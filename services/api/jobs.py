@@ -6,7 +6,13 @@ from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from sqlalchemy import exists, select
 
-from services.api.access import WRITE, Paging, project_role, require_project
+from services.api.access import (
+    WRITE,
+    Paging,
+    check_token_project,
+    project_role,
+    require_project,
+)
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
 from services.api.models import Corpus, Document, Job
@@ -20,6 +26,7 @@ CORPUS_STATUS_FOR_KIND = {"import": "importing", "index": "indexing"}
 EXPORT_TYPES = {
     "csv": "text/csv",
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
 
 
@@ -68,6 +75,7 @@ def _load(db, job_id, user, manage=False) -> Job:
     job = db.get(Job, job_id)
     if not job:
         raise not_found("任务")
+    check_token_project(user, job.project_id)
     if job.owner_id == user.id:
         return job
     role = project_role(db, job.project_id, user) if job.project_id else None

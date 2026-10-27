@@ -7,6 +7,9 @@
     "web:dev": "npm --prefix apps/web run dev",
     "web:build": "npm --prefix apps/web run build",
     "web:test": "npm --prefix apps/web test",
+    "agent:check": "npm --prefix services/agent run check",
+    "agent:test": "npm --prefix services/agent test",
+    "agent:dev": "npm --prefix services/agent run dev",
     "check": "npm run web:build && npm run web:test"
   }
 }

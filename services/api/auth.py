@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from services.api.db import get_db
 from services.api.errors import ApiError
-from services.api.models import LoginSession, User
+from services.api.models import AgentToken, LoginSession, User
 from services.api.views import user_view
 
 router = APIRouter(prefix="/api/auth")
@@ -38,9 +38,16 @@ def allowed_origins():
     return {o.strip() for o in os.environ["PUBLIC_ORIGIN"].split(",") if o.strip()}
 
 
+def bearer(request: Request) -> str | None:
+    scheme, _, token = request.headers.get("authorization", "").partition(" ")
+    return (token.strip() or None) if scheme.lower() == "bearer" else None
+
+
 def origin_rejected(request: Request) -> bool:
+    """Cookie requests need a known Origin (CSRF); bearer-token requests carry no cookie and are exempt."""
     return (
         request.method not in SAFE_METHODS
+        and bearer(request) is None
         and request.headers.get("origin") not in allowed_origins()
     )
 
@@ -50,6 +57,15 @@ def token_hash(token: str) -> str:
 
 
 def current_user(request: Request, db: Db) -> User:
+    """Cookie session, or `Authorization: Bearer <agent token>`: the token's user, limited to its project
+    (user.token_project_id, enforced in services.api.access)."""
+    if (raw := bearer(request)) is not None:
+        entry = db.get(AgentToken, token_hash(raw))
+        if not entry or entry.expires_at <= datetime.now(UTC):
+            raise ApiError(401, "AUTH_REQUIRED", "令牌无效或已过期")
+        user = db.get(User, entry.user_id)
+        user.token_project_id = entry.project_id
+        return user
     token = request.cookies.get(COOKIE)
     entry = db.get(LoginSession, token_hash(token)) if token else None
     if not entry or entry.expires_at <= datetime.now(UTC):

@@ -1,0 +1,4 @@
+.settings-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; }
+.add-member { padding: 16px 18px; border-bottom: 1px solid var(--line-soft); }
+.row-new > td { animation: row-new 1.4s ease both; }
+@keyframes row-new { from { background: var(--accent-tint); } }

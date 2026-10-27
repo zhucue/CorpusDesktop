@@ -252,3 +252,23 @@ def test_saved_queries(owner, project, corpus, member):
     assert owner.get(f"/api/projects/{pid}/queries").json()["total"] == 1
     assert owner.delete(f"/api/queries/{saved['id']}").status_code == 204
     assert owner.get(f"/api/projects/{pid}/queries").json()["total"] == 0
+
+
+def test_include_tokens(owner, corpus):
+    plain = search(owner, {"corpus_id": corpus["id"]}).json()
+    assert "tokens" not in plain["items"][0]
+    items = search(owner, {"corpus_id": corpus["id"]}, include_tokens=True).json()[
+        "items"
+    ]
+    assert items[0]["tokens"] == [
+        {"part": "match", "form": "Language", "pos": None},
+        {"part": "right", "form": "is", "pos": None},
+        {"part": "right", "form": "a", "pos": None},
+        {"part": "right", "form": "system.", "pos": None},
+    ]
+    assert [(t["part"], t["form"]) for t in items[1]["tokens"]] == [
+        ("left", "The"),
+        ("match", "language"),
+        ("right", "of"),
+        ("right", "science."),
+    ]

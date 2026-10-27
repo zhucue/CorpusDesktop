@@ -1,0 +1,11 @@
+.jobs .ant-table-tbody > tr > td { padding: 13px 14px; vertical-align: middle; }
+.jprog { display: flex; flex-direction: column; gap: 5px; width: 210px; }
+.jprog .row { font-size: 12px; color: var(--text-3); justify-content: space-between; }
+.jtype { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; white-space: nowrap; }
+.jtype .ji { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: var(--fill); color: var(--text-2); }
+.jtype .ji .ic { width: 14px; height: 14px; }
+.jobs .ant-table-expanded-row > td { background: var(--err-bg) !important; padding: 8px 14px 10px 54px !important; }
+.err-line { display: flex; gap: 8px; align-items: center; color: var(--err); font-size: 13px; }
+.sumcard { padding: 14px 18px; display: flex; align-items: center; gap: 14px; }
+.sumcard .si { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; padding: 0; }
+.sumcard .count { font-size: 24px; }

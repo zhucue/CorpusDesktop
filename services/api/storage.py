@@ -27,3 +27,7 @@ def corpus_key(corpus_id):
 
 def export_path(job_id, fmt):
     return data_dir() / "exports" / f"{job_id}.{fmt}"
+
+
+def stats_path(stat_id):
+    return data_dir() / "stats" / f"{stat_id}.json"

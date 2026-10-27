@@ -63,3 +63,35 @@ def saved_query_view(q):
         "scope": q.scope,
         "created_at": q.created_at,
     }
+
+
+def stat_view(s, rows=None):
+    view = {
+        "id": s.id,
+        "project_id": s.project_id,
+        "method": s.method,
+        "params": s.params,
+        "scope": s.scope,
+        "index_version": s.index_version,
+        "totals": s.totals,
+        "created_at": s.created_at,
+        "columns": s.columns,
+        "row_count": s.row_count,
+    }
+    if rows is not None:
+        view["rows"] = rows
+    return view
+
+
+def evidence_view(e):
+    return {
+        "id": e.id,
+        "project_id": e.project_id,
+        "kind": e.kind,
+        "ref": e.ref,
+        "text": e.text,
+        "source": e.source,
+        "note": e.note,
+        "created_by": e.created_by,
+        "created_at": e.created_at,
+    }

@@ -1,0 +1,22 @@
+# Agent service (Node + Pi SDK). Build context: repository root.
+FROM node:24-slim AS build
+ENV OPENUI_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1
+WORKDIR /app
+COPY services/agent/package.json services/agent/package-lock.json ./
+RUN npm ci
+COPY services/agent/tsconfig.json services/agent/tsconfig.build.json ./
+COPY services/agent/src src
+RUN npm run build && npm prune --omit=dev
+
+FROM node:24-slim
+ENV NODE_ENV=production OPENUI_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 DATA_DIR=/data/agent PORT=8700
+WORKDIR /app
+COPY --from=build /app/package.json ./
+COPY --from=build /app/node_modules node_modules
+COPY --from=build /app/dist dist
+# DATA_DIR=/data/agent is a named volume; it inherits this ownership on first mount.
+RUN useradd --create-home --uid 10001 corpus && mkdir -p /data/agent && chown -R corpus:corpus /data
+USER corpus
+VOLUME /data/agent
+EXPOSE 8700
+CMD ["node", "dist/main.js"]

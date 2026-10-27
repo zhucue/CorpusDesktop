@@ -19,11 +19,12 @@ from services.api.access import (
     load_corpus,
     load_subcorpus,
     require_project,
+    token_project,
 )
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, not_found
 from services.api.jobs import enqueue
-from services.api.metadata import field_types
+from services.api.metadata import field_types, validate_filter
 from services.api.models import (
     Corpus,
     Document,
@@ -31,6 +32,7 @@ from services.api.models import (
     Sentence,
     SentenceAlignment,
     Subcorpus,
+    Token,
 )
 from services.api.storage import corpus_key, index_dir
 from services.api.subcorpora import project_corpus
@@ -42,13 +44,18 @@ COUNT_TIMEOUT = 20
 
 
 class Scope(BaseModel):
+    """{corpus_id} | {subcorpus_id} | {corpus_id, filter}: filter is a temporary subcorpus filter, not saved."""
+
     corpus_id: UUID | None = None
     subcorpus_id: UUID | None = None
+    filter: dict | None = None
 
     @model_validator(mode="after")
     def one_target(self):
         if (self.corpus_id is None) == (self.subcorpus_id is None):
             raise ValueError("scope 须且只能包含 corpus_id 或 subcorpus_id")
+        if self.filter is not None and self.corpus_id is None:
+            raise ValueError("filter 只能与 corpus_id 一起使用")
         return self
 
 
@@ -66,6 +73,9 @@ class SearchInput(BaseModel):
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=50, ge=1, le=200)
     search_id: str | None = Field(default=None, max_length=64)
+    include_tokens: bool = (
+        False  # add Hit.tokens (sentence tokens with POS) to each item
+    )
 
 
 class ExportInput(SearchInput):
@@ -113,6 +123,13 @@ def compile_query(text):
         raise ApiError(422, "QUERY_INVALID", f"第 {e.position + 1} 个字符：{e.message}")
 
 
+def scope_filter(db, scope: Scope):
+    """The metadata filter a scope applies ({} for a whole corpus)."""
+    if scope.subcorpus_id:
+        return db.get(Subcorpus, scope.subcorpus_id).filter
+    return scope.filter or {}
+
+
 def resolve_scope(db, scope: Scope, user):
     """Return (corpus, restrict) after access checks; corpus must have an index."""
     restrict = None
@@ -127,6 +144,10 @@ def resolve_scope(db, scope: Scope, user):
             raise ApiError(409, "INVALID_FILTER", f"子库筛选条件已失效：{e}")
     else:
         corpus = load_corpus(db, scope.corpus_id, user)
+        if scope.filter is not None:
+            fields = field_types(db, corpus.id)
+            validate_filter(scope.filter, fields)
+            restrict = query.compile_filter(scope.filter, fields) or None
     if corpus.status not in ("ready", "stale") or not corpus.index_version:
         raise ApiError(409, "CORPUS_NOT_READY", "语料库尚未完成索引")
     return corpus, restrict
@@ -250,6 +271,40 @@ def enrich(db, hits):
     return items
 
 
+def attach_tokens(db, items):
+    """Hit.tokens: the hit sentence's tokens in order, part left/match/right by document code points."""
+    keys = {(UUID(i["document_id"]), i["sentence_index"]) for i in items}
+    by_sentence = {}
+    if keys:
+        rows = db.execute(
+            select(
+                Sentence.document_id,
+                Sentence.idx,
+                Token.start_cp,
+                Token.end_cp,
+                Token.form,
+                Token.pos,
+            )
+            .join(Token, Token.sentence_id == Sentence.id)
+            .where(tuple_(Sentence.document_id, Sentence.idx).in_(keys))
+            .order_by(Sentence.document_id, Sentence.idx, Token.idx)
+        )
+        for doc, idx, start, end, form, pos in rows:
+            by_sentence.setdefault((doc, idx), []).append((start, end, form, pos))
+    for item in items:
+        a, b = item["start_cp"], item["end_cp"]
+        toks = by_sentence.get((UUID(item["document_id"]), item["sentence_index"]), [])
+        item["tokens"] = [
+            {
+                "part": "left" if end <= a else "right" if start >= b else "match",
+                "form": form,
+                "pos": pos,
+            }
+            for start, end, form, pos in toks
+        ]
+    return items
+
+
 # ---- routes ----
 
 
@@ -270,11 +325,14 @@ def search(body: SearchInput, user: CurrentUser, db: Db):
     counts = entry["counts"] or counts_view(result.counts)
     if counts["complete"]:
         entry["counts"] = counts
+    items = enrich(db, result.items)
+    if body.include_tokens:
+        attach_tokens(db, items)
     return {
         "search_id": sid,
         "parse": parse_view(body.query),
         "counts": counts,
-        "items": enrich(db, result.items),
+        "items": items,
         "page": body.page,
         "page_size": body.page_size,
     }
@@ -324,7 +382,7 @@ def export(body: ExportInput, user: CurrentUser, db: Db):
     if body.scope.subcorpus_id:
         project_id = db.get(Subcorpus, body.scope.subcorpus_id).project_id
     else:
-        project_id = corpus.project_id or body.project_id
+        project_id = corpus.project_id or body.project_id or token_project(user)
         if body.project_id and corpus.project_id is None:
             require_project(db, body.project_id, user, READ)
     params = body.model_dump(mode="json", exclude={"project_id"})

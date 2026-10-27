@@ -21,8 +21,19 @@ def project_role(db, project_id, user):
     )
 
 
+def token_project(user):
+    """Project an agent token is limited to (None for cookie sessions)."""
+    return getattr(user, "token_project_id", None)
+
+
+def check_token_project(user, project_id):
+    if token_project(user) is not None and project_id != token_project(user):
+        raise forbidden()
+
+
 def require_project(db, project_id, user, roles=READ):
-    """Non-members get 404 so project ids do not leak."""
+    """Non-members get 404 so project ids do not leak; agent tokens get 403 outside their project."""
+    check_token_project(user, project_id)
     role = project_role(db, project_id, user)
     if role is None:
         raise not_found("项目")
@@ -36,7 +47,7 @@ def load_corpus(db, corpus_id, user, write=False) -> Corpus:
     if not corpus:
         raise not_found("语料库")
     if corpus.project_id is None:
-        if write and not user.is_admin:
+        if write and (not user.is_admin or token_project(user)):
             raise forbidden()
     else:
         require_project(db, corpus.project_id, user, WRITE if write else READ)

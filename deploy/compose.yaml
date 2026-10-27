@@ -45,12 +45,30 @@ services:
     depends_on:
       api: { condition: service_healthy }
 
+  agent:
+    build: { context: .., dockerfile: deploy/Dockerfile.agent }
+    environment:
+      MODEL_BASE_URL: ${MODEL_BASE_URL:-}
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+      MODEL_ID: ${MODEL_ID:-}
+      MODEL_API: ${MODEL_API:-openai-completions}
+      API_BASE_URL: http://api:8000/api
+      DATABASE_URL: postgresql://corpus:${POSTGRES_PASSWORD:?set in deploy/.env}@postgres:5432/corpus
+      DATA_DIR: /data/agent
+      PORT: "8700"
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
+    volumes:
+      - agentdata:/data/agent
+    depends_on:
+      api: { condition: service_healthy }
+
   web:
     build: { context: .., dockerfile: deploy/Dockerfile.web }
     ports:
       - "127.0.0.1:${HTTP_PORT:-8080}:80"
     depends_on:
       - api
+      - agent
 
   test:
     profiles: [test]
@@ -69,3 +87,4 @@ volumes:
   pgdata:
   data:
   stanza:
+  agentdata:

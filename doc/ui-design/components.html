@@ -247,7 +247,7 @@
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('monos').innerHTML = ['翻译对等研究', '学习者语料偏误', '个人空间', '法律翻译'].map(function (n) { return '<span class="row" style="gap:6px;font-size:13px">' + UI.monogram(n, 'lg') + n + '</span>'; }).join('');
   var C = [['名词', '#5B8DEF', '#EAF1FD', '#1E4F9A', '7.0'], ['动词', '#4AA79A', '#E4F4F1', '#1D6458', '6.1'], ['形容词', '#D9A441', '#FBF1DD', '#7A5210', '6.2'], ['副词', '#D9788A', '#FBE9EC', '#922C40', '6.8'],
-    ['代词', '#8E82C8', '#EFECF8', '#4B3F87', '7.6'], ['介词', '#7DAA63', '#EAF3E4', '#3A6324', '6.2'], ['助词', '#C98762', '#F8EBE3', '#86411D', '6.5'], ['限定·数词', '#6E97AE', '#E6EFF4', '#2F5568', '6.9']];
+    ['代词', '#479CA6', '#E5F1F2', '#005A64', '6.9'], ['介词', '#7DAA63', '#EAF3E4', '#3A6324', '6.2'], ['助词', '#C98762', '#F8EBE3', '#86411D', '6.5'], ['限定·数词', '#6E97AE', '#E6EFF4', '#2F5568', '6.9']];
   document.getElementById('cats').innerHTML = C.map(function (c, i) {
     return '<div class="cat" data-c="' + (i + 1) + '"><div class="bar"></div><div class="lab">' + c[0] + '</div><span>--c' + (i + 1) + ' ' + c[1] + '</span><span>bg ' + c[2] + '</span><span>fg ' + c[3] + '</span><span>对比 ' + c[4] + ':1</span></div>';
   }).join('');

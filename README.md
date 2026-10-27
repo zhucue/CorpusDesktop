@@ -40,10 +40,13 @@ npm ci --prefix apps/web
 uv run --frozen --with pytest pytest tests/engine -k "not cwb and not nlp" -q
 npm run check
 
-# 整套服务：复制 deploy/.env.example 为 deploy/.env 并填 POSTGRES_PASSWORD
+# 整套服务：复制 deploy/.env.example 为 deploy/.env，填 POSTGRES_PASSWORD；
+# 8080 被占用时同时改 HTTP_PORT 和 PUBLIC_ORIGIN；对话模型填 MODEL_BASE_URL / MODEL_API_KEY / MODEL_ID
+npm run web:build                                   # web 镜像打包 apps/web/dist，改前端后先构建
 docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
-docker compose --env-file deploy/.env -f deploy/compose.yaml exec api python scripts/create_account.py --email you@example.edu --admin
-docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm test   # api 测试（真实 PostgreSQL）
+docker compose --env-file deploy/.env -f deploy/compose.yaml exec api python scripts/create_account.py --email you@example.edu --admin   # 隐藏输入；脚本可用 --password-stdin
+docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm test   # api + engine 测试（真实 PostgreSQL、CWB、Stanza）
+npm run agent:test                                  # agent 服务测试（假模型）
 ```
 
-浏览器打开 http://localhost:8080。前端开发用 `npm run web:dev`（5173，代理 /api 到 8000），此时 `PUBLIC_ORIGIN` 需加入 `http://127.0.0.1:5173`。首次导入会把 Stanza 中英模型（约 500 MB）下载到 `stanza` 卷。
+浏览器打开 http://localhost:8080。模型未配置时助手页提示"尚未配置模型"，其余功能可用。前端开发用 `npm run web:dev`（5173，代理 /api 到 8000、/agent 到 8700），此时 `PUBLIC_ORIGIN` 需加入 `http://127.0.0.1:5173`。首次导入会把 Stanza 中英模型（约 500 MB）下载到 `stanza` 卷。

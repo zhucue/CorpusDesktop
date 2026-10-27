@@ -1,0 +1,6 @@
+*
+!services/agent/package.json
+!services/agent/package-lock.json
+!services/agent/tsconfig.json
+!services/agent/tsconfig.build.json
+!services/agent/src

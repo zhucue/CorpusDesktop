@@ -2,38 +2,54 @@
 writes results and marks the job succeeded, so a cancel either wins entirely or not at all."""
 
 import csv
+import json
 import shutil
 import uuid
 from datetime import datetime
 from itertools import islice
 from pathlib import Path
 
+from docx import Document as DocxDocument
+from docx.oxml.ns import qn
+from docx.shared import Pt
 from openpyxl import Workbook
 from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Font
 from sqlalchemy import exists, func, insert, select
 
-from engine import cwb, nlp, parsers
+from engine import cwb, nlp, parsers, stats
 from engine import model as em
 from services.api.db import session, transaction
 from services.api.jobs import enqueue
+from services.api.metadata import field_types
 from services.api.models import (
     Corpus,
     Document,
+    Evidence,
     Job,
     Sentence,
     SentenceAlignment,
+    StatResult,
+    Subcorpus,
     Token,
     User,
 )
 from services.api.search import (
     ExportInput,
+    Scope,
     compile_query,
     enrich,
     resolve_scope,
     run_search,
+    scope_filter,
 )
-from services.api.storage import corpus_key, export_path, index_dir, text_path
+from services.api.storage import (
+    corpus_key,
+    export_path,
+    index_dir,
+    stats_path,
+    text_path,
+)
 from services.worker.main import JobFailed
 
 EXPORT_PAGE = 1000
@@ -336,9 +352,9 @@ def _write_csv(path, header, rows):
         writer.writerows(rows)
 
 
-def _write_xlsx(path, header, rows):
+def _write_xlsx(path, header, rows, sheet="检索结果"):
     wb = Workbook(write_only=True)
-    ws = wb.create_sheet("检索结果")
+    ws = wb.create_sheet(sheet)
     title_font = Font(name="宋体", bold=True)
     cells = []
     for title in header:
@@ -370,15 +386,188 @@ def run_export(run):
             if len(result.items) < EXPORT_PAGE:
                 break
             page += 1
-    fmt = req.format
+    header, rows = _rows(items)
+    _finish_export(run, "检索结果", header, rows, {"hits": hits})
+
+
+def _finish_export(run, name, header, rows, extra=None):
+    fmt = run.params["format"]
     path = export_path(run.id, fmt)
     path.parent.mkdir(parents=True, exist_ok=True)
-    header, rows = _rows(items)
-    (_write_csv if fmt == "csv" else _write_xlsx)(path, header, rows)
-    filename = f"检索结果-{datetime.now():%Y%m%d-%H%M}.{fmt}"
+    if fmt == "csv":
+        _write_csv(path, header, rows)
+    elif fmt == "xlsx":
+        _write_xlsx(path, header, rows, name)
+    else:
+        _write_docx(path, name, header, rows)
+    filename = f"{name}-{datetime.now():%Y%m%d-%H%M}.{fmt}"
     with transaction() as db:
         run.lock(db)
-        run.succeed(db, {"rows": len(rows), "hits": hits, "filename": filename})
+        run.succeed(db, {"rows": len(rows), **(extra or {}), "filename": filename})
 
 
-HANDLERS = {"import": run_import, "index": run_index, "export": run_export}
+def _write_docx(path, title, header, rows):
+    """One block per row: the first column as a paragraph, the others as `label：value` lines. 宋体, no fills."""
+    doc = DocxDocument()
+    normal = doc.styles["Normal"]
+    normal.font.name = "宋体"
+    normal.element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+    heading = doc.add_paragraph().add_run(title)
+    heading.bold, heading.font.size = True, Pt(16)
+    for i, row in enumerate(rows, 1):
+        doc.add_paragraph(f"{i}. {row[0]}")
+        for label, value in zip(header[1:], row[1:]):
+            if value not in (None, ""):
+                doc.add_paragraph(f"{label}：{value}")
+    doc.save(path)
+
+
+def run_export_stats(run):
+    with session() as db:
+        stat = db.get(StatResult, uuid.UUID(run.params["stat_id"]))
+        if not stat:
+            raise JobFailed("STAT_DELETED", "统计结果已删除")
+        columns, path = stat.columns, Path(stat.rows_path)
+    data = json.loads(path.read_text(encoding="utf-8"))["rows"]
+    header = [c["label"] for c in columns] + ["查询式"]
+    rows = [
+        [_cell(r["values"].get(c["key"])) for c in columns] + [r["search_query"]]
+        for r in data
+    ]
+    _finish_export(run, "统计结果", header, rows)
+
+
+def run_export_evidence(run):
+    with session() as db:
+        items = db.scalars(
+            select(Evidence)
+            .where(Evidence.project_id == uuid.UUID(run.params["project_id"]))
+            .order_by(Evidence.created_at, Evidence.id)
+        ).all()
+    header = ["原文", "出处", "查询式", "备注"]
+    rows = [[e.text, e.source, e.ref.get("search_query"), e.note] for e in items]
+    _finish_export(run, "证据篮", header, rows)
+
+
+EXPORTS = {
+    "search": run_export,
+    "stats": run_export_stats,
+    "evidence": run_export_evidence,
+}
+
+
+def run_any_export(run):
+    EXPORTS[run.params.get("source", "search")](run)
+
+
+# ---- stats ----
+
+
+def _scope_info(db, scope: Scope, corpus):
+    sub = db.get(Subcorpus, scope.subcorpus_id) if scope.subcorpus_id else None
+    info = {
+        "corpus_id": str(corpus.id),
+        "subcorpus_id": str(sub.id) if sub else None,
+        "name": sub.name if sub else corpus.name,
+    }
+    if scope.filter is not None:
+        info["filter"] = scope.filter
+    return info
+
+
+def _compute(p, target, reference, numeric):
+    method, top = p["method"], p["top"]
+    if method == "frequency":
+        return stats.frequency(target, p["unit"], p["pos"], top, p["min_freq"])
+    if method == "ngrams":
+        return stats.ngrams(
+            target, p["n"], p["unit"], p["pos_pattern"], top, p["min_freq"]
+        )
+    if method == "collocations":
+        return stats.collocations(
+            target,
+            p["node"],
+            p["window"],
+            p["unit"],
+            p["pos"],
+            p["measures"],
+            p["min_freq"],
+            top,
+        )
+    if method == "keywords":
+        return stats.keywords(
+            target, reference, p["unit"], p["measure"], p["min_freq"], top
+        )
+    return stats.distribution(
+        target, p["query"], p["field"], p["bins"], numeric=numeric, top=top
+    )
+
+
+def run_stats(run):
+    p = run.params
+    method = p["method"]
+    scope = Scope.model_validate(p["target"] if method == "keywords" else p["scope"])
+    params = {k: v for k, v in p.items() if k != "method"}
+    reference = numeric = None
+    with session() as db:
+        user = db.get(User, run.owner_id)
+        corpus, restrict = resolve_scope(db, scope, user)
+        target = stats.Scope(index_dir(corpus.id), corpus_key(corpus.id), restrict)
+        info, base_filter = _scope_info(db, scope, corpus), scope_filter(db, scope)
+        index_version = corpus.index_version
+        if method == "keywords":
+            ref_scope = Scope.model_validate(p["reference"])
+            ref_corpus, ref_restrict = resolve_scope(db, ref_scope, user)
+            reference = stats.Scope(
+                index_dir(ref_corpus.id), corpus_key(ref_corpus.id), ref_restrict
+            )
+            params["reference"] = _scope_info(db, ref_scope, ref_corpus)
+        if method == "distribution":
+            numeric = field_types(db, corpus.id).get(p["field"]) == "number"
+    run.progress(0, None, "计算")
+    try:
+        table = _compute(p, target, reference, numeric)
+    except ValueError as e:  # includes query.QueryError
+        raise JobFailed("STATS_INVALID", str(e)) from e
+    search_scope = scope.model_dump(mode="json", exclude_none=True)
+    for row in table.rows:
+        row["search_scope"] = search_scope
+        if "bin_value" in row:  # distribution by field: temporary filter for that value
+            filt = {**base_filter, p["field"]: row.pop("bin_value")}
+            row["search_scope"] = {"corpus_id": str(corpus.id), "filter": filt}
+    stat_id = uuid.uuid4()
+    path = stats_path(stat_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"rows": table.rows}, ensure_ascii=False), encoding="utf-8"
+    )
+    try:
+        with transaction() as db:
+            run.lock(db)
+            db.add(
+                StatResult(
+                    id=stat_id,
+                    project_id=run.project_id,
+                    method=method,
+                    params=params,
+                    scope=info,
+                    index_version=index_version,
+                    totals=table.totals,
+                    columns=table.columns,
+                    rows_path=str(path),
+                    row_count=table.row_count,
+                    created_by=run.owner_id,
+                )
+            )
+            run.succeed(db, {"stat_id": str(stat_id)})
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+
+
+HANDLERS = {
+    "import": run_import,
+    "index": run_index,
+    "export": run_any_export,
+    "stats": run_stats,
+}

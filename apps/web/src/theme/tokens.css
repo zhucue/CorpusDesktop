@@ -1,0 +1,120 @@
+/* Design tokens, kept identical to doc/ui-design/style.css (light :root, dark [data-theme="dark"]). */
+:root {
+  --bg: #F6F7FA;
+  --surface: #FFFFFF;
+  --surface-2: #FAFAFC;
+  --line: #E6E8EE;
+  --line-soft: #F0F1F4;
+  --fill: #F2F4F7;
+  --fill-hover: #EEF0F5;
+  --text: #1A1D24;
+  --text-2: #475467;
+  --text-3: #6B7280;
+  --text-4: #98A2B3;
+  --accent: #1570EF;
+  --accent-hover: #175CD3;
+  --accent-text: #175CD3; /* 浅蓝底上的文字，保证 ≥4.5:1 */
+  --accent-tint: #EFF8FF;
+  --accent-tint-2: #D1E9FF;
+  --accent-line: rgba(21, 112, 239, .2);
+  --accent-fill: #F5FAFF;
+  --accent-solid: #1570EF;       /* 白字底色：主按钮、发送、已确认标签 */
+  --accent-solid-hover: #175CD3;
+  --line-strong: #D0D5DD;
+  --glass: rgba(255, 255, 255, .92);
+  --toast-bg: #1A1D24; --toast-text: #FFFFFF;
+  --skel-a: #EEF0F4; --skel-b: #F7F8FA;
+  --mark-bg: #FEF7C3;
+  --hit2: #0E7090; --hit2-bg: #ECFDFF;
+  --dot: rgba(16, 24, 40, .09);
+  --backdrop: rgba(16, 24, 40, .36);
+  /* 语义色：状态标签、提示、进度统一使用 */
+  --success: #067647; --success-soft: #ECFDF3; --success-line: #ABEFC6; --success-solid: #17B26A;
+  --warning: #B54708; --warning-soft: #FFFAEB; --warning-line: #FEDF89; --warning-solid: #F79009;
+  --error: #B42318; --error-soft: #FEF3F2; --error-line: #FECDCA; --error-solid: #F04438;
+  --info: #175CD3; --info-soft: #EFF8FF; --info-line: rgba(21, 112, 239, .2); --info-solid: #1570EF;
+  --ok: var(--success); --ok-bg: var(--success-soft); --ok-line: var(--success-line);
+  --warn: var(--warning); --warn-bg: var(--warning-soft); --warn-line: var(--warning-line);
+  --err: var(--error); --err-bg: var(--error-soft); --err-line: var(--error-line);
+  /* 8 色低饱和分类色：c 为图形/系列色，-bg/-fg 为标签底与字（字与底对比 ≥ 6:1） */
+  --c1: #5B8DEF; --c1-bg: #EAF1FD; --c1-fg: #1E4F9A;
+  --c2: #4AA79A; --c2-bg: #E4F4F1; --c2-fg: #1D6458;
+  --c3: #D9A441; --c3-bg: #FBF1DD; --c3-fg: #7A5210;
+  --c4: #D9788A; --c4-bg: #FBE9EC; --c4-fg: #922C40;
+  --c5: #479CA6; --c5-bg: #E5F1F2; --c5-fg: #005A64;
+  --c6: #7DAA63; --c6-bg: #EAF3E4; --c6-fg: #3A6324;
+  --c7: #C98762; --c7-bg: #F8EBE3; --c7-fg: #86411D;
+  --c8: #6E97AE; --c8-bg: #E6EFF4; --c8-fg: #2F5568;
+  /* 圆角：8 / 12 / 16 */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-md: 12px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  /* 阴影：卡片 / 浮层 / 对话框 */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, .04);
+  --shadow-pop: 0 4px 12px rgba(16, 24, 40, .10), 0 1px 3px rgba(16, 24, 40, .06);
+  --shadow-dialog: 0 20px 48px rgba(16, 24, 40, .18), 0 4px 12px rgba(16, 24, 40, .08);
+  --shadow-1: var(--shadow-card);
+  --shadow-2: 0 2px 6px rgba(16, 24, 40, .08);
+  --shadow-3: 0 12px 32px rgba(16, 24, 40, .12), 0 2px 6px rgba(16, 24, 40, .06);
+  --font: "Inter Variable", Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "JetBrains Mono Variable", "JetBrains Mono", Consolas, "SFMono-Regular", monospace;
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --t-fast: 150ms;
+  --t-base: 220ms;
+  --t-slow: 400ms;
+  color-scheme: light;
+}
+
+/* 深色模式：同名变量，强调蓝略提亮 */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0F1218;
+  --surface: #161A22;
+  --surface-2: #1B2029;
+  --line: #2A303B;
+  --line-soft: #222833;
+  --line-strong: #3A4250;
+  --fill: #222833;
+  --fill-hover: #283040;
+  --text: #E6E9EF;
+  --text-2: #B4BCC8;
+  --text-3: #8C95A3;
+  --text-4: #5E6673;
+  --accent: #2E90FA;
+  --accent-hover: #53B1FD;
+  --accent-text: #84CAFF;
+  --accent-tint: #12233A;
+  --accent-tint-2: #173356;
+  --accent-line: rgba(46, 144, 250, .32);
+  --accent-fill: #131D2B;
+  --accent-solid: #1570EF;
+  --accent-solid-hover: #175CD3;
+  --glass: rgba(22, 26, 34, .88);
+  --toast-bg: #2A303B; --toast-text: #F2F4F7;
+  --skel-a: #20262F; --skel-b: #2A313C;
+  --mark-bg: #3D3510;
+  --hit2: #67E3F9; --hit2-bg: #0B2A33;
+  --dot: rgba(255, 255, 255, .07);
+  --backdrop: rgba(0, 0, 0, .55);
+  --success: #47CD89; --success-soft: #0E2A1C; --success-line: #1D5236; --success-solid: #17B26A;
+  --warning: #FDB022; --warning-soft: #2E2210; --warning-line: #5C4314; --warning-solid: #F79009;
+  --error: #F97066; --error-soft: #33171A; --error-line: #6A2A2A; --error-solid: #F04438;
+  --info: #84CAFF; --info-soft: #12233A; --info-line: rgba(46, 144, 250, .32); --info-solid: #2E90FA;
+  --c1-bg: #17253D; --c1-fg: #9DBCF5;
+  --c2-bg: #132C29; --c2-fg: #8FD3C8;
+  --c3-bg: #2E2414; --c3-fg: #E8C783;
+  --c4-bg: #33191F; --c4-fg: #EEA9B6;
+  --c5-bg: #08282C; --c5-fg: #91C7CD;
+  --c6-bg: #1C2A15; --c6-fg: #B3D39F;
+  --c7-bg: #2F1E15; --c7-fg: #E3B79E;
+  --c8-bg: #17252D; --c8-fg: #A9C7D7;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .3);
+  --shadow-pop: 0 6px 16px rgba(0, 0, 0, .45), 0 1px 3px rgba(0, 0, 0, .3);
+  --shadow-dialog: 0 24px 56px rgba(0, 0, 0, .6), 0 4px 12px rgba(0, 0, 0, .4);
+  --shadow-2: 0 2px 6px rgba(0, 0, 0, .4);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .35);
+}

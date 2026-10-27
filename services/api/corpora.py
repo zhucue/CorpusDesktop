@@ -9,7 +9,13 @@ from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select, update
 
-from services.api.access import WRITE, Paging, load_corpus, require_project
+from services.api.access import (
+    WRITE,
+    Paging,
+    load_corpus,
+    require_project,
+    token_project,
+)
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
 from services.api.jobs import ACTIVE, enqueue, has_active_job
@@ -77,7 +83,7 @@ def create_corpus(project_id: UUID, body: CorpusInput, user: CurrentUser, db: Db
 
 @router.post("/corpora")
 def create_builtin_corpus(body: CorpusInput, user: CurrentUser, db: Db):
-    if not user.is_admin:
+    if not user.is_admin or token_project(user):
         raise forbidden()
     return _create(db, None, body)
 

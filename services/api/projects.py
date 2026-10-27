@@ -5,9 +5,9 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from services.api.access import MANAGE, Paging, require_project
+from services.api.access import MANAGE, Paging, require_project, token_project
 from services.api.auth import CurrentUser, Db
-from services.api.errors import ApiError, not_found
+from services.api.errors import ApiError, forbidden, not_found
 from services.api.models import Project, ProjectMember, User
 from services.api.views import project_view
 
@@ -34,11 +34,15 @@ def list_projects(user: CurrentUser, db: Db, paging: Paging):
         .where(ProjectMember.user_id == user.id)
         .order_by(Project.created_at, Project.id)
     )
+    if token_project(user):
+        stmt = stmt.where(Project.id == token_project(user))
     return paging.run(db, stmt, project_view)
 
 
 @router.post("")
 def create_project(body: ProjectInput, user: CurrentUser, db: Db):
+    if token_project(user):
+        raise forbidden()
     project = Project(name=body.name.strip(), created_by=user.id)
     db.add(project)
     db.flush()

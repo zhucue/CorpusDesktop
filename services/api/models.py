@@ -19,7 +19,10 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 ROLES = ("owner", "editor", "annotator", "viewer")
 CORPUS_STATUSES = ("empty", "importing", "indexing", "ready", "stale", "failed")
-JOB_KINDS = ("import", "index", "export")
+JOB_KINDS = ("import", "index", "export", "stats")
+EVIDENCE_KINDS = ("hit", "stat_row", "text")
+AGENT_STATES = ("idle", "running")
+AGENT_ROLES = ("user", "assistant")
 JOB_STATES = ("queued", "running", "succeeded", "failed", "cancelled")
 
 
@@ -213,3 +216,102 @@ class Job(Base):
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class StatResult(Base):
+    __tablename__ = "stat_results"
+    id: Mapped[uuid.UUID] = _id()
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    method: Mapped[str] = mapped_column(Text)
+    params: Mapped[dict] = mapped_column(JSONB)
+    scope: Mapped[dict] = mapped_column(JSONB)
+    index_version: Mapped[str | None] = mapped_column(Text)
+    totals: Mapped[dict] = mapped_column(JSONB)
+    columns: Mapped[list] = mapped_column(JSONB)
+    rows_path: Mapped[str] = mapped_column(Text)
+    row_count: Mapped[int] = mapped_column(Integer)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = _created()
+
+
+class Evidence(Base):
+    __tablename__ = "evidence"
+    __table_args__ = (
+        CheckConstraint(_in("kind", EVIDENCE_KINDS), name="ck_evidence_kind"),
+    )
+    id: Mapped[uuid.UUID] = _id()
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(Text)
+    ref: Mapped[dict] = mapped_column(JSONB)
+    text: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = _created()
+
+
+def _server_id():
+    return mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=func.gen_random_uuid(),
+    )
+
+
+# agent_sessions / agent_messages are written directly by the Node agent service (services/agent).
+class AgentSession(Base):
+    __tablename__ = "agent_sessions"
+    __table_args__ = (
+        CheckConstraint(_in("state", AGENT_STATES), name="ck_agent_session_state"),
+    )
+    id: Mapped[uuid.UUID] = _server_id()
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(Text, server_default="")
+    scope: Mapped[dict | None] = mapped_column(JSONB)
+    state: Mapped[str] = mapped_column(Text, server_default="idle")
+    pi_session_path: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class AgentMessage(Base):
+    __tablename__ = "agent_messages"
+    __table_args__ = (
+        CheckConstraint(_in("role", AGENT_ROLES), name="ck_agent_message_role"),
+        Index("ix_agent_messages_session_created", "session_id", "created_at"),
+    )
+    id: Mapped[uuid.UUID] = _server_id()
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agent_sessions.id", ondelete="CASCADE")
+    )
+    role: Mapped[str] = mapped_column(Text)
+    content: Mapped[str] = mapped_column(Text, server_default="")
+    parts: Mapped[list] = mapped_column(JSONB, server_default="[]")
+    tool_calls: Mapped[list] = mapped_column(JSONB, server_default="[]")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+
+
+class AgentToken(Base):
+    __tablename__ = "agent_tokens"
+    token_hash: Mapped[str] = mapped_column(Text, primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime] = _created()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

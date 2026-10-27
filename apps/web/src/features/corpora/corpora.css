@@ -1,0 +1,15 @@
+.corp .ant-table-tbody > tr > td { padding: 13px 14px; }
+.cname { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.state { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.state-msg { font-size: 12px; color: var(--text-3); }
+.state-msg.err-text { color: var(--error); }
+.samples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; width: 100%; max-width: 860px; margin-top: 8px; text-align: left; }
+.sample { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; font: inherit; color: inherit; text-align: left; }
+.sample b { font-weight: 600; }
+.sub-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px 18px; }
+.sub-item { padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 6px; transition: border-color var(--t-fast), background var(--t-fast); }
+.sub-item:hover { border-color: var(--accent-line); background: var(--surface-2); }
+.sub-item .q { align-self: flex-start; }
+.docs-tools { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.counts-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.counts-row .count { font-size: 22px; }

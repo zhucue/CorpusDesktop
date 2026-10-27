@@ -1,6 +1,17 @@
 from fastapi import FastAPI, Request
 
-from services.api import auth, corpora, errors, jobs, projects, search, subcorpora
+from services.api import (
+    agent_auth,
+    auth,
+    corpora,
+    errors,
+    evidence,
+    jobs,
+    projects,
+    search,
+    stats,
+    subcorpora,
+)
 
 app = FastAPI(title="Corpus API", docs_url="/api/docs", openapi_url="/api/openapi.json")
 errors.install(app)
@@ -18,6 +29,16 @@ def health():
     return {"ok": True}
 
 
-for module in (auth, projects, corpora, subcorpora, search, jobs):
+for module in (
+    auth,
+    agent_auth,
+    projects,
+    corpora,
+    subcorpora,
+    search,
+    stats,
+    evidence,
+    jobs,
+):
     app.include_router(module.router)
 app.include_router(auth.users_router)

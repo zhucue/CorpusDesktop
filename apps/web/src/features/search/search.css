@@ -1,0 +1,29 @@
+.query-card { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.parse { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); flex-wrap: wrap; min-height: 26px; }
+.parse .ok { color: var(--success); display: inline-flex; align-items: center; gap: 4px; }
+.parse .bad { color: var(--error); display: inline-flex; align-items: center; gap: 4px; }
+.parse > span { animation: fade 200ms ease both; }
+.parse .caret-mark { background: var(--error-soft); color: var(--error); text-decoration: underline wavy; }
+.count-card { display: flex; align-items: flex-end; gap: 12px; }
+.count-card > div:first-child { flex: 1; }
+.dist { padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
+.kwic-head { flex-wrap: wrap; }
+.pager { display: flex; gap: 4px; }
+.pager button { min-width: 30px; height: 30px; border-radius: 6px; border: 1px solid transparent; background: none; cursor: pointer; font-family: var(--mono); font-size: 12px; color: var(--text-2); transition: background var(--t-fast), color var(--t-fast); display: inline-grid; place-items: center; }
+.pager button:hover:not([disabled]) { background: var(--fill-hover); }
+.pager button[disabled] { opacity: .4; cursor: default; }
+.pager button[aria-current="page"] { background: var(--accent-tint); color: var(--accent-text); font-weight: 600; border-color: var(--accent-line); }
+.ctx .cur { font-size: 15px; line-height: 1.8; animation: rise 300ms var(--ease-out) both; }
+.ctx .side-s { color: var(--text-3); font-size: 13px; line-height: 1.7; }
+.hist { position: fixed; top: 56px; left: 232px; bottom: 0; z-index: 25; width: 340px; background: var(--surface); border-right: 1px solid var(--line); box-shadow: var(--shadow-dialog); display: flex; flex-direction: column; transform: translateX(-104%); visibility: hidden; transition: transform 340ms var(--ease-out), visibility 0s linear 340ms; }
+.hist.open { transform: none; visibility: visible; transition: transform 340ms var(--ease-out); }
+.hist .card-head { border-radius: 0; }
+.hist-list { flex: 1; overflow: auto; padding: 8px; }
+.hist-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; width: 100%; padding: 10px; border: 0; border-radius: var(--radius); background: none; text-align: left; cursor: pointer; font: inherit; color: inherit; transition: background var(--t-fast); }
+.hist-item:hover { background: var(--fill-hover); }
+.hist-item.on { background: var(--accent-tint); }
+.hist.open .hist-item { animation: rise 320ms var(--ease-out) both; animation-delay: calc(80ms + var(--i, 0) * 40ms); }
+.hist-item .meta { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-item .num { font-size: 12px; color: var(--text-2); text-align: right; }
+.hist-item .q { justify-self: start; }
+.results-row { display: flex; gap: 20px; align-items: flex-start; }

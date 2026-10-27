@@ -1,0 +1,267 @@
+import assert from 'node:assert/strict';
+import { rm } from 'node:fs/promises';
+import { after, test } from 'node:test';
+import { createParser } from '@openuidev/lang-core';
+import { library } from '../src/components.ts';
+import type { Config } from '../src/config.ts';
+import { createModel } from '../src/model.ts';
+import { Runner } from '../src/runner.ts';
+import { createApp } from '../src/server.ts';
+import {
+  AGENT_TOKEN, CORPUS, COOKIE, MemoryStore, ORIGIN, PROJECT, fakeApi, fakeModel, parseSse, testConfig, type Reply,
+} from './fixtures.ts';
+
+const closers: (() => Promise<void>)[] = [];
+after(async () => { for (const close of closers) await close(); });
+
+async function setup(replies: Reply[], options: { api?: Parameters<typeof fakeApi>[0]; config?: Partial<Config>; modelApi?: 'openai-completions' | 'openai-responses'; noModel?: boolean; modelTimeoutMs?: number } = {}) {
+  const api = await fakeApi(options.api);
+  const model = await fakeModel(options.modelApi ?? 'openai-completions', replies);
+  closers.push(api.close, model.close);
+  const config = testConfig({ apiUrl: api.url, modelUrl: options.noModel ? undefined : model.url, modelApi: options.modelApi, ...options.config });
+  closers.push(() => rm(config.dataDir, { recursive: true, force: true }));
+  if (options.modelTimeoutMs && config.model) config.model.timeoutMs = options.modelTimeoutMs;
+  const store = new MemoryStore();
+  const runner = new Runner(config, store, config.model ? await createModel(config.model) : null);
+  const app = createApp(config, store, runner);
+  const call = (method: string, path: string, body?: unknown) => app.request(path, {
+    method, headers: { cookie: COOKIE, origin: ORIGIN, 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const createSession = async () => {
+    const response = await call('POST', '/agent/sessions', { project_id: PROJECT, scope: { corpus_id: CORPUS } });
+    assert.equal(response.status, 201);
+    return (await response.json()) as { id: string; state: string };
+  };
+  return { api, model, store, app, call, createSession };
+}
+
+const KWIC = [
+  'root = KwicTable("search-1", "翻译", "UD 中文", counts, rows, 2)',
+  'counts = {hits: 2, sentences: 2, documents: 2}',
+  'rows = [{hit_id: "doc1:10-12", left: "他们决定", match: "翻译", right: "这本书。", source: "新闻 01"}, {hit_id: "doc2:4-6", left: "请", match: "翻译", right: "成英文。", source: "小说 07", aligned: "Please translate it."}]',
+].join('\n');
+const COLLOCATIONS = 'root = CollocationTable("stat-1", "翻译", 5, "logdice", [{collocate: "w0", freq: 60, score: 10}, {collocate: "w1", freq: 59, score: 9.9}])';
+const ANSWER = `“翻译”在 UD 中文中有 2 条命中（hit_id doc1:10-12、doc2:4-6）。\n\n\`\`\`openui-lang\n${KWIC}\n\`\`\`\n\n搭配结果见 stat-1：\n\`\`\`openui-lang\n${COLLOCATIONS}\n\`\`\`\n`;
+
+test('full run: search and collocation tools, prose and OpenUI streamed, message persisted', async () => {
+  const { api, model, store, call, createSession } = await setup([
+    { tool: 'corpus_search', args: { query: '翻译/v' } },
+    { tool: 'stats_collocations', args: { node: '翻译/v', measures: ['logdice'] } },
+    { text: ANSWER },
+  ]);
+  const session = await createSession();
+  const response = await call('POST', `/agent/sessions/${session.id}/messages`, { content: '找 翻译 作动词的搭配' });
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type') ?? '', /text\/event-stream/);
+  const events = parseSse(await response.text());
+  const names = events.map(e => e.event);
+
+  assert.equal(names[0], 'start');
+  assert.equal(names.at(-1), 'done');
+  assert.deepEqual(names.filter(n => n === 'tool_call' || n === 'tool_result'), ['tool_call', 'tool_result', 'tool_call', 'tool_result']);
+  const results = events.filter(e => e.event === 'tool_result').map(e => e.data);
+  assert.deepEqual(results.map(r => [r.name, r.state]), [['corpus.search', 'succeeded'], ['stats.collocations', 'succeeded']]);
+  assert.deepEqual(results[0].result_ref, { kind: 'search', id: 'search-1' });
+  assert.deepEqual(results[1].result_ref, { kind: 'stat', id: 'stat-1' });
+  assert.equal(events.find(e => e.event === 'tool_call')!.data.state, 'running');
+
+  // text deltas carry only prose; ui deltas carry only OpenUI Lang (no fences)
+  const text = events.filter(e => e.event === 'text').map(e => e.data.delta).join('');
+  const ui = events.filter(e => e.event === 'ui').map(e => e.data.delta).join('');
+  assert.ok(!text.includes('```') && !text.includes('root ='));
+  assert.ok(text.includes('hit_id doc1:10-12'));
+  assert.ok(!ui.includes('```'));
+  assert.ok(ui.startsWith('root = KwicTable('));
+
+  const message = events.at(-1)!.data.message;
+  assert.equal(message.id, events[0].data.message_id);
+  assert.deepEqual(message.parts.map((p: any) => p.type), ['text', 'ui', 'text', 'ui']);
+  assert.equal(message.parts[1].lang.trim(), KWIC);
+  assert.equal(message.parts[3].lang.trim(), COLLOCATIONS);
+  assert.equal(message.tool_calls.length, 2);
+  assert.ok(message.duration_ms >= 0);
+  // every ui part index in the stream points at the matching persisted part
+  for (const e of events.filter(e => e.event === 'ui')) assert.equal(message.parts[e.data.part].type, 'ui');
+
+  // the ui parts are valid OpenUI Lang for the registered library
+  const parser = createParser(library.toJSONSchema());
+  const kwic = parser.parse(message.parts[1].lang);
+  assert.equal((kwic.root as any)?.typeName, 'KwicTable');
+  assert.equal((kwic.root as any)?.props.rows.length, 2);
+  assert.equal((parser.parse(message.parts[3].lang).root as any)?.typeName, 'CollocationTable');
+
+  // tools used the agent token, with the session scope; browser cookie only for identity
+  const search = api.requests.find(r => r.path === '/search')!;
+  assert.equal(search.headers.authorization, `Bearer ${AGENT_TOKEN}`);
+  assert.equal(search.headers.cookie, undefined);
+  assert.deepEqual(search.body.scope, { corpus_id: CORPUS });
+  const collocations = api.requests.find(r => r.path === '/stats/collocations')!;
+  assert.deepEqual(collocations.body.measures, ['logdice']);
+  assert.ok(api.requests.filter(r => r.path.startsWith('/jobs/')).length >= 2);
+  const tokenRequest = api.requests.find(r => r.path === '/auth/agent-token')!;
+  assert.equal(tokenRequest.headers.cookie, COOKIE);
+  assert.deepEqual(tokenRequest.body, { project_id: PROJECT });
+
+  // compact tool results reach the model; system prompt carries the catalog and scope
+  const toolResult = JSON.parse(model.requests[2].body.messages.filter((m: any) => m.role === 'tool').at(-1).content);
+  assert.equal(toolResult.rows.length, 50);
+  assert.equal(toolResult.row_count, 60);
+  const system = model.requests[0].body.messages[0].content;
+  assert.match(system, /KwicTable\(search_id: string/);
+  assert.match(system, /UD 中文/);
+  const toolNames = model.requests[0].body.tools.map((t: any) => t.function.name);
+  assert.equal(toolNames.length, 19);
+  assert.ok(!toolNames.some((n: string) => ['read', 'bash', 'edit', 'write'].includes(n)));
+  assert.ok(toolNames.includes('stats_collocations') && toolNames.includes('jobs_cancel'));
+
+  // persisted: user + assistant, session idle, title from first message, Pi session file present
+  const detail = await (await call('GET', `/agent/sessions/${session.id}`)).json() as any;
+  assert.equal(detail.state, 'idle');
+  assert.equal(detail.message_count, 2);
+  assert.equal(detail.title, '找 翻译 作动词的搭配');
+  assert.deepEqual(detail.messages.map((m: any) => m.role), ['user', 'assistant']);
+  assert.deepEqual(detail.messages[1].parts, message.parts);
+  const stored = [...store.sessions.values()][0];
+  assert.ok(stored.pi_session_path.endsWith(session.id));
+});
+
+test('second message in a session reuses the Pi session history', async () => {
+  const { model, call, createSession } = await setup([{ text: '第一次回答。' }, { text: '第二次回答。' }]);
+  const session = await createSession();
+  parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '你好' })).text());
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '继续' })).text());
+  assert.equal(events.at(-1)!.event, 'done');
+  const contents = model.requests[1].body.messages.map((m: any) => typeof m.content === 'string' ? m.content : JSON.stringify(m.content));
+  assert.ok(contents.some((c: string) => c.includes('第一次回答')));
+});
+
+test('reasoning deltas become thinking events and a thinking part', async () => {
+  const { call, createSession } = await setup([{ thinking: '先确认范围。', text: '范围是 UD 中文。' }]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '范围？' })).text());
+  const thinking = events.filter(e => e.event === 'thinking');
+  assert.equal(thinking.map(e => e.data.delta).join(''), '先确认范围。');
+  assert.ok(thinking.every(e => e.data.part === 0));
+  const message = events.at(-1)!.data.message;
+  assert.deepEqual(message.parts, [{ type: 'thinking', text: '先确认范围。' }, { type: 'text', text: '范围是 UD 中文。' }]);
+  assert.equal(message.content, '范围是 UD 中文。');
+});
+
+test('openai-responses provider streams text', async () => {
+  const { call, createSession } = await setup([{ text: '结果如下。\n```openui-lang\nroot = Callout("info", "范围内没有命中")\n```' }], { modelApi: 'openai-responses' });
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '查一下' })).text());
+  const message = events.at(-1)!.data.message;
+  assert.deepEqual(message.parts.map((p: any) => p.type), ['text', 'ui']);
+  assert.equal(message.parts[1].lang.trim(), 'root = Callout("info", "范围内没有命中")');
+});
+
+test('SESSION_BUSY while running; cancel aborts the run and the waiting tool', async () => {
+  const { api, call, createSession } = await setup(
+    [{ tool: 'stats_frequency', args: {} }],
+    { api: { statJobState: 'running' }, config: { jobWaitMs: 60000 } },
+  );
+  const session = await createSession();
+  const first = await call('POST', `/agent/sessions/${session.id}/messages`, { content: '统计词频' });
+  const body = first.text();
+  await api.firstJobPoll;
+
+  const busy = await call('POST', `/agent/sessions/${session.id}/messages`, { content: '再来' });
+  assert.equal(busy.status, 409);
+  assert.equal(((await busy.json()) as any).error.code, 'SESSION_BUSY');
+  const running = await (await call('GET', `/agent/sessions/${session.id}`)).json() as any;
+  assert.equal(running.state, 'running');
+  assert.equal(running.messages[1].tool_calls[0].state, 'running');
+
+  const cancel = await call('POST', `/agent/sessions/${session.id}/cancel`);
+  assert.equal(cancel.status, 204);
+  const events = parseSse(await body);
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.equal(result.name, 'stats.frequency');
+  assert.equal(result.state, 'cancelled');
+  assert.equal(events.at(-1)!.event, 'done');
+  assert.equal(events.at(-1)!.data.message.tool_calls[0].state, 'cancelled');
+
+  const idle = await (await call('GET', `/agent/sessions/${session.id}`)).json() as any;
+  assert.equal(idle.state, 'idle');
+});
+
+test('stats tool returns job_id when the job outlives the wait', async () => {
+  const { model, call, createSession } = await setup(
+    [{ tool: 'stats_frequency', args: { unit: 'lemma' } }, { text: '任务仍在运行。' }],
+    { api: { statJobState: 'running' }, config: { jobWaitMs: 50 } },
+  );
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '统计' })).text());
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.equal(result.state, 'succeeded');
+  assert.deepEqual(result.result_ref, { kind: 'job', id: 'job-frequency' });
+  const toolMessage = JSON.parse(model.requests[1].body.messages.find((m: any) => m.role === 'tool').content);
+  assert.equal(toolMessage.job_id, 'job-frequency');
+  assert.equal(toolMessage.state, 'running');
+});
+
+test('api errors become failed tool calls with the api code', async () => {
+  const { call, createSession } = await setup([{ tool: 'corpora_get', args: { corpus_id: 'missing' } }, { text: '没有找到该语料库。' }]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '看看语料' })).text());
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.equal(result.name, 'corpora.get');
+  assert.equal(result.state, 'failed');
+  assert.match(result.result_summary, /NOT_FOUND/);
+  assert.equal(events.at(-1)!.event, 'done');
+});
+
+test('MODEL_NOT_CONFIGURED: health reports it and messages return 503', async () => {
+  const { app, call, createSession } = await setup([], { noModel: true });
+  assert.deepEqual(await (await app.request('/agent/health')).json(), { ok: false, reason: 'MODEL_NOT_CONFIGURED' });
+  const session = await createSession();
+  const response = await call('POST', `/agent/sessions/${session.id}/messages`, { content: '你好' });
+  assert.equal(response.status, 503);
+  assert.equal(((await response.json()) as any).error.code, 'MODEL_NOT_CONFIGURED');
+});
+
+test('provider errors map to MODEL_* codes', async () => {
+  const cases: [Reply, string][] = [[{ status: 401 }, 'MODEL_AUTH_FAILED'], [{ status: 429 }, 'MODEL_RATE_LIMITED'], [{ status: 500 }, 'MODEL_REQUEST_FAILED']];
+  for (const [reply, code] of cases) {
+    const { app, call, createSession } = await setup([reply]);
+    assert.equal(((await (await app.request('/agent/health')).json()) as any).ok, true);
+    const session = await createSession();
+    const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '你好' })).text());
+    assert.deepEqual(events.map(e => e.event), ['start', 'error']);
+    assert.equal(events[1].data.code, code);
+  }
+});
+
+test('model timeout maps to MODEL_TIMEOUT', async () => {
+  const { call, createSession } = await setup([{ hang: true }], { modelTimeoutMs: 300 });
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '你好' })).text());
+  assert.equal(events.at(-1)!.event, 'error');
+  assert.equal(events.at(-1)!.data.code, 'MODEL_TIMEOUT');
+});
+
+test('identity, ownership and origin checks', async () => {
+  const { app, call, createSession } = await setup([]);
+  const anonymous = await app.request('/agent/sessions?project_id=' + PROJECT);
+  assert.equal(anonymous.status, 401);
+  const foreign = await app.request('/agent/sessions', {
+    method: 'POST', headers: { cookie: COOKIE, origin: 'http://evil.example', 'content-type': 'application/json' },
+    body: JSON.stringify({ project_id: PROJECT, scope: null }),
+  });
+  assert.equal(foreign.status, 403);
+  const otherProject = await call('POST', '/agent/sessions', { project_id: '99999999-9999-4999-8999-999999999999', scope: null });
+  assert.equal(otherProject.status, 404);
+  const badScope = await call('POST', '/agent/sessions', { project_id: PROJECT, scope: { corpus_id: 'x' } });
+  assert.equal(badScope.status, 422);
+
+  const session = await createSession();
+  const list = await (await call('GET', `/agent/sessions?project_id=${PROJECT}`)).json() as any;
+  assert.equal(list.total, 1);
+  const patched = await (await call('PATCH', `/agent/sessions/${session.id}`, { title: '搭配研究', scope: null })).json() as any;
+  assert.equal(patched.title, '搭配研究');
+  assert.equal(patched.scope, null);
+  assert.equal((await call('DELETE', `/agent/sessions/${session.id}`)).status, 204);
+  assert.equal((await call('GET', `/agent/sessions/${session.id}`)).status, 404);
+});

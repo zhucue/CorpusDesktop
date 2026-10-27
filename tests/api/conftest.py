@@ -74,7 +74,8 @@ def clean(database):
         conn.execute(
             text(
                 "TRUNCATE users, login_sessions, projects, project_members, corpora, documents,"
-                " sentences, tokens, sentence_alignments, subcorpora, saved_queries, jobs CASCADE"
+                " sentences, tokens, sentence_alignments, subcorpora, saved_queries, jobs,"
+                " stat_results, evidence, agent_sessions, agent_messages, agent_tokens CASCADE"
             )
         )
     searches.entries.clear()

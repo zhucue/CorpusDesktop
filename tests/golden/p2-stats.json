@@ -1,0 +1,1688 @@
+{
+ "fixture": "tests/fixtures/ud-en-ewt-sample.conllu",
+ "notes": "keywords: target = documents 1-8, reference = documents 9-16; distribution field newdoc = `# newdoc id`",
+ "cases": [
+  {
+   "name": "frequency-word",
+   "method": "frequency",
+   "params": {
+    "unit": "word",
+    "min_freq": 1
+   },
+   "row_count": 1499,
+   "rows": [
+    {
+     "key": ",",
+     "values": {
+      "item": ",",
+      "freq": 234,
+      "per_million": 51473.82314122305,
+      "doc_freq": 12
+     }
+    },
+    {
+     "key": "the",
+     "values": {
+      "item": "the",
+      "freq": 227,
+      "per_million": 49934.00791904971,
+      "doc_freq": 14
+     }
+    },
+    {
+     "key": ".",
+     "values": {
+      "item": ".",
+      "freq": 166,
+      "per_million": 36515.6181258249,
+      "doc_freq": 15
+     }
+    },
+    {
+     "key": "of",
+     "values": {
+      "item": "of",
+      "freq": 107,
+      "per_million": 23537.175538935327,
+      "doc_freq": 13
+     }
+    },
+    {
+     "key": "and",
+     "values": {
+      "item": "and",
+      "freq": 96,
+      "per_million": 21117.46590409151,
+      "doc_freq": 13
+     }
+    },
+    {
+     "key": "to",
+     "values": {
+      "item": "to",
+      "freq": 88,
+      "per_million": 19357.67707875055,
+      "doc_freq": 14
+     }
+    },
+    {
+     "key": "in",
+     "values": {
+      "item": "in",
+      "freq": 77,
+      "per_million": 16937.96744390673,
+      "doc_freq": 13
+     }
+    },
+    {
+     "key": "a",
+     "values": {
+      "item": "a",
+      "freq": 72,
+      "per_million": 15838.099428068632,
+      "doc_freq": 14
+     }
+    },
+    {
+     "key": "that",
+     "values": {
+      "item": "that",
+      "freq": 61,
+      "per_million": 13418.389793224813,
+      "doc_freq": 14
+     }
+    },
+    {
+     "key": "-",
+     "values": {
+      "item": "-",
+      "freq": 55,
+      "per_million": 12098.548174219093,
+      "doc_freq": 11
+     }
+    },
+    {
+     "key": "is",
+     "values": {
+      "item": "is",
+      "freq": 45,
+      "per_million": 9898.812142542894,
+      "doc_freq": 12
+     }
+    },
+    {
+     "key": "\"",
+     "values": {
+      "item": "\"",
+      "freq": 42,
+      "per_million": 9238.891333040036,
+      "doc_freq": 7
+     }
+    },
+    {
+     "key": "on",
+     "values": {
+      "item": "on",
+      "freq": 35,
+      "per_million": 7699.076110866696,
+      "doc_freq": 11
+     }
+    },
+    {
+     "key": "with",
+     "values": {
+      "item": "with",
+      "freq": 33,
+      "per_million": 7259.128904531456,
+      "doc_freq": 10
+     }
+    },
+    {
+     "key": "'s",
+     "values": {
+      "item": "'s",
+      "freq": 31,
+      "per_million": 6819.1816981962165,
+      "doc_freq": 9
+     }
+    },
+    {
+     "key": "The",
+     "values": {
+      "item": "The",
+      "freq": 27,
+      "per_million": 5939.2872855257365,
+      "doc_freq": 8
+     }
+    },
+    {
+     "key": "have",
+     "values": {
+      "item": "have",
+      "freq": 25,
+      "per_million": 5499.340079190497,
+      "doc_freq": 10
+     }
+    },
+    {
+     "key": "was",
+     "values": {
+      "item": "was",
+      "freq": 25,
+      "per_million": 5499.340079190497,
+      "doc_freq": 9
+     }
+    },
+    {
+     "key": "al",
+     "values": {
+      "item": "al",
+      "freq": 23,
+      "per_million": 5059.392872855257,
+      "doc_freq": 3
+     }
+    },
+    {
+     "key": "it",
+     "values": {
+      "item": "it",
+      "freq": 23,
+      "per_million": 5059.392872855257,
+      "doc_freq": 10
+     }
+    }
+   ]
+  },
+  {
+   "name": "bigrams-word",
+   "method": "ngrams",
+   "params": {
+    "n": 2,
+    "unit": "word",
+    "min_freq": 2
+   },
+   "row_count": 381,
+   "rows": [
+    {
+     "key": ",\tand",
+     "values": {
+      "ngram": ", and",
+      "freq": 32,
+      "per_million": 7039.155301363837
+     }
+    },
+    {
+     "key": "of\tthe",
+     "values": {
+      "ngram": "of the",
+      "freq": 30,
+      "per_million": 6599.208095028596
+     }
+    },
+    {
+     "key": "al\t-",
+     "values": {
+      "ngram": "al -",
+      "freq": 22,
+      "per_million": 4839.419269687637
+     }
+    },
+    {
+     "key": "in\tthe",
+     "values": {
+      "ngram": "in the",
+      "freq": 19,
+      "per_million": 4179.498460184778
+     }
+    },
+    {
+     "key": "-\tQaeda",
+     "values": {
+      "ngram": "- Qaeda",
+      "freq": 15,
+      "per_million": 3299.604047514298
+     }
+    },
+    {
+     "key": ",\tLondon",
+     "values": {
+      "ngram": ", London",
+      "freq": 12,
+      "per_million": 2639.683238011439
+     }
+    },
+    {
+     "key": "that\tthe",
+     "values": {
+      "ngram": "that the",
+      "freq": 10,
+      "per_million": 2199.7360316761988
+     }
+    },
+    {
+     "key": "to\tthe",
+     "values": {
+      "ngram": "to the",
+      "freq": 10,
+      "per_million": 2199.7360316761988
+     }
+    },
+    {
+     "key": ",\tthe",
+     "values": {
+      "ngram": ", the",
+      "freq": 9,
+      "per_million": 1979.762428508579
+     }
+    },
+    {
+     "key": "London\tE17",
+     "values": {
+      "ngram": "London E17",
+      "freq": 9,
+      "per_million": 1979.762428508579
+     }
+    },
+    {
+     "key": "and\tthe",
+     "values": {
+      "ngram": "and the",
+      "freq": 9,
+      "per_million": 1979.762428508579
+     }
+    },
+    {
+     "key": "is\ta",
+     "values": {
+      "ngram": "is a",
+      "freq": 9,
+      "per_million": 1979.762428508579
+     }
+    },
+    {
+     "key": ",\t\"",
+     "values": {
+      "ngram": ", \"",
+      "freq": 8,
+      "per_million": 1759.7888253409592
+     }
+    },
+    {
+     "key": ",\tin",
+     "values": {
+      "ngram": ", in",
+      "freq": 8,
+      "per_million": 1759.7888253409592
+     }
+    },
+    {
+     "key": "in\twhich",
+     "values": {
+      "ngram": "in which",
+      "freq": 8,
+      "per_million": 1759.7888253409592
+     }
+    },
+    {
+     "key": "on\tthe",
+     "values": {
+      "ngram": "on the",
+      "freq": 8,
+      "per_million": 1759.7888253409592
+     }
+    },
+    {
+     "key": "the\tUS",
+     "values": {
+      "ngram": "the US",
+      "freq": 8,
+      "per_million": 1759.7888253409592
+     }
+    },
+    {
+     "key": ",\t24",
+     "values": {
+      "ngram": ", 24",
+      "freq": 7,
+      "per_million": 1539.8152221733392
+     }
+    },
+    {
+     "key": ",\tbut",
+     "values": {
+      "ngram": ", but",
+      "freq": 7,
+      "per_million": 1539.8152221733392
+     }
+    },
+    {
+     "key": "Bin\tLaden",
+     "values": {
+      "ngram": "Bin Laden",
+      "freq": 7,
+      "per_million": 1539.8152221733392
+     }
+    }
+   ]
+  },
+  {
+   "name": "collocations-the",
+   "method": "collocations",
+   "params": {
+    "node": "the",
+    "window": 5,
+    "unit": "word",
+    "measures": [
+     "mi",
+     "logdice",
+     "t",
+     "ll"
+    ],
+    "min_freq": 3
+   },
+   "row_count": 122,
+   "rows": [
+    {
+     "key": "United",
+     "values": {
+      "collocate": "United",
+      "freq": 5,
+      "coll_freq": 5,
+      "mi": 1.2924009736902757,
+      "logdice": 9.305119807200807,
+      "t": 1.3231462515341912,
+      "ll": 8.966221492948048
+     }
+    },
+    {
+     "key": "government",
+     "values": {
+      "collocate": "government",
+      "freq": 5,
+      "coll_freq": 5,
+      "mi": 1.2924009736902757,
+      "logdice": 9.305119807200807,
+      "t": 1.3231462515341912,
+      "ll": 8.966221492948048
+     }
+    },
+    {
+     "key": "Americans",
+     "values": {
+      "collocate": "Americans",
+      "freq": 4,
+      "coll_freq": 4,
+      "mi": 1.2924009736902757,
+      "logdice": 8.988772744576746,
+      "t": 1.183457985041795,
+      "ll": 7.171699007501323
+     }
+    },
+    {
+     "key": "One",
+     "values": {
+      "collocate": "One",
+      "freq": 4,
+      "coll_freq": 4,
+      "mi": 1.2924009736902757,
+      "logdice": 8.988772744576746,
+      "t": 1.183457985041795,
+      "ll": 7.171699007501323
+     }
+    },
+    {
+     "key": "city",
+     "values": {
+      "collocate": "city",
+      "freq": 4,
+      "coll_freq": 4,
+      "mi": 1.2924009736902757,
+      "logdice": 8.988772744576746,
+      "t": 1.183457985041795,
+      "ll": 7.171699007501323
+     }
+    },
+    {
+     "key": "forces",
+     "values": {
+      "collocate": "forces",
+      "freq": 4,
+      "coll_freq": 4,
+      "mi": 1.2924009736902757,
+      "logdice": 8.988772744576746,
+      "t": 1.183457985041795,
+      "ll": 7.171699007501323
+     }
+    },
+    {
+     "key": "threat",
+     "values": {
+      "collocate": "threat",
+      "freq": 4,
+      "coll_freq": 4,
+      "mi": 1.2924009736902757,
+      "logdice": 8.988772744576746,
+      "t": 1.183457985041795,
+      "ll": 7.171699007501323
+     }
+    },
+    {
+     "key": "AMS",
+     "values": {
+      "collocate": "AMS",
+      "freq": 3,
+      "coll_freq": 3,
+      "mi": 1.2924009736902757,
+      "logdice": 8.579337951527275,
+      "t": 1.0249046793577388,
+      "ll": 5.37781610105612
+     }
+    },
+    {
+     "key": "Darfur",
+     "values": {
+      "collocate": "Darfur",
+      "freq": 3,
+      "coll_freq": 3,
+      "mi": 1.2924009736902757,
+      "logdice": 8.579337951527275,
+      "t": 1.0249046793577388,
+      "ll": 5.37781610105612
+     }
+    },
+    {
+     "key": "Government",
+     "values": {
+      "collocate": "Government",
+      "freq": 3,
+      "coll_freq": 3,
+      "mi": 1.2924009736902757,
+      "logdice": 8.579337951527275,
+      "t": 1.0249046793577388,
+      "ll": 5.37781610105612
+     }
+    },
+    {
+     "key": "Iranian",
+     "values": {
+      "collocate": "Iranian",
+      "freq": 3,
+      "coll_freq": 3,
+      "mi": 1.2924009736902757,
+      "logdice": 8.579337951527275,
+      "t": 1.0249046793577388,
+      "ll": 5.37781610105612
+     }
+    },
+    {
+     "key": "Iraqis",
+     "values": {
+      "collocate": "Iraqis",
+      "freq": 3,
+      "coll_freq": 3,
+      "mi": 1.2924009736902757,
+      "logdice": 8.579337951527275,
+      "t": 1.0249046793577388,
+      "ll": 5.37781610105612
+     }
+    },
+    {
+     "key": "Jihad",
+     "values": {
+      "collocate": "Jihad",
+      "freq": 3,
+      "coll_freq": 3,
+      "mi": 1.2924009736902757,
+      "logdice": 8.579337951527275,
+      "t": 1.0249046793577388,
+      "ll": 5.37781610105612
+     }
+    },
+    {
+     "key": "Nations",
+     "values": {
+      "collocate": "Nations",
+      "freq": 3,
+      "coll_freq": 3,
+      "mi": 1.2924009736902757,
+      "logdice": 8.579337951527275,
+      "t": 1.0249046793577388,
+      "ll": 5.37781610105612
+     }
+    },
+    {
+     "key": "article",
+     "values": {
+      "collocate": "article",
+      "freq": 3,
+      "coll_freq": 3,
+      "mi": 1.2924009736902757,
+      "logdice": 8.579337951527275,
+      "t": 1.0249046793577388,
+      "ll": 5.37781610105612
+     }
+    },
+    {
+     "key": "assault",
+     "values": {
+      "collocate": "assault",
+      "freq": 3,
+      "coll_freq": 3,
+      "mi": 1.2924009736902757,
+      "logdice": 8.579337951527275,
+      "t": 1.0249046793577388,
+      "ll": 5.37781610105612
+     }
+    },
+    {
+     "key": "clerics",
+     "values": {
+      "collocate": "clerics",
+      "freq": 3,
+      "coll_freq": 3,
+      "mi": 1.2924009736902757,
+      "logdice": 8.579337951527275,
+      "t": 1.0249046793577388,
+      "ll": 5.37781610105612
+     }
+    },
+    {
+     "key": "company",
+     "values": {
+      "collocate": "company",
+      "freq": 3,
+      "coll_freq": 3,
+      "mi": 1.2924009736902757,
+      "logdice": 8.579337951527275,
+      "t": 1.0249046793577388,
+      "ll": 5.37781610105612
+     }
+    },
+    {
+     "key": "during",
+     "values": {
+      "collocate": "during",
+      "freq": 3,
+      "coll_freq": 3,
+      "mi": 1.2924009736902757,
+      "logdice": 8.579337951527275,
+      "t": 1.0249046793577388,
+      "ll": 5.37781610105612
+     }
+    },
+    {
+     "key": "elections",
+     "values": {
+      "collocate": "elections",
+      "freq": 3,
+      "coll_freq": 3,
+      "mi": 1.2924009736902757,
+      "logdice": 8.579337951527275,
+      "t": 1.0249046793577388,
+      "ll": 5.37781610105612
+     }
+    }
+   ]
+  },
+  {
+   "name": "collocations-verb",
+   "method": "collocations",
+   "params": {
+    "node": "/v",
+    "window": 5,
+    "unit": "word",
+    "measures": [
+     "ll",
+     "mi",
+     "logdice",
+     "t"
+    ],
+    "min_freq": 3
+   },
+   "row_count": 185,
+   "rows": [
+    {
+     "key": "to",
+     "values": {
+      "collocate": "to",
+      "freq": 83,
+      "coll_freq": 88,
+      "mi": 0.6240830769852361,
+      "logdice": 12.35267161831847,
+      "t": 3.1992925598666853,
+      "ll": 53.39705240077795
+     }
+    },
+    {
+     "key": ".",
+     "values": {
+      "collocate": ".",
+      "freq": 63,
+      "coll_freq": 166,
+      "mi": -0.6892842435713996,
+      "logdice": 11.753278249301813,
+      "t": -4.861435699401715,
+      "ll": 37.93330290082493
+     }
+    },
+    {
+     "key": ",",
+     "values": {
+      "collocate": ",",
+      "freq": 110,
+      "coll_freq": 234,
+      "mi": -0.38052974178313625,
+      "logdice": 12.401981346453397,
+      "t": -3.165512575223465,
+      "ll": 20.334058292578312
+     }
+    },
+    {
+     "key": "is",
+     "values": {
+      "collocate": "is",
+      "freq": 15,
+      "coll_freq": 45,
+      "mi": -0.8764872364455476,
+      "logdice": 10.009045139603009,
+      "t": -3.2374255863590373,
+      "ll": 14.39310028147058
+     }
+    },
+    {
+     "key": "could",
+     "values": {
+      "collocate": "could",
+      "freq": 11,
+      "coll_freq": 11,
+      "mi": 0.7084752642756087,
+      "logdice": 9.668268730082278,
+      "t": 1.2869613132835296,
+      "ll": 10.820620929821061
+     }
+    },
+    {
+     "key": "will",
+     "values": {
+      "collocate": "will",
+      "freq": 11,
+      "coll_freq": 11,
+      "mi": 0.7084752642756087,
+      "logdice": 9.668268730082278,
+      "t": 1.2869613132835296,
+      "ll": 10.820620929821061
+     }
+    },
+    {
+     "key": "he",
+     "values": {
+      "collocate": "he",
+      "freq": 19,
+      "coll_freq": 21,
+      "mi": 0.5640853549404339,
+      "logdice": 10.42456027339735,
+      "t": 1.410609017410898,
+      "ll": 9.274102165711728
+     }
+    },
+    {
+     "key": "(",
+     "values": {
+      "collocate": "(",
+      "freq": 4,
+      "coll_freq": 16,
+      "mi": -1.2915247357243913,
+      "logdice": 8.192645077942396,
+      "t": -2.895732512098548,
+      "ll": 8.685019840536551
+     }
+    },
+    {
+     "key": "be",
+     "values": {
+      "collocate": "be",
+      "freq": 14,
+      "coll_freq": 15,
+      "mi": 0.6089395907246944,
+      "logdice": 10.003223900874287,
+      "t": 1.2883332281717703,
+      "ll": 8.31719022990441
+     }
+    },
+    {
+     "key": "n't",
+     "values": {
+      "collocate": "n't",
+      "freq": 14,
+      "coll_freq": 15,
+      "mi": 0.6089395907246944,
+      "logdice": 10.003223900874287,
+      "t": 1.2883332281717703,
+      "ll": 8.31719022990441
+     }
+    },
+    {
+     "key": "they",
+     "values": {
+      "collocate": "they",
+      "freq": 8,
+      "coll_freq": 8,
+      "mi": 0.7084752642756087,
+      "logdice": 9.21864028647534,
+      "t": 1.0975242956560227,
+      "ll": 7.866182650128657
+     }
+    },
+    {
+     "key": "that",
+     "values": {
+      "collocate": "that",
+      "freq": 47,
+      "coll_freq": 61,
+      "mi": 0.33232677839035973,
+      "logdice": 11.609145015299724,
+      "t": 1.4105202433452362,
+      "ll": 7.036492647099671
+     }
+    },
+    {
+     "key": "you",
+     "values": {
+      "collocate": "you",
+      "freq": 16,
+      "coll_freq": 18,
+      "mi": 0.5385502628332964,
+      "logdice": 10.186218808782963,
+      "t": 1.2461504619445667,
+      "ll": 6.96628362176246
+     }
+    },
+    {
+     "key": "me",
+     "values": {
+      "collocate": "me",
+      "freq": 7,
+      "coll_freq": 7,
+      "mi": 0.7084752642756087,
+      "logdice": 9.029277792522247,
+      "t": 1.026639972001306,
+      "ll": 6.881930622946785
+     }
+    },
+    {
+     "key": "up",
+     "values": {
+      "collocate": "up",
+      "freq": 7,
+      "coll_freq": 7,
+      "mi": 0.7084752642756087,
+      "logdice": 9.029277792522247,
+      "t": 1.026639972001306,
+      "ll": 6.881930622946785
+     }
+    },
+    {
+     "key": "who",
+     "values": {
+      "collocate": "who",
+      "freq": 7,
+      "coll_freq": 7,
+      "mi": 0.7084752642756087,
+      "logdice": 9.029277792522247,
+      "t": 1.026639972001306,
+      "ll": 6.881930622946785
+     }
+    },
+    {
+     "key": "for",
+     "values": {
+      "collocate": "for",
+      "freq": 19,
+      "coll_freq": 22,
+      "mi": 0.49697115908189693,
+      "logdice": 10.421379026152671,
+      "t": 1.270214259023766,
+      "ll": 6.843944344903882
+     }
+    },
+    {
+     "key": "do",
+     "values": {
+      "collocate": "do",
+      "freq": 6,
+      "coll_freq": 6,
+      "mi": 0.7084752642756087,
+      "logdice": 8.81017544111998,
+      "t": 0.9504839213087388,
+      "ll": 5.8979586908105945
+     }
+    },
+    {
+     "key": "-",
+     "values": {
+      "collocate": "-",
+      "freq": 25,
+      "coll_freq": 55,
+      "mi": -0.42902825947432627,
+      "logdice": 10.716078227692382,
+      "t": -1.7316322041355037,
+      "ll": 5.633027148856655
+     }
+    },
+    {
+     "key": "out",
+     "values": {
+      "collocate": "out",
+      "freq": 10,
+      "coll_freq": 11,
+      "mi": 0.5709717405256737,
+      "logdice": 9.530765206332344,
+      "t": 1.0335486466076063,
+      "ll": 5.022803242452029
+     }
+    }
+   ]
+  },
+  {
+   "name": "keywords-ll",
+   "method": "keywords",
+   "params": {
+    "unit": "word",
+    "measure": "ll",
+    "min_freq": 3
+   },
+   "row_count": 87,
+   "rows": [
+    {
+     "key": "opinion",
+     "values": {
+      "word": "opinion",
+      "target_freq": 9,
+      "ref_freq": 0,
+      "target_pm": 6351.446718419195,
+      "ref_pm": 0.0,
+      "ll": 20.982703764992543,
+      "log_ratio": 5.312786901765215,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "I",
+     "values": {
+      "word": "I",
+      "target_freq": 16,
+      "ref_freq": 4,
+      "target_pm": 11291.460832745237,
+      "ref_pm": 1278.363694471077,
+      "ll": 20.274761615519196,
+      "log_ratio": 3.1428619003229032,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "Google",
+     "values": {
+      "word": "Google",
+      "target_freq": 6,
+      "ref_freq": 0,
+      "target_pm": 4234.297812279464,
+      "ref_pm": 0.0,
+      "ll": 13.988469176661697,
+      "log_ratio": 4.727824401044059,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "joined",
+     "values": {
+      "word": "joined",
+      "target_freq": 8,
+      "ref_freq": 1,
+      "target_pm": 5645.7304163726185,
+      "ref_pm": 319.59092361776925,
+      "ll": 13.119383031861567,
+      "log_ratio": 4.142861900322903,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "which",
+     "values": {
+      "word": "which",
+      "target_freq": 12,
+      "ref_freq": 4,
+      "target_pm": 8468.595624558928,
+      "ref_pm": 1278.363694471077,
+      "ll": 12.970487811470377,
+      "log_ratio": 2.7278244010440593,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "Parts",
+     "values": {
+      "word": "Parts",
+      "target_freq": 5,
+      "ref_freq": 0,
+      "target_pm": 3528.5815102328866,
+      "ref_pm": 0.0,
+      "ll": 11.657057647218082,
+      "log_ratio": 4.464789995210266,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "filed",
+     "values": {
+      "word": "filed",
+      "target_freq": 5,
+      "ref_freq": 0,
+      "target_pm": 3528.5815102328866,
+      "ref_pm": 0.0,
+      "ll": 11.657057647218082,
+      "log_ratio": 4.464789995210266,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "nuclear",
+     "values": {
+      "word": "nuclear",
+      "target_freq": 5,
+      "ref_freq": 0,
+      "target_pm": 3528.5815102328866,
+      "ref_pm": 0.0,
+      "ll": 11.657057647218082,
+      "log_ratio": 4.464789995210266,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "BREYER",
+     "values": {
+      "word": "BREYER",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "GINSBURG",
+     "values": {
+      "word": "GINSBURG",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "John",
+     "values": {
+      "word": "John",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "SOUTER",
+     "values": {
+      "word": "SOUTER",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "VI",
+     "values": {
+      "word": "VI",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "read",
+     "values": {
+      "word": "read",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "two",
+     "values": {
+      "word": "two",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "ALITO",
+     "values": {
+      "word": "ALITO",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "D",
+     "values": {
+      "word": "D",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "Darfur",
+     "values": {
+      "word": "Darfur",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "Falluja",
+     "values": {
+      "word": "Falluja",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "Government",
+     "values": {
+      "word": "Government",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "significance": "**"
+     }
+    }
+   ]
+  },
+  {
+   "name": "keywords-log-ratio",
+   "method": "keywords",
+   "params": {
+    "unit": "word",
+    "measure": "log_ratio",
+    "min_freq": 3
+   },
+   "row_count": 87,
+   "rows": [
+    {
+     "key": "opinion",
+     "values": {
+      "word": "opinion",
+      "target_freq": 9,
+      "ref_freq": 0,
+      "target_pm": 6351.446718419195,
+      "ref_pm": 0.0,
+      "ll": 20.982703764992543,
+      "log_ratio": 5.312786901765215,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "Google",
+     "values": {
+      "word": "Google",
+      "target_freq": 6,
+      "ref_freq": 0,
+      "target_pm": 4234.297812279464,
+      "ref_pm": 0.0,
+      "ll": 13.988469176661697,
+      "log_ratio": 4.727824401044059,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "Parts",
+     "values": {
+      "word": "Parts",
+      "target_freq": 5,
+      "ref_freq": 0,
+      "target_pm": 3528.5815102328866,
+      "ref_pm": 0.0,
+      "ll": 11.657057647218082,
+      "log_ratio": 4.464789995210266,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "filed",
+     "values": {
+      "word": "filed",
+      "target_freq": 5,
+      "ref_freq": 0,
+      "target_pm": 3528.5815102328866,
+      "ref_pm": 0.0,
+      "ll": 11.657057647218082,
+      "log_ratio": 4.464789995210266,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "nuclear",
+     "values": {
+      "word": "nuclear",
+      "target_freq": 5,
+      "ref_freq": 0,
+      "target_pm": 3528.5815102328866,
+      "ref_pm": 0.0,
+      "ll": 11.657057647218082,
+      "log_ratio": 4.464789995210266,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "joined",
+     "values": {
+      "word": "joined",
+      "target_freq": 8,
+      "ref_freq": 1,
+      "target_pm": 5645.7304163726185,
+      "ref_pm": 319.59092361776925,
+      "ll": 13.119383031861567,
+      "log_ratio": 4.142861900322903,
+      "significance": "***"
+     }
+    },
+    {
+     "key": "BREYER",
+     "values": {
+      "word": "BREYER",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "GINSBURG",
+     "values": {
+      "word": "GINSBURG",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "John",
+     "values": {
+      "word": "John",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "SOUTER",
+     "values": {
+      "word": "SOUTER",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "VI",
+     "values": {
+      "word": "VI",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "read",
+     "values": {
+      "word": "read",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "two",
+     "values": {
+      "word": "two",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "ALITO",
+     "values": {
+      "word": "ALITO",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "D",
+     "values": {
+      "word": "D",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "Darfur",
+     "values": {
+      "word": "Darfur",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "Falluja",
+     "values": {
+      "word": "Falluja",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "Government",
+     "values": {
+      "word": "Government",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "Iranian",
+     "values": {
+      "word": "Iranian",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "significance": "**"
+     }
+    },
+    {
+     "key": "KENNEDY",
+     "values": {
+      "word": "KENNEDY",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "significance": "**"
+     }
+    }
+   ]
+  },
+  {
+   "name": "distribution-newdoc",
+   "method": "distribution",
+   "params": {
+    "query_text": "the",
+    "field": "newdoc"
+   },
+   "row_count": 16,
+   "rows": [
+    {
+     "key": "email-enronsent23_09",
+     "values": {
+      "bin": "email-enronsent23_09",
+      "hits": 2,
+      "tokens": 25,
+      "per_million": 80000.0
+     }
+    },
+    {
+     "key": "email-enronsent23_10",
+     "values": {
+      "bin": "email-enronsent23_10",
+      "hits": 0,
+      "tokens": 26,
+      "per_million": 0.0
+     }
+    },
+    {
+     "key": "weblog-blogspot.com_aggressivevoicedaily_20060629164800_ENG_20060629_164800",
+     "values": {
+      "bin": "weblog-blogspot.com_aggressivevoicedaily_20060629164800_ENG_20060629_164800",
+      "hits": 8,
+      "tokens": 276,
+      "per_million": 28985.507246376812
+     }
+    },
+    {
+     "key": "weblog-blogspot.com_aggressivevoicedaily_20060811122000_ENG_20060811_122000",
+     "values": {
+      "bin": "weblog-blogspot.com_aggressivevoicedaily_20060811122000_ENG_20060811_122000",
+      "hits": 10,
+      "tokens": 533,
+      "per_million": 18761.726078799253
+     }
+    },
+    {
+     "key": "weblog-blogspot.com_floppingaces_20041126180010_ENG_20041126_180010",
+     "values": {
+      "bin": "weblog-blogspot.com_floppingaces_20041126180010_ENG_20041126_180010",
+      "hits": 10,
+      "tokens": 137,
+      "per_million": 72992.700729927
+     }
+    },
+    {
+     "key": "weblog-blogspot.com_floppingaces_20050313182621_ENG_20050313_182621",
+     "values": {
+      "bin": "weblog-blogspot.com_floppingaces_20050313182621_ENG_20050313_182621",
+      "hits": 35,
+      "tokens": 375,
+      "per_million": 93333.33333333334
+     }
+    },
+    {
+     "key": "weblog-blogspot.com_grandpasgripes_20060413051000_ENG_20060413_051000",
+     "values": {
+      "bin": "weblog-blogspot.com_grandpasgripes_20060413051000_ENG_20060413_051000",
+      "hits": 12,
+      "tokens": 201,
+      "per_million": 59701.49253731343
+     }
+    },
+    {
+     "key": "weblog-blogspot.com_marketview_20050224181500_ENG_20050224_181500",
+     "values": {
+      "bin": "weblog-blogspot.com_marketview_20050224181500_ENG_20050224_181500",
+      "hits": 4,
+      "tokens": 154,
+      "per_million": 25974.025974025975
+     }
+    },
+    {
+     "key": "weblog-blogspot.com_marketview_20050511222700_ENG_20050511_222700",
+     "values": {
+      "bin": "weblog-blogspot.com_marketview_20050511222700_ENG_20050511_222700",
+      "hits": 3,
+      "tokens": 92,
+      "per_million": 32608.695652173912
+     }
+    },
+    {
+     "key": "weblog-blogspot.com_marketview_20060625150800_ENG_20060625_150800",
+     "values": {
+      "bin": "weblog-blogspot.com_marketview_20060625150800_ENG_20060625_150800",
+      "hits": 19,
+      "tokens": 366,
+      "per_million": 51912.56830601093
+     }
+    },
+    {
+     "key": "weblog-blogspot.com_tacitusproject_20040715092419_ENG_20040715_092419",
+     "values": {
+      "bin": "weblog-blogspot.com_tacitusproject_20040715092419_ENG_20040715_092419",
+      "hits": 21,
+      "tokens": 289,
+      "per_million": 72664.3598615917
+     }
+    },
+    {
+     "key": "weblog-blogspot.com_zentelligence_20040423000200_ENG_20040423_000200",
+     "values": {
+      "bin": "weblog-blogspot.com_zentelligence_20040423000200_ENG_20040423_000200",
+      "hits": 0,
+      "tokens": 39,
+      "per_million": 0.0
+     }
+    },
+    {
+     "key": "weblog-juancole.com_juancole_20030914114200_ENG_20030914_114200",
+     "values": {
+      "bin": "weblog-juancole.com_juancole_20030914114200_ENG_20030914_114200",
+      "hits": 16,
+      "tokens": 229,
+      "per_million": 69868.99563318778
+     }
+    },
+    {
+     "key": "weblog-juancole.com_juancole_20040722101300_ENG_20040722_101300",
+     "values": {
+      "bin": "weblog-juancole.com_juancole_20040722101300_ENG_20040722_101300",
+      "hits": 38,
+      "tokens": 792,
+      "per_million": 47979.79797979798
+     }
+    },
+    {
+     "key": "weblog-juancole.com_juancole_20041018060600_ENG_20041018_060600",
+     "values": {
+      "bin": "weblog-juancole.com_juancole_20041018060600_ENG_20041018_060600",
+      "hits": 35,
+      "tokens": 597,
+      "per_million": 58626.465661641545
+     }
+    },
+    {
+     "key": "weblog-juancole.com_juancole_20041109060653_ENG_20041109_060653",
+     "values": {
+      "bin": "weblog-juancole.com_juancole_20041109060653_ENG_20041109_060653",
+      "hits": 41,
+      "tokens": 415,
+      "per_million": 98795.18072289156
+     }
+    }
+   ]
+  },
+  {
+   "name": "distribution-position",
+   "method": "distribution",
+   "params": {
+    "query_text": "the",
+    "field": "position",
+    "bins": 10
+   },
+   "row_count": 10,
+   "rows": [
+    {
+     "key": "0–10%",
+     "values": {
+      "bin": "0–10%",
+      "hits": 27,
+      "tokens": 462,
+      "per_million": 58441.55844155844
+     }
+    },
+    {
+     "key": "10–20%",
+     "values": {
+      "bin": "10–20%",
+      "hits": 28,
+      "tokens": 454,
+      "per_million": 61674.00881057269
+     }
+    },
+    {
+     "key": "20–30%",
+     "values": {
+      "bin": "20–30%",
+      "hits": 33,
+      "tokens": 455,
+      "per_million": 72527.47252747254
+     }
+    },
+    {
+     "key": "30–40%",
+     "values": {
+      "bin": "30–40%",
+      "hits": 23,
+      "tokens": 453,
+      "per_million": 50772.626931567334
+     }
+    },
+    {
+     "key": "40–50%",
+     "values": {
+      "bin": "40–50%",
+      "hits": 20,
+      "tokens": 454,
+      "per_million": 44052.86343612335
+     }
+    },
+    {
+     "key": "50–60%",
+     "values": {
+      "bin": "50–60%",
+      "hits": 29,
+      "tokens": 457,
+      "per_million": 63457.33041575492
+     }
+    },
+    {
+     "key": "60–70%",
+     "values": {
+      "bin": "60–70%",
+      "hits": 29,
+      "tokens": 456,
+      "per_million": 63596.491228070176
+     }
+    },
+    {
+     "key": "70–80%",
+     "values": {
+      "bin": "70–80%",
+      "hits": 21,
+      "tokens": 452,
+      "per_million": 46460.176991150445
+     }
+    },
+    {
+     "key": "80–90%",
+     "values": {
+      "bin": "80–90%",
+      "hits": 22,
+      "tokens": 457,
+      "per_million": 48140.04376367615
+     }
+    },
+    {
+     "key": "90–100%",
+     "values": {
+      "bin": "90–100%",
+      "hits": 22,
+      "tokens": 446,
+      "per_million": 49327.35426008968
+     }
+    }
+   ]
+  }
+ ]
+}
