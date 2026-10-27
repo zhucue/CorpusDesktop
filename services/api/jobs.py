@@ -101,10 +101,12 @@ def _load(db, job_id, user, manage=False) -> Job:
     if not job:
         raise not_found("任务")
     check_token_project(user, job.project_id)
+    role = project_role(db, job.project_id, user) if job.project_id else None
+    if job.project_id is not None and role is None:
+        raise not_found("任务")  # also for its creator once removed from the project
     if job.owner_id == user.id:
         return job
-    role = project_role(db, job.project_id, user) if job.project_id else None
-    if role is None and not (job.project_id is None and user.is_admin):
+    if job.project_id is None and not user.is_admin:
         raise not_found("任务")
     if manage and role not in WRITE and job.project_id is not None:
         raise forbidden()

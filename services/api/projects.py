@@ -8,6 +8,7 @@ from sqlalchemy import select
 from services.api.access import MANAGE, Paging, require_project, token_project
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
+from services.api.label_sets import human_only
 from services.api.models import Project, ProjectMember, User
 from services.api.views import project_view
 
@@ -83,6 +84,8 @@ def _check_last_owner(db, project_id, user_id):
 def put_member(
     project_id: UUID, user_id: UUID, body: MemberInput, user: CurrentUser, db: Db
 ):
+    # membership changes only from a cookie session, never an agent token
+    human_only(user)
     require_project(db, project_id, user, MANAGE)
     target = db.get(User, user_id)
     if not target:
@@ -101,6 +104,8 @@ def put_member(
 
 @router.delete("/{project_id}/members/{user_id}", status_code=204)
 def delete_member(project_id: UUID, user_id: UUID, user: CurrentUser, db: Db):
+    # membership changes only from a cookie session, never an agent token
+    human_only(user)
     require_project(db, project_id, user, MANAGE)
     member = db.get(ProjectMember, (project_id, user_id))
     if member is None:

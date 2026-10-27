@@ -54,6 +54,8 @@ export function createApp(config: Config, store: Store, runner: Runner) {
     const id = c.req.param('id') ?? '';
     const session = UUID.test(id) ? await store.getSession(id) : null;
     if (!session || session.owner_id !== user.id) throw new HttpError(404, 'NOT_FOUND', '会话不存在');
+    // The owner must still be a project member: removal revokes access to earlier sessions at once.
+    await browserApi(c).get(`/projects/${session.project_id}`);
     return session;
   }
 
