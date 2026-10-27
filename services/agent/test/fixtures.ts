@@ -135,6 +135,39 @@ export const SENTENCE = {
   ],
 };
 
+/** Layer documents in corpus order: document_ordinal 2 → doc1. */
+export const LAYER_DOCS = [
+  { document_id: 'doc0', title: '前言', sentences: 5, done: 5, pending: 0 },
+  { document_id: 'doc1', title: '新闻 01', sentences: 12, done: 3, pending: 9 },
+];
+
+// ---- P4 knowledge base fixtures (contracts/p4.md §四)
+export const TERM = {
+  id: 'term-1', project_id: PROJECT, term: '翻译腔', language: 'zh', translations: [{ language: 'en', text: 'translationese' }],
+  definition: '译文受源语影响而显得不自然的语言特征。', domain: '翻译学',
+  examples: [{ text: '这种翻译腔在早期译本中很常见。', source: '文献：翻译腔研究 p.3', document_id: 'kb-doc-1' }],
+  source: 'manual', status: 'confirmed', created_by: USER.id, confirmed_by: USER.id,
+  created_at: '2026-10-20T00:00:00Z', updated_at: '2026-10-20T00:00:00Z',
+};
+export const LONG_CHUNK = '翻译腔'.repeat(250); // 750 chars, clipped to 600
+export const KB_SEARCH = {
+  items: [
+    {
+      chunk: { id: 'chunk-1', document_id: 'kb-doc-1', ordinal: 2, text: '翻译腔指译文中受源语结构影响的表达。', locator: { page: 3 } },
+      document: { id: 'kb-doc-1', title: '翻译腔研究', kind: 'literature', source: 'translationese.pdf' }, score: 0.91, highlight: '翻译腔',
+    },
+    {
+      chunk: { id: 'chunk-2', document_id: 'kb-doc-2', ordinal: 0, text: LONG_CHUNK, locator: { heading_path: ['标注规范', '词性'] } },
+      document: { id: 'kb-doc-2', title: '标注规范', kind: 'guideline', source: null }, score: 0.5, highlight: '',
+    },
+  ],
+  terms: [TERM],
+};
+const draftTerms = Array.from({ length: 25 }, (_, i) => ({
+  ...TERM, id: `draft-${i}`, term: `候选${i}`, source: 'corpus', status: 'draft', confirmed_by: null,
+  created_at: `2026-10-27T00:00:${String(i).padStart(2, '0')}Z`,
+}));
+
 export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' } = {}) {
   const requests: ApiRequest[] = [];
   const jobPolls = new Map<string, number>();
@@ -175,6 +208,33 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
     if (statJob && request.method === 'POST') {
       return json(response, 200, { id: `job-${statJob[1]}`, project_id: PROJECT, kind: 'stats', state: 'queued', progress: { done: 0, total: null, message: '' }, result: null, error: null });
     }
+    // ---- P4 knowledge base (contracts/p4.md §四)
+    if (path === `/projects/${PROJECT}/kb/search` && request.method === 'POST') return json(response, 200, KB_SEARCH);
+    if (path === `/projects/${PROJECT}/kb/documents` && request.method === 'POST') {
+      return json(response, 201, {
+        id: 'note-1', project_id: PROJECT, kind: body.kind, title: body.title, source: null, meta: {}, status: 'ready', error: null,
+        chunk_count: 0, created_by: USER.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      });
+    }
+    if (path === '/kb/documents/note-1/refs' && request.method === 'POST') return json(response, 201, { note_id: 'note-1', ...body });
+    if (path === `/projects/${PROJECT}/kb/terms/extract` && request.method === 'POST') {
+      return json(response, 200, { id: 'job-kbextract', project_id: PROJECT, kind: 'kb_extract', state: 'queued', progress: null, result: null, error: null });
+    }
+    if (path === '/jobs/job-kbextract') {
+      const polls = (jobPolls.get('job-kbextract') ?? 0) + 1;
+      jobPolls.set('job-kbextract', polls);
+      const done = polls >= 2;
+      return json(response, 200, {
+        id: 'job-kbextract', project_id: PROJECT, kind: 'kb_extract', state: done ? 'succeeded' : 'running',
+        progress: { done: done ? 1 : 0, total: 1, message: '' }, result: done ? { created: 25, skipped: 3 } : null, error: null,
+      });
+    }
+    if (path === `/projects/${PROJECT}/kb/terms` && request.method === 'GET') {
+      const status = url.searchParams.get('status');
+      return json(response, 200, status === 'draft' ? draftTerms : [TERM]);
+    }
+    if (path === `/projects/${PROJECT}/layers` && request.method === 'GET') return json(response, 200, [layer(DEP_LAYER, 'dep', '依存', 'ready')]);
+    if (path === `/layers/${DEP_LAYER}/documents`) return json(response, 200, { items: LAYER_DOCS, total: LAYER_DOCS.length });
     const job = /^\/jobs\/(job-\w+)$/.exec(path);
     if (job) {
       const polls = (jobPolls.get(job[1]) ?? 0) + 1;

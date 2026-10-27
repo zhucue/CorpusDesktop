@@ -1,5 +1,5 @@
 /**
- * Pi customTools (contracts/p2.md §五 工具, p3.md §五 annot.*). Each tool is a thin call to the api
+ * Pi customTools (contracts/p2.md §五 工具, p3.md §五 annot.*, p4.md §五 kb.*). Each tool is a thin call to the api
  * with the run's agent token; the api decides permissions. Results stay compact.
  */
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -45,7 +45,36 @@ const MAX_HITS = 20;
 const MAX_DIFF_SENTENCES = 10;
 const MAX_LABELS = 30;
 const EFFECTIVE = new Set(['confirmed', 'modified']);
+const MAX_LAYER_DOCS = 50;
+const MAX_KB_ITEMS = 8;
+const MAX_CHUNK_CHARS = 600;
+const MAX_DRAFT_TERMS = 20;
+const MAX_LIST = 50;
 const seg = (value: string | number) => encodeURIComponent(String(value));
+/** List endpoints return either a bare array or {items, total}. */
+const listItems = (list: any): any[] => Array.isArray(list) ? list : list?.items ?? [];
+const clip = (text: unknown, max: number) => {
+  const value = String(text ?? '');
+  return value.length > max ? value.slice(0, max) + '…' : value;
+};
+/** Chunk locator ({page} | {heading_path} | {line}) as display text, e.g. "第 5 页", "引言 › 方法", "第 12 行". */
+export const locatorText = (locator: any): string => {
+  if (!locator || typeof locator !== 'object') return '';
+  if (locator.page !== undefined && locator.page !== null) return `第 ${locator.page} 页`;
+  if (Array.isArray(locator.heading_path) && locator.heading_path.length) return locator.heading_path.join(' › ');
+  if (typeof locator.heading_path === 'string' && locator.heading_path) return locator.heading_path;
+  if (locator.line !== undefined && locator.line !== null) return `第 ${locator.line} 行`;
+  return '';
+};
+const compactTerm = (term: any) => ({
+  term_id: term.id, term: term.term, language: term.language, translations: term.translations ?? [],
+  definition: term.definition ?? '', domain: term.domain ?? '', status: term.status, source: term.source,
+  examples: (term.examples ?? []).slice(0, 3).map((e: any) => ({ text: clip(e.text, 200), source: e.source ?? '' })),
+});
+const compactKbDocument = (doc: any) => ({
+  document_id: doc.id, kind: doc.kind, title: doc.title, source: doc.source ?? null, status: doc.status,
+  chunk_count: doc.chunk_count ?? 0, error: doc.error ?? null, updated_at: doc.updated_at,
+});
 
 /** Pi tool names must match [A-Za-z0-9_-]; the contract name keeps the dot. */
 export const piName = (name: string) => name.replace('.', '_');
@@ -105,11 +134,59 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     return found.id;
   }
 
+  /** `documents` here is the layer's progress by document ({total, done}); annot.layers adds the list separately. */
   const compactLayer = (layer: any) => ({
     layer_id: layer.id, corpus_id: layer.corpus_id, corpus_name: layer.corpus_name, kind: layer.kind, name: layer.name,
     label_set_id: layer.label_set_id, source_model: layer.source_model, status: layer.status, job_id: layer.job_id ?? null,
-    progress: layer.progress, documents: layer.documents, error: layer.error ?? null,
+    progress: layer.progress, document_progress: layer.documents, error: layer.error ?? null,
   });
+
+  /** Documents of a layer in corpus order (GET /layers/{id}/documents), cached per run. */
+  const layerDocs = new Map<string, { document_id: string; title: string }[]>();
+  async function getLayerDocs(layerId: string, signal?: AbortSignal) {
+    if (!layerDocs.has(layerId)) {
+      const docs = listItems(await api.get<any>(`/layers/${seg(layerId)}/documents`, signal));
+      layerDocs.set(layerId, docs.map(d => ({ document_id: String(d.document_id), title: String(d.title ?? '') })));
+    }
+    return layerDocs.get(layerId)!;
+  }
+
+  /** document_id as given, else by title (exact, then unique substring) or 1-based ordinal; none → first document. */
+  async function resolveDocument(layerId: string, args: { document_id?: string; document_title?: string; document_ordinal?: number },
+    signal?: AbortSignal): Promise<{ document_id: string; title: string | null; note?: string }> {
+    if (args.document_id) return { document_id: args.document_id, title: null };
+    const docs = await getLayerDocs(layerId, signal);
+    if (!docs.length) throw new Error('NO_DOCUMENTS: 该标注层没有文档');
+    if (args.document_title) {
+      const wanted = args.document_title.trim().toLowerCase();
+      const exact = docs.filter(d => d.title.toLowerCase() === wanted);
+      const partial = exact.length ? exact : docs.filter(d => d.title.toLowerCase().includes(wanted));
+      if (partial.length === 1) return partial[0];
+      const names = docs.slice(0, 20).map((d, i) => `${i + 1}. ${d.title}`).join('；');
+      throw new Error(partial.length
+        ? `DOCUMENT_AMBIGUOUS: 有 ${partial.length} 个文档标题包含“${args.document_title}”，请指定 document_ordinal：${names}`
+        : `DOCUMENT_NOT_FOUND: 没有标题为“${args.document_title}”的文档：${names}`);
+    }
+    if (args.document_ordinal !== undefined) {
+      const doc = docs[args.document_ordinal - 1];
+      if (!doc) throw new Error(`DOCUMENT_NOT_FOUND: 该层只有 ${docs.length} 个文档`);
+      return doc;
+    }
+    return { ...docs[0], note: `未指定文档，使用该层第一个文档“${docs[0].title}”` };
+  }
+
+  /** A job still running after the wait: hand back job_id instead of failing. */
+  const pendingOutput = (job: Job, what: string, extra: Record<string, unknown> = {}): ToolOutput => ({
+    data: {
+      ...extra, job_id: job.id, kind: job.kind, state: job.state, progress: job.progress,
+      note: `${what}等待超过 ${Math.round(ctx.jobWaitMs / 1000)} 秒仍未完成，请用户到任务页查看；不要重复提交。`,
+    },
+    summary: `任务 ${job.id} 仍在运行`,
+    ref: { kind: 'job', id: job.id },
+  });
+  const jobFailed = (job: Job, what: string) =>
+    new Error(`${job.error?.code ?? 'JOB_' + job.state.toUpperCase()}: ${job.error?.message ?? what + '任务未成功'}`);
+  const running = (job: Job) => job.state === 'queued' || job.state === 'running';
 
   /** Diff-view value of one token: pos → label; dep → "label→head". */
   const annotValue = (kind: string, label: unknown, head: unknown) =>
@@ -117,19 +194,8 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
 
   async function runStat(path: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<ToolOutput> {
     const job = await waitJob(await api.post<Job>(path, body, signal), signal);
-    if (job.state === 'queued' || job.state === 'running') {
-      return {
-        data: {
-          job_id: job.id, kind: job.kind, state: job.state, progress: job.progress,
-          note: `等待超过 ${Math.round(ctx.jobWaitMs / 1000)} 秒仍未完成，请用户到任务页查看；不要重复提交。`,
-        },
-        summary: `任务 ${job.id} 仍在运行`,
-        ref: { kind: 'job', id: job.id },
-      };
-    }
-    if (job.state !== 'succeeded') {
-      throw new Error(`${job.error?.code ?? 'JOB_' + job.state.toUpperCase()}: ${job.error?.message ?? '统计任务未成功'}`);
-    }
+    if (running(job)) return pendingOutput(job, '');
+    if (job.state !== 'succeeded') throw jobFailed(job, '统计');
     const statId = String(job.result?.stat_id ?? '');
     if (!statId) throw new Error('STAT_RESULT_MISSING: 任务成功但没有 stat_id');
     const stat = await api.get<any>(`/stats/${statId}`, signal);
@@ -440,12 +506,16 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     }),
     spec({
       name: 'annot.layers',
-      description: '列出项目标注层（pos 或 dep）与校对进度。',
+      description: `列出项目标注层（pos 或 dep）与校对进度；每层附文档列表 documents（按语料顺序，最多 ${MAX_LAYER_DOCS} 个，document_ordinal 即其中的 1 起序号）。`,
       parameters: Type.Object({ corpus_id: Type.Optional(Type.String()) }),
       run: async (args, signal) => {
-        const list = await api.get<any>(`/projects/${projectId}/layers${query({ corpus_id: args.corpus_id })}`, signal);
-        const items: any[] = Array.isArray(list) ? list : list?.items ?? [];
-        return { data: { total: items.length, items: items.map(compactLayer) }, summary: `${items.length} 个标注层` };
+        const items = listItems(await api.get<any>(`/projects/${projectId}/layers${query({ corpus_id: args.corpus_id })}`, signal));
+        const layersOut = await Promise.all(items.map(async layer => {
+          layers.set(layer.id, layer);
+          const docs = await getLayerDocs(layer.id, signal);
+          return { ...compactLayer(layer), document_count: docs.length, documents: docs.slice(0, MAX_LAYER_DOCS) };
+        }));
+        return { data: { total: items.length, items: layersOut }, summary: `${items.length} 个标注层` };
       },
     }),
     spec({
@@ -487,16 +557,19 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     }),
     spec({
       name: 'annot.sentence',
-      description: '读取标注层中的一句：每个 token 的系统值 system（pos/head/deprel）、该层标注 annotation 和有效值 effective（confirmed/modified 的标注优先，否则系统值）。head 为句内 token 序号，0 为根。',
+      description: '读取标注层中的一句：每个 token 的系统值 system（pos/head/deprel）、该层标注 annotation 和有效值 effective（confirmed/modified 的标注优先，否则系统值）。head 为句内 token 序号，0 为根。文档用 document_id、document_title 或 document_ordinal（annot_layers 中 documents 的 1 起序号）之一指定；都省略时用该层第一个文档。',
       parameters: Type.Object({
         layer_id: Type.String(),
-        document_id: Type.String(),
+        document_id: Type.Optional(Type.String()),
+        document_title: Type.Optional(Type.String({ minLength: 1 })),
+        document_ordinal: Type.Optional(Type.Integer({ minimum: 1 })),
         sentence_index: Type.Integer({ minimum: 0 }),
       }),
       run: async (args, signal) => {
         const layer = await getLayer(args.layer_id, signal);
+        const doc = await resolveDocument(args.layer_id, args, signal);
         const sentence = await api.get<any>(
-          `/layers/${seg(args.layer_id)}/sentences/${seg(args.document_id)}/${seg(args.sentence_index)}`, signal);
+          `/layers/${seg(args.layer_id)}/sentences/${seg(doc.document_id)}/${seg(args.sentence_index)}`, signal);
         const byToken = new Map<number, any>((sentence.annotations ?? []).map((a: any) => [a.token_index, a]));
         const tokens = (sentence.tokens ?? []).map((token: any) => {
           const system = { pos: token.system?.pos ?? null, head: token.system?.head ?? null, deprel: token.system?.deprel ?? null };
@@ -516,7 +589,8 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
         });
         return {
           data: {
-            layer_id: args.layer_id, layer_kind: layer.kind, document_id: sentence.document_id ?? args.document_id,
+            layer_id: args.layer_id, layer_kind: layer.kind, document_id: sentence.document_id ?? doc.document_id,
+            ...(doc.title !== null ? { document_title: doc.title } : {}), ...(doc.note ? { note: doc.note } : {}),
             sentence_index: sentence.sentence_index ?? args.sentence_index, text: sentence.text, status: sentence.status, tokens,
           },
           summary: `第 ${args.sentence_index} 句，${tokens.length} 个 token`,
@@ -613,6 +687,153 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
           format: 'conllu', ...(args.document_ids ? { document_ids: args.document_ids } : {}),
         }, signal);
         return { data: compactJob(job), summary: `导出任务 ${job.id}`, ref: { kind: 'job', id: job.id } };
+      },
+    }),
+    // ---- P4 knowledge base (contracts/p4.md §四–五)
+    spec({
+      name: 'kb.search',
+      description: `知识库混合检索（文献、规范、笔记、网页）：返回最多 ${MAX_KB_ITEMS} 个片段（chunk_id、document_id、title、locator 出处文字、text ≤ ${MAX_CHUNK_CHARS} 字）和匹配的术语。回答引用这些片段时用 KbCitation。`,
+      parameters: Type.Object({
+        q: Type.String({ minLength: 1 }),
+        kinds: Type.Optional(Type.Array(Type.Union(['literature', 'guideline', 'note', 'url'].map(value => Type.Literal(value))))),
+        document_ids: Type.Optional(Type.Array(Type.String())),
+        top_k: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_KB_ITEMS })),
+        mode: oneOf(['hybrid', 'vector', 'keyword']),
+      }),
+      run: async (args, signal) => {
+        const result = await api.post<any>(`/projects/${projectId}/kb/search`, {
+          q: args.q, ...(args.kinds ? { kinds: args.kinds } : {}), ...(args.document_ids ? { document_ids: args.document_ids } : {}),
+          top_k: Math.min(args.top_k ?? MAX_KB_ITEMS, MAX_KB_ITEMS), mode: args.mode ?? 'hybrid',
+        }, signal);
+        const items = (result.items ?? []).slice(0, MAX_KB_ITEMS).map((item: any) => ({
+          chunk_id: item.chunk?.id, document_id: item.document?.id ?? item.chunk?.document_id, title: item.document?.title ?? '',
+          kind: item.document?.kind, locator: locatorText(item.chunk?.locator), text: clip(item.chunk?.text, MAX_CHUNK_CHARS), score: item.score,
+        }));
+        const terms = (result.terms ?? []).map(compactTerm);
+        return {
+          data: { q: args.q, items, terms, ...(result.note ? { note: result.note } : {}) },
+          summary: `${items.length} 个片段，${terms.length} 条术语`,
+        };
+      },
+    }),
+    spec({
+      name: 'kb.save',
+      description: '保存为研究笔记：不给 note_id 时新建笔记（title 省略取正文首行），给 note_id 时把 body（Markdown）追加到该笔记末尾。refs 为引用 [{kind: search|stat|evidence|chunk|term, ref: {...}}]，如 {kind: "chunk", ref: {chunk_id, document_id}}。',
+      parameters: Type.Object({
+        title: Type.Optional(Type.String({ minLength: 1 })),
+        note_id: Type.Optional(Type.String()),
+        body: Type.String({ minLength: 1 }),
+        refs: Type.Optional(Type.Array(Type.Object({
+          kind: Type.Union(['search', 'stat', 'evidence', 'chunk', 'term'].map(value => Type.Literal(value))),
+          ref: Type.Record(Type.String(), Type.Unknown()),
+        }))),
+      }),
+      run: async (args, signal) => {
+        let note: any;
+        if (args.note_id) {
+          const current = await api.get<any>(`/kb/documents/${seg(args.note_id)}`, signal);
+          if (current.kind !== 'note') throw new Error('NOT_A_NOTE: 只能追加到笔记');
+          const previous = String(current.body ?? '').replace(/\s+$/, '');
+          note = await api.patch<any>(`/kb/documents/${seg(args.note_id)}`, {
+            body: previous ? `${previous}\n\n${args.body}` : args.body, ...(args.title ? { title: args.title } : {}),
+          }, signal);
+        } else {
+          const firstLine = args.body.split('\n').map(line => line.replace(/^#+\s*/, '').trim()).find(Boolean) ?? '';
+          note = await api.post<any>(`/projects/${projectId}/kb/documents`, {
+            kind: 'note', title: args.title ?? (clip(firstLine, 40) || '助手笔记'), body: args.body,
+          }, signal);
+        }
+        for (const ref of args.refs ?? []) await api.post(`/kb/documents/${seg(note.id)}/refs`, ref, signal);
+        return {
+          data: { note_id: note.id, title: note.title, appended: Boolean(args.note_id), refs_added: args.refs?.length ?? 0 },
+          summary: `${args.note_id ? '已追加到笔记' : '已新建笔记'} ${note.title}`,
+          ref: { kind: 'note', id: note.id },
+        };
+      },
+    }),
+    spec({
+      name: 'kb.extract_terms',
+      description: `抽取术语候选（后台任务，最多等待 90 秒），结果为草稿，返回最新 ${MAX_DRAFT_TERMS} 条。source=corpus 从语料抽取（scope 省略用会话范围；method pos_pattern 或 model；top 候选数）；source=literature 从文献抽取（需 document_ids，方法为 model）。`,
+      parameters: Type.Object({
+        source: Type.Union([Type.Literal('corpus'), Type.Literal('literature')]),
+        scope: ScopeArg,
+        method: oneOf(['pos_pattern', 'model']),
+        top: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })),
+        document_ids: Type.Optional(Type.Array(Type.String(), { minItems: 1 })),
+      }),
+      run: async (args, signal) => {
+        let body: Record<string, unknown>;
+        if (args.source === 'literature') {
+          if (!args.document_ids?.length) throw new Error('DOCUMENT_IDS_REQUIRED: 从文献抽取需要 document_ids（先用 kb_documents 查找）');
+          body = { source: 'literature', document_ids: args.document_ids, method: 'model' };
+        } else {
+          body = { source: 'corpus', scope: resolveScope(args.scope), method: args.method ?? 'pos_pattern', top: args.top ?? 100 };
+        }
+        const job = await waitJob(await api.post<Job>(`/projects/${projectId}/kb/terms/extract`, body, signal), signal);
+        if (running(job)) return pendingOutput(job, '术语抽取');
+        if (job.state !== 'succeeded') throw jobFailed(job, '术语抽取');
+        const drafts = listItems(await api.get<any>(`/projects/${projectId}/kb/terms${query({ status: 'draft' })}`, signal))
+          .sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')))
+          .slice(0, MAX_DRAFT_TERMS).map(compactTerm);
+        const created = Number(job.result?.created ?? 0);
+        return {
+          data: { job_id: job.id, created, skipped: job.result?.skipped ?? 0, terms: drafts, note: '均为草稿，需用户在术语页确认。' },
+          summary: `新增草稿术语 ${created} 条`,
+          ref: { kind: 'job', id: job.id },
+        };
+      },
+    }),
+    spec({
+      name: 'kb.summarize',
+      description: '为知识库文档生成摘要（后台任务，最多等待 90 秒），返回摘要文本（模型生成的草稿）。',
+      parameters: Type.Object({ document_id: Type.String() }),
+      run: async (args, signal) => {
+        const ref = { kind: 'kb_document', id: args.document_id };
+        const job = await waitJob(await api.post<Job>(`/kb/documents/${seg(args.document_id)}/summarize`, {}, signal), signal);
+        if (running(job)) return pendingOutput(job, '摘要', { document_id: args.document_id });
+        if (job.state !== 'succeeded') throw jobFailed(job, '摘要');
+        const doc = await api.get<any>(`/kb/documents/${seg(args.document_id)}`, signal);
+        const summary = doc.meta?.summary ?? null;
+        if (!summary) throw new Error('SUMMARY_MISSING: 任务成功但文档没有摘要');
+        return {
+          data: { document_id: doc.id, title: doc.title, kind: doc.kind, summary, summary_source: doc.meta?.summary_source ?? null },
+          summary: `已生成摘要：${doc.title}`,
+          ref,
+        };
+      },
+    }),
+    spec({
+      name: 'kb.terms',
+      description: `查询项目术语表（最多 ${MAX_LIST} 条）：q 匹配术语，status 为 draft 或 confirmed，language 如 zh、en。`,
+      parameters: Type.Object({
+        q: Type.Optional(Type.String()),
+        status: oneOf(['draft', 'confirmed']),
+        language: Type.Optional(Type.String()),
+      }),
+      run: async (args, signal) => {
+        const all = listItems(await api.get<any>(`/projects/${projectId}/kb/terms${query({ q: args.q, status: args.status, language: args.language })}`, signal));
+        const items = all.slice(0, MAX_LIST).map(compactTerm);
+        return {
+          data: { total: all.length, items },
+          summary: `${all.length} 条术语`,
+          ...(items.length === 1 ? { ref: { kind: 'term', id: items[0].term_id } } : {}),
+        };
+      },
+    }),
+    spec({
+      name: 'kb.documents',
+      description: `列出知识库文档（最多 ${MAX_LIST} 个，不含正文）：kind 为 literature、guideline、note 或 url，q 匹配标题。`,
+      parameters: Type.Object({
+        kind: oneOf(['literature', 'guideline', 'note', 'url']),
+        q: Type.Optional(Type.String()),
+      }),
+      run: async (args, signal) => {
+        const all = listItems(await api.get<any>(`/projects/${projectId}/kb/documents${query({ kind: args.kind, q: args.q })}`, signal));
+        return {
+          data: { total: all.length, items: all.slice(0, MAX_LIST).map(compactKbDocument) },
+          summary: `${all.length} 个文档`,
+          ...(all.length === 1 ? { ref: { kind: 'kb_document', id: all[0].id } } : {}),
+        };
       },
     }),
   ];

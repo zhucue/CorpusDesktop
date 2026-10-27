@@ -5,10 +5,11 @@ import { createParser } from '@openuidev/lang-core';
 import { COMPONENTS, componentCatalog, library } from '../src/components.ts';
 import type { Config } from '../src/config.ts';
 import { createModel } from '../src/model.ts';
+import { systemPrompt } from '../src/prompt.ts';
 import { Runner } from '../src/runner.ts';
 import { createApp } from '../src/server.ts';
 import {
-  AGENT_TOKEN, CORPUS, COOKIE, DEP_LAYER, MemoryStore, ORIGIN, PROJECT, USER, fakeApi, fakeModel, parseSse, testConfig, type Reply,
+  AGENT_TOKEN, CORPUS, COOKIE, DEP_LAYER, KB_SEARCH, LONG_CHUNK, MemoryStore, ORIGIN, PROJECT, USER, fakeApi, fakeModel, parseSse, testConfig, type Reply,
 } from './fixtures.ts';
 
 const closers: (() => Promise<void>)[] = [];
@@ -111,9 +112,9 @@ test('full run: search and collocation tools, prose and OpenUI streamed, message
   assert.match(system, /KwicTable\(search_id: string/);
   assert.match(system, /UD 中文/);
   const toolNames = model.requests[0].body.tools.map((t: any) => t.function.name);
-  assert.equal(toolNames.length, 26);
+  assert.equal(toolNames.length, 32);
   assert.ok(!toolNames.some((n: string) => ['read', 'bash', 'edit', 'write'].includes(n)));
-  assert.ok(toolNames.includes('stats_collocations') && toolNames.includes('jobs_cancel'));
+  assert.ok(toolNames.includes('stats_collocations') && toolNames.includes('jobs_cancel') && toolNames.includes('kb_search'));
 
   // persisted: user + assistant, session idle, title from first message, Pi session file present
   const detail = await (await call('GET', `/agent/sessions/${session.id}`)).json() as any;
@@ -277,10 +278,10 @@ const TREE = [
 test('annot.sentence then a DependencyTree block', async () => {
   const { api, model, call, createSession } = await setup([
     { tool: 'annot_sentence', args: { layer_id: DEP_LAYER, document_id: 'doc1', sentence_index: 3 } },
-    { text: `doc1 第 3 句的依存结构：\n\`\`\`openui-lang\n${TREE}\n\`\`\`\n` },
+    { text: `doc1 第 4 句的依存结构：\n\`\`\`openui-lang\n${TREE}\n\`\`\`\n` },
   ]);
   const session = await createSession();
-  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '看第 3 句的依存树' })).text());
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '看第 4 句的依存树' })).text());
   assert.equal(events.at(-1)!.event, 'done');
   const result = events.find(e => e.event === 'tool_result')!.data;
   assert.deepEqual([result.name, result.state], ['annot.sentence', 'succeeded']);
@@ -348,10 +349,132 @@ test('annot.create_layer resolves the built-in label set and waits for preannota
   assert.equal(toolResult.layer_id, 'layer-new');
 });
 
-test('catalog lists the 10 components with the P3 signatures', () => {
-  assert.equal(COMPONENTS.length, 10);
+test('annot.layers lists documents; annot.sentence resolves document_ordinal', async () => {
+  const { api, model, call, createSession } = await setup([
+    { tool: 'annot_layers', args: {} },
+    { tool: 'annot_sentence', args: { layer_id: DEP_LAYER, document_ordinal: 2, sentence_index: 3 } },
+    { text: '用的是第 2 个文档“新闻 01”。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '看第 2 个文档第 4 句' })).text());
+  const results = events.filter(e => e.event === 'tool_result').map(e => e.data);
+  assert.deepEqual(results.map(r => [r.name, r.state]), [['annot.layers', 'succeeded'], ['annot.sentence', 'succeeded']]);
+  const tools = model.requests[2].body.messages.filter((m: any) => m.role === 'tool').map((m: any) => JSON.parse(m.content));
+  assert.deepEqual(tools[0].items[0].documents, [{ document_id: 'doc0', title: '前言' }, { document_id: 'doc1', title: '新闻 01' }]);
+  assert.deepEqual(tools[0].items[0].document_progress, { total: 1, done: 1 });
+  assert.equal(tools[1].document_id, 'doc1');
+  assert.equal(tools[1].document_title, '新闻 01');
+  assert.ok(api.requests.some(r => r.path === `/layers/${DEP_LAYER}/sentences/doc1/3`));
+  // the document list is fetched once per run
+  assert.equal(api.requests.filter(r => r.path === `/layers/${DEP_LAYER}/documents`).length, 1);
+});
+
+// ---------------------------------------------------------------- P4 knowledge base
+
+const CITATION = [
+  'root = KbCitation(items)',
+  'items = [{chunk_id: "chunk-1", document_id: "kb-doc-1", title: "翻译腔研究", locator: "第 3 页", text: "翻译腔指译文中受源语结构影响的表达。"}]',
+].join('\n');
+
+test('kb.search returns compact chunks and the answer cites them with KbCitation', async () => {
+  const { api, model, call, createSession } = await setup([
+    { tool: 'kb_search', args: { q: '翻译腔 定义', top_k: 8 } },
+    { text: `翻译腔指受源语结构影响的表达（kb-doc-1 / chunk-1）。\n\`\`\`openui-lang\n${CITATION}\n\`\`\`\n` },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '文献里怎么定义翻译腔' })).text());
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([result.name, result.state], ['kb.search', 'succeeded']);
+  const request = api.requests.find(r => r.path === `/projects/${PROJECT}/kb/search`)!;
+  assert.equal(request.headers.authorization, `Bearer ${AGENT_TOKEN}`);
+  assert.deepEqual(request.body, { q: '翻译腔 定义', top_k: 8, mode: 'hybrid' });
+
+  const toolResult = JSON.parse(model.requests[1].body.messages.find((m: any) => m.role === 'tool').content);
+  assert.deepEqual(toolResult.items[0], {
+    chunk_id: 'chunk-1', document_id: 'kb-doc-1', title: '翻译腔研究', kind: 'literature', locator: '第 3 页',
+    text: KB_SEARCH.items[0].chunk.text, score: 0.91,
+  });
+  assert.equal(toolResult.items[1].locator, '标注规范 › 词性');
+  assert.equal(toolResult.items[1].text, LONG_CHUNK.slice(0, 600) + '…');
+  assert.deepEqual(toolResult.terms.map((t: any) => [t.term_id, t.status]), [['term-1', 'confirmed']]);
+
+  const message = events.at(-1)!.data.message;
+  assert.deepEqual(message.parts.map((p: any) => p.type), ['text', 'ui']);
+  const citation = createParser(library.toJSONSchema()).parse(message.parts[1].lang).root as any;
+  assert.equal(citation?.typeName, 'KbCitation');
+  assert.deepEqual(citation.props.items, [{
+    chunk_id: 'chunk-1', document_id: 'kb-doc-1', title: '翻译腔研究', locator: '第 3 页', text: '翻译腔指译文中受源语结构影响的表达。',
+  }]);
+  const system = model.requests[0].body.messages[0].content;
+  assert.match(system, /kb_search/);
+  assert.match(system, /KbCitation\(items: /);
+});
+
+test('kb.save creates a note, adds refs and returns a note ref', async () => {
+  const refs = [{ kind: 'chunk', ref: { chunk_id: 'chunk-1', document_id: 'kb-doc-1' } }];
+  const { api, call, createSession } = await setup([
+    { tool: 'kb_save', args: { body: '# 翻译腔\n\n定义见 chunk-1。', refs } },
+    { text: '已保存为笔记。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '保存为笔记' })).text());
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([result.name, result.state], ['kb.save', 'succeeded']);
+  assert.deepEqual(result.result_ref, { kind: 'note', id: 'note-1' });
+  const create = api.requests.find(r => r.path === `/projects/${PROJECT}/kb/documents` && r.method === 'POST')!;
+  assert.deepEqual(create.body, { kind: 'note', title: '翻译腔', body: '# 翻译腔\n\n定义见 chunk-1。' });
+  const ref = api.requests.find(r => r.path === '/kb/documents/note-1/refs')!;
+  assert.deepEqual(ref.body, refs[0]);
+});
+
+test('kb.extract_terms polls the job and returns the newest 20 drafts', async () => {
+  const { api, model, call, createSession } = await setup([
+    { tool: 'kb_extract_terms', args: { source: 'corpus' } },
+    { text: '新增 25 条草稿术语。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '从语料抽取术语' })).text());
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([result.name, result.state], ['kb.extract_terms', 'succeeded']);
+  assert.deepEqual(result.result_ref, { kind: 'job', id: 'job-kbextract' });
+  const extract = api.requests.find(r => r.path === `/projects/${PROJECT}/kb/terms/extract`)!;
+  assert.deepEqual(extract.body, { source: 'corpus', scope: { corpus_id: CORPUS }, method: 'pos_pattern', top: 100 });
+  assert.ok(api.requests.filter(r => r.path === '/jobs/job-kbextract').length >= 2);
+  assert.ok(api.requests.some(r => r.path === `/projects/${PROJECT}/kb/terms?status=draft`));
+  const toolResult = JSON.parse(model.requests[1].body.messages.find((m: any) => m.role === 'tool').content);
+  assert.equal(toolResult.created, 25);
+  assert.equal(toolResult.terms.length, 20);
+  assert.equal(toolResult.terms[0].term_id, 'draft-24');
+  assert.ok(toolResult.terms.every((t: any) => t.status === 'draft'));
+});
+
+test('TermCard block parses with the contract props', () => {
+  const lang = [
+    'root = TermCard("term-1", "翻译腔", translations, "译文受源语影响而显得不自然的语言特征。", "翻译学", examples, "confirmed")',
+    'translations = [{language: "en", text: "translationese"}]',
+    'examples = [{text: "这种翻译腔在早期译本中很常见。", source: "文献：翻译腔研究 p.3"}]',
+  ].join('\n');
+  const card = createParser(library.toJSONSchema()).parse(lang).root as any;
+  assert.equal(card?.typeName, 'TermCard');
+  assert.equal(card.props.term_id, 'term-1');
+  assert.deepEqual(card.props.translations, [{ language: 'en', text: 'translationese' }]);
+  assert.equal(card.props.domain, '翻译学');
+  assert.equal(card.props.examples[0].source, '文献：翻译腔研究 p.3');
+  assert.equal(card.props.status, 'confirmed');
+});
+
+test('catalog lists the 12 components with the P3 and P4 signatures', () => {
+  assert.equal(COMPONENTS.length, 12);
   const catalog = componentCatalog();
   for (const component of COMPONENTS) assert.ok(catalog.includes(component.name), component.name);
   assert.match(catalog, /DependencyTree\(document_id: string, sentence_index: number, tokens: .*arcs: .*highlight\?/);
   assert.match(catalog, /AnnotationDiff\(layer_id: string, document_id: string, sentence_index: number, tokens: /);
+  assert.match(catalog, /TermCard\(term_id: string, term: string, translations: .*definition: string, domain: string, examples: .*status: /);
+  assert.match(catalog, /KbCitation\(items: /);
+});
+
+test('system prompt states 1-based sentence numbering', () => {
+  const prompt = systemPrompt('UD 中文');
+  assert.ok(prompt.includes('用户说的“第 N 句”对应 sentence_index = N−1'));
+  assert.ok(prompt.includes('组件中的 sentence_index 保持工具返回的原值'));
 });

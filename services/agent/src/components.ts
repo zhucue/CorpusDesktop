@@ -1,5 +1,5 @@
 /**
- * OpenUI component catalog (contracts/p2.md §五, p3.md §五). Single source for the
+ * OpenUI component catalog (contracts/p2.md §五, p3.md §五, p4.md §五). Single source for the
  * system-prompt catalog; the web app registers renderers under the same names
  * and prop order. No renderer here: `component` is null on the server.
  */
@@ -128,9 +128,35 @@ export const AnnotationDiff = defineComponent({
   component: null,
 });
 
+export const TermCard = defineComponent({
+  name: 'TermCard',
+  description: '一条术语的词条。用户问某个术语或术语建议时使用，数据取自 kb_terms、kb_search 的 terms 或 kb_extract_terms；status 原样复制（draft 为草稿，confirmed 为已确认），自己提出的术语建议只能写 draft；examples 最多 3 条。',
+  props: z.object({
+    term_id: z.string(),
+    term: z.string(),
+    translations: z.array(z.object({ language: z.string(), text: z.string() })),
+    definition: z.string(),
+    domain: z.string(),
+    examples: z.array(z.object({ text: z.string(), source: z.string() })),
+    status: z.enum(['draft', 'confirmed']),
+  }),
+  component: null,
+});
+
+export const KbCitation = defineComponent({
+  name: 'KbCitation',
+  description: '回答所依据的知识库片段。kb_search 之后、回答引用了文献、规范或笔记内容时使用：items 只放实际引用的片段，chunk_id、document_id、title、locator、text 从 kb_search 结果复制。',
+  props: z.object({
+    items: z.array(z.object({
+      chunk_id: z.string(), document_id: z.string(), title: z.string(), locator: z.string(), text: z.string(),
+    })),
+  }),
+  component: null,
+});
+
 export const COMPONENTS = [
   KwicTable, FreqChart, CollocationTable, KeywordTable, DistributionChart, EvidenceCard, JobStatus, Callout,
-  DependencyTree, AnnotationDiff,
+  DependencyTree, AnnotationDiff, TermCard, KbCitation,
 ];
 export const COMPONENT_NAMES = COMPONENTS.map(component => component.name);
 

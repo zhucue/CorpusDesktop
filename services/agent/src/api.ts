@@ -1,4 +1,4 @@
-/** Thin client for the business api (contracts/p1.md §二, p2.md §三–五). */
+/** Thin client for the business api (contracts/p1.md §二, p2.md §三–五, p4.md §四). */
 
 export class ApiError extends Error {
   readonly status: number;
@@ -59,6 +59,7 @@ export class ApiClient {
 
   get<T>(path: string, signal?: AbortSignal) { return this.request<T>('GET', path, undefined, signal); }
   post<T>(path: string, body: unknown = {}, signal?: AbortSignal) { return this.request<T>('POST', path, body, signal); }
+  patch<T>(path: string, body: unknown, signal?: AbortSignal) { return this.request<T>('PATCH', path, body, signal); }
 }
 
 export function query(params: Record<string, string | number | undefined | null>): string {
