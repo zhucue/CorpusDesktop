@@ -126,6 +126,8 @@ class Corpus(Base):
         JSONB, server_default='{"documents": 0, "sentences": 0, "tokens": 0}'
     )
     index_version: Mapped[str | None] = mapped_column(Text)
+    # source and license: {license, attribution, source_url, version} (built-in corpora)
+    meta: Mapped[dict] = mapped_column("metadata", JSONB, server_default="{}")
     created_at: Mapped[datetime] = _created()
 
 

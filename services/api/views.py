@@ -23,6 +23,7 @@ def corpus_view(c):
         "error": c.error,
         "stats": c.stats,
         "index_version": c.index_version,
+        "meta": c.meta or {},
         "created_at": c.created_at,
     }
 

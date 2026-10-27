@@ -202,3 +202,17 @@ def test_txt_to_search(tmp_path):
     )
     assert run("语言/NOUN").counts.hits == tagged.counts.hits
     assert run("语言/n", "upos").counts.hits == 0
+
+
+def test_progress_offsets(monkeypatch):
+    """annotate(doc, progress) reports increasing offsets inside one document (zh and Stanza paths)."""
+    monkeypatch.setattr(nlp, "ZH_PROGRESS", 1)
+    monkeypatch.setattr(nlp, "BATCH", 1)
+    zh = Document("zh", "zh", "语言是工具。社会语言学研究语言。\n第三句。", {}, [])
+    seen = []
+    nlp.annotate(zh, seen.append)
+    assert seen == [s.end for s in zh.sentences] and seen == sorted(seen)
+    en = Document("en", "en", "One line.\nAnother line here.", {}, [])
+    seen = []
+    nlp.annotate(en, seen.append)
+    assert seen == [9, len(en.text)]

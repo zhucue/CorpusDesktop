@@ -4,9 +4,9 @@ writes results and marks the job succeeded, so a cancel either wins entirely or 
 import csv
 import json
 import shutil
+import time
 import uuid
 from datetime import datetime
-from itertools import islice
 from pathlib import Path
 
 from docx import Document as DocxDocument
@@ -70,6 +70,10 @@ from services.worker.main import Cancelled, JobFailed
 EXPORT_PAGE = 1000
 EXPORT_COUNT_TIMEOUT = 600
 LOAD_BATCH = 500
+# token rows read per index load round; a larger document loads alone
+LOAD_TOKENS = 1_000_000
+WRITE_SENTENCES = 5000  # sentences (with their tokens) per INSERT round at import
+PROGRESS_SECONDS = 2.0
 
 
 def _corpus(db, corpus_id):
@@ -132,41 +136,41 @@ def _write_documents(db, corpus_id, documents, written):
                 "token_count": sum(len(s.tokens) for s in doc.sentences),
             },
         )
-        if not doc.sentences:
-            continue
-        ids = db.scalars(
-            insert(Sentence).returning(Sentence.id, sort_by_parameter_order=True),
-            [
+        for k in range(0, len(doc.sentences), WRITE_SENTENCES):
+            part = doc.sentences[k : k + WRITE_SENTENCES]
+            ids = db.scalars(
+                insert(Sentence).returning(Sentence.id, sort_by_parameter_order=True),
+                [
+                    {
+                        "document_id": doc_id,
+                        "idx": k + i,
+                        "start_cp": s.start,
+                        "end_cp": s.end,
+                        "text": doc.text[s.start : s.end],
+                    }
+                    for i, s in enumerate(part)
+                ],
+            ).all()
+            tokens = [
                 {
-                    "document_id": doc_id,
-                    "idx": i,
-                    "start_cp": s.start,
-                    "end_cp": s.end,
-                    "text": doc.text[s.start : s.end],
+                    "sentence_id": sid,
+                    "idx": j,
+                    "start_cp": t.start,
+                    "end_cp": t.end,
+                    "form": t.form,
+                    "pos": t.pos,
+                    "lemma": t.lemma,
+                    "head": t.head,
+                    "deprel": t.deprel,
                 }
-                for i, s in enumerate(doc.sentences)
-            ],
-        ).all()
-        tokens = [
-            {
-                "sentence_id": sid,
-                "idx": j,
-                "start_cp": t.start,
-                "end_cp": t.end,
-                "form": t.form,
-                "pos": t.pos,
-                "lemma": t.lemma,
-                "head": t.head,
-                "deprel": t.deprel,
-            }
-            for sid, s in zip(ids, doc.sentences)
-            for j, t in enumerate(s.tokens)
-        ]
-        if tokens:
-            db.execute(insert(Token), tokens)
-        for sid, s in zip(ids, doc.sentences):
-            if s.external_id:
-                by_external[s.external_id] = sid
+                for sid, s in zip(ids, part)
+                for j, t in enumerate(s.tokens)
+            ]
+            if tokens:
+                db.execute(insert(Token), tokens)
+            for sid, s in zip(ids, part):
+                if s.external_id:
+                    by_external[s.external_id] = sid
     return by_external
 
 
@@ -174,11 +178,21 @@ def run_import(run):
     corpus_id = uuid.UUID(run.params["corpus_id"])
     documents, alignments = _parse_batch(run)
     total = len(documents)
-    for i, doc in enumerate(documents):
-        if i % 20 == 0:
-            run.progress(i, total, "标注")
-        nlp.annotate(doc)
-    run.progress(total, total, "写入")
+    # progress in characters so one large document (Tatoeba: one per language) still advances
+    chars = sum(len(d.text) for d in documents)
+    done, last = 0, 0.0
+
+    def report(offset):
+        nonlocal last
+        if time.monotonic() - last >= PROGRESS_SECONDS:
+            last = time.monotonic()
+            run.progress(done + offset, chars, "标注（字符）")
+
+    for doc in documents:
+        report(0)
+        nlp.annotate(doc, report)
+        done += len(doc.text)
+    run.progress(chars, chars, "写入")
     written = []
     try:
         with transaction() as db:
@@ -235,41 +249,77 @@ def run_import(run):
 # ---- index ----
 
 
-def _load_documents(doc_ids, run):
-    """Stream engine Documents from the database in id order, LOAD_BATCH at a time."""
-    total = len(doc_ids)
-    it = iter(doc_ids)
+def _load_batches(docs):
+    """Group (id, token_count) rows into load rounds of at most LOAD_BATCH documents and LOAD_TOKENS
+    tokens; a document larger than LOAD_TOKENS is a round of its own."""
+    batch, tokens = [], 0
+    for doc_id, n in docs:
+        if batch and (len(batch) >= LOAD_BATCH or tokens + n > LOAD_TOKENS):
+            yield batch
+            batch, tokens = [], 0
+        batch.append(doc_id)
+        tokens += n
+    if batch:
+        yield batch
+
+
+def _load_documents(docs, run):
+    """Stream engine Documents from the database in the given order, one load round at a time.
+    Rows are read as plain tuples; ORM objects for millions of tokens would not fit in memory."""
+    total = len(docs)
     done = 0
-    while batch := list(islice(it, LOAD_BATCH)):
-        run.progress(done, total, "建索引")
+    for batch in _load_batches(docs):
+        run.progress(done, total, "建索引（文档）")
         with session() as db:
-            docs = {
-                d.id: d
-                for d in db.scalars(select(Document).where(Document.id.in_(batch)))
+            rows = {
+                r.id: r
+                for r in db.execute(
+                    select(
+                        Document.id,
+                        Document.title,
+                        Document.language,
+                        Document.meta,
+                        Document.external_id,
+                        Document.text_path,
+                    ).where(Document.id.in_(batch))
+                )
             }
-            sentences = db.scalars(
-                select(Sentence)
+            sentences = db.execute(
+                select(
+                    Sentence.id,
+                    Sentence.document_id,
+                    Sentence.start_cp,
+                    Sentence.end_cp,
+                )
                 .where(Sentence.document_id.in_(batch))
                 .order_by(Sentence.document_id, Sentence.idx)
             ).all()
-            tokens = db.scalars(
-                select(Token)
+            by_sentence = {}
+            for sid, *fields in db.execute(
+                select(
+                    Token.sentence_id,
+                    Token.start_cp,
+                    Token.end_cp,
+                    Token.form,
+                    Token.pos,
+                    Token.lemma,
+                    Token.head,
+                    Token.deprel,
+                )
                 .join(Sentence, Sentence.id == Token.sentence_id)
                 .where(Sentence.document_id.in_(batch))
                 .order_by(Token.sentence_id, Token.idx)
-            ).all()
-        by_sentence = {}
-        for t in tokens:
-            by_sentence.setdefault(t.sentence_id, []).append(
-                em.Token(t.start_cp, t.end_cp, t.form, t.pos, t.lemma, t.head, t.deprel)
-            )
+                .execution_options(yield_per=50_000)
+            ):
+                by_sentence.setdefault(sid, []).append(em.Token(*fields))
         by_doc = {}
-        for s in sentences:
-            by_doc.setdefault(s.document_id, []).append(
-                em.Sentence(s.start_cp, s.end_cp, by_sentence.get(s.id, []))
+        for sid, doc_id, a, b in sentences:
+            by_doc.setdefault(doc_id, []).append(
+                em.Sentence(a, b, by_sentence.pop(sid, []))
             )
+        del sentences
         for doc_id in batch:
-            d = docs.get(doc_id)
+            d = rows.get(doc_id)
             if d is None:
                 raise JobFailed("DOCUMENTS_CHANGED", "建索引期间文档被删除，请重试")
             yield em.Document(
@@ -277,7 +327,7 @@ def _load_documents(doc_ids, run):
                 language=d.language,
                 text=Path(d.text_path).read_text(encoding="utf-8"),
                 metadata=d.meta,
-                sentences=by_doc.get(doc_id, []),
+                sentences=by_doc.pop(doc_id, []),
                 external_id=d.external_id,
             )
         done += len(batch)
@@ -287,18 +337,18 @@ def run_index(run):
     corpus_id = uuid.UUID(run.params["corpus_id"])
     with transaction() as db:
         _corpus(db, corpus_id).status = "indexing"
-        doc_ids = db.scalars(
-            select(Document.id)
+        docs = db.execute(
+            select(Document.id, Document.token_count)
             .where(Document.corpus_id == corpus_id)
             .order_by(Document.created_at, Document.id)
         ).all()
     info = None
-    if doc_ids:
+    if docs:
         info = cwb.build(
             index_dir(corpus_id),
             corpus_key(corpus_id),
-            _load_documents(doc_ids, run),
-            [str(i) for i in doc_ids],
+            _load_documents(docs, run),
+            [str(i) for i, _ in docs],
         )
     with transaction() as db:
         run.lock(db)
@@ -360,17 +410,23 @@ def _cell(value):
     )
 
 
-def _write_csv(path, header, rows):
+def _write_csv(path, header, rows, notice=()):
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
+        if notice:
+            writer.writerows([[line] for line in notice] + [[]])
         writer.writerow(header)
         writer.writerows(rows)
 
 
-def _write_xlsx(path, header, rows, sheet="检索结果"):
+def _write_xlsx(path, header, rows, sheet="检索结果", notice=()):
     wb = Workbook(write_only=True)
     ws = wb.create_sheet(sheet)
     title_font = Font(name="宋体", bold=True)
+    for line in notice:
+        ws.append([line])
+    if notice:
+        ws.append([])
     cells = []
     for title in header:
         cell = WriteOnlyCell(ws, value=title)
@@ -391,6 +447,7 @@ def run_export(run):
         ast, cqp = plan_query(req.query, corpus_tagset(corpus))
         layers = effective.check_layers(db, req.layers, corpus, user)
         with_span_layer(db, cqp, layers, corpus, user)
+        notice = source_notice(db, [corpus.id])
         size = (
             10**9 if pure_attr(ast) or query.pure_span(ast) else EXPORT_PAGE
         )  # PostgreSQL answers in one pass
@@ -416,26 +473,49 @@ def run_export(run):
                 break
             page += 1
     header, rows = _rows(items)
-    _finish_export(run, "检索结果", header, rows, {"hits": hits})
+    _finish_export(run, "检索结果", header, rows, {"hits": hits}, notice)
 
 
-def _finish_export(run, name, header, rows, extra=None):
+SOURCE_FIELDS = (
+    ("license", "许可"),
+    ("attribution", "署名"),
+    ("source_url", "链接"),
+    ("version", "版本"),
+)
+
+
+def source_notice(db, corpus_ids):
+    """One line per corpus that has a license or attribution (Corpus.meta), for the top of exports."""
+    lines = []
+    for cid in dict.fromkeys(str(c) for c in corpus_ids if c):
+        corpus = db.get(Corpus, uuid.UUID(cid))
+        meta = (corpus.meta or {}) if corpus else {}
+        if not (meta.get("license") or meta.get("attribution")):
+            continue
+        parts = [f"来源：{corpus.name}"]
+        parts += [f"{label}：{meta[k]}" for k, label in SOURCE_FIELDS if meta.get(k)]
+        lines.append("；".join(parts))
+    return lines
+
+
+def _finish_export(run, name, header, rows, extra=None, notice=()):
+    """notice: source / license lines written above the table (csv, xlsx) or under the title (docx)."""
     fmt = run.params["format"]
     path = export_path(run.id, fmt)
     path.parent.mkdir(parents=True, exist_ok=True)
     if fmt == "csv":
-        _write_csv(path, header, rows)
+        _write_csv(path, header, rows, notice)
     elif fmt == "xlsx":
-        _write_xlsx(path, header, rows, name)
+        _write_xlsx(path, header, rows, name, notice)
     else:
-        _write_docx(path, name, header, rows)
+        _write_docx(path, name, header, rows, notice)
     filename = f"{name}-{datetime.now():%Y%m%d-%H%M}.{fmt}"
     with transaction() as db:
         run.lock(db)
         run.succeed(db, {"rows": len(rows), **(extra or {}), "filename": filename})
 
 
-def _write_docx(path, title, header, rows):
+def _write_docx(path, title, header, rows, notice=()):
     """One block per row: the first column as a paragraph, the others as `label：value` lines. 宋体, no fills."""
     doc = DocxDocument()
     normal = doc.styles["Normal"]
@@ -443,6 +523,8 @@ def _write_docx(path, title, header, rows):
     normal.element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
     heading = doc.add_paragraph().add_run(title)
     heading.bold, heading.font.size = True, Pt(16)
+    for line in notice:
+        doc.add_paragraph(line)
     for i, row in enumerate(rows, 1):
         doc.add_paragraph(f"{i}. {row[0]}")
         for label, value in zip(header[1:], row[1:]):
@@ -457,13 +539,17 @@ def run_export_stats(run):
         if not stat:
             raise JobFailed("STAT_DELETED", "统计结果已删除")
         columns, path = stat.columns, Path(stat.rows_path)
+        reference = (stat.params or {}).get("reference") or {}
+        notice = source_notice(
+            db, [stat.scope.get("corpus_id"), reference.get("corpus_id")]
+        )
     data = json.loads(path.read_text(encoding="utf-8"))["rows"]
     header = [c["label"] for c in columns] + ["查询式"]
     rows = [
         [_cell(r["values"].get(c["key"])) for c in columns] + [r["search_query"]]
         for r in data
     ]
-    _finish_export(run, "统计结果", header, rows)
+    _finish_export(run, "统计结果", header, rows, notice=notice)
 
 
 def run_export_evidence(run):
@@ -496,7 +582,8 @@ def run_export_layer(run):
         docs = db.scalars(stmt.order_by(Document.created_at, Document.id)).all()
         layers = {"pos": None, "dep": None, layer.kind: effective.eff_layer(layer)}
         name = layer.name
-    parts, sentences, tokens = [], 0, 0
+        notice = source_notice(db, [layer.corpus_id])
+    parts, sentences, tokens = [f"# {line}\n" for line in notice], 0, 0
     for i in range(0, len(docs), LOAD_BATCH):
         batch = docs[i : i + LOAD_BATCH]
         run.progress(i, len(docs), "导出")

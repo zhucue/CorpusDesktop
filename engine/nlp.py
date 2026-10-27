@@ -12,6 +12,9 @@ STANZA_RESOURCES_DIR.
 
 Documents without sentences are split per paragraph ("\n"); existing sentences without tokens (Tatoeba,
 TMX) are tokenised in place; sentences that already have tokens (CoNLL-U) are left untouched.
+
+annotate(doc, progress) calls progress(offset) with the code-point offset reached in doc.text after every
+BATCH Stanza items and every ZH_PROGRESS Chinese sentences, so callers can report progress inside large documents.
 """
 
 import functools
@@ -26,6 +29,7 @@ from engine.model import Document, Sentence, Token
 STANZA_PROCESSORS = {"en": "tokenize,mwt,pos,lemma,depparse"}
 LANGUAGES = ("en", "zh")
 BATCH = 200  # paragraphs / sentences per Stanza call
+ZH_PROGRESS = 2000  # Chinese sentences between progress callbacks
 
 _CJK = re.compile(r"[㐀-䶿一-鿿豈-﫿]")
 _CLOSE = "”’」』）》〉】〕］｝\"')]}"
@@ -119,16 +123,20 @@ def zh_tokens(text: str, start: int, end: int) -> list[Token]:
     return out
 
 
-def _annotate_zh(doc: Document) -> None:
+def _annotate_zh(doc: Document, progress) -> None:
     if not doc.sentences:
-        for a, b in zh_sentences(doc.text):
+        for i, (a, b) in enumerate(zh_sentences(doc.text), 1):
             toks = zh_tokens(doc.text, a, b)
             if toks:
                 doc.sentences.append(Sentence(toks[0].start, toks[-1].end, toks))
+            if i % ZH_PROGRESS == 0:
+                progress(b)
         return
-    for s in doc.sentences:
+    for i, s in enumerate(doc.sentences, 1):
         if not s.tokens:
             s.tokens = zh_tokens(doc.text, s.start, s.end)
+        if i % ZH_PROGRESS == 0:
+            progress(s.end)
 
 
 # Rough jieba → UPOS map, for the UPOS column of CoNLL-U exports of jieba-tagged text.
@@ -254,31 +262,43 @@ def _process(lang: str, texts: list[str]):
         )
 
 
-def _annotate_stanza(doc: Document, lang: str) -> None:
+def _annotate_stanza(doc: Document, lang: str, progress) -> None:
     if not doc.sentences:
         paras, pos = [], 0
         for line in doc.text.split("\n"):
             if line.strip():
                 paras.append((pos, line))
             pos += len(line) + 1
-        for (base, line), sd in zip(paras, _process(lang, [p for _, p in paras])):
+        for i, ((base, line), sd) in enumerate(
+            zip(paras, _process(lang, [p for _, p in paras])), 1
+        ):
             for sent in sd.sentences:
                 toks = _tokens(sent, base)
                 if toks:
                     doc.sentences.append(Sentence(toks[0].start, toks[-1].end, toks))
+            if i % BATCH == 0:
+                progress(base + len(line))
         return
     todo = [
         s for s in doc.sentences if not s.tokens and doc.text[s.start : s.end].strip()
     ]
-    for s, sd in zip(todo, _process(lang, [doc.text[s.start : s.end] for s in todo])):
+    for i, (s, sd) in enumerate(
+        zip(todo, _process(lang, [doc.text[s.start : s.end] for s in todo])), 1
+    ):
         s.tokens = [t for sent in sd.sentences for t in _tokens(sent, s.start)]
+        if i % BATCH == 0:
+            progress(s.end)
 
 
-def annotate(doc: Document) -> None:
+def _ignore(_offset: int) -> None:
+    pass
+
+
+def annotate(doc: Document, progress=None) -> None:
     if not doc.language:
         doc.language = detect_language(doc.text)
     lang = _lang(doc.language)
     if lang == "zh":
-        _annotate_zh(doc)
+        _annotate_zh(doc, progress or _ignore)
     else:
-        _annotate_stanza(doc, lang)
+        _annotate_stanza(doc, lang, progress or _ignore)

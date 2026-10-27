@@ -30,10 +30,20 @@ FORMATS = {".txt", ".docx", ".csv", ".tsv", ".conllu", ".tmx"}
 MAX_UPLOAD = 500 * 1024 * 1024
 
 
+class CorpusMeta(BaseModel):
+    """Source and license shown on the corpus page and written into exports."""
+
+    license: str | None = Field(default=None, max_length=200)
+    attribution: str | None = Field(default=None, max_length=2000)
+    source_url: str | None = Field(default=None, max_length=1000)
+    version: str | None = Field(default=None, max_length=200)
+
+
 class CorpusInput(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     language: str = Field(min_length=1, max_length=20)
     description: str = Field(default="", max_length=2000)
+    meta: CorpusMeta | None = None
 
 
 class DocumentPatch(BaseModel):
@@ -47,6 +57,7 @@ def _create(db, project_id, body):
         name=body.name.strip(),
         language=body.language.strip(),
         description=body.description,
+        meta=body.meta.model_dump(exclude_none=True) if body.meta else {},
         status="empty",
     )
     db.add(corpus)

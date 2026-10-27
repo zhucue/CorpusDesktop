@@ -127,7 +127,7 @@ class FakeEngine:
             sentences.append(em.Sentence(start, start + len(line), [], ext))
         return em.Document(title, language, text, dict(metadata), sentences)
 
-    def annotate(self, doc):
+    def annotate(self, doc, progress=None):
         if not doc.sentences:
             for m in re.finditer(r"[^\n]+", doc.text):
                 doc.sentences.append(em.Sentence(m.start(), m.end(), []))
