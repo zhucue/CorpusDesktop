@@ -6,7 +6,7 @@ import { isActiveJob, quietJobs, useProjectJobs } from "../../lib/data";
 import { fmt } from "../../lib/format";
 import { Progress, Sparkline } from "../common";
 
-export const jobKindLabels: Record<string, string> = { import: "导入", index: "建索引", export: "导出", stats: "统计" };
+export const jobKindLabels: Record<string, string> = { import: "导入", index: "建索引", export: "导出", stats: "统计", preannotate: "预标注" };
 
 export function jobTitle(j: Job): string {
   return `${jobKindLabels[j.kind] ?? j.kind}${j.progress.message ? ` · ${j.progress.message}` : ""}`;

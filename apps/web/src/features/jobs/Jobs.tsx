@@ -13,7 +13,7 @@ import "./jobs.css";
 
 const PAGE_SIZE = 50;
 type Filter = "all" | "active" | "failed";
-const kindIcon: Record<string, IconName> = { import: "upload", index: "layers", export: "download", stats: "chart" };
+const kindIcon: Record<string, IconName> = { import: "upload", index: "layers", export: "download", stats: "chart", preannotate: "pen" };
 
 function Actions({ job, onAct, pending }: { job: Job; onAct: (a: "cancel" | "retry") => void; pending: boolean }) {
   return (

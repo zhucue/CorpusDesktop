@@ -373,6 +373,7 @@ export default function Onboarding() {
                     [
                       ["search", "检索", "search"],
                       ["stats", "统计", "chart"],
+                      ["annotate", "标注", "pen"],
                       ["assistant", "助手", "spark"],
                     ] as [string, string, IconName][]
                   ).map(([p, l, ic]) => (

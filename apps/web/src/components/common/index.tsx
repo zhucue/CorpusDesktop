@@ -40,6 +40,9 @@ export function Tip({ title, children }: { title: ReactNode; children: React.Rea
 
 /* ---------- query chip with syntax colouring (B12) ---------- */
 function qTokens(tok: string, key: string): ReactNode[] {
+  // Attributes attached to a term: 学生{dep=nsubj}, "run"{pos=v}.
+  const attached = tok.match(/^(.+?)(\{[^{}]*\})$/);
+  if (attached && !/^[+-]$/.test(attached[1])) return [...qTokens(attached[1], `${key}t`), <span key={`${key}a`} className="qa">{attached[2]}</span>];
   const out: ReactNode[] = [];
   let t = tok;
   if (/^[+-]./.test(t)) {

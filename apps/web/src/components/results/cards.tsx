@@ -18,7 +18,7 @@ function searchUrl(projectId: string, query: string, scope: Scope | null) {
   return `/p/${projectId}/search?${p.toString()}`;
 }
 
-function Card({
+export function Card({
   icon,
   title,
   meta,

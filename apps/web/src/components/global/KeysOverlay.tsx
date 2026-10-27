@@ -6,6 +6,19 @@ const GLOBAL: Row[] = [["命令面板", ["Ctrl", "K"]], ["快捷键", ["?"]], ["
 const PAGE: Record<string, { name: string; rows: Row[] }> = {
   search: { name: "检索", rows: [["检索", ["Enter"]], ["查询历史", ["H"]], ["词性着色", ["P"]]] },
   stats: { name: "统计", rows: [["切换统计方法", ["1", "–", "5"]]] },
+  annotate: {
+    name: "标注",
+    rows: [
+      ["确认当前词", ["Enter"]],
+      ["整句确认", ["Shift", "Enter"]],
+      ["拒绝（词性层）", ["Del"]],
+      ["修改：聚焦标签筛选", ["E"]],
+      ["选词", ["←", "→"]],
+      ["选标签", ["1", "–", "9", "A", "–", "Z"]],
+      ["上一句 / 下一句", ["K", "J"]],
+      ["词性着色", ["P"]],
+    ],
+  },
   assistant: { name: "助手", rows: [["发送", ["Enter"]], ["换行", ["Shift", "Enter"]], ["停止运行", ["Esc"]]] },
 };
 

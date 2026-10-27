@@ -4,6 +4,7 @@ import type { IconName } from "../Icon";
 export const AGENT_TOOLS: { group: string; tools: string[] }[] = [
   { group: "语料", tools: ["corpora.list", "corpora.get", "subcorpora.list", "subcorpora.create", "corpus.parse", "corpus.search", "corpus.context"] },
   { group: "统计", tools: ["stats.frequency", "stats.ngrams", "stats.collocations", "stats.keywords", "stats.distribution"] },
+  { group: "标注", tools: ["annot.layers", "annot.create_layer", "annot.sentence", "annot.diff", "annot.stats", "annot.suggest", "annot.export"] },
   { group: "成果", tools: ["evidence.add", "evidence.list", "queries.save", "queries.list", "export.create", "jobs.get", "jobs.cancel"] },
 ];
 
@@ -30,4 +31,11 @@ export const TOOL_VIEW: Record<string, { title: string; label: string; icon: Ico
   "export.create": { title: "创建导出", label: "正在创建导出…", icon: "download" },
   "jobs.get": { title: "查看任务", label: "正在查看任务…", icon: "clock" },
   "jobs.cancel": { title: "取消任务", label: "正在取消任务…", icon: "stop" },
+  "annot.layers": { title: "列出标注层", label: "正在读取标注层…", icon: "layers" },
+  "annot.create_layer": { title: "新建标注层", label: "正在新建标注层…", icon: "pen" },
+  "annot.sentence": { title: "读取句子标注", label: "正在读取标注…", icon: "tree" },
+  "annot.diff": { title: "读取预标差异", label: "正在比较预标与人工…", icon: "diff" },
+  "annot.stats": { title: "标注统计", label: "正在统计标签…", icon: "chart" },
+  "annot.suggest": { title: "提出标注建议", label: "正在写入建议…", icon: "spark" },
+  "annot.export": { title: "导出 CoNLL-U", label: "正在创建导出…", icon: "download" },
 };

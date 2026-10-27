@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { EvidenceInput, HitToken } from "../../api";
-import { posCat } from "../../lib/pos";
+import { isPunctPos, posCat } from "../../lib/pos";
 import { PinButton } from "../global/evidence";
+import { Icon } from "../Icon";
 
 export interface KwicRow {
   id: string;
@@ -37,8 +38,8 @@ function PosText({ tokens, part }: { tokens: HitToken[]; part: HitToken["part"] 
   return (
     <>
       {list.map((t, i) => {
-        const pos = t.pos?.toUpperCase();
-        if (!pos || pos === "PUNCT" || pos === "X")
+        const pos = t.pos;
+        if (!pos || isPunctPos(pos))
           return (
             <span key={i}>
               {t.form}
@@ -77,6 +78,10 @@ export function KwicTable({
   onSelect,
   compact,
   offset,
+  expanded,
+  onExpand,
+  renderExpanded,
+  expandLabel = "依存树",
 }: {
   rows: KwicRow[];
   terms?: string[];
@@ -85,7 +90,13 @@ export function KwicTable({
   onSelect?: (id: string) => void;
   compact?: boolean;
   offset?: number;
+  /** Row expander (e.g. 依存树); shown only when renderExpanded is given. */
+  expanded?: string | null;
+  onExpand?: (id: string | null) => void;
+  renderExpanded?: (row: KwicRow) => ReactNode;
+  expandLabel?: string;
 }) {
+  const cols = (offset != null ? 1 : 0) + 5;
   return (
     <table className={`tbl kwic ${posColor ? "poscolor" : ""}`}>
       <colgroup>
@@ -94,7 +105,7 @@ export function KwicTable({
         <col style={{ width: compact ? 72 : 110 }} />
         <col />
         <col style={{ width: compact ? 96 : 150 }} />
-        <col style={{ width: 36 }} />
+        <col style={{ width: renderExpanded ? 64 : 36 }} />
       </colgroup>
       {!compact && (
         <thead>
@@ -111,7 +122,9 @@ export function KwicTable({
       <tbody className="stagger">
         {rows.map((r, i) => {
           const pos = posColor && r.tokens?.length;
+          const open = !!renderExpanded && expanded === r.id;
           return (
+            <Fragment key={r.id}>
             <tr
               key={r.id}
               className={selected === r.id ? "sel" : undefined}
@@ -139,8 +152,31 @@ export function KwicTable({
               <td className="src" title={r.source}>
                 {r.source}
               </td>
-              <td>{r.evidence && <PinButton input={r.evidence} />}</td>
+              <td className="row-acts">
+                {renderExpanded && (
+                  <button
+                    className={`pin-btn exp-btn ${open ? "exp-on" : ""}`}
+                    type="button"
+                    aria-label={expandLabel}
+                    title={expandLabel}
+                    aria-expanded={open}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onExpand?.(open ? null : r.id);
+                    }}
+                  >
+                    <Icon name="tree" size={14} />
+                  </button>
+                )}
+                {r.evidence && <PinButton input={r.evidence} />}
+              </td>
             </tr>
+            {open && (
+              <tr className="kwic-exp">
+                <td colSpan={cols}>{renderExpanded!(r)}</td>
+              </tr>
+            )}
+            </Fragment>
           );
         })}
       </tbody>

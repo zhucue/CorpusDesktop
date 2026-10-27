@@ -88,6 +88,8 @@ export interface SearchRequest {
   search_id?: string;
   /** Adds Hit.tokens (part, form, pos) for POS colouring. */
   include_tokens?: boolean;
+  /** P3: resolve {pos=} / {dep=} against these annotation layers' effective values. */
+  layers?: { pos?: string; dep?: string };
 }
 
 export interface ParseResult {
@@ -151,7 +153,7 @@ export interface SavedQuery {
 }
 
 export type JobState = "queued" | "running" | "succeeded" | "failed" | "cancelled";
-export type JobKind = "import" | "index" | "export" | "stats";
+export type JobKind = "import" | "index" | "export" | "stats" | "preannotate";
 
 export interface Job {
   id: string;
@@ -279,3 +281,119 @@ export interface AgentMessage {
 }
 
 export type AgentSessionDetail = AgentSession & { messages: AgentMessage[] };
+
+// ---------- P3: annotation (contracts/p3.md; token indices are 1-based, head 0 = root) ----------
+
+export type LayerKind = "pos" | "dep";
+export type AnnotStatus = "suggested" | "confirmed" | "modified" | "rejected";
+
+export interface LabelDef {
+  id: string;
+  /** The tag value stored in Annotation.label (e.g. NOUN, nsubj). */
+  name: string;
+  color?: string;
+  description?: string;
+  parent?: string;
+}
+
+export interface LabelSet {
+  id: string;
+  project_id: string | null;
+  name: string;
+  kind: LayerKind | "span" | "relation";
+  language: string | null;
+  labels: LabelDef[];
+  created_at: string;
+}
+
+export interface LayerProgress {
+  total: number;
+  suggested: number;
+  confirmed: number;
+  modified: number;
+  rejected: number;
+}
+
+export interface Layer {
+  id: string;
+  project_id: string;
+  corpus_id: string;
+  corpus_name: string;
+  kind: LayerKind;
+  name: string;
+  label_set_id: string;
+  source_model: string;
+  status: "created" | "preannotating" | "ready" | "failed";
+  job_id: string | null;
+  progress: LayerProgress;
+  documents: { total: number; done: number };
+  error: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LayerDocument {
+  document_id: string;
+  title: string;
+  sentences: number;
+  done: number;
+  pending: number;
+}
+
+export interface Annotation {
+  id: string;
+  token_index: number;
+  label: string | null;
+  head: number | null;
+  model_label: string | null;
+  model_head: number | null;
+  source: string;
+  status: AnnotStatus;
+  revision: number;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export interface AnnotToken {
+  index: number;
+  form: string;
+  start_cp: number;
+  end_cp: number;
+  system: { pos: string | null; head: number | null; deprel: string | null };
+}
+
+export interface SentenceAnnot {
+  document_id: string;
+  sentence_index: number;
+  text: string;
+  tokens: AnnotToken[];
+  annotations: Annotation[];
+  status: "pending" | "done";
+}
+
+export interface CursorPage<T> {
+  items: T[];
+  next_cursor: string | null;
+}
+
+export interface AnnotationInput {
+  document_id: string;
+  sentence_index: number;
+  token_index: number;
+  action: "confirm" | "modify" | "reject";
+  label?: string;
+  head?: number;
+}
+
+export interface DiffResult {
+  items: SentenceAnnot[];
+  counts: { changed: number; confirmed: number; rejected: number; pending: number };
+}
+
+export interface LayerStats {
+  labels: { label: string; count: number; confirmed: number; modified: number }[];
+  progress: LayerProgress;
+  /** Shape beyond the contract: assumed to mirror GET /layers/{id}/documents rows. */
+  per_document: (Partial<LayerDocument> & { document_id: string })[];
+}

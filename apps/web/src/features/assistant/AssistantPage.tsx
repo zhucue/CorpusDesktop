@@ -22,6 +22,8 @@ export function refLink(projectId: string, ref: ToolCall["result_ref"]): string 
       return `${base}/stats?stat=${encodeURIComponent(ref.id)}`;
     case "job":
       return `${base}/jobs?job=${encodeURIComponent(ref.id)}`;
+    case "layer":
+      return `${base}/annotate?layer=${encodeURIComponent(ref.id)}`;
     case "corpus":
       return `${base}/corpora/${ref.id}`;
     case "subcorpus":

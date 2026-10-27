@@ -26,7 +26,7 @@ export default function UiBlock({ lang, streaming, index = 0 }: { lang: string; 
   const json = parseJsonBlock(lang);
   if (json) {
     return (
-      <ErrorBoundary retry style={{ margin: 0 }}>
+      <ErrorBoundary retry resetKey={lang} style={{ margin: 0 }}>
         {json.map((b, i) => {
           const C = RENDERERS[b.component] as React.FC<Record<string, unknown>> | undefined;
           return (
@@ -45,7 +45,7 @@ export default function UiBlock({ lang, streaming, index = 0 }: { lang: string; 
   }
   return (
     <div className="ui-block" style={{ ["--i" as string]: index }}>
-      <ErrorBoundary retry style={{ margin: 0 }}>
+      <ErrorBoundary retry resetKey={lang} style={{ margin: 0 }}>
         <Renderer response={lang} library={library} isStreaming={!!streaming} />
       </ErrorBoundary>
     </div>

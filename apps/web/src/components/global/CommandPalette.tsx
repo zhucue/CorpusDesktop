@@ -65,6 +65,7 @@ export default function CommandPalette({
       { group: "页面", label: "语料库", icon: "db", run: go(`${base}/corpora`) },
       { group: "页面", label: "检索", icon: "search", run: go(`${base}/search`) },
       { group: "页面", label: "统计", icon: "chart", run: go(`${base}/stats`) },
+      { group: "页面", label: "标注", icon: "pen", run: go(`${base}/annotate`) },
       { group: "页面", label: "助手", icon: "spark", run: go(`${base}/assistant`) },
       { group: "页面", label: "任务", icon: "clock", run: go(`${base}/jobs`) },
       { group: "页面", label: "项目设置", icon: "sliders", run: go(`${base}/settings`) },

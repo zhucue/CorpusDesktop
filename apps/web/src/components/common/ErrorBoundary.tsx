@@ -3,12 +3,19 @@ import { ErrorAlert } from ".";
 
 /**
  * Shows the render error instead of a blank page. "重新加载" reloads the page, or with
- * `retry` re-renders only this subtree (used for single OpenUI blocks).
+ * `retry` re-renders only this subtree (used for single OpenUI blocks); a changed `resetKey` clears the error.
  */
-export class ErrorBoundary extends Component<{ children: ReactNode; retry?: boolean; style?: React.CSSProperties }, { error: Error | null }> {
+export class ErrorBoundary extends Component<
+  { children: ReactNode; retry?: boolean; style?: React.CSSProperties; resetKey?: unknown },
+  { error: Error | null }
+> {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) {
     return { error };
+  }
+  componentDidUpdate(prev: { resetKey?: unknown }) {
+    // New content (e.g. more of a streaming block) gets a fresh render attempt.
+    if (this.state.error && prev.resetKey !== this.props.resetKey) this.setState({ error: null });
   }
   componentDidCatch(error: Error) {
     console.error(error);

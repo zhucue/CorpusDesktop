@@ -13,6 +13,7 @@ const codeLabels: Record<string, { label: string; detail?: boolean }> = {
   TOO_LARGE: { label: "文件超过 500 MB" },
   SESSION_BUSY: { label: "该会话正在运行" },
   MODEL_NOT_CONFIGURED: { label: "未配置对话模型" },
+  LABEL_SET_IN_USE: { label: "标签集正被标注层使用" },
 };
 
 export function codeLabel(code: string, message: string): string {

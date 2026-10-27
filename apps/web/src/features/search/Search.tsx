@@ -27,7 +27,9 @@ import { fmt, fmtShortTime } from "../../lib/format";
 import { posLegend } from "../../lib/pos";
 import { distRows, type DistRow } from "../stats/columns";
 import { useStatJob } from "../stats/useStatJob";
+import { defaultLayer, useLayers } from "../annotate/data";
 import ContextInspector, { hitEvidence } from "./ContextInspector";
+import SentenceTree from "./SentenceTree";
 import { loadHistory, pushHistory, type HistoryEntry } from "./history";
 import "./search.css";
 
@@ -45,7 +47,9 @@ const CHIPS: [string, string, string][] = [
   ['"精确"', '""', "精确词形"],
   ["*", "*", "任意词"],
   ["?", "?", "任意单字"],
-  ["{dep=}", "{dep=nsubj}", "依存关系（P3 接入）"],
+  ["{pos=}", "{pos=}", "词性属性，可接在词后"],
+  ["{dep=}", "{dep=}", "依存关系，可接在词后"],
+  ["{lemma=}", "{lemma=}", "词元"],
 ];
 
 const isExpired = (e: unknown) => e instanceof ApiError && e.code === "SEARCH_EXPIRED";
@@ -63,11 +67,24 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-/** Insert `snippet` at the caret; "" places the caret between the quotes. */
+/** Insert `snippet` at the caret; "" places the caret between the quotes, {k=} before the brace. */
 export function insertAt(value: string, start: number, end: number, snippet: string): { value: string; caret: number } {
   const next = value.slice(0, start) + snippet + value.slice(end);
-  const caret = snippet === '""' ? start + 1 : start + snippet.length;
+  const caret = snippet === '""' ? start + 1 : snippet.endsWith("=}") ? start + snippet.length - 1 : start + snippet.length;
   return { value: next, caret };
+}
+
+const ATTR_NAMES: Record<string, string> = { pos: "词性", dep: "依存", lemma: "词元" };
+
+/** Token attribute constraints in a query: {pos=v,dep=root} → [["pos","v"],["dep","root"]]. */
+export function attrPairs(q: string): [string, string][] {
+  const out: [string, string][] = [];
+  for (const m of q.matchAll(/\{([^{}]*)\}/g))
+    for (const part of m[1].split(",")) {
+      const eq = part.indexOf("=");
+      if (eq > 0) out.push([part.slice(0, eq).trim(), part.slice(eq + 1).trim()]);
+    }
+  return out;
 }
 
 export function ParseLine({ query, parse, error }: { query: string; parse: ParseResult | undefined; error: unknown }) {
@@ -94,6 +111,11 @@ export function ParseLine({ query, parse, error }: { query: string; parse: Parse
     <>
       <span className="tag t-run">主查询</span>
       <QueryChip q={parse.anchor} />
+      {attrPairs(parse.anchor).map(([k, v], i) => (
+        <span key={`attr${i}`} className="tag t-line attr-tag">
+          {ATTR_NAMES[k] ?? k} <b className="mono">{v}</b>
+        </span>
+      ))}
       {parse.conditions.map((c, i) => (
         <span key={i} className="row" style={{ gap: 6 }}>
           <span className={`tag ${c.op === "-" ? "t-warn" : "t-gray"}`} style={{ marginLeft: 6 }}>
@@ -354,6 +376,8 @@ export default function Search() {
   const [picked, setPicked] = useState<number | null>(null);
   const [distPick, setDistPick] = useState<string | null>(null); // field chosen in the select
   const [distRuns, setDistRuns] = useState<Record<string, string>>({}); // search (query + scope) → computed field
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [layerPick, setLayerPick] = useState<{ corpus: string | null; pos?: string | null; dep?: string | null }>({ corpus: null });
   const inputRef = useRef<HTMLInputElement>(null);
   const lastParams = useRef<string>("");
 
@@ -361,6 +385,23 @@ export default function Search() {
   const allCorpora = corpora.data?.items ?? [];
   const allSubs = subcorpora.data?.items ?? [];
   const info = describeScope(scope, allCorpora, allSubs);
+
+  /* ---------- annotation layers for {pos=} / {dep=} (default: latest ready layer of the corpus) ---------- */
+  const layersQ = useLayers(projectId);
+  const allLayers = layersQ.data ?? [];
+  const corpusLayers = allLayers.filter((l) => l.corpus_id === info.corpus?.id && l.status === "ready");
+  const pickLayer = (kind: "pos" | "dep"): string | null => {
+    const p = layerPick.corpus === info.corpus?.id ? layerPick[kind] : undefined;
+    return p === undefined ? (defaultLayer(allLayers, info.corpus?.id, kind)?.id ?? null) : p;
+  };
+  const posLayer = pickLayer("pos");
+  const depLayer = pickLayer("dep");
+  function layersFor(sc: SearchScope): SearchRequest["layers"] | undefined {
+    const cid = describeScope(sc, allCorpora, allSubs).corpus?.id;
+    const pos = cid === info.corpus?.id ? posLayer : (defaultLayer(allLayers, cid, "pos")?.id ?? null);
+    const dep = cid === info.corpus?.id ? depLayer : (defaultLayer(allLayers, cid, "dep")?.id ?? null);
+    return pos || dep ? { ...(pos ? { pos } : {}), ...(dep ? { dep } : {}) } : undefined;
+  }
 
   /* ---------- parse as you type ---------- */
   const debounced = useDebounced(query.trim(), 300);
@@ -476,10 +517,13 @@ export default function Search() {
       page_size: PAGE_SIZE,
       include_tokens: true,
     };
+    const lay = layersFor(sc);
+    if (lay) next.layers = lay;
     if (sort === "random") next.seed = Math.floor(Math.random() * 1e9);
     setRunId((n) => n + 1);
     setReq(next);
     setSelected(null);
+    setExpanded(null);
     setWithin("");
     if (!opts?.fromDist) {
       setPicked(null);
@@ -515,7 +559,7 @@ export default function Search() {
   useEffect(() => {
     if (req) run({ query: req.query, scope: req.scope, fromDist: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ctxMode, sort]);
+  }, [ctxMode, sort, posLayer, depLayer]);
 
   function pickDist(i: number | null) {
     setPicked(i);
@@ -594,6 +638,8 @@ export default function Search() {
       hit: h,
     }));
   const posAvailable = hasPos(rows);
+  // 依存树 expander: the dependency layer the search used, else the corpus default; hidden without one.
+  const treeLayer = req ? (req.layers?.dep ?? defaultLayer(allLayers, describeScope(req.scope, allCorpora, allSubs).corpus?.id, "dep")?.id ?? null) : null;
   const selectedHit = rows.find((r) => r.id === selected)?.hit ?? null;
   const total = counts?.complete ? counts.hits : null;
   const pages = result ? (total != null ? Math.max(1, Math.ceil(total / result.page_size)) : result.page + (result.items.length === result.page_size ? 1 : 0)) : 1;
@@ -698,6 +744,27 @@ export default function Search() {
               <ParseLine query={query.trim()} parse={parseShown} error={parse.error} />
             </div>
           </div>
+          {corpusLayers.length > 0 && (
+            <div className="layer-pick">
+              <span className="small muted">标注层</span>
+              {(["pos", "dep"] as const).map((kind) => {
+                const opts = corpusLayers.filter((l) => l.kind === kind);
+                if (!opts.length) return null;
+                const name = kind === "pos" ? "词性" : "依存";
+                return (
+                  <Select
+                    key={kind}
+                    size="small"
+                    style={{ width: 200 }}
+                    aria-label={`${name}层`}
+                    value={(kind === "pos" ? posLayer : depLayer) ?? ""}
+                    onChange={(v: string) => setLayerPick((p) => ({ ...(p.corpus === info.corpus?.id ? p : { corpus: info.corpus?.id ?? null }), [kind]: v || null }))}
+                    options={[{ value: "", label: `${name}：系统层` }, ...opts.map((l) => ({ value: l.id, label: `${name}：${l.name}` }))]}
+                  />
+                );
+              })}
+            </div>
+          )}
           {!scope && (
             <div className="alert info">
               <Icon name="info" size={14} />
@@ -827,7 +894,23 @@ export default function Search() {
               ) : (
                 result && (
                   <div style={{ opacity: search.isFetching ? 0.55 : 1, transition: "opacity 200ms" }}>
-                    <KwicTable rows={rows} terms={terms} posColor={posOn && posAvailable} selected={selected} onSelect={setSelected} />
+                    <KwicTable
+                      rows={rows}
+                      terms={terms}
+                      posColor={posOn && posAvailable}
+                      selected={selected}
+                      onSelect={setSelected}
+                      expanded={expanded}
+                      onExpand={setExpanded}
+                      renderExpanded={
+                        treeLayer
+                          ? (r) => {
+                              const hit = rows.find((x) => x.id === r.id)?.hit;
+                              return hit ? <SentenceTree layerId={treeLayer} hit={hit} projectId={projectId} /> : null;
+                            }
+                          : undefined
+                      }
+                    />
                   </div>
                 )
               )}

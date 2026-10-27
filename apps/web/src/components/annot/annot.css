@@ -1,0 +1,49 @@
+/* Dependency graph (DependencyTree, dep editor, KWIC expander) */
+/* Centre with auto margins, not justify-content: a wide tree must overflow to the right (scrollable), not off the left edge. */
+.depwrap { display: flex; overflow-x: auto; padding: 8px 0 4px; }
+.depwrap > .depsvg { margin-inline: auto; }
+.depwrap.left > .depsvg { margin-inline: 0; }
+.depsvg { display: block; overflow: visible; flex-shrink: 0; touch-action: none; }
+.depsvg .arc { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+.depsvg .draw { stroke-dasharray: 1; animation: draw 800ms var(--ease-in-out) both; animation-delay: calc(var(--i, 0) * 90ms); }
+.depsvg .sugg .arc { stroke: #53B1FD; stroke-dasharray: 4 3; animation: fade 600ms ease both; animation-delay: calc(var(--i, 0) * 90ms); }
+.depsvg .arrow { fill: var(--accent); animation: fade 300ms ease both; animation-delay: calc(500ms + var(--i, 0) * 90ms); }
+.depsvg .sugg .arrow { fill: #53B1FD; }
+.depsvg .rel { animation: fade 300ms ease both; animation-delay: calc(500ms + var(--i, 0) * 90ms); }
+.depsvg .rel text { font-family: var(--mono); font-size: 11px; fill: var(--text-2); }
+.depsvg .rel-bg { fill: var(--surface); }
+.depsvg .rel.click { cursor: pointer; }
+.depsvg .rel.click:hover .rel-bg { fill: var(--accent-tint); stroke: var(--accent-line); }
+.depsvg .darc.on .arc { stroke-width: 2.5; }
+.depsvg .darc.on .rel-bg { fill: var(--accent-tint); stroke: var(--accent-line); }
+.depsvg .darc.on .rel text { fill: var(--accent-text); font-weight: 600; }
+.depsvg .darc.dragging { opacity: .35; }
+.depsvg .handle { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; cursor: grab; opacity: 0; transition: opacity var(--t-fast); }
+.depsvg.editable .darc:hover .handle, .depsvg.editable .darc.on .handle { opacity: 1; }
+.depsvg .drag-line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 3; pointer-events: none; }
+.depsvg .dtk { cursor: default; }
+.depsvg.editable .dtk, .depsvg.clickable .dtk { cursor: pointer; }
+.depsvg .dtk-bg { fill: transparent; transition: fill var(--t-fast); }
+.depsvg.editable .dtk:hover .dtk-bg { fill: var(--fill); }
+.depsvg .dtk.sel .dtk-bg { fill: var(--accent-tint); stroke: var(--accent-line); }
+.depsvg .dtk.hl .dtk-bg { fill: var(--mark-bg); }
+.depsvg .dtk.drop .dtk-bg { fill: var(--accent-tint-2); stroke: var(--accent); stroke-dasharray: 3 2; }
+.depsvg .dtk-form { font-size: 15px; fill: var(--text); font-weight: 500; }
+.depsvg .dtk.hl .dtk-form { fill: var(--accent-text); font-weight: 600; }
+.depsvg .dtk-pos { font-family: var(--mono); font-size: 11px; fill: var(--text-3); }
+.depsvg.poscolor .dtk-pos[data-c] { fill: var(--pfg); font-weight: 600; }
+
+/* Diff rows (AnnotationDiff, diff tab) */
+.diff-rows { display: flex; flex-direction: column; gap: 8px; }
+.diff-line { display: grid; grid-template-columns: 44px 120px minmax(0, 1fr); gap: 10px; align-items: center; }
+.diff-line .dl-lab { font-size: 12px; font-weight: 600; color: var(--text-3); }
+.diff-line .dl-src { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toks { display: flex; flex-wrap: wrap; gap: 4px; }
+.dtok { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 6px; border-radius: 6px; border: 1px solid transparent; }
+.dtok b { font-weight: 500; font-size: 14px; }
+.dtok.chg { background: var(--warning-soft); border-color: var(--warning-line); }
+.dtok.chg b { color: var(--warning); }
+.dtok.rej { background: var(--error-soft); border-color: var(--error-line); }
+.dtok.rej b { color: var(--error); text-decoration: line-through; }
+.dtok.pend .pos-tagchip { background: none; color: var(--text-3); box-shadow: inset 0 0 0 1px var(--line); font-weight: 500; }
+.pos-tagchip { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 5px; font-family: var(--mono); font-size: 11px; font-weight: 600; background: var(--pbg); color: var(--pfg); white-space: nowrap; }

@@ -10,6 +10,7 @@ import {
   KeywordTableCard,
   KwicTableCard,
 } from "../components/results/cards";
+import { AnnotationDiffCard, DependencyTreeCard } from "../components/results/annotCards";
 
 // Names, prop order and schemas mirror services/agent/src/components.ts (positional OpenUI Lang args).
 export const KwicTable = defineComponent({
@@ -104,7 +105,34 @@ export const Callout = defineComponent({
   component: ({ props }) => <CalloutView {...props} />,
 });
 
-export const COMPONENTS = [KwicTable, FreqChart, CollocationTable, KeywordTable, DistributionChart, EvidenceCard, JobStatus, Callout];
+export const DependencyTree = defineComponent({
+  name: "DependencyTree",
+  description: "一句的依存结构弧线图。",
+  props: z.object({
+    document_id: z.string(),
+    sentence_index: z.number(),
+    tokens: z.array(z.object({ index: z.number(), form: z.string(), pos: z.string() })),
+    arcs: z.array(z.object({ head: z.number(), dep: z.number(), label: z.string() })),
+    highlight: z.array(z.number()).optional(),
+  }),
+  component: ({ props }) => <DependencyTreeCard {...props} />,
+});
+
+export const AnnotationDiff = defineComponent({
+  name: "AnnotationDiff",
+  description: "一句的预标与人工结果对比。",
+  props: z.object({
+    layer_id: z.string(),
+    document_id: z.string(),
+    sentence_index: z.number(),
+    tokens: z.array(
+      z.object({ form: z.string(), model: z.string(), human: z.string(), status: z.enum(["suggested", "confirmed", "modified", "rejected"]) }),
+    ),
+  }),
+  component: ({ props }) => <AnnotationDiffCard {...props} />,
+});
+
+export const COMPONENTS = [KwicTable, FreqChart, CollocationTable, KeywordTable, DistributionChart, EvidenceCard, JobStatus, Callout, DependencyTree, AnnotationDiff];
 
 /** No root component: each ui block is a program whose entry is `root = <Component>(...)`. */
 export const library = createLibrary({ components: COMPONENTS });
@@ -119,4 +147,6 @@ export const RENDERERS: Record<string, React.FC<never>> = {
   EvidenceCard: EvidenceCardView,
   JobStatus: JobStatusCard,
   Callout: CalloutView,
+  DependencyTree: DependencyTreeCard,
+  AnnotationDiff: AnnotationDiffCard,
 };
