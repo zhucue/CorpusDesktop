@@ -1,0 +1,380 @@
+{
+  "status": "completed",
+  "formal_acceptance": false,
+  "quality_status": "NOT_VALIDATED",
+  "sample_file_sha256": "0adece88d1fd7e250deac2cafd80a8043ff133bc9404f367da653559dc9d4bd9",
+  "input_pairs": 10000,
+  "eligible_unique_pairs": 9630,
+  "excluded_long_pairs": 1,
+  "overlength_segments": 2,
+  "max_observed_tokens": 162,
+  "max_tokens_limit": 128,
+  "preflight_tokenize_and_select_seconds": 0.6514369000215083,
+  "selection": "existing deterministic sample order; remove overlength pairs, then greedily keep distinct endpoints; nested prefixes by size",
+  "source_sha256": {
+    "algorithm.py": "d69adc57e6e3beea6be237dc2c215e65ea5b07b372f8bc3412aa7a6ef453917f",
+    "benchmark.py": "bc78852357207c029735a3233d0f1886d5fa0d298ed7166b1650c1a9f2e1c598",
+    "local_model.py": "fc5799b4a857d80ff7b1778737082945cda24e0a99e6da84cae9aa4a6bfe6901",
+    "model-candidates.json": "4f91ffba405989698d42b54812047a840885dfd981540e06610382b75e430e59"
+  },
+  "hardware": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.14",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+    "logical_cpus": 16,
+    "dedicated_host": false
+  },
+  "limits": {
+    "dp_cells": 1000000,
+    "onnx_intra_op_threads": 2,
+    "onnx_inter_op_threads": 1,
+    "blas_threads": 2,
+    "memory_hard_limit": null,
+    "timeout_per_size_seconds": 600
+  },
+  "interpretation": "Fresh-process local CPU capacity on artificial documents concatenated from real independent sentences. Upstream pair recovery is restricted engineering evidence, not domain precision/recall acceptance.",
+  "runs": [
+    {
+      "status": "completed",
+      "formal_acceptance": false,
+      "input_sha256": "46373e41dca573a006200b6b80c79560884ae80a7081bc2dc6df6933e62ba846",
+      "input_file_sha256": "514260e07fee9b7d704989e7064779fe9dfddc49e78c904ab1404a208417df0f",
+      "method_manifest": {
+        "algorithm": {
+          "version": "alignment-s0/v1",
+          "cosine_weight": 0.85,
+          "length_weight": 0.1,
+          "number_weight": 0.04,
+          "punctuation_weight": 0.01,
+          "source_target_length_ratio": 0.5,
+          "min_score": 0.55,
+          "skip_cost": 0.15,
+          "review_score": 0.7,
+          "ambiguity_margin": 0.1
+        },
+        "model_id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+        "files": [
+          {
+            "path": "onnx/model_quint8_avx2.onnx",
+            "size": 118453870,
+            "sha256": "98a01d88b7de996cdea58c32ca71208c09968d143798814b2ea09d3439dc334f"
+          },
+          {
+            "path": "tokenizer.json",
+            "size": 9081518,
+            "sha256": "2c3387be76557bd40970cec13153b3bbf80407865484b209e655e5e4729076b8"
+          }
+        ],
+        "pooling": "attention-mask mean followed by L2 normalization for cosine",
+        "max_tokens": 128,
+        "segmentation_recipe": "upstream-sentence-pairs-concatenated/v1",
+        "source_language": "zh",
+        "target_language": "en",
+        "threads": {
+          "intra_op": 2,
+          "inter_op": 1
+        },
+        "packages": {
+          "onnxruntime": "1.31.0",
+          "tokenizers": "0.23.3",
+          "numpy": "2.5.4"
+        }
+      },
+      "method_sha256": "884621c6424d45c5062e23ee0c9dec1730d6c0faca0c08c3b8120ae04cdd604f",
+      "segments_per_side": 100,
+      "dp_cells": 10000,
+      "timing": {
+        "run_local_wall_seconds": 5.536592499935068,
+        "model_load_seconds": 0.4625312000280246,
+        "encode_seconds": 1.0906643000198528,
+        "dp_seconds": 0.09428039996419102,
+        "other_seconds": 3.8891165999229997
+      },
+      "memory": {
+        "before_run": {
+          "rss_bytes": 30920704,
+          "peak_rss_bytes": 30920704,
+          "peak_commit_bytes": 20520960
+        },
+        "before_dp": {
+          "rss_bytes": 509665280,
+          "peak_rss_bytes": 558821376,
+          "peak_commit_bytes": 588451840
+        },
+        "after_dp": {
+          "rss_bytes": 511725568,
+          "peak_rss_bytes": 558821376,
+          "peak_commit_bytes": 588451840
+        },
+        "after_run": {
+          "rss_bytes": 83296256,
+          "peak_rss_bytes": 558821376,
+          "peak_commit_bytes": 588451840
+        }
+      },
+      "memory_interpretation": "OS process lifetime peak; stages are snapshots, not isolated stage allocations. Each size uses a fresh process.",
+      "reference_comparison": {
+        "quality_status": "NOT_VALIDATED",
+        "comparison": "selected upstream direct pairs in artificial monotonic order",
+        "candidate_count": 100,
+        "selected_direct_pair_count": 100,
+        "candidate_matches_selected_direct_pair": 100,
+        "candidate_other_than_selected_direct_pair": 0,
+        "selected_direct_pair_recovery_fraction": 1.0,
+        "candidates_requiring_review": 7,
+        "unmatched_source": 0,
+        "unmatched_target": 0
+      },
+      "runtime": {
+        "python": "3.12.14",
+        "system": "Windows-11-10.0.26200-SP0",
+        "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+        "model_load_seconds": 0.4625312000280246,
+        "encode_seconds": 1.0906643000198528,
+        "segment_count": 200,
+        "peak_memory": "OS measurements in memory section"
+      },
+      "network_mode": "local_files_only_no_application_network_calls",
+      "network_capture_verified": false,
+      "batch_size": 16,
+      "truncated_segments": [],
+      "subprocess_wall_seconds": 6.139765899977647,
+      "raw_result_sha256": "a6e1d7ea279020221a805ef7f98a169cb06db647f9c7e5e33e1ff038993bb377"
+    },
+    {
+      "status": "completed",
+      "formal_acceptance": false,
+      "input_sha256": "507709126013099b3227edcda01975950a070ccf7c4675febccd06237e9236a0",
+      "input_file_sha256": "5b499de8aa7cf782a1967fa1e365e38920d5dd088437bb4a9d4e3a87367b1f7b",
+      "method_manifest": {
+        "algorithm": {
+          "version": "alignment-s0/v1",
+          "cosine_weight": 0.85,
+          "length_weight": 0.1,
+          "number_weight": 0.04,
+          "punctuation_weight": 0.01,
+          "source_target_length_ratio": 0.5,
+          "min_score": 0.55,
+          "skip_cost": 0.15,
+          "review_score": 0.7,
+          "ambiguity_margin": 0.1
+        },
+        "model_id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+        "files": [
+          {
+            "path": "onnx/model_quint8_avx2.onnx",
+            "size": 118453870,
+            "sha256": "98a01d88b7de996cdea58c32ca71208c09968d143798814b2ea09d3439dc334f"
+          },
+          {
+            "path": "tokenizer.json",
+            "size": 9081518,
+            "sha256": "2c3387be76557bd40970cec13153b3bbf80407865484b209e655e5e4729076b8"
+          }
+        ],
+        "pooling": "attention-mask mean followed by L2 normalization for cosine",
+        "max_tokens": 128,
+        "segmentation_recipe": "upstream-sentence-pairs-concatenated/v1",
+        "source_language": "zh",
+        "target_language": "en",
+        "threads": {
+          "intra_op": 2,
+          "inter_op": 1
+        },
+        "packages": {
+          "onnxruntime": "1.31.0",
+          "tokenizers": "0.23.3",
+          "numpy": "2.5.4"
+        }
+      },
+      "method_sha256": "884621c6424d45c5062e23ee0c9dec1730d6c0faca0c08c3b8120ae04cdd604f",
+      "segments_per_side": 500,
+      "dp_cells": 250000,
+      "timing": {
+        "run_local_wall_seconds": 9.983999699936248,
+        "model_load_seconds": 0.48194820003118366,
+        "encode_seconds": 4.493068799958564,
+        "dp_seconds": 2.2303648999659345,
+        "other_seconds": 2.778617799980566
+      },
+      "memory": {
+        "before_run": {
+          "rss_bytes": 31002624,
+          "peak_rss_bytes": 31502336,
+          "peak_commit_bytes": 21291008
+        },
+        "before_dp": {
+          "rss_bytes": 526016512,
+          "peak_rss_bytes": 560934912,
+          "peak_commit_bytes": 596123648
+        },
+        "after_dp": {
+          "rss_bytes": 575578112,
+          "peak_rss_bytes": 581869568,
+          "peak_commit_bytes": 650350592
+        },
+        "after_run": {
+          "rss_bytes": 137183232,
+          "peak_rss_bytes": 581869568,
+          "peak_commit_bytes": 650350592
+        }
+      },
+      "memory_interpretation": "OS process lifetime peak; stages are snapshots, not isolated stage allocations. Each size uses a fresh process.",
+      "reference_comparison": {
+        "quality_status": "NOT_VALIDATED",
+        "comparison": "selected upstream direct pairs in artificial monotonic order",
+        "candidate_count": 499,
+        "selected_direct_pair_count": 500,
+        "candidate_matches_selected_direct_pair": 499,
+        "candidate_other_than_selected_direct_pair": 0,
+        "selected_direct_pair_recovery_fraction": 0.998,
+        "candidates_requiring_review": 39,
+        "unmatched_source": 1,
+        "unmatched_target": 1
+      },
+      "runtime": {
+        "python": "3.12.14",
+        "system": "Windows-11-10.0.26200-SP0",
+        "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+        "model_load_seconds": 0.48194820003118366,
+        "encode_seconds": 4.493068799958564,
+        "segment_count": 1000,
+        "peak_memory": "OS measurements in memory section"
+      },
+      "network_mode": "local_files_only_no_application_network_calls",
+      "network_capture_verified": false,
+      "batch_size": 16,
+      "truncated_segments": [],
+      "subprocess_wall_seconds": 10.65967510000337,
+      "raw_result_sha256": "ed40d47dac9c2d6df0ff11e1a5c7f985179d046d75674e5b2f56517707c01f64"
+    },
+    {
+      "status": "completed",
+      "formal_acceptance": false,
+      "input_sha256": "d09e35522fec0fd8baa0b17b7a07e6c362afd5afdcf337d7878dc0a623804c18",
+      "input_file_sha256": "3b3353cb56df94c14d5c4602a3c3b5282a46380e3944fd5a44d8b779baf8513a",
+      "method_manifest": {
+        "algorithm": {
+          "version": "alignment-s0/v1",
+          "cosine_weight": 0.85,
+          "length_weight": 0.1,
+          "number_weight": 0.04,
+          "punctuation_weight": 0.01,
+          "source_target_length_ratio": 0.5,
+          "min_score": 0.55,
+          "skip_cost": 0.15,
+          "review_score": 0.7,
+          "ambiguity_margin": 0.1
+        },
+        "model_id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+        "files": [
+          {
+            "path": "onnx/model_quint8_avx2.onnx",
+            "size": 118453870,
+            "sha256": "98a01d88b7de996cdea58c32ca71208c09968d143798814b2ea09d3439dc334f"
+          },
+          {
+            "path": "tokenizer.json",
+            "size": 9081518,
+            "sha256": "2c3387be76557bd40970cec13153b3bbf80407865484b209e655e5e4729076b8"
+          }
+        ],
+        "pooling": "attention-mask mean followed by L2 normalization for cosine",
+        "max_tokens": 128,
+        "segmentation_recipe": "upstream-sentence-pairs-concatenated/v1",
+        "source_language": "zh",
+        "target_language": "en",
+        "threads": {
+          "intra_op": 2,
+          "inter_op": 1
+        },
+        "packages": {
+          "onnxruntime": "1.31.0",
+          "tokenizers": "0.23.3",
+          "numpy": "2.5.4"
+        }
+      },
+      "method_sha256": "884621c6424d45c5062e23ee0c9dec1730d6c0faca0c08c3b8120ae04cdd604f",
+      "segments_per_side": 1000,
+      "dp_cells": 1000000,
+      "timing": {
+        "run_local_wall_seconds": 21.6323027999606,
+        "model_load_seconds": 0.4122714000986889,
+        "encode_seconds": 10.00286889995914,
+        "dp_seconds": 8.856400599936023,
+        "other_seconds": 2.3607618999667466
+      },
+      "memory": {
+        "before_run": {
+          "rss_bytes": 31629312,
+          "peak_rss_bytes": 33280000,
+          "peak_commit_bytes": 22224896
+        },
+        "before_dp": {
+          "rss_bytes": 564776960,
+          "peak_rss_bytes": 572780544,
+          "peak_commit_bytes": 639610880
+        },
+        "after_dp": {
+          "rss_bytes": 735158272,
+          "peak_rss_bytes": 786853888,
+          "peak_commit_bytes": 855355392
+        },
+        "after_run": {
+          "rss_bytes": 295329792,
+          "peak_rss_bytes": 786853888,
+          "peak_commit_bytes": 855355392
+        }
+      },
+      "memory_interpretation": "OS process lifetime peak; stages are snapshots, not isolated stage allocations. Each size uses a fresh process.",
+      "reference_comparison": {
+        "quality_status": "NOT_VALIDATED",
+        "comparison": "selected upstream direct pairs in artificial monotonic order",
+        "candidate_count": 997,
+        "selected_direct_pair_count": 1000,
+        "candidate_matches_selected_direct_pair": 997,
+        "candidate_other_than_selected_direct_pair": 0,
+        "selected_direct_pair_recovery_fraction": 0.997,
+        "candidates_requiring_review": 95,
+        "unmatched_source": 3,
+        "unmatched_target": 3
+      },
+      "runtime": {
+        "python": "3.12.14",
+        "system": "Windows-11-10.0.26200-SP0",
+        "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+        "model_load_seconds": 0.4122714000986889,
+        "encode_seconds": 10.00286889995914,
+        "segment_count": 2000,
+        "peak_memory": "OS measurements in memory section"
+      },
+      "network_mode": "local_files_only_no_application_network_calls",
+      "network_capture_verified": false,
+      "batch_size": 16,
+      "truncated_segments": [],
+      "subprocess_wall_seconds": 22.274134899955243,
+      "raw_result_sha256": "5d60872b09bdfd3b96ce8b8235f4368019d52b575d7ae806a2ae1220c2213f6f"
+    }
+  ],
+  "exclusion_counts": {
+    "REUSED_ENDPOINT": 369,
+    "SEGMENT_TOO_LONG": 1
+  },
+  "overlength_pair_details": [
+    {
+      "edge_id": "tatoeba:13879111:5514234",
+      "reason": "SEGMENT_TOO_LONG",
+      "source_tokens": 162,
+      "target_tokens": 145
+    }
+  ],
+  "raw_report": "tmp/alignment-s0/capacity-20261016/report.json",
+  "raw_report_sha256": "a9cc387232bdfbb4d80825e708d3471d22d1a199dbd44998df97ac60b57d9942",
+  "raw_selection_records": "Full excluded edge IDs and token counts retained in raw report; selected IDs and text retained in input-100/500/1000.json.",
+  "source_snapshot_directory": "tmp/alignment-s0/capacity-20261016/sources",
+  "dp_timing_scope": "Original align() including pair scoring, weighted matrix construction, dynamic programming and traceback. No algorithm changes.",
+  "verification": "Raw input/result and source snapshot SHA256 verified; candidate IDs independently compared with selected input pairs; paired plus unpaired endpoint counts checked."
+}

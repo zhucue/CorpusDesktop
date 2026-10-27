@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-16",
+  "scope": "S1 login/project/single-file upload/validation-job HTTP slice",
+  "acceptance": "scoped_browser_workflow_passed_not_whole_S1",
+  "production_pi_tools_available": 0,
+  "explicit_contract_test_adapters": 13,
+  "tests": [
+    {
+      "command": ".venv/Scripts/python.exe -m pytest tests/contracts -q",
+      "passed": 18,
+      "subtests_passed": 4
+    },
+    {
+      "command": "node --test test/s1-tools.test.ts",
+      "cwd": "services/agent-runtime",
+      "passed": 6,
+      "includes": "default global fetch receiver binding regression"
+    },
+    {
+      "command": "npm run check",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv/Scripts/ruff.exe check services/api/main.py contracts/s1.py tests/contracts/test_s1.py",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv/Scripts/python.exe -m pytest tests/api/test_health.py -q",
+      "execution": "elevated Windows process",
+      "passed": 5
+    }
+  ],
+  "browser_acceptance": {
+    "verifier": "independent parent agent",
+    "surface": "real in-app browser",
+    "steps": [
+      "login",
+      "create project",
+      "select local 53-byte text file",
+      "browser SHA-256 and XHR upload",
+      "resident worker validation",
+      "rendered validated SHA-256 equals local file SHA-256",
+      "reload and restore authenticated session",
+      "select project and read persisted job",
+      "light/dark theme toggle",
+      "logout"
+    ],
+    "screenshot": "tmp/s1-browser-validated.png",
+    "screenshot_sha256": "ad4c01ccdb3d1f05b4b43c0974b74401fbb5007e670a3fca6b47e72a14fe6bf1",
+    "cleanup": "parent removed one-time acceptance account/project/object"
+  },
+  "fixes_from_browser_review": [
+    "bind default fetch to globalThis",
+    "clear job pagination cursor after complete succeeds"
+  ],
+  "limits": [
+    "VALIDATED confirms byte size, SHA-256, UTF-8 and no NUL only; not parsed material or searchable READY",
+    "Production Pi restricted credentials and invocation/run ledger remain unimplemented; all 135 production tools planned",
+    "Browser acceptance does not claim every member/cancel/retry/security case; integration tests cover separate assertions",
+    "Project creation has no idempotency ledger and is not automatically retried",
+    "No claim of whole S1 or production deployment acceptance"
+  ],
+  "sha256": {
+    "contracts/build.py": "ccdb53868fda00fe6634213e60934a172cb62b2b6ac4670b1a61ff9919a57878",
+    "contracts/s1.py": "79474bd2a2622d92579af02e689eaeda86e4b78b61ae2ef59eeb029202e923d5",
+    "contracts/types/s1.ts": "7fdab0b392b1ac383109bd44d2112dccbed971ded75938eb38919e320fd11eb7",
+    "contracts/status.json": "d192dc313e71c435969e9ac85cdb01df51e70ad09403fefe53f5de78b906e97f",
+    "contracts/s1-capabilities.json": "622682432bd74927c675077c1194fa339360dacfb8186b064f0f9094fcdacb44",
+    "services/api/main.py": "9dccb971a6c3c97d43aa1feb76b33e6b6db8442f0c0112bcc5884b166b2fe560",
+    "services/agent-runtime/src/s1-tools.ts": "30f2531b17313b2e7a3e75008a552569d55c55a31fe957612a819b5b560519c6",
+    "services/agent-runtime/test/s1-tools.test.ts": "e60710b21aaa388a478a31021afffb642ce641c6a6e29722efc26eddb9cae235",
+    "apps/web/index.html": "95696bd4bd3b6e4b755e951970bfd5c16dffad90154b223b67b70e957ff019fd",
+    "apps/web/src/main.tsx": "a283619305f8a1cb310ffc483d5e4b0e36dadac0c1bba409ddc78d1363b907bc",
+    "apps/web/src/style.css": "f6016b134d1516015a8259c25a803abe649abbe862ef31dff3e006e0e49f7243",
+    "tests/contracts/test_s1.py": "6eaa95baa8044c5b0fe7ae45c298e762c23e3fe7ef40f55bb831c229add3f92f"
+  }
+}

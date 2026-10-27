@@ -1,0 +1,369 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/tool-result.schema.json",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "invocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "action_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "scope_ref": {
+          "$ref": "scope.schema.json"
+        },
+        "scope_effect": {
+          "$ref": "scope-effect.schema.json"
+        },
+        "version_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "source_release",
+                  "snapshot",
+                  "material_revision",
+                  "alignment_overlay",
+                  "recipe",
+                  "engine",
+                  "metadata_manifest"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "revision": {
+                "type": [
+                  "string",
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "revision"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        },
+        "status": {
+          "const": "succeeded"
+        },
+        "result_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "minItems": 0
+        },
+        "method_summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result_view": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "resource_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "kind",
+            "resource_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "invocation_id",
+        "action_id",
+        "scope_ref",
+        "scope_effect",
+        "version_refs",
+        "status",
+        "result_ref",
+        "evidence_refs",
+        "method_summary",
+        "result_view"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "invocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "action_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "scope_ref": {
+          "$ref": "scope.schema.json"
+        },
+        "scope_effect": {
+          "$ref": "scope-effect.schema.json"
+        },
+        "version_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "source_release",
+                  "snapshot",
+                  "material_revision",
+                  "alignment_overlay",
+                  "recipe",
+                  "engine",
+                  "metadata_manifest"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "revision": {
+                "type": [
+                  "string",
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "revision"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        },
+        "status": {
+          "const": "accepted"
+        },
+        "job_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "invocation_id",
+        "action_id",
+        "scope_ref",
+        "scope_effect",
+        "version_refs",
+        "status",
+        "job_id"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "invocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "action_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "scope_ref": {
+          "$ref": "scope.schema.json"
+        },
+        "scope_effect": {
+          "$ref": "scope-effect.schema.json"
+        },
+        "version_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "source_release",
+                  "snapshot",
+                  "material_revision",
+                  "alignment_overlay",
+                  "recipe",
+                  "engine",
+                  "metadata_manifest"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "revision": {
+                "type": [
+                  "string",
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "revision"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        },
+        "status": {
+          "const": "failed"
+        },
+        "error": {
+          "$ref": "error.schema.json"
+        }
+      },
+      "required": [
+        "invocation_id",
+        "action_id",
+        "scope_ref",
+        "scope_effect",
+        "version_refs",
+        "status",
+        "error"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "invocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "action_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "scope_ref": {
+          "$ref": "scope.schema.json"
+        },
+        "scope_effect": {
+          "$ref": "scope-effect.schema.json"
+        },
+        "version_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "source_release",
+                  "snapshot",
+                  "material_revision",
+                  "alignment_overlay",
+                  "recipe",
+                  "engine",
+                  "metadata_manifest"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "revision": {
+                "type": [
+                  "string",
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "revision"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        },
+        "status": {
+          "const": "unknown"
+        },
+        "reconcile": {
+          "type": "object",
+          "properties": {
+            "tool_name": {
+              "const": "invocations.get"
+            },
+            "invocation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "tool_name",
+            "invocation_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "invocation_id",
+        "action_id",
+        "scope_ref",
+        "scope_effect",
+        "version_refs",
+        "status",
+        "reconcile"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

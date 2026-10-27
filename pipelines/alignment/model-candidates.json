@@ -1,0 +1,36 @@
+{
+  "verified_date": "2026-10-16",
+  "selected_for_smoke": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+  "quality_accepted": false,
+  "candidates": [
+    {
+      "id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+      "license": "apache-2.0",
+      "dimension": 384,
+      "max_tokens": 128,
+      "pooling": "attention-mask mean followed by L2 normalization for cosine",
+      "model_card": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "metadata_source": "https://huggingface.co/api/models/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2?blobs=true",
+      "paper": "https://arxiv.org/abs/2004.09813",
+      "decision": "First CPU smoke candidate: smaller official quantized ONNX export. Quantization quality requires independent evaluation.",
+      "files": [
+        {"path": "onnx/model_quint8_avx2.onnx", "size": 118453870, "sha256": "98a01d88b7de996cdea58c32ca71208c09968d143798814b2ea09d3439dc334f"},
+        {"path": "tokenizer.json", "size": 9081518, "sha256": "2c3387be76557bd40970cec13153b3bbf80407865484b209e655e5e4729076b8"}
+      ]
+    },
+    {
+      "id": "sentence-transformers/LaBSE",
+      "revision": "836121a0533e5664b21c7aacc5d22951f2b8b25b",
+      "license": "apache-2.0",
+      "dimension": 768,
+      "max_tokens": 256,
+      "pooling": "CLS plus learned dense/tanh and normalization",
+      "model_card": "https://huggingface.co/sentence-transformers/LaBSE",
+      "metadata_source": "https://huggingface.co/api/models/sentence-transformers/LaBSE?blobs=true",
+      "paper": "https://arxiv.org/abs/2007.01852",
+      "decision": "Translation-retrieval comparator; 1.88GB weights exceed this bounded CPU smoke download. Not run or quality accepted.",
+      "files": [{"path": "model.safetensors", "size": 1883734344, "sha256": "77d8e1f2dbab6eb5d3c261ce9d3dbf1e3c69e02938c95f934f94f42c22dfa31f"}]
+    }
+  ]
+}

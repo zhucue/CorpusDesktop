@@ -1,0 +1,324 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/k09-agent-runtime.schema.json",
+  "$defs": {
+    "FixtureManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "sdk_package": {
+          "const": "@earendil-works/pi-coding-agent",
+          "title": "Sdk Package",
+          "type": "string"
+        },
+        "sdk_version": {
+          "const": "1.3.0",
+          "title": "Sdk Version",
+          "type": "string"
+        },
+        "session_version": {
+          "const": 3,
+          "title": "Session Version",
+          "type": "integer"
+        },
+        "tool_schema": {
+          "const": "s3-outcomes-tools-v1",
+          "title": "Tool Schema",
+          "type": "string"
+        },
+        "host_policy": {
+          "const": "corpus-k09-linear-v1",
+          "title": "Host Policy",
+          "type": "string"
+        },
+        "provider": {
+          "const": "corpus-s1-fixed",
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "const": "fixed-project-v1",
+          "title": "Model",
+          "type": "string"
+        },
+        "resource_config": {
+          "const": "corpus-empty-resources-v1",
+          "title": "Resource Config",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sdk_package",
+        "sdk_version",
+        "session_version",
+        "tool_schema",
+        "host_policy",
+        "provider",
+        "model",
+        "resource_config"
+      ],
+      "title": "FixtureManifest",
+      "type": "object"
+    },
+    "OpenAIManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "sdk_package": {
+          "const": "@earendil-works/pi-coding-agent",
+          "title": "Sdk Package",
+          "type": "string"
+        },
+        "sdk_version": {
+          "const": "1.3.0",
+          "title": "Sdk Version",
+          "type": "string"
+        },
+        "session_version": {
+          "const": 3,
+          "title": "Session Version",
+          "type": "integer"
+        },
+        "tool_schema": {
+          "const": "s3-outcomes-tools-v1",
+          "title": "Tool Schema",
+          "type": "string"
+        },
+        "host_policy": {
+          "const": "corpus-k09-openai-v1",
+          "title": "Host Policy",
+          "type": "string"
+        },
+        "provider": {
+          "const": "corpus-openai-compatible",
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "resource_config": {
+          "const": "corpus-explicit-resources-v1",
+          "title": "Resource Config",
+          "type": "string"
+        },
+        "model_api": {
+          "enum": [
+            "openai-completions",
+            "openai-responses"
+          ],
+          "title": "Model Api",
+          "type": "string"
+        },
+        "model_config_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Model Config Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sdk_package",
+        "sdk_version",
+        "session_version",
+        "tool_schema",
+        "host_policy",
+        "provider",
+        "model",
+        "resource_config",
+        "model_api",
+        "model_config_sha256"
+      ],
+      "title": "OpenAIManifest",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "mode": {
+          "const": "unconfigured"
+        },
+        "fixture_enabled": {
+          "const": false
+        },
+        "can_submit": {
+          "const": false
+        },
+        "config_id": {
+          "type": "null"
+        },
+        "runtime_manifest": {
+          "type": "null"
+        },
+        "reason": {
+          "const": "MODEL_NOT_CONFIGURED"
+        }
+      }
+    },
+    {
+      "properties": {
+        "mode": {
+          "const": "fixture"
+        },
+        "fixture_enabled": {
+          "const": true
+        },
+        "can_submit": {
+          "const": true
+        },
+        "config_id": {
+          "const": "local-fixture-v1"
+        },
+        "runtime_manifest": {
+          "properties": {
+            "provider": {
+              "const": "corpus-s1-fixed"
+            }
+          },
+          "type": "object"
+        },
+        "reason": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "properties": {
+        "mode": {
+          "const": "openai-compatible"
+        },
+        "fixture_enabled": {
+          "const": false
+        },
+        "can_submit": {
+          "const": false
+        },
+        "config_id": {
+          "type": "null"
+        },
+        "runtime_manifest": {
+          "type": "null"
+        },
+        "reason": {
+          "const": "MODEL_CONFIGURATION_INVALID"
+        }
+      }
+    },
+    {
+      "properties": {
+        "mode": {
+          "const": "openai-compatible"
+        },
+        "fixture_enabled": {
+          "const": false
+        },
+        "can_submit": {
+          "const": true
+        },
+        "config_id": {
+          "pattern": "^openai-[a-f0-9]{48}$",
+          "type": "string"
+        },
+        "runtime_manifest": {
+          "properties": {
+            "provider": {
+              "const": "corpus-openai-compatible"
+            }
+          },
+          "type": "object"
+        },
+        "reason": {
+          "type": "null"
+        }
+      }
+    }
+  ],
+  "properties": {
+    "production_ready": {
+      "const": false,
+      "title": "Production Ready",
+      "type": "boolean"
+    },
+    "mode": {
+      "enum": [
+        "unconfigured",
+        "fixture",
+        "openai-compatible"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "fixture_enabled": {
+      "title": "Fixture Enabled",
+      "type": "boolean"
+    },
+    "can_submit": {
+      "title": "Can Submit",
+      "type": "boolean"
+    },
+    "config_id": {
+      "anyOf": [
+        {
+          "pattern": "^(local-fixture-v1|openai-[a-f0-9]{48})$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Config Id"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "enum": [
+            "MODEL_NOT_CONFIGURED",
+            "MODEL_CONFIGURATION_INVALID"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Reason"
+    },
+    "runtime_manifest": {
+      "anyOf": [
+        {
+          "discriminator": {
+            "mapping": {
+              "corpus-openai-compatible": "#/$defs/OpenAIManifest",
+              "corpus-s1-fixed": "#/$defs/FixtureManifest"
+            },
+            "propertyName": "provider"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/FixtureManifest"
+            },
+            {
+              "$ref": "#/$defs/OpenAIManifest"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Runtime Manifest"
+    }
+  },
+  "required": [
+    "production_ready",
+    "mode",
+    "fixture_enabled",
+    "can_submit",
+    "config_id",
+    "reason",
+    "runtime_manifest"
+  ],
+  "title": "RuntimeView",
+  "type": "object"
+}

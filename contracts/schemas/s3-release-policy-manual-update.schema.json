@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-release-policy-manual-update.schema.json",
+  "type": "object",
+  "properties": {
+    "expected_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "decision": {
+      "enum": [
+        "allow",
+        "deny"
+      ]
+    },
+    "review_note": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "evidence_urls": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+        "type": "string",
+        "pattern": "^https?://",
+        "maxLength": 2048
+      }
+    },
+    "export_decision": {
+      "enum": [
+        "allow",
+        "deny"
+      ],
+      "default": "deny"
+    }
+  },
+  "required": [
+    "expected_revision",
+    "decision",
+    "review_note",
+    "evidence_urls"
+  ],
+  "additionalProperties": false
+}

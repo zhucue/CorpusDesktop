@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-release-policy.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "source_id": {
+      "title": "Source Id",
+      "type": "string"
+    },
+    "acquisition_id": {
+      "format": "uuid",
+      "title": "Acquisition Id",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 0,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "decision": {
+      "enum": [
+        "unknown",
+        "allow",
+        "deny"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "policy_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Policy Id"
+    },
+    "source_identity": {
+      "additionalProperties": true,
+      "title": "Source Identity",
+      "type": "object"
+    },
+    "source_identity_revision": {
+      "title": "Source Identity Revision",
+      "type": "integer"
+    },
+    "identity_current": {
+      "title": "Identity Current",
+      "type": "boolean"
+    },
+    "acquisition_manifest_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Acquisition Manifest Sha256",
+      "type": "string"
+    },
+    "license_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "License Sha256",
+      "type": "string"
+    },
+    "license": {
+      "additionalProperties": true,
+      "title": "License",
+      "type": "object"
+    },
+    "quality": {
+      "additionalProperties": true,
+      "title": "Quality",
+      "type": "object"
+    },
+    "review_note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Review Note"
+    },
+    "evidence_urls": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence Urls",
+      "type": "array"
+    },
+    "reviewed_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Reviewed By"
+    },
+    "reviewed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Reviewed At"
+    },
+    "scope": {
+      "const": "internal_research",
+      "title": "Scope",
+      "type": "string"
+    },
+    "export_decision": {
+      "enum": [
+        "allow",
+        "deny"
+      ],
+      "title": "Export Decision",
+      "type": "string"
+    },
+    "export": {
+      "title": "Export",
+      "type": "boolean"
+    },
+    "model_egress": {
+      "const": false,
+      "title": "Model Egress",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "source_id",
+    "acquisition_id",
+    "revision",
+    "decision",
+    "policy_id",
+    "source_identity",
+    "source_identity_revision",
+    "identity_current",
+    "acquisition_manifest_sha256",
+    "license_sha256",
+    "license",
+    "quality",
+    "review_note",
+    "evidence_urls",
+    "reviewed_by",
+    "reviewed_at",
+    "scope",
+    "export_decision",
+    "export",
+    "model_egress"
+  ],
+  "title": "PolicyView",
+  "type": "object"
+}

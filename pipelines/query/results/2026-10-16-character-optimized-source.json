@@ -1,0 +1,20 @@
+{
+  "changes_after_measurement": "Top-level import ordering only, fixed by Ruff I001",
+  "verification": "Python AST comparison excludes line numbers; same imports and identical remaining syntax trees",
+  "files": {
+    "engine.py": {
+      "measured_sha256": "0fed51a2e1b969b25bc0beef90910f13c75ba02857e099849adfada4cea4c6c2",
+      "final_sha256": "647f117f7ba93dc6e21508ff9c8a54c6d4ea4d067d9f937a568de248f1a3eaf5",
+      "snapshot": "tmp/query-s0/character-10m-optimized/engine.py",
+      "imports_identical_as_multiset": true,
+      "non_import_ast_identical": true
+    },
+    "benchmark.py": {
+      "measured_sha256": "9aeb2558ae14157f71a89ff8a865ab91c86ce174bcb52299236a7e519a39a0a4",
+      "final_sha256": "84e5e109a38490b0d889ae24c06b1c1fbca5fd1a0cc1033c7cfe25e1c33eeb8d",
+      "snapshot": "tmp/query-s0/character-10m-optimized/benchmark.py",
+      "imports_identical_as_multiset": true,
+      "non_import_ast_identical": true
+    }
+  }
+}

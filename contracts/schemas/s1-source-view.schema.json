@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s1-source-view.schema.json",
+  "$defs": {
+    "SourceCapabilities": {
+      "properties": {
+        "discover": {
+          "const": true,
+          "default": true,
+          "title": "Discover",
+          "type": "boolean"
+        },
+        "remote_query": {
+          "const": false,
+          "default": false,
+          "title": "Remote Query",
+          "type": "boolean"
+        },
+        "fulltext_analysis": {
+          "const": false,
+          "default": false,
+          "title": "Fulltext Analysis",
+          "type": "boolean"
+        },
+        "export": {
+          "const": false,
+          "default": false,
+          "title": "Export",
+          "type": "boolean"
+        },
+        "model_egress": {
+          "const": false,
+          "default": false,
+          "title": "Model Egress",
+          "type": "boolean"
+        }
+      },
+      "title": "SourceCapabilities",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "publisher": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Publisher",
+      "type": "string"
+    },
+    "entry_kind": {
+      "enum": [
+        "publisher",
+        "aggregator",
+        "dataset"
+      ],
+      "title": "Entry Kind",
+      "type": "string"
+    },
+    "categories": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 12,
+      "minItems": 1,
+      "title": "Categories",
+      "type": "array"
+    },
+    "languages": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "minItems": 1,
+      "title": "Languages",
+      "type": "array"
+    },
+    "official_url": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "title": "Official Url",
+      "type": "string"
+    },
+    "materials": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Materials",
+      "type": "string"
+    },
+    "access_route": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Access Route",
+      "type": "string"
+    },
+    "boundary": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Boundary",
+      "type": "string"
+    },
+    "source_id": {
+      "title": "Source Id",
+      "type": "string"
+    },
+    "license_status": {
+      "const": "pending_review",
+      "default": "pending_review",
+      "title": "License Status",
+      "type": "string"
+    },
+    "integration_status": {
+      "enum": [
+        "catalog_only",
+        "verification_pending",
+        "experimental_evidence"
+      ],
+      "title": "Integration Status",
+      "type": "string"
+    },
+    "capabilities": {
+      "$ref": "#/$defs/SourceCapabilities"
+    },
+    "evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "revision": {
+      "title": "Revision",
+      "type": "integer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "publisher",
+    "entry_kind",
+    "categories",
+    "languages",
+    "official_url",
+    "materials",
+    "access_route",
+    "boundary",
+    "source_id",
+    "integration_status",
+    "evidence_refs",
+    "revision",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "SourceView",
+  "type": "object"
+}

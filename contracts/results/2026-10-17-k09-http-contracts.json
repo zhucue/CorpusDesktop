@@ -1,0 +1,31 @@
+{
+  "status": "passed",
+  "require_all": true,
+  "validated_response_counts": {
+    "runtimes": 1,
+    "sessions": 2,
+    "session_lists": 1,
+    "runs": 3,
+    "run_lists": 1,
+    "messages": 1,
+    "events": 1
+  },
+  "not_recorded": [],
+  "failures": [],
+  "inputs": [
+    {
+      "path": "tmp\\pi-k09\\8c1ae654c4144fff87a37490a9d1c51d\\result.json",
+      "sha256": "afa1cf59ae49ee2e8ae3d0d77204dddd142bbbb83a5adc82d65febbeef5061f8"
+    }
+  ],
+  "schema_sha256": {
+    "runtimes": "a2a402c08dee002c68bdd78c8f0359dfac43a0b9b6fa5dcb7080b053155de30f",
+    "sessions": "d98f04dc04983465a8f4ab8a5779fc909ff1d4135928ba51c8517062fc591f27",
+    "session_lists": "2bdca470bca0247bb6c40e4cdce81ee819892aaa525f92a165d308716b9f396d",
+    "runs": "b7e5565618af704d09cb7add4c3cd105998338cbb6733979782898c82526434b",
+    "run_lists": "843d8dcfe0c463057614c739362a3bd05194d245171236e6fd77fc85f943cd98",
+    "messages": "12af23a6b0be344ae0b63a8f35886cffd31482576d30e674d4603428689da0cd",
+    "events": "779a95ac80900d692fa8141728cbae5310fa08b3ec53560a441f9c56c5d2775c"
+  },
+  "limits": "Captured HTTP shape and invariants only; real host execution, cancellation, waiting jobs, restoration and browser authorization need separate execution evidence. Production model/material scope is not accepted."
+}

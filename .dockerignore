@@ -1,0 +1,9 @@
+tmp
+.git
+.venv
+**/node_modules
+**/__pycache__
+**/.env
+doc
+docs
+output

@@ -1,0 +1,16 @@
+{
+  "status": "verified",
+  "query_and_count_logic_ast_identical": true,
+  "verification": "Remove only the added _replace_report helper and normalize its one save call back to the original pending.replace statement; complete module ASTs then match exactly without source locations.",
+  "before_sha256": "76f6a29f02f5b6c76ba01e4ecb65ffb99089e947c6ebb41f8d4e20d27d0bd470",
+  "after_sha256": "acea40b2a533d59fc1f40a5755ccd1813ef33e33ae02fa49a37e3787a77134cf",
+  "only_existing_statement_change": {
+    "before": "pending.replace(target / 'report.json')",
+    "after": "_replace_report(pending, target / 'report.json')"
+  },
+  "added_helper_source": "def _replace_report(pending, destination):\n    for attempt in range(5):\n        try:\n            pending.replace(destination)\n            return\n        except PermissionError:\n            if attempt == 4:\n                raise\n            time.sleep(0.05 * 2 ** attempt)",
+  "maximum_attempts": 5,
+  "maximum_total_sleep_seconds": 0.75,
+  "reason": "Observed PermissionError replacing report.json through Windows Docker bind mount; retry only PermissionError, retain final failure after bounded attempts.",
+  "failed_experiment_retained": "tmp/query-s0/cwb-paged-10m/report.json"
+}

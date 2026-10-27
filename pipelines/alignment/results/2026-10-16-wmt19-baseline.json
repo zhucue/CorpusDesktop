@@ -1,0 +1,2646 @@
+{
+  "version": "wmt19-document-evaluation/v1",
+  "plan_sha256": "b86043f8879f2d5ae6f500e9ae7c7a06c1461ec90d783baeee64d778bb42c826",
+  "evaluation_kind": "public_news_document_benchmark",
+  "domain_quality_status": "NOT_VALIDATED",
+  "formal_acceptance": false,
+  "synthetic_perturbations": "none",
+  "input": {
+    "source_sha256": "0dff7e5d5c3f03934c1e9073281d3044c99812c6e25b85b74bc1cb14fef66486",
+    "target_sha256": "0748890c24879b0ce5ae11fea118bc8286cc051b33a08c6121c2ce5942e5ff56"
+  },
+  "source_hashes": {
+    "wmt_evaluation.py": "822585169ac10bf5405baebc8962e41217299980d1d0ca197c618eab7be37f29",
+    "local_model.py": "52fb2629d031c174672879f4b1cfbfe6478f08864e66c6cfdfd3f002582fa81d",
+    "algorithm.py": "e565b085c112fa66a336f205194b4029fecc3e5c6526517262a7b19d74cb1a4a",
+    "benchmark.py": "bc78852357207c029735a3233d0f1886d5fa0d298ed7166b1650c1a9f2e1c598",
+    "download_model.py": "736e7a128fdf85ace50fe803c5b886e299c578e618ab64c31ae097742f38f5ab",
+    "model-candidates.json": "4f91ffba405989698d42b54812047a840885dfd981540e06610382b75e430e59",
+    "input.schema.json": "032da509d0d9757749fb3d1fd5e088578d651c5a5628189aadb894c5be1b5c7b"
+  },
+  "recipe": {
+    "version": "alignment-s0/v1",
+    "cosine_weight": 0.85,
+    "length_weight": 0.1,
+    "number_weight": 0.04,
+    "punctuation_weight": 0.01,
+    "source_target_length_ratio": 0.5,
+    "min_score": 0.55,
+    "skip_cost": 0.15,
+    "review_score": 0.7,
+    "ambiguity_margin": 0.1
+  },
+  "model": {
+    "id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+    "license": "apache-2.0",
+    "dimension": 384,
+    "max_tokens": 128,
+    "pooling": "attention-mask mean followed by L2 normalization for cosine",
+    "model_card": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "metadata_source": "https://huggingface.co/api/models/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2?blobs=true",
+    "paper": "https://arxiv.org/abs/2004.09813",
+    "decision": "First CPU smoke candidate: smaller official quantized ONNX export. Quantization quality requires independent evaluation.",
+    "files": [
+      {
+        "path": "onnx/model_quint8_avx2.onnx",
+        "size": 118453870,
+        "sha256": "98a01d88b7de996cdea58c32ca71208c09968d143798814b2ea09d3439dc334f"
+      },
+      {
+        "path": "tokenizer.json",
+        "size": 9081518,
+        "sha256": "2c3387be76557bd40970cec13153b3bbf80407865484b209e655e5e4729076b8"
+      }
+    ]
+  },
+  "threshold_tuning": "none; calibration reserved, baseline fixed before both splits",
+  "exact_sentence_overlap_between_splits": {
+    "source": 0,
+    "target": 0
+  },
+  "metrics": {
+    "calibration": {
+      "selected_documents": 13,
+      "completed_documents": 11,
+      "rejected_documents": 2,
+      "selected_reference_pairs": 119,
+      "unevaluated_reference_pairs": 23,
+      "overlong_segments": 2,
+      "evaluated_reference_pairs": 96,
+      "candidate_pairs": 93,
+      "correct_pairs": 93,
+      "adjacent_sentence_mispairs": 0,
+      "unpaired_source": 3,
+      "unpaired_target": 3,
+      "review_candidates": 35,
+      "wrong_pairs": 0,
+      "candidate_precision": 1.0,
+      "reference_recall_eligible": 0.96875,
+      "reference_recall_selected_including_rejected": 0.7815126050420168,
+      "candidate_coverage_eligible": 0.96875,
+      "candidate_coverage_selected_including_rejected": 0.7815126050420168,
+      "unpaired_rate_eligible": 0.03125,
+      "fully_recovered_documents": 9
+    },
+    "test": {
+      "selected_documents": 51,
+      "completed_documents": 36,
+      "rejected_documents": 15,
+      "selected_reference_pairs": 681,
+      "unevaluated_reference_pairs": 199,
+      "overlong_segments": 28,
+      "evaluated_reference_pairs": 482,
+      "candidate_pairs": 476,
+      "correct_pairs": 476,
+      "adjacent_sentence_mispairs": 0,
+      "unpaired_source": 6,
+      "unpaired_target": 6,
+      "review_candidates": 187,
+      "wrong_pairs": 0,
+      "candidate_precision": 1.0,
+      "reference_recall_eligible": 0.9875518672199171,
+      "reference_recall_selected_including_rejected": 0.6989720998531571,
+      "candidate_coverage_eligible": 0.9875518672199171,
+      "candidate_coverage_selected_including_rejected": 0.6989720998531571,
+      "unpaired_rate_eligible": 0.012448132780082987,
+      "fully_recovered_documents": 32
+    }
+  },
+  "documents": [
+    {
+      "id": "tsrus.cn.82",
+      "split": "calibration",
+      "segment_pairs": 4,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 4,
+        "candidate_pairs": 4,
+        "correct_pairs": 4,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 2
+      },
+      "wall_seconds": 5.815073400037363,
+      "evidence_file": "document-000.json",
+      "evidence_sha256": "39fb1ecce684e65052a870f0c168a9a944cf51a6f62ef8bd4538f6c929f52f02",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1720",
+      "split": "test",
+      "segment_pairs": 10,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "target",
+          "id": "en:chinanews.com.1720:3",
+          "tokens": 146
+        }
+      ]
+    },
+    {
+      "id": "chinanews.com.9951",
+      "split": "test",
+      "segment_pairs": 27,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "target",
+          "id": "en:chinanews.com.9951:10",
+          "tokens": 148
+        },
+        {
+          "side": "target",
+          "id": "en:chinanews.com.9951:19",
+          "tokens": 147
+        }
+      ]
+    },
+    {
+      "id": "reuters-zh.194",
+      "split": "test",
+      "segment_pairs": 11,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 11,
+        "candidate_pairs": 11,
+        "correct_pairs": 11,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 5
+      },
+      "wall_seconds": 2.414718299987726,
+      "evidence_file": "document-003.json",
+      "evidence_sha256": "2ef156277c9936fbfa8f908598915db87f3d39723157f0308bf27dd5456a3351",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1424",
+      "split": "test",
+      "segment_pairs": 14,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 14,
+        "candidate_pairs": 14,
+        "correct_pairs": 14,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 4
+      },
+      "wall_seconds": 3.2639818999450654,
+      "evidence_file": "document-004.json",
+      "evidence_sha256": "eb28676d843f426a69ff6049777066085e0b001868655c6c218c0ab86da2cae0",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1292",
+      "split": "calibration",
+      "segment_pairs": 9,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 9,
+        "candidate_pairs": 9,
+        "correct_pairs": 9,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 1
+      },
+      "wall_seconds": 2.511491999961436,
+      "evidence_file": "document-005.json",
+      "evidence_sha256": "a9b07649105deb70c55f5b027df1e62630717e7ab09e0682047ab816e9c988f2",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1558",
+      "split": "test",
+      "segment_pairs": 14,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 14,
+        "candidate_pairs": 14,
+        "correct_pairs": 14,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 2
+      },
+      "wall_seconds": 3.212510699988343,
+      "evidence_file": "document-006.json",
+      "evidence_sha256": "6bb6caa9eef46731a1be878aa8cf0a6a7521f2a4524b657171e6a1b4f1ba320e",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinese.macao.33",
+      "split": "test",
+      "segment_pairs": 13,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 13,
+        "candidate_pairs": 13,
+        "correct_pairs": 13,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 4
+      },
+      "wall_seconds": 2.6788399000652134,
+      "evidence_file": "document-007.json",
+      "evidence_sha256": "bdce2fc659288eb5afce283facd081fec0a684f71f48af4bc81ba243742e737e",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1306",
+      "split": "test",
+      "segment_pairs": 10,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 10,
+        "candidate_pairs": 10,
+        "correct_pairs": 10,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 2
+      },
+      "wall_seconds": 3.6621331999776885,
+      "evidence_file": "document-008.json",
+      "evidence_sha256": "5323fa9694425fda303c9b638638e0e771210bf92f0d388492ad02d09b66db32",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.9943",
+      "split": "test",
+      "segment_pairs": 12,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "source",
+          "id": "zh:chinanews.com.9943:12",
+          "tokens": 169
+        },
+        {
+          "side": "target",
+          "id": "en:chinanews.com.9943:12",
+          "tokens": 221
+        }
+      ]
+    },
+    {
+      "id": "chinanews.com.1649",
+      "split": "calibration",
+      "segment_pairs": 10,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "target",
+          "id": "en:chinanews.com.1649:10",
+          "tokens": 135
+        }
+      ]
+    },
+    {
+      "id": "chinanews.com.1255",
+      "split": "test",
+      "segment_pairs": 19,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 19,
+        "candidate_pairs": 19,
+        "correct_pairs": 19,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 4
+      },
+      "wall_seconds": 3.6994438000256196,
+      "evidence_file": "document-011.json",
+      "evidence_sha256": "71e8c63183effc78b9ef6c5eec81bd63f85e0f5ec29f9274a2334c39ecfc4c1b",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "reuters-zh.1989",
+      "split": "test",
+      "segment_pairs": 24,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 24,
+        "candidate_pairs": 24,
+        "correct_pairs": 24,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 6
+      },
+      "wall_seconds": 3.238565900013782,
+      "evidence_file": "document-012.json",
+      "evidence_sha256": "d5bc4b09a60df05a34e31b191e190ebc5963da4a82894724ec1bdb4205de2ce5",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1273",
+      "split": "test",
+      "segment_pairs": 21,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 21,
+        "candidate_pairs": 21,
+        "correct_pairs": 21,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 14
+      },
+      "wall_seconds": 3.122178699937649,
+      "evidence_file": "document-013.json",
+      "evidence_sha256": "46b816b2c1df8eb088fdf28857154c8b17562eab216c85ae60362f5039e6953e",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1751",
+      "split": "test",
+      "segment_pairs": 8,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 8,
+        "candidate_pairs": 8,
+        "correct_pairs": 8,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 4
+      },
+      "wall_seconds": 2.6632305999519303,
+      "evidence_file": "document-014.json",
+      "evidence_sha256": "8fe6fa9677cda6cd84e381fb7d86c87bc38480a278ce49a5e83a798be0de17f6",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1373",
+      "split": "calibration",
+      "segment_pairs": 6,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 6,
+        "candidate_pairs": 6,
+        "correct_pairs": 6,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 0
+      },
+      "wall_seconds": 2.9745104999747127,
+      "evidence_file": "document-015.json",
+      "evidence_sha256": "88fc1d7611efd4ac552c5db4d6231fba9b5300f2375276f9ca22ce71686bdf80",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "qq.com.240",
+      "split": "test",
+      "segment_pairs": 26,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 26,
+        "candidate_pairs": 26,
+        "correct_pairs": 26,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 8
+      },
+      "wall_seconds": 3.2482980999629945,
+      "evidence_file": "document-016.json",
+      "evidence_sha256": "f45f25668cf2c67b5154881b2d924147faae515968b6f7d8390342a84f1d5b86",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1400",
+      "split": "test",
+      "segment_pairs": 12,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 12,
+        "candidate_pairs": 12,
+        "correct_pairs": 12,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 5
+      },
+      "wall_seconds": 2.907683700090274,
+      "evidence_file": "document-017.json",
+      "evidence_sha256": "2c2e463a64559638db24f756833b8bd79e4593b527c6225de6d540b2efc2a6ba",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1741",
+      "split": "test",
+      "segment_pairs": 5,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 5,
+        "candidate_pairs": 5,
+        "correct_pairs": 5,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 3
+      },
+      "wall_seconds": 2.021535399951972,
+      "evidence_file": "document-018.json",
+      "evidence_sha256": "2dfcdf3e665f2b77ee55e8a63b8f90ee811cc8ca2545ca4b623763e20f1be311",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "qq.com.255",
+      "split": "test",
+      "segment_pairs": 17,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 17,
+        "candidate_pairs": 17,
+        "correct_pairs": 17,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 5
+      },
+      "wall_seconds": 3.0222666000481695,
+      "evidence_file": "document-019.json",
+      "evidence_sha256": "76e171321275f7caa045c9c27415b6f496866aff2665a5b82924ad019140c98e",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1457",
+      "split": "calibration",
+      "segment_pairs": 4,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 4,
+        "candidate_pairs": 4,
+        "correct_pairs": 4,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 3
+      },
+      "wall_seconds": 2.012839199975133,
+      "evidence_file": "document-020.json",
+      "evidence_sha256": "09012d689b0bc87b036a497b9bb89d16ed20f7aaa210d96d6e25ed95dc4535ab",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.9930",
+      "split": "test",
+      "segment_pairs": 23,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 23,
+        "candidate_pairs": 23,
+        "correct_pairs": 23,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 10
+      },
+      "wall_seconds": 3.6993791999993846,
+      "evidence_file": "document-021.json",
+      "evidence_sha256": "9c2aaa83c385806082ab08d82b17078451845c78db5bbeb4dc2ceb0e3468748c",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1750",
+      "split": "test",
+      "segment_pairs": 18,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 18,
+        "candidate_pairs": 17,
+        "correct_pairs": 17,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 1,
+        "unpaired_target": 1,
+        "review_candidates": 12
+      },
+      "wall_seconds": 2.748661100049503,
+      "evidence_file": "document-022.json",
+      "evidence_sha256": "1629ecab4d4a7efcc54c03fe6fcea69f5c466ff1ddeba881a9aa533271359281",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1625",
+      "split": "test",
+      "segment_pairs": 19,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "source",
+          "id": "zh:chinanews.com.1625:19",
+          "tokens": 138
+        },
+        {
+          "side": "target",
+          "id": "en:chinanews.com.1625:19",
+          "tokens": 203
+        }
+      ]
+    },
+    {
+      "id": "chinanews.com.1328",
+      "split": "test",
+      "segment_pairs": 18,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "target",
+          "id": "en:chinanews.com.1328:8",
+          "tokens": 154
+        },
+        {
+          "side": "target",
+          "id": "en:chinanews.com.1328:14",
+          "tokens": 132
+        }
+      ]
+    },
+    {
+      "id": "reuters-zh.199",
+      "split": "calibration",
+      "segment_pairs": 8,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 8,
+        "candidate_pairs": 8,
+        "correct_pairs": 8,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 1
+      },
+      "wall_seconds": 1.9312588999746367,
+      "evidence_file": "document-025.json",
+      "evidence_sha256": "ae6f78762bf6f2fe1c11de4cb5043151fdd5c8cf46d0483ea9b28b6f930e78a4",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1670",
+      "split": "test",
+      "segment_pairs": 16,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 16,
+        "candidate_pairs": 16,
+        "correct_pairs": 16,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 2
+      },
+      "wall_seconds": 2.80913910001982,
+      "evidence_file": "document-026.json",
+      "evidence_sha256": "682c2148fccc6b872da1f860bf00944742ad9313c20bf62cf8493a3c9e1f6801",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1448",
+      "split": "test",
+      "segment_pairs": 14,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 14,
+        "candidate_pairs": 14,
+        "correct_pairs": 14,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 1
+      },
+      "wall_seconds": 2.50282159994822,
+      "evidence_file": "document-027.json",
+      "evidence_sha256": "1455f5bb8bdfded8d7ec32eb404f021a09033566f53dede8c19bb25cd8b10337",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1770",
+      "split": "test",
+      "segment_pairs": 9,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 9,
+        "candidate_pairs": 9,
+        "correct_pairs": 9,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 4
+      },
+      "wall_seconds": 3.244379800045863,
+      "evidence_file": "document-028.json",
+      "evidence_sha256": "7a65bf0b9e0fe98247ef9594f8258678fd4110528fc40b7d164fe7da860a1984",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1806",
+      "split": "test",
+      "segment_pairs": 10,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 10,
+        "candidate_pairs": 10,
+        "correct_pairs": 10,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 4
+      },
+      "wall_seconds": 2.9586815000511706,
+      "evidence_file": "document-029.json",
+      "evidence_sha256": "adc0df54ec09f0034b06f2e945acb4861e8960d48c36604fa79b04b20583967c",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1423",
+      "split": "calibration",
+      "segment_pairs": 15,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 15,
+        "candidate_pairs": 15,
+        "correct_pairs": 15,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 11
+      },
+      "wall_seconds": 2.418635500012897,
+      "evidence_file": "document-030.json",
+      "evidence_sha256": "acd91437b4b2837798276316ff926741f5a999503c9f41dc2a8981e1de31a23e",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1319",
+      "split": "test",
+      "segment_pairs": 6,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 6,
+        "candidate_pairs": 6,
+        "correct_pairs": 6,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 4
+      },
+      "wall_seconds": 2.3017616999568418,
+      "evidence_file": "document-031.json",
+      "evidence_sha256": "b4de6512e39ad045011c9541ddbcc3a5b52f3f147c9583abdb3c57600c925615",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "reuters-zh.195",
+      "split": "test",
+      "segment_pairs": 8,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 8,
+        "candidate_pairs": 8,
+        "correct_pairs": 8,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 1
+      },
+      "wall_seconds": 2.0168564000632614,
+      "evidence_file": "document-032.json",
+      "evidence_sha256": "d527955a3246946c888fbbc8598090ca718f1714cdcb49ac3704dd39abea98ce",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1561",
+      "split": "test",
+      "segment_pairs": 5,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 5,
+        "candidate_pairs": 4,
+        "correct_pairs": 4,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 1,
+        "unpaired_target": 1,
+        "review_candidates": 2
+      },
+      "wall_seconds": 2.208658799994737,
+      "evidence_file": "document-033.json",
+      "evidence_sha256": "11474d2a169431091e8a2dd3810c4c69643eeecb648b2ab0280a0db900c9bcc5",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "reuters-zh.1982",
+      "split": "test",
+      "segment_pairs": 14,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "target",
+          "id": "en:reuters-zh.1982:8",
+          "tokens": 131
+        }
+      ]
+    },
+    {
+      "id": "chinanews.com.1310",
+      "split": "calibration",
+      "segment_pairs": 4,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 4,
+        "candidate_pairs": 2,
+        "correct_pairs": 2,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 2,
+        "unpaired_target": 2,
+        "review_candidates": 2
+      },
+      "wall_seconds": 2.6286480999551713,
+      "evidence_file": "document-035.json",
+      "evidence_sha256": "1a8fbc8d954588de55fff74f6373a72f8ef811060bede8978976157ef02f71e5",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1374",
+      "split": "test",
+      "segment_pairs": 8,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "source",
+          "id": "zh:chinanews.com.1374:5",
+          "tokens": 147
+        },
+        {
+          "side": "target",
+          "id": "en:chinanews.com.1374:5",
+          "tokens": 234
+        }
+      ]
+    },
+    {
+      "id": "chinanews.com.1744",
+      "split": "test",
+      "segment_pairs": 5,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 5,
+        "candidate_pairs": 5,
+        "correct_pairs": 5,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 3
+      },
+      "wall_seconds": 1.9020942999050021,
+      "evidence_file": "document-037.json",
+      "evidence_sha256": "53a423ebbf06466725b4cd6aad11a5d3591ea16c3387a766188d4339f8f09ef2",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1471",
+      "split": "test",
+      "segment_pairs": 24,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 24,
+        "candidate_pairs": 24,
+        "correct_pairs": 24,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 8
+      },
+      "wall_seconds": 2.360521599999629,
+      "evidence_file": "document-038.json",
+      "evidence_sha256": "9700029cad6e06160ea6e9c7cd914ec3477b6a7553afe2f902f0593a5437b07e",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinese.macao.35",
+      "split": "test",
+      "segment_pairs": 18,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "target",
+          "id": "en:chinese.macao.35:9",
+          "tokens": 142
+        }
+      ]
+    },
+    {
+      "id": "chinanews.com.1483",
+      "split": "calibration",
+      "segment_pairs": 15,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 15,
+        "candidate_pairs": 14,
+        "correct_pairs": 14,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 1,
+        "unpaired_target": 1,
+        "review_candidates": 6
+      },
+      "wall_seconds": 2.3185871000168845,
+      "evidence_file": "document-040.json",
+      "evidence_sha256": "af0a0c8badead5f01a699bb49d8ca8c84b948f6b4fbd0fa9011e48596bcb4a48",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.9937",
+      "split": "test",
+      "segment_pairs": 7,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "source",
+          "id": "zh:chinanews.com.9937:3",
+          "tokens": 134
+        },
+        {
+          "side": "target",
+          "id": "en:chinanews.com.9937:3",
+          "tokens": 236
+        },
+        {
+          "side": "target",
+          "id": "en:chinanews.com.9937:5",
+          "tokens": 142
+        }
+      ]
+    },
+    {
+      "id": "chinanews.com.1584",
+      "split": "test",
+      "segment_pairs": 14,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 14,
+        "candidate_pairs": 14,
+        "correct_pairs": 14,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 7
+      },
+      "wall_seconds": 2.189116399968043,
+      "evidence_file": "document-042.json",
+      "evidence_sha256": "8f0485ee1ee3ba8a0554a9ed4452018ebc65d387a42100415b5303ec41e62356",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.10003",
+      "split": "test",
+      "segment_pairs": 6,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "target",
+          "id": "en:chinanews.com.10003:1",
+          "tokens": 133
+        }
+      ]
+    },
+    {
+      "id": "chinanews.com.1509",
+      "split": "test",
+      "segment_pairs": 18,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 18,
+        "candidate_pairs": 16,
+        "correct_pairs": 16,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 2,
+        "unpaired_target": 2,
+        "review_candidates": 12
+      },
+      "wall_seconds": 2.290689400047995,
+      "evidence_file": "document-044.json",
+      "evidence_sha256": "5ec7a699a3e32a100eefde57f50893af3f5709d69afa736fee4c6619a3adce5c",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.10001",
+      "split": "calibration",
+      "segment_pairs": 13,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "target",
+          "id": "en:chinanews.com.10001:3",
+          "tokens": 130
+        }
+      ]
+    },
+    {
+      "id": "reuters-zh.197",
+      "split": "test",
+      "segment_pairs": 13,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 13,
+        "candidate_pairs": 13,
+        "correct_pairs": 13,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 3
+      },
+      "wall_seconds": 2.420723200077191,
+      "evidence_file": "document-046.json",
+      "evidence_sha256": "b52f5d38d21da39b4a629de890b2bf95bfb66fb590cf660125bc608990ecfd12",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.9987",
+      "split": "test",
+      "segment_pairs": 7,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 7,
+        "candidate_pairs": 7,
+        "correct_pairs": 7,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 3
+      },
+      "wall_seconds": 2.046515400055796,
+      "evidence_file": "document-047.json",
+      "evidence_sha256": "5c6c79677bf8e86264186f8c585cf9659d1a77da1ff7dbfa0cf23291ddff42d1",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "qq.com.223",
+      "split": "test",
+      "segment_pairs": 9,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 9,
+        "candidate_pairs": 9,
+        "correct_pairs": 9,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 6
+      },
+      "wall_seconds": 2.606263400055468,
+      "evidence_file": "document-048.json",
+      "evidence_sha256": "e606c03a01456e9b06c54cc45cda71ef8199f215192b3077fb4867869b5e3ef1",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.10006",
+      "split": "test",
+      "segment_pairs": 3,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "source",
+          "id": "zh:chinanews.com.10006:1",
+          "tokens": 146
+        },
+        {
+          "side": "target",
+          "id": "en:chinanews.com.10006:1",
+          "tokens": 164
+        }
+      ]
+    },
+    {
+      "id": "reuters-zh.2004",
+      "split": "calibration",
+      "segment_pairs": 14,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 14,
+        "candidate_pairs": 14,
+        "correct_pairs": 14,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 3
+      },
+      "wall_seconds": 2.579554400057532,
+      "evidence_file": "document-050.json",
+      "evidence_sha256": "e0fa08970d0841021c176b911fb3eb6825aa5c57dfebc9be03c759d5ddd95904",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "qq.com.271",
+      "split": "test",
+      "segment_pairs": 22,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 22,
+        "candidate_pairs": 22,
+        "correct_pairs": 22,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 12
+      },
+      "wall_seconds": 3.5539490999653935,
+      "evidence_file": "document-051.json",
+      "evidence_sha256": "6631b0b1be0d7550c78ca96110ddf095e47cf4142c52dcc8dada6bba15077599",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "reuters-zh.220",
+      "split": "test",
+      "segment_pairs": 20,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 20,
+        "candidate_pairs": 20,
+        "correct_pairs": 20,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 5
+      },
+      "wall_seconds": 2.319667199975811,
+      "evidence_file": "document-052.json",
+      "evidence_sha256": "102b8fd6e1c84c30645614199412297de146a0e4332093784a1abdb3aadbf64c",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1476",
+      "split": "test",
+      "segment_pairs": 8,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 8,
+        "candidate_pairs": 8,
+        "correct_pairs": 8,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 5
+      },
+      "wall_seconds": 2.0253196000121534,
+      "evidence_file": "document-053.json",
+      "evidence_sha256": "8a65312e6bc5982a6909e52f0ef5214e239b08ae31dceba87aabacd346112e98",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "reuters-zh.1981",
+      "split": "test",
+      "segment_pairs": 18,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "target",
+          "id": "en:reuters-zh.1981:6",
+          "tokens": 138
+        },
+        {
+          "side": "target",
+          "id": "en:reuters-zh.1981:11",
+          "tokens": 177
+        }
+      ]
+    },
+    {
+      "id": "tsrus.cn.87",
+      "split": "calibration",
+      "segment_pairs": 3,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 3,
+        "candidate_pairs": 3,
+        "correct_pairs": 3,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 0
+      },
+      "wall_seconds": 1.8508689000736922,
+      "evidence_file": "document-055.json",
+      "evidence_sha256": "5950125c93f1d15855aadda7c2e257ac3f6f187392614d1c0b76aad68f4f6f48",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "reuters-zh.227",
+      "split": "test",
+      "segment_pairs": 10,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 10,
+        "candidate_pairs": 10,
+        "correct_pairs": 10,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 1
+      },
+      "wall_seconds": 1.885565000004135,
+      "evidence_file": "document-056.json",
+      "evidence_sha256": "b1da7b97fdb9fe0b11ff0812c5d68f5dc9a2c3857d42baf881ff44389175da46",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1533",
+      "split": "test",
+      "segment_pairs": 9,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "source",
+          "id": "zh:chinanews.com.1533:6",
+          "tokens": 227
+        },
+        {
+          "side": "source",
+          "id": "zh:chinanews.com.1533:8",
+          "tokens": 148
+        },
+        {
+          "side": "target",
+          "id": "en:chinanews.com.1533:6",
+          "tokens": 333
+        },
+        {
+          "side": "target",
+          "id": "en:chinanews.com.1533:8",
+          "tokens": 205
+        },
+        {
+          "side": "target",
+          "id": "en:chinanews.com.1533:9",
+          "tokens": 132
+        }
+      ]
+    },
+    {
+      "id": "chinanews.com.1377",
+      "split": "test",
+      "segment_pairs": 6,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 6,
+        "candidate_pairs": 6,
+        "correct_pairs": 6,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 3
+      },
+      "wall_seconds": 1.9116694000549614,
+      "evidence_file": "document-058.json",
+      "evidence_sha256": "94aec2b71f9c9358069891493f30a1258ac55418d2adaecb4637135a51014678",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1370",
+      "split": "test",
+      "segment_pairs": 17,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "target",
+          "id": "en:chinanews.com.1370:14",
+          "tokens": 141
+        }
+      ]
+    },
+    {
+      "id": "chinanews.com.1466",
+      "split": "calibration",
+      "segment_pairs": 14,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 14,
+        "candidate_pairs": 14,
+        "correct_pairs": 14,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 6
+      },
+      "wall_seconds": 3.191027899971232,
+      "evidence_file": "document-060.json",
+      "evidence_sha256": "0a4b9ae0de938f029667a2b3ff7aed2e06d2340cb4b57712b278380059b71bde",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.10053",
+      "split": "test",
+      "segment_pairs": 5,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 5,
+        "candidate_pairs": 5,
+        "correct_pairs": 5,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 0,
+        "unpaired_target": 0,
+        "review_candidates": 2
+      },
+      "wall_seconds": 1.8894845999311656,
+      "evidence_file": "document-061.json",
+      "evidence_sha256": "862ec2296d937ac71c8c7f20402ae45984c1853253d2ee15b68446fc0cf7d38a",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "reuters-zh.1997",
+      "split": "test",
+      "segment_pairs": 18,
+      "status": "completed",
+      "metrics": {
+        "reference_pairs": 18,
+        "candidate_pairs": 16,
+        "correct_pairs": 16,
+        "wrong_pairs": [],
+        "adjacent_sentence_mispairs": 0,
+        "unpaired_source": 2,
+        "unpaired_target": 2,
+        "review_candidates": 11
+      },
+      "wall_seconds": 2.3283312999410555,
+      "evidence_file": "document-062.json",
+      "evidence_sha256": "c21501f29585f0c2a8ced9fa6d7b363ddb73b51d56947c9b549a53b0605767f3",
+      "method_sha256": "1b4092a0e4487d5e08faa965250be8524108f256e5587c3c0d11b3bb2ce2f149"
+    },
+    {
+      "id": "chinanews.com.1499",
+      "split": "test",
+      "segment_pairs": 13,
+      "status": "rejected_overlong_document",
+      "overlong_segments": [
+        {
+          "side": "target",
+          "id": "en:chinanews.com.1499:6",
+          "tokens": 145
+        }
+      ]
+    }
+  ],
+  "runtime": {
+    "wall_seconds": 127.91897809994407,
+    "python": "3.12.14",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "memory": {
+      "rss_bytes": 670011392,
+      "peak_rss_bytes": 892313600,
+      "peak_commit_bytes": 1406423040
+    },
+    "environment": "shared Windows host; sequential documents; unchanged local_model CPU threads=2"
+  },
+  "limitations": [
+    "Public news reference is not independent project-domain gold.",
+    "Upstream 1:1 reference measures segment correspondence; no split/merge or naturally unpaired gold.",
+    "Existing model training overlap with this public benchmark has not been ruled out.",
+    "Whole-document long-segment rejection is included in selected-set recall and coverage.",
+    "Research use permission does not establish production redistribution or model-egress rights."
+  ],
+  "date": "2026-10-16",
+  "command": "tmp/alignment-s0/venv/Scripts/python.exe -m pipelines.alignment.wmt_evaluation --source-directory tmp/alignment-s0/wmt19 --model-directory tmp/alignment-s0/model --output tmp/alignment-s0/wmt19-evaluation-20261016 --limit 800",
+  "exit_code": 0,
+  "raw_directory": "tmp\\alignment-s0\\wmt19-evaluation-20261016",
+  "raw_report_sha256": "0a20b26c1988adf56ee7780bbb147594f028f383fa45d432a3e749794ef8d932",
+  "selection_plan": {
+    "version": "wmt19-document-evaluation/v1",
+    "seed": "corpus-s0-wmt19-documents-v1",
+    "limit": 800,
+    "source_sha256": "0dff7e5d5c3f03934c1e9073281d3044c99812c6e25b85b74bc1cb14fef66486",
+    "target_sha256": "0748890c24879b0ce5ae11fea118bc8286cc051b33a08c6121c2ce5942e5ff56",
+    "source_hashes": {
+      "wmt_evaluation.py": "822585169ac10bf5405baebc8962e41217299980d1d0ca197c618eab7be37f29",
+      "local_model.py": "52fb2629d031c174672879f4b1cfbfe6478f08864e66c6cfdfd3f002582fa81d",
+      "algorithm.py": "e565b085c112fa66a336f205194b4029fecc3e5c6526517262a7b19d74cb1a4a",
+      "benchmark.py": "bc78852357207c029735a3233d0f1886d5fa0d298ed7166b1650c1a9f2e1c598",
+      "download_model.py": "736e7a128fdf85ace50fe803c5b886e299c578e618ab64c31ae097742f38f5ab",
+      "model-candidates.json": "4f91ffba405989698d42b54812047a840885dfd981540e06610382b75e430e59",
+      "input.schema.json": "032da509d0d9757749fb3d1fd5e088578d651c5a5628189aadb894c5be1b5c7b"
+    },
+    "available_documents": 163,
+    "available_segment_pairs": 2000,
+    "selected": [
+      {
+        "id": "tsrus.cn.82",
+        "split": "calibration",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ]
+      },
+      {
+        "id": "chinanews.com.1720",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ]
+      },
+      {
+        "id": "chinanews.com.9951",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20",
+          "21",
+          "22",
+          "23",
+          "24",
+          "25",
+          "26",
+          "27"
+        ]
+      },
+      {
+        "id": "reuters-zh.194",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11"
+        ]
+      },
+      {
+        "id": "chinanews.com.1424",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14"
+        ]
+      },
+      {
+        "id": "chinanews.com.1292",
+        "split": "calibration",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      },
+      {
+        "id": "chinanews.com.1558",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14"
+        ]
+      },
+      {
+        "id": "chinese.macao.33",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13"
+        ]
+      },
+      {
+        "id": "chinanews.com.1306",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ]
+      },
+      {
+        "id": "chinanews.com.9943",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12"
+        ]
+      },
+      {
+        "id": "chinanews.com.1649",
+        "split": "calibration",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ]
+      },
+      {
+        "id": "chinanews.com.1255",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19"
+        ]
+      },
+      {
+        "id": "reuters-zh.1989",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20",
+          "21",
+          "22",
+          "23",
+          "24"
+        ]
+      },
+      {
+        "id": "chinanews.com.1273",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20",
+          "21"
+        ]
+      },
+      {
+        "id": "chinanews.com.1751",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8"
+        ]
+      },
+      {
+        "id": "chinanews.com.1373",
+        "split": "calibration",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      },
+      {
+        "id": "qq.com.240",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20",
+          "21",
+          "22",
+          "23",
+          "24",
+          "25",
+          "26"
+        ]
+      },
+      {
+        "id": "chinanews.com.1400",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12"
+        ]
+      },
+      {
+        "id": "chinanews.com.1741",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      {
+        "id": "qq.com.255",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17"
+        ]
+      },
+      {
+        "id": "chinanews.com.1457",
+        "split": "calibration",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ]
+      },
+      {
+        "id": "chinanews.com.9930",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20",
+          "21",
+          "22",
+          "23"
+        ]
+      },
+      {
+        "id": "chinanews.com.1750",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18"
+        ]
+      },
+      {
+        "id": "chinanews.com.1625",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19"
+        ]
+      },
+      {
+        "id": "chinanews.com.1328",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18"
+        ]
+      },
+      {
+        "id": "reuters-zh.199",
+        "split": "calibration",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8"
+        ]
+      },
+      {
+        "id": "chinanews.com.1670",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16"
+        ]
+      },
+      {
+        "id": "chinanews.com.1448",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14"
+        ]
+      },
+      {
+        "id": "chinanews.com.1770",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      },
+      {
+        "id": "chinanews.com.1806",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ]
+      },
+      {
+        "id": "chinanews.com.1423",
+        "split": "calibration",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15"
+        ]
+      },
+      {
+        "id": "chinanews.com.1319",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      },
+      {
+        "id": "reuters-zh.195",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8"
+        ]
+      },
+      {
+        "id": "chinanews.com.1561",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      {
+        "id": "reuters-zh.1982",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14"
+        ]
+      },
+      {
+        "id": "chinanews.com.1310",
+        "split": "calibration",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ]
+      },
+      {
+        "id": "chinanews.com.1374",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8"
+        ]
+      },
+      {
+        "id": "chinanews.com.1744",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      {
+        "id": "chinanews.com.1471",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20",
+          "21",
+          "22",
+          "23",
+          "24"
+        ]
+      },
+      {
+        "id": "chinese.macao.35",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18"
+        ]
+      },
+      {
+        "id": "chinanews.com.1483",
+        "split": "calibration",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15"
+        ]
+      },
+      {
+        "id": "chinanews.com.9937",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      },
+      {
+        "id": "chinanews.com.1584",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14"
+        ]
+      },
+      {
+        "id": "chinanews.com.10003",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      },
+      {
+        "id": "chinanews.com.1509",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18"
+        ]
+      },
+      {
+        "id": "chinanews.com.10001",
+        "split": "calibration",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13"
+        ]
+      },
+      {
+        "id": "reuters-zh.197",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13"
+        ]
+      },
+      {
+        "id": "chinanews.com.9987",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      },
+      {
+        "id": "qq.com.223",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      },
+      {
+        "id": "chinanews.com.10006",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      {
+        "id": "reuters-zh.2004",
+        "split": "calibration",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14"
+        ]
+      },
+      {
+        "id": "qq.com.271",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20",
+          "21",
+          "22"
+        ]
+      },
+      {
+        "id": "reuters-zh.220",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18",
+          "19",
+          "20"
+        ]
+      },
+      {
+        "id": "chinanews.com.1476",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8"
+        ]
+      },
+      {
+        "id": "reuters-zh.1981",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18"
+        ]
+      },
+      {
+        "id": "tsrus.cn.87",
+        "split": "calibration",
+        "segment_ids": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      {
+        "id": "reuters-zh.227",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ]
+      },
+      {
+        "id": "chinanews.com.1533",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      },
+      {
+        "id": "chinanews.com.1377",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      },
+      {
+        "id": "chinanews.com.1370",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17"
+        ]
+      },
+      {
+        "id": "chinanews.com.1466",
+        "split": "calibration",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14"
+        ]
+      },
+      {
+        "id": "chinanews.com.10053",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      {
+        "id": "reuters-zh.1997",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16",
+          "17",
+          "18"
+        ]
+      },
+      {
+        "id": "chinanews.com.1499",
+        "split": "test",
+        "segment_ids": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13"
+        ]
+      }
+    ],
+    "selection": "Sort whole documents by SHA256(seed + docid), greedily include within limit; every fifth selected document is calibration.",
+    "overlong_policy": "Reject entire selected document if any source or target segment exceeds 128 tokens; no silent truncation, removal or resegmentation.",
+    "recipe": {
+      "version": "alignment-s0/v1",
+      "cosine_weight": 0.85,
+      "length_weight": 0.1,
+      "number_weight": 0.04,
+      "punctuation_weight": 0.01,
+      "source_target_length_ratio": 0.5,
+      "min_score": 0.55,
+      "skip_cost": 0.15,
+      "review_score": 0.7,
+      "ambiguity_margin": 0.1
+    },
+    "threshold_tuning": "none; calibration reserved, baseline fixed before both splits",
+    "model": {
+      "id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+      "license": "apache-2.0",
+      "dimension": 384,
+      "max_tokens": 128,
+      "pooling": "attention-mask mean followed by L2 normalization for cosine",
+      "model_card": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "metadata_source": "https://huggingface.co/api/models/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2?blobs=true",
+      "paper": "https://arxiv.org/abs/2004.09813",
+      "decision": "First CPU smoke candidate: smaller official quantized ONNX export. Quantization quality requires independent evaluation.",
+      "files": [
+        {
+          "path": "onnx/model_quint8_avx2.onnx",
+          "size": 118453870,
+          "sha256": "98a01d88b7de996cdea58c32ca71208c09968d143798814b2ea09d3439dc334f"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 9081518,
+          "sha256": "2c3387be76557bd40970cec13153b3bbf80407865484b209e655e5e4729076b8"
+        }
+      ]
+    },
+    "exact_sentence_overlap_between_splits": {
+      "source": 0,
+      "target": 0
+    }
+  },
+  "source_research": "pipelines/alignment/results/2026-10-16-evaluation-source-research.json",
+  "source_research_sha256": "8660fbfc11e37d8c97e0f78d321d9de17aea150a09c619de4d11ea8c29c5f9a1",
+  "independent_bookkeeping_verification": {
+    "status": "passed",
+    "counts": {
+      "calibration": {
+        "selected": 119,
+        "eligible": 96,
+        "predicted": 93,
+        "correct": 93,
+        "adjacent_wrong": 0,
+        "unpaired_source": 3,
+        "unpaired_target": 3
+      },
+      "test": {
+        "selected": 681,
+        "eligible": 482,
+        "predicted": 476,
+        "correct": 476,
+        "adjacent_wrong": 0,
+        "unpaired_source": 6,
+        "unpaired_target": 6
+      }
+    },
+    "method": "Separate regex SGML extraction verifies original text/IDs, each candidate against upstream-ID references, and aggregate counts; no model or scoring rerun.",
+    "script": "tmp/alignment-s0/finalize_wmt.py",
+    "script_sha256": "0e8b182422db2e227bda7cf6a6cdee652ffb076b772d99fa4addbcd5bb361e53"
+  },
+  "verification": {
+    "pytest_command": ".venv/Scripts/python.exe -m pytest tests/alignment -q",
+    "pytest_passed": 24,
+    "subtests_passed": 4,
+    "new_test_methods": 7,
+    "test_sha256": "8fa0599e281fff299e826da74dc8bd56e032e8e635f8f221f399e587d9063fe9",
+    "ruff_command": ".venv/Scripts/ruff.exe check pipelines/alignment/wmt_evaluation.py pipelines/alignment/algorithm.py pipelines/alignment/local_model.py tests/alignment/test_wmt_evaluation.py",
+    "ruff_exit_code": 0,
+    "ruff_select_ignore_overrides": "none"
+  }
+}

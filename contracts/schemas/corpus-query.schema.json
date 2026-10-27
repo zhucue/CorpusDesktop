@@ -1,0 +1,755 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/corpus-query.schema.json",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "dsl_version": {
+          "const": "corpus-query/v1"
+        },
+        "unit": {
+          "const": "character"
+        },
+        "pattern": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "literal"
+                },
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "sequence"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "literal"
+                          },
+                          "value": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "gap"
+                          },
+                          "min": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "max": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "min",
+                          "max"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "type",
+                "items"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "any_of"
+                },
+                "patterns": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "literal"
+                          },
+                          "value": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "sequence"
+                          },
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "const": "literal"
+                                    },
+                                    "value": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "value"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "const": "gap"
+                                    },
+                                    "min": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    "max": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "min",
+                                    "max"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              ]
+                            },
+                            "minItems": 2
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "items"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "type",
+                "patterns"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "within": {
+          "enum": [
+            "sentence",
+            "paragraph"
+          ]
+        },
+        "overlap": {
+          "const": "all"
+        },
+        "normalization": {
+          "const": "none"
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            },
+            "minItems": 1
+          }
+        },
+        "sort": {
+          "const": [
+            "document_ordinal",
+            "start",
+            "end"
+          ]
+        },
+        "condition": {
+          "type": "object",
+          "properties": {
+            "operator": {
+              "enum": [
+                "and",
+                "not"
+              ]
+            },
+            "pattern": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "literal"
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "sequence"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "const": "literal"
+                              },
+                              "value": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "const": "gap"
+                              },
+                              "min": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "max": {
+                                "type": "integer",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "min",
+                              "max"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "minItems": 2
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "within": {
+              "enum": [
+                "sentence",
+                "paragraph"
+              ]
+            }
+          },
+          "required": [
+            "operator",
+            "pattern",
+            "within"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "dsl_version",
+        "unit",
+        "pattern",
+        "within",
+        "overlap"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "dsl_version": {
+          "const": "corpus-query/v1"
+        },
+        "unit": {
+          "const": "token"
+        },
+        "pattern": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "term"
+                },
+                "attr": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                },
+                "op": {
+                  "enum": [
+                    "eq",
+                    "regex"
+                  ]
+                },
+                "value": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              },
+              "required": [
+                "type",
+                "attr",
+                "op",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "sequence"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "term"
+                          },
+                          "attr": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                          },
+                          "op": {
+                            "enum": [
+                              "eq",
+                              "regex"
+                            ]
+                          },
+                          "value": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "attr",
+                          "op",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "gap"
+                          },
+                          "min": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "max": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "min",
+                          "max"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "type",
+                "items"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "any_of"
+                },
+                "patterns": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "term"
+                          },
+                          "attr": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                          },
+                          "op": {
+                            "enum": [
+                              "eq",
+                              "regex"
+                            ]
+                          },
+                          "value": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "attr",
+                          "op",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "sequence"
+                          },
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "const": "term"
+                                    },
+                                    "attr": {
+                                      "type": "string",
+                                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                    },
+                                    "op": {
+                                      "enum": [
+                                        "eq",
+                                        "regex"
+                                      ]
+                                    },
+                                    "value": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 1024
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "attr",
+                                    "op",
+                                    "value"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "const": "gap"
+                                    },
+                                    "min": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    "max": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "min",
+                                    "max"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              ]
+                            },
+                            "minItems": 2
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "items"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "type",
+                "patterns"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "within": {
+          "enum": [
+            "sentence",
+            "paragraph"
+          ]
+        },
+        "overlap": {
+          "const": "all"
+        },
+        "normalization": {
+          "const": "none"
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            },
+            "minItems": 1
+          }
+        },
+        "sort": {
+          "const": [
+            "document_ordinal",
+            "start",
+            "end"
+          ]
+        },
+        "condition": {
+          "type": "object",
+          "properties": {
+            "operator": {
+              "enum": [
+                "and",
+                "not"
+              ]
+            },
+            "pattern": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "term"
+                    },
+                    "attr": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                    },
+                    "op": {
+                      "enum": [
+                        "eq",
+                        "regex"
+                      ]
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "attr",
+                    "op",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "sequence"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "const": "term"
+                              },
+                              "attr": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                              },
+                              "op": {
+                                "enum": [
+                                  "eq",
+                                  "regex"
+                                ]
+                              },
+                              "value": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 1024
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "attr",
+                              "op",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "const": "gap"
+                              },
+                              "min": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "max": {
+                                "type": "integer",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "min",
+                              "max"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "minItems": 2
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "within": {
+              "enum": [
+                "sentence",
+                "paragraph"
+              ]
+            }
+          },
+          "required": [
+            "operator",
+            "pattern",
+            "within"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "dsl_version",
+        "unit",
+        "pattern",
+        "within",
+        "overlap"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$comment": "Semantic validation must reject leading/trailing/consecutive gaps and min > max. Runtime must verify attribute availability and the accepted regex subset before execution; regex syntax is not executable permission."
+}

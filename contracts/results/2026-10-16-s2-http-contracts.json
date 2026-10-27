@@ -1,0 +1,27 @@
+{
+  "status": "passed",
+  "validated_response_counts": {
+    "run": 1,
+    "action": 1,
+    "list": 1
+  },
+  "not_recorded": [],
+  "require_all": true,
+  "failures": [],
+  "inputs": [
+    {
+      "path": "tmp\\source-sync-smoke\\2c43eaddaa534d689dae891890c300af\\result.json",
+      "sha256": "b31140af1ecec511cda6738de0374d9274a9992b93bda63464c3366877316b36"
+    },
+    {
+      "path": "tmp\\browser-s2-http.json",
+      "sha256": "2007db199ceb18905f94aaf43b694fd26d11d78ef65c9c9f6336fff9d50ad156"
+    }
+  ],
+  "schema_sha256": {
+    "run": "c5b2b8da14036121e6874318a4ea56e37791938b2a05d2343ef7649787dce202",
+    "action": "10eaea59090fc75e1444ca4b835f2a4f729fe11486ead35c05d018dc5b87b233",
+    "list": "1f05a72dfb8c130bb26062a3a6cf0f2c0e046ad2a585da0021ca24ca8dd3e1b0"
+  },
+  "scope": "Captured JSON contract validation only; no authorization or worker acceptance claim."
+}

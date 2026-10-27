@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-outcomes-evidence-create.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "result_set_id": {
+      "format": "uuid",
+      "title": "Result Set Id",
+      "type": "string"
+    },
+    "ordinal": {
+      "minimum": 0,
+      "title": "Ordinal",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "result_set_id",
+    "ordinal"
+  ],
+  "title": "EvidenceInput",
+  "type": "object"
+}

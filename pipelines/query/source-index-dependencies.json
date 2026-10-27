@@ -1,0 +1,111 @@
+{
+  "scope": "Linux CPython 3.12 x86_64 offline index worker",
+  "packages": [
+    {
+      "package": "click",
+      "version": "8.5.0",
+      "filename": "click-8.5.0-py3-none-any.whl",
+      "sha256": "255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360",
+      "bytes": 125251,
+      "official_metadata": "https://pypi.org/pypi/click/8.5.0/json",
+      "url": "https://files.pythonhosted.org/packages/58/50/6c0d534c5f134586a8e1ba4e330569e32f057e33372ae556463212fb4cd3/click-8.5.0-py3-none-any.whl"
+    },
+    {
+      "package": "cloudpickle",
+      "version": "3.1.2",
+      "filename": "cloudpickle-3.1.2-py3-none-any.whl",
+      "sha256": "9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a",
+      "bytes": 22228,
+      "official_metadata": "https://pypi.org/pypi/cloudpickle/3.1.2/json",
+      "url": "https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl"
+    },
+    {
+      "package": "colorama",
+      "version": "0.4.6",
+      "filename": "colorama-0.4.6-py2.py3-none-any.whl",
+      "sha256": "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6",
+      "bytes": 25335,
+      "official_metadata": "https://pypi.org/pypi/colorama/0.4.6/json",
+      "url": "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl"
+    },
+    {
+      "package": "defusedxml",
+      "version": "0.7.1",
+      "filename": "defusedxml-0.7.1-py2.py3-none-any.whl",
+      "sha256": "a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61",
+      "bytes": 25604,
+      "official_metadata": "https://pypi.org/pypi/defusedxml/0.7.1/json",
+      "url": "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl"
+    },
+    {
+      "package": "jieba",
+      "version": "0.42.1",
+      "filename": "jieba-0.42.1-py3-none-any.whl",
+      "sha256": "bbf3fa7ec652b3fddd553e23360f9364440e2f97362547c48cf21b794f5caaed",
+      "bytes": 19314526,
+      "official_metadata": "https://pypi.org/pypi/jieba/0.42.1/json",
+      "official_source": {
+        "url": "https://files.pythonhosted.org/packages/c6/cb/18eeb235f833b726522d7ebed54f2278ce28ba9438e3135ab0278d9792a2/jieba-0.42.1.tar.gz",
+        "sha256": "055ca12f62674fafed09427f176506079bc135638a14e23e25be909131928db2",
+        "bytes": 19214172
+      },
+      "wheel_provenance": "pip cached built pure Python wheel; module and dictionary equal official pinned sdist"
+    },
+    {
+      "package": "joblib",
+      "version": "1.6.0",
+      "filename": "joblib-1.6.0-py3-none-any.whl",
+      "sha256": "3dbbf9f6e4b592a2357b854608e980fe6390d131d7a82f011a377ef2ebef7aba",
+      "bytes": 306115,
+      "official_metadata": "https://pypi.org/pypi/joblib/1.6.0/json",
+      "url": "https://files.pythonhosted.org/packages/18/53/84099323c2ec4be98d935f63c033ac4151ee83836ca1050ede3b3aadf155/joblib-1.6.0-py3-none-any.whl"
+    },
+    {
+      "package": "nltk",
+      "version": "3.10.3",
+      "filename": "nltk-3.10.3-py3-none-any.whl",
+      "sha256": "ff9598a8e20518ee0d557745890cc4435b9578489e2dcbc69c4f81fa060caf7c",
+      "bytes": 1798643,
+      "official_metadata": "https://pypi.org/pypi/nltk/3.10.3/json",
+      "url": "https://files.pythonhosted.org/packages/b6/6d/ebd2af4640b12168fdf0cb74b6118df2f32a2f62ec7e0c06fbfd80706639/nltk-3.10.3-py3-none-any.whl"
+    },
+    {
+      "package": "regex",
+      "version": "2026.9.29",
+      "filename": "regex-2026.9.29-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "39ab5894d971f9ac68baa6eca5c50387db579cfcacf36ae8df3feceb1815e6d0",
+      "bytes": 807783,
+      "official_metadata": "https://pypi.org/pypi/regex/2026.9.29/json",
+      "url": "https://files.pythonhosted.org/packages/26/83/d2fbd2e4e3afb1167daa825187d196f313cbaa1a4768f311fb041bb0e3d2/regex-2026.9.29-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+    },
+    {
+      "package": "tqdm",
+      "version": "4.70.1",
+      "filename": "tqdm-4.70.1-py3-none-any.whl",
+      "sha256": "c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73",
+      "bytes": 80199,
+      "official_metadata": "https://pypi.org/pypi/tqdm/4.70.1/json",
+      "url": "https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl"
+    }
+  ],
+  "build_dependencies": [
+    {
+      "package": "setuptools",
+      "version": "80.9.0",
+      "url": "https://files.pythonhosted.org/packages/a3/dc/17031897dae0efacfea57dfd3a82fdd2a2aeb58e0ff71b77b87e44edc772/setuptools-80.9.0-py3-none-any.whl",
+      "sha256": "062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922"
+    },
+    {
+      "package": "wheel",
+      "version": "0.45.1",
+      "url": "https://files.pythonhosted.org/packages/0b/2c/87f3254fd8ffd29e4c02732eee68a83a1d3c346ae39bc6822dcbcb697f2b/wheel-0.45.1-py3-none-any.whl",
+      "sha256": "708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248"
+    },
+    {
+      "package": "packaging",
+      "version": "25.0",
+      "url": "https://files.pythonhosted.org/packages/20/12/38679034af332785aac8774540895e234f4d07f7545804097de4b666afd8/packaging-25.0-py3-none-any.whl",
+      "sha256": "29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484"
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "schema": "source-registry/v1",
+  "reviewed_on": "2026-10-16",
+  "stage": "S0",
+  "publication_state": "NOT_PUBLISHED",
+  "sources": [
+    {
+      "id": "tatoeba-cmn-eng",
+      "publisher": "Tatoeba",
+      "official_downloads": "https://tatoeba.org/en/downloads",
+      "languages": [
+        "cmn",
+        "eng"
+      ],
+      "files": [
+        "cmn/cmn_sentences_detailed.tsv.bz2",
+        "eng/eng_sentences_detailed.tsv.bz2",
+        "cmn/cmn-eng_links.tsv.bz2"
+      ],
+      "base_url": "https://downloads.tatoeba.org/exports/per_language/",
+      "version_strategy": "Weekly Last-Modified date plus acquired file SHA256. Upstream URLs are mutable: retain the acquired originals to reproduce an older sample.",
+      "license_declared": "CC BY 2.0 FR; CC0 subset exists but is not assumed",
+      "attribution_required": [
+        "sentence ID",
+        "sentence owner",
+        "sentence URL",
+        "license",
+        "modification record"
+      ],
+      "sample_seed": "corpus-s0-20261016-v1",
+      "sample_pairs": 10000,
+      "model_egress": "not_approved",
+      "release_approved": false
+    },
+    {
+      "id": "wikimedia-current",
+      "publisher": "Wikimedia Foundation",
+      "wikis": [
+        "zhwiki",
+        "enwiki"
+      ],
+      "official_downloads": "https://wikitech.wikimedia.org/wiki/MediaWiki_Content_File_Exports",
+      "release": "2026-10-01",
+      "dataset": "mediawiki_content_current",
+      "completion_marker": "xml/bzip2/SHA256SUMS",
+      "namespace_filter": [
+        0
+      ],
+      "current_revisions_only": true,
+      "license_evidence": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use#7._Licensing_of_Content",
+      "license_declared": "CC BY-SA 4.0 and GFDL where applicable; preserve page-specific terms",
+      "attribution_required": [
+        "wiki",
+        "page ID",
+        "revision ID",
+        "page title",
+        "revision URL",
+        "history URL",
+        "license",
+        "modification record"
+      ],
+      "checksum_basis": "dated publisher SHA256SUMS; Chinese fixed tail shard and English fixed minimum shard both fully verified. English was assembled from two preserved interrupted prefixes and exact validator-checked bounded ranges, then whole-file SHA256 matched the publisher; historical prefix probes and failures remain separate evidence. Both 1000-article samples were selected across every eligible page in their respective complete shard.",
+      "english_transfer_evidence": "pipelines/sources/2026-10-16-enwiki-ranges.json",
+      "chinese_cleaning_evidence": "pipelines/sources/2026-10-16-zhwiki-cleaning.json (972 restricted subsets, 28 rejected; full text coverage not validated)",
+      "model_egress": "not_approved",
+      "release_approved": false,
+      "english_historical_failures": "pipelines/sources/enwiki-transfer-evidence.json",
+      "english_cleaning_evidence": "pipelines/sources/2026-10-16-enwiki-cleaning.json (restricted subset only; full text coverage not validated)"
+    },
+    {
+      "id": "ud-chinese-gsd",
+      "publisher": "Universal Dependencies",
+      "repository": "https://github.com/UniversalDependencies/UD_Chinese-GSD",
+      "tag": "r2.18",
+      "commit": "e0d85a020182e264d6384be2a59c0f4879a1cc35",
+      "commit_evidence": "git ls-remote official repository refs/tags/r2.18, 2026-10-16",
+      "language": "zh-Hant",
+      "license_declared": "CC BY-SA 4.0 (annotations)",
+      "license_scope_issue": "README states Google does not claim ownership or copyright in underlying text",
+      "attribution_required": [
+        "Mo Shen",
+        "Ryan McDonald",
+        "Daniel Zeman",
+        "Peng Qi",
+        "treebank version",
+        "sentence ID"
+      ],
+      "model_egress": "not_approved",
+      "release_approved": false
+    },
+    {
+      "id": "ud-english-gum",
+      "role": "reviewed_alternative",
+      "publisher": "Universal Dependencies / Georgetown University",
+      "repository": "https://github.com/UniversalDependencies/UD_English-GUM",
+      "tag": "r2.18",
+      "commit": "b58e74bc22d17220c9198864c253a50a897bf27f",
+      "commit_evidence": "git ls-remote official repository refs/tags/r2.18, 2026-10-16",
+      "license_declared": "CC BY-NC-SA 4.0",
+      "license_scope_issue": "Underlying source licenses are documented; verify intended deployment satisfies NC/SA. Reddit data is separately licensed and excluded from this repository.",
+      "attribution_required": [
+        "document meta::author",
+        "document meta::sourceURL",
+        "GUM annotators",
+        "Zeldes 2017 GUM citation",
+        "treebank version",
+        "sentence ID"
+      ],
+      "model_egress": "not_approved",
+      "release_approved": false
+    }
+  ]
+}

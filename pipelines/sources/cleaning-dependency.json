@@ -1,0 +1,18 @@
+{
+  "package": "mwparserfromhell",
+  "version": "0.7.2",
+  "license": "MIT",
+  "file": {
+    "filename": "mwparserfromhell-0.7.2-cp312-cp312-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/13/8b/de18b03f7df8e315682ae33028fb3e10cb895617d061092b9c9e055bf5de/mwparserfromhell-0.7.2-cp312-cp312-win_amd64.whl",
+    "size": 156405,
+    "digests": {
+      "blake2b_256": "138bde18b03f7df8e315682ae33028fb3e10cb895617d061092b9c9e055bf5de",
+      "md5": "2b6ef0d78bef1fcfa121e1ac57067da3",
+      "sha256": "4bd6e388b5e0f247c3b2484acb2a4bec4f7ba81598fa25956ec93b7abbd17fbe"
+    }
+  },
+  "platform": "CPython 3.12 Windows AMD64 isolated S0 experiment",
+  "official_docs": "https://mwparserfromhell.readthedocs.io/en/v0.7.2/api/mwparserfromhell.nodes.html",
+  "scope": "source AST parser; no template expansion or MediaWiki render"
+}

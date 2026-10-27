@@ -1,0 +1,7 @@
+tmp/
+node_modules/
+.venv/
+doc/*.docx
+dist/
+package-lock.json
+uv.lock

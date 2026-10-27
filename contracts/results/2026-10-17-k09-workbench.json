@@ -1,0 +1,161 @@
+{
+  "date": "2026-10-17",
+  "status": "scoped_fixture_runtime_http_and_browser_accepted",
+  "scope": "K09 fixed empty-material account/project workbench and safe browser control; local fixture only",
+  "registry_count": 143,
+  "registered_contract_adapters": 52,
+  "production_available_tools": 0,
+  "runtime_tool_schema": "s3-outcomes-tools-v1",
+  "host_policy": "corpus-k09-linear-v1",
+  "tests": {
+    "contracts": {
+      "command": ".venv/Scripts/python.exe -m unittest discover -s tests/contracts -q",
+      "passed": 62,
+      "new_topic": 4,
+      "seconds": 6.924
+    },
+    "web": {
+      "command": "node --test apps/web/test/agent.test.ts",
+      "passed": 5,
+      "duration_ms": 287.32
+    },
+    "build": {
+      "command": "npm run web:build",
+      "exit_code": 0
+    },
+    "ruff": {
+      "command": ".venv/Scripts/python.exe -m ruff check --select E4,E7,E9,F,I contracts/agent.py tests/contracts/test_agent.py tests/contracts/validate_agent_report.py",
+      "exit_code": 0
+    }
+  },
+  "source_sha256_at_code_freeze": {
+    "contracts/agent.py": "5d3d80ad8804fc0cd2cd264b4091794306072de116105945d2e8f8cb2affea72",
+    "contracts/types/agent.ts": "72565ee5967e33f3ee4deece2be62cf095fd9536dafbaf2af8b562a808163f2b",
+    "contracts/types/s1.ts": "13db9e927a0bab3dfcce09f2a95a54ecfb7edaecbf4485c9a7556ad5882b7d1d",
+    "contracts/build.py": "09adeb334d70d473b009604d64cedaf390e3c7d2e7a2fce0bbb8e8b3ffc59a69",
+    "apps/web/src/AgentWorkspace.tsx": "ebecc072d02ace14b92426ccb5866eac70a45de73690e603bace6594de2b8ccb",
+    "apps/web/src/agent-state.ts": "824e73740ea290d0dba26e8ee4236a39ef24c1dfbc2df541522182ad67f44a7e",
+    "apps/web/src/main.tsx": "14cc39226ee458c60748f2f9b3dc1c08fdd654be80b571154c777ce4c44ddb1d",
+    "apps/web/src/style.css": "8082925c14ecff5ae942970a01dba581400a384b47320b1b42fe93b06242060d",
+    "apps/web/test/agent.test.ts": "42e0de8d2c176704c0f23a9453f412f960673ec32d0d230759a0b7d10fac22d1",
+    "tests/contracts/test_agent.py": "822d2d1c7323c09e7860dd9efc78ca6466e652297458d798dfe3828c8a3ae957",
+    "tests/contracts/validate_agent_report.py": "d680d7a0d5259d3b79e9d61d13b7853d1ace788719d55aaf6b366517f6638225"
+  },
+  "schema_sha256": {
+    "contracts/schemas/k09-agent-events.schema.json": "779a95ac80900d692fa8141728cbae5310fa08b3ec53560a441f9c56c5d2775c",
+    "contracts/schemas/k09-agent-messages.schema.json": "12af23a6b0be344ae0b63a8f35886cffd31482576d30e674d4603428689da0cd",
+    "contracts/schemas/k09-agent-run-create.schema.json": "d2dea15f4908e3b4d1ce6702b3a2cceaa4ad40f9cbfbcfb8554c61ce1fd0fda7",
+    "contracts/schemas/k09-agent-run-list.schema.json": "843d8dcfe0c463057614c739362a3bd05194d245171236e6fd77fc85f943cd98",
+    "contracts/schemas/k09-agent-run.schema.json": "b7e5565618af704d09cb7add4c3cd105998338cbb6733979782898c82526434b",
+    "contracts/schemas/k09-agent-runtime.schema.json": "a2a402c08dee002c68bdd78c8f0359dfac43a0b9b6fa5dcb7080b053155de30f",
+    "contracts/schemas/k09-agent-session-create.schema.json": "3877fb945c0c1ecee5b938a4dfa0c3d5a29bb543622343484679e78b7f00823f",
+    "contracts/schemas/k09-agent-session-list.schema.json": "2bdca470bca0247bb6c40e4cdce81ee819892aaa525f92a165d308716b9f396d",
+    "contracts/schemas/k09-agent-session.schema.json": "d98f04dc04983465a8f4ab8a5779fc909ff1d4135928ba51c8517062fc591f27"
+  },
+  "frontend": {
+    "path": "apps/web/dist/assets/index-DdhfQ0cy.js",
+    "sha256": "05322d2bc41c0b931ed7a91ac56067a0034f7521db32d64ddcd51e3d7525d658",
+    "css_path": "apps/web/dist/assets/index-DZv-HdgF.css",
+    "css_sha256": "aaa667caae2815e9e66530f7843f12f59c59772ffdc4820dff2df67e7d8de2b7"
+  },
+  "http": {
+    "status": "passed",
+    "raw_report": "tmp/pi-k09/8c1ae654c4144fff87a37490a9d1c51d/result.json",
+    "raw_sha256": "afa1cf59ae49ee2e8ae3d0d77204dddd142bbbb83a5adc82d65febbeef5061f8",
+    "schema_report": "contracts/results/2026-10-17-k09-http-contracts.json",
+    "schema_report_sha256": "5fc65f66e86780ecf1b8133f654b8787d92892a189135419320d7ba9b9e6d8f6",
+    "families": 7,
+    "responses": 10,
+    "same_run_wait_resume": true,
+    "new_epoch": true,
+    "duplicate_write": false,
+    "private_body_in_model": false,
+    "cleanup_completed": true
+  },
+  "browser": {
+    "status": "scoped_passed_by_parent",
+    "verified": [
+      "account/project scope separation and return to account history",
+      "project message completes and refresh restores persistent history",
+      "cancel and terminal session list indicators agree",
+      "final asset confirmed from browser DOM",
+      "default unconfigured runtime preserves nonempty draft and disables send",
+      "explicit successful refresh has no stale alert",
+      "manual project entry remains usable",
+      "temporary actor cleanup exit0; refresh returns to login; browser tab closed"
+    ],
+    "artifacts": {
+      "tmp/k09-browser/project-completed.png": "34d5637e63788eb813e135a6b1e7550844cdf6a387fc119ea53e341dd70a21a7",
+      "tmp/k09-browser/unconfigured-final.png": "fab43fc91c0b60e150929908d6e279339b0c2d035691c375bb5ea113bd50ff8b"
+    },
+    "asset_note": "project-completed image is from the preceding asset differing only by clearing a prior error at explicit refresh; unconfigured-final is from final deployed DdhfQ0cy asset"
+  },
+  "document_qa": {
+    "status": "passed",
+    "document_sha256": {
+      "doc/frontend-specification.md": "f37c87962d915d9f8fbc98964f00151ec6b1fa52511abe9a7548b15bad99883b",
+      "doc/assistant-capabilities.md": "9b1159ebef91da1492ec7bb5116c2edd68ce10818d73e1d2dac10db5b30e8af9",
+      "doc/前端与接口设计规范.docx": "9d50a74b0758c86807072375e735bbdc1b529efe8abfa834a4b71f27d5030f2d",
+      "doc/研究助手业务能力与工具契约.docx": "8c0d05a4ca6fc9d5b86a234718c9962aa672717f48d76d9a74b46a25306c203e"
+    },
+    "structure": "Title/Heading1-3 explicit Songti ascii/hAnsi/eastAsia/cs; all header/footer parts have no text",
+    "render": "Isolated LibreOffice 25.2.3.2 with readonly Windows Songti fonts; packaged document renderer rasterized the resulting PDFs. Native Word COM export failed and was stopped without claiming success.",
+    "visual_review": {
+      "frontend": {
+        "directory": "tmp/k09-frontend-final",
+        "pages": 23,
+        "full_page_pngs_reviewed": 23,
+        "representative_pages": [
+          3,
+          15,
+          17
+        ]
+      },
+      "assistant": {
+        "directory": "tmp/k09-assistant-final",
+        "pages": 14,
+        "full_page_pngs_reviewed": 14,
+        "representative_pages": [
+          1,
+          3
+        ]
+      },
+      "result": "No clipped text, broken glyphs, overflowing tables or empty pages. Frontend desktop-workspace heading moved to page3; final rerender changed only page2/page3 PNGs, both rechecked."
+    }
+  },
+  "limits": [
+    "User has an OpenAI-compatible interface; URL/model/protocol are not yet fixed and the real provider is not configured. Fixture is disabled by default and labelled local flow testing when explicitly configured.",
+    "Configured can_submit does not establish host liveness; queued runs remain queued until actually claimed.",
+    "Project scope rejects nonempty material references; model material egress and production tools remain unavailable.",
+    "No follow-up queue, arbitrary tool route, raw checkpoint, internal thinking or raw business payload is exposed by the workbench.",
+    "Shown historical runs are independently reauthorized; old responses cannot revive history after revocation.",
+    "Shared local environment only; not independent production performance acceptance."
+  ],
+  "frontend_at_first_freeze": {
+    "path": "apps/web/dist/assets/index-BixhaQTI.js",
+    "sha256": "be8240ba4e4349786c2a60c126c6e279158c0d5cba58529e21a309262634ed20",
+    "css_path": "apps/web/dist/assets/index-DZv-HdgF.css",
+    "css_sha256": "aaa667caae2815e9e66530f7843f12f59c59772ffdc4820dff2df67e7d8de2b7"
+  },
+  "ui_refinement": {
+    "purpose": "Keep session activity and explicit-refresh error display synchronized with authoritative reads",
+    "changes": [
+      "remember updates the matching session list item after cancel or terminal polling",
+      "explicit refresh clears the old error before attempting reads; a new failure is still shown"
+    ],
+    "validation": {
+      "command": "npm run web:build; node --test apps/web/test/agent.test.ts",
+      "build_exit_code": 0,
+      "tests_passed": 5,
+      "test_duration_ms": 286.5993
+    },
+    "source_sha256": {
+      "apps/web/src/AgentWorkspace.tsx": "99832b8e75104e783b9d2424c74092aafebc4efb69efa89c3b2a314895471f15"
+    }
+  },
+  "backend_evidence": {
+    "path": "tests/api/results/2026-10-17-agent-waiting.json",
+    "sha256": "4dd6fdaa0393737ff40c3d51233d22194e640eec3b33bf26a30aa825a1544794",
+    "parent_cleanup_audit": "3 temporary actors across 13 tables zero residual rows; real D12 policies zero; migration0014"
+  }
+}

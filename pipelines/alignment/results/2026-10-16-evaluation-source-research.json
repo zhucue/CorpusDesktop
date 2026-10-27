@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-16",
+  "scope": "Public evaluation material selection; not source-registry approval or project-domain gold",
+  "pud": {
+    "release": "Universal Dependencies r2.18",
+    "chinese_readme": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-PUD/r2.18/README.md",
+    "english_readme": "https://raw.githubusercontent.com/UniversalDependencies/UD_English-PUD/r2.18/README.md",
+    "chinese_license": "https://raw.githubusercontent.com/UniversalDependencies/UD_Chinese-PUD/r2.18/LICENSE.txt",
+    "english_license": "https://raw.githubusercontent.com/UniversalDependencies/UD_English-PUD/r2.18/LICENSE.txt",
+    "license": "CC BY-SA 3.0; README also disclaims ownership of underlying text",
+    "parallel_identity": "Both fixed-release files provide parallel_id=pud/<sentence_id>; README describes 1000 corresponding professionally translated segments, except German translation provenance differs.",
+    "decision": "Not suitable for continuous-document alignment evaluation: README says a few randomly selected sentences per document are not necessarily adjacent. newdoc and parallel_id do not restore missing original context.",
+    "downloaded_for_experiment": false
+  },
+  "wmt19": {
+    "task_page": "https://www.statmt.org/wmt19/translation-task.html",
+    "organizer_paper": "https://aclanthology.org/W19-5301/",
+    "paper_pdf": "https://aclanthology.org/W19-5301.pdf",
+    "archive_url": "https://data.statmt.org/wmt19/translation-task/test.tgz",
+    "original_task_link_scheme": "http",
+    "archive_bytes": 3533424,
+    "archive_local_sha256": "5ef66d76e183ed40450086ad6fa7beccda1fbb290c5556b93273d515fd6683fb",
+    "etag": "\"35ea70-587b1cdef44ac\"",
+    "last_modified": "Mon, 29 Apr 2019 21:16:57 GMT",
+    "publisher_checksum_verified": false,
+    "checksum_meaning": "Local content digest after complete download and successful tar decompression; no publisher checksum manifest was available in this investigation.",
+    "source_member": "sgm/newstest2019-zhen-src.zh.sgm",
+    "source_bytes": 356605,
+    "source_sha256": "0dff7e5d5c3f03934c1e9073281d3044c99812c6e25b85b74bc1cb14fef66486",
+    "reference_member": "sgm/newstest2019-zhen-ref.en.sgm",
+    "reference_bytes": 504767,
+    "reference_sha256": "0748890c24879b0ce5ae11fea118bc8286cc051b33a08c6121c2ce5942e5ff56",
+    "licensing_basis": "Official task page permits research use with WMT19 overview citation and dataset-specific citation requirements. Other uses require consulting original owners. No general production redistribution or external-model permission is asserted.",
+    "citation": "Barrault et al. (2019). Findings of the 2019 Conference on Machine Translation (WMT19), pp. 1–61. https://doi.org/10.18653/v1/W19-5301",
+    "continuity_basis": "Organizer paper section 2.1 instructs all translation agencies to retain document/line boundaries and translate from scratch; table 1 identifies Chinese news documents. The task explicitly includes document-level Chinese-to-English evaluation.",
+    "observed_identity": "163 Chinese-original documents and 2000 segments per side; exact document-ID sets and segment-ID order agree. Pairing uses docid and seg id; reference file document order is not assumed.",
+    "experiment": "Deterministically select up to 800 segments while retaining complete documents; split by document before token checks or model output. Freeze existing MiniLM revision and recipe min_score=0.55; reserve calibration without tuning. Reject entire documents containing a segment above 128 tokens, retaining their references in selected-set recall and coverage denominators.",
+    "limitations": [
+      "This evaluates correspondence to public news reference segments, not independently adjudicated project-domain alignment quality.",
+      "WMT supplied translation segmentation; this does not test the project's own sentence splitter or naturally occurring split/merge relations.",
+      "No synthetic omissions or reorderings are included in this baseline.",
+      "Possible overlap with pretrained model training material has not been ruled out."
+    ]
+  }
+}

@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-research-snapshot-create.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "mount_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Mount Ids",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "material_revision_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Material Revision Ids",
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "title": "SnapshotInput",
+  "type": "object",
+  "anyOf": [
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 0,
+          "maxItems": 0
+        },
+        "material_revision_ids": {
+          "minItems": 1,
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "material_revision_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 15
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 14
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 13
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 12
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 5,
+          "maxItems": 5
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 11
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 6,
+          "maxItems": 6
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 10
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 7,
+          "maxItems": 7
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 9
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 8,
+          "maxItems": 8
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 9,
+          "maxItems": 9
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 7
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 10,
+          "maxItems": 10
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 6
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 11,
+          "maxItems": 11
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 12,
+          "maxItems": 12
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 4
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 13,
+          "maxItems": 13
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 14,
+          "maxItems": 14
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 15,
+          "maxItems": 15
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    },
+    {
+      "properties": {
+        "mount_ids": {
+          "minItems": 16,
+          "maxItems": 16
+        },
+        "material_revision_ids": {
+          "minItems": 0,
+          "maxItems": 0
+        }
+      },
+      "required": [
+        "mount_ids"
+      ]
+    }
+  ]
+}

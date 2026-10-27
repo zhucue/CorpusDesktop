@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/event.schema.json",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "kind": {
+      "enum": [
+        "state_changed",
+        "tool_completed",
+        "job_linked",
+        "text_delta",
+        "completed"
+      ]
+    },
+    "payload_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    }
+  },
+  "required": [
+    "event_id",
+    "sequence",
+    "run_id",
+    "kind",
+    "payload_ref"
+  ],
+  "additionalProperties": false
+}

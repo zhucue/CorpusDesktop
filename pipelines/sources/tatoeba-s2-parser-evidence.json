@@ -1,0 +1,228 @@
+{
+  "schema": "tatoeba-full-parser-evidence/v1",
+  "executed_date": "2026-10-16",
+  "status": "passed",
+  "source_id": "D12",
+  "scope": "Full cached official cmn/eng detailed exports and cmn-eng direct links; not the prior 10000-pair sample",
+  "network_acquisition": "New production worker acquisition is separately verified; these two local runs reuse complete original files and verify SHA256",
+  "input_bytes": 37141424,
+  "inputs": [
+    {
+      "bytes": 481441,
+      "etag": "\"6ac9ddd2-758a1\"",
+      "export_date": "2026-10-10",
+      "last_modified": "Sat, 10 Oct 2026 06:40:18 GMT",
+      "name": "cmn-eng_links.tsv.bz2",
+      "sha256": "82b1c58d73e3e1b2310fb4f2c3dcb13de1043a109aafea07ba9cbbb98bc7409e",
+      "url": "https://downloads.tatoeba.org/exports/per_language/cmn/cmn-eng_links.tsv.bz2"
+    },
+    {
+      "bytes": 1722861,
+      "etag": "\"6ac9db4c-1a49ed\"",
+      "export_date": "2026-10-10",
+      "last_modified": "Sat, 10 Oct 2026 06:29:32 GMT",
+      "name": "cmn_sentences_detailed.tsv.bz2",
+      "sha256": "a8c53945a8806ce7b6e220585294bf2df4c021f2adfe9d0efc49b6db7e9c0af5",
+      "url": "https://downloads.tatoeba.org/exports/per_language/cmn/cmn_sentences_detailed.tsv.bz2"
+    },
+    {
+      "bytes": 34937122,
+      "etag": "\"6ac9db4c-2151922\"",
+      "export_date": "2026-10-10",
+      "last_modified": "Sat, 10 Oct 2026 06:29:32 GMT",
+      "name": "eng_sentences_detailed.tsv.bz2",
+      "sha256": "1d8c40545b4af2c6531d1a8b64941fa9d0fa3ee5bcc11cb705c8d8c1fd930c84",
+      "url": "https://downloads.tatoeba.org/exports/per_language/eng/eng_sentences_detailed.tsv.bz2"
+    }
+  ],
+  "quality": {
+    "cmn_input_rows": 89179,
+    "eng_input_rows": 2038719,
+    "cmn_sentences": 89179,
+    "eng_sentences": 2038719,
+    "sentences": 2127898,
+    "unknown_owner": 44439,
+    "duplicate_sentence_rows": 0,
+    "edge_input_rows": 78288,
+    "missing_endpoint_rows": 199,
+    "wrong_language_edge_rows": 0,
+    "direct_edges": 78089,
+    "duplicate_or_reciprocal_edge_rows": 0,
+    "same_text_distinct_ids": 0,
+    "unlinked_sentences": 1988958,
+    "missing_endpoint_examples": [
+      [
+        332495,
+        268969
+      ],
+      [
+        334178,
+        1588
+      ],
+      [
+        334178,
+        1230710
+      ],
+      [
+        345963,
+        16282
+      ],
+      [
+        470962,
+        35478
+      ],
+      [
+        777314,
+        777055
+      ],
+      [
+        777315,
+        777055
+      ],
+      [
+        778707,
+        282108
+      ],
+      [
+        795768,
+        322766
+      ],
+      [
+        816954,
+        813535
+      ],
+      [
+        2790037,
+        2788504
+      ],
+      [
+        3234982,
+        3234963
+      ],
+      [
+        3335162,
+        1977717
+      ],
+      [
+        3343909,
+        879598
+      ],
+      [
+        3778215,
+        3778750
+      ],
+      [
+        3776923,
+        3778751
+      ],
+      [
+        3775631,
+        3778757
+      ],
+      [
+        2518631,
+        3778791
+      ],
+      [
+        478683,
+        3778793
+      ],
+      [
+        2395011,
+        3778895
+      ]
+    ],
+    "policy": "Full language exports; distinct IDs retained even for equal text; missing/wrong-language edges excluded explicitly"
+  },
+  "diff": {
+    "baseline": "4da815f0806d6a40677de04c37ea7431a05fc899d41d7f4c6d954f52b8ba6a9f",
+    "status": "compared",
+    "sentence_added": 0,
+    "sentence_removed": 0,
+    "sentence_changed": 0,
+    "text_changed": 0,
+    "edge_added": 0,
+    "edge_removed": 0
+  },
+  "deterministic_artifacts": {
+    "corpus.sqlite3": {
+      "bytes": 542023680,
+      "sha256": "4da815f0806d6a40677de04c37ea7431a05fc899d41d7f4c6d954f52b8ba6a9f",
+      "equal_across_two_complete_runs": true
+    },
+    "sentences.jsonl.gz": {
+      "bytes": 166826656,
+      "sha256": "1e397f4d4d9ade498d329bdf737b10f7b1e375153e9743aac5a7454b357bf665",
+      "equal_across_two_complete_runs": true
+    },
+    "direct_edges.jsonl.gz": {
+      "bytes": 549255,
+      "sha256": "e5811a4cef3f108d0745f31048a878bf1fc1868fe4ae88e9d13a56cadbb4ec6d",
+      "equal_across_two_complete_runs": true
+    }
+  },
+  "local_runs": [
+    {
+      "report": "tmp/tatoeba-s2/full-parse-result.json",
+      "report_sha256": "0c5424244d380bb28beb12b89c8790433bdbcf1cbafe48e5c254cf4b05b05df6",
+      "elapsed_seconds": 163.18699999991804,
+      "temp_directory_compliance": "not_established: initial process set SQLITE_TMPDIR only; Windows SQLite ignores it and may have used system temp"
+    },
+    {
+      "report": "tmp/tatoeba-s2/full-rerun-result.json",
+      "report_sha256": "a39b3a19248333bb51202ca65985e5bf6a1e57c27cbe8cc04e2bbe8592f0ff01",
+      "elapsed_seconds": 279.280999999959,
+      "temp_directory_compliance": "passed: dedicated process launched with TMP/TEMP under repository tmp and GetTempPathW verified before SQLite opens",
+      "baseline": "first complete corpus.sqlite3, opened read-only"
+    }
+  ],
+  "tests": {
+    "command": ".venv/Scripts/python.exe -m pytest tests/sources/test_tatoeba.py -q",
+    "passed": 9,
+    "coverage": [
+      "full counts and attribution",
+      "duplicate ID conflict",
+      "invalid bz2/UTF-8/truncation",
+      "ID and content diff",
+      "callback cancellation",
+      "SQLite VM progress cancellation",
+      "pinned callback before GET",
+      "changed source identity rejection",
+      "bounded retry of incomplete HTTP body"
+    ]
+  },
+  "source_sha256": {
+    "pipelines/sources/tatoeba.py": "a69982e133f802f9218e288fe0b9d5ed3a9b6403554d608a108ea19dc29c8631",
+    "tests/sources/test_tatoeba.py": "ce39e01a9306df3437ea5bdc16ced53017fb81ef728a3ad5775448196bdd75d6"
+  },
+  "primary_documentation": [
+    {
+      "url": "https://tatoeba.org/en/downloads",
+      "supports": "weekly detailed exports, six fields, owner field, direct translation links, CC BY 2.0 FR default text license"
+    },
+    {
+      "url": "https://en.wiki.tatoeba.org/articles/show/using-the-tatoeba-corpus",
+      "supports": "attribution and reuse guidance; no project release or model-egress approval inferred"
+    },
+    {
+      "url": "https://www.sqlite.org/tempfiles.html",
+      "supports": "Windows uses GetTempPath for SQLite temporary files; SQLITE_TMPDIR is not the Windows control"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-gettemppatha",
+      "supports": "TMP and TEMP resolution used by GetTempPath"
+    }
+  ],
+  "boundaries": [
+    "Local SHA256 identifies acquired bytes; no publisher-provided checksum is claimed.",
+    "Before/after ETag, Last-Modified and size checks do not constitute an upstream atomic snapshot guarantee.",
+    "Owner is retained as supplied and is not claimed to identify the original author.",
+    "Missing endpoint links are excluded with counts and examples; all full-language sentences remain.",
+    "VALIDATED staging only; no public release, query-ready index, model-egress approval or source-license approval.",
+    "Shared Windows wall times are diagnostic observations, not formal capacity acceptance."
+  ],
+  "source_snapshot": {
+    "path": "pipelines/sources/tatoeba-s2-parser-source.json",
+    "sha256": "014444e16fd32a86790aae6dea39adc5f539e1a7e0cbdb2357e89ceb5996a7b5"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": "alignment-eval/v1",
+  "dataset_kind": "constructed_smoke",
+  "provenance": "Agent-written engineering smoke sentences; not independent domain annotation.",
+  "snapshot_id": "s0-smoke-snapshot",
+  "segmentation_recipe": "manually-segmented-smoke/v1",
+  "block_id": "s0-smoke-block",
+  "source_language": "zh",
+  "target_language": "en",
+  "source": [
+    {"id": "zh-1", "revision_id": "smoke-zh-v1", "text": "图书馆每天早上九点开放。"},
+    {"id": "zh-2", "revision_id": "smoke-zh-v1", "text": "本研究包括20名学生。"},
+    {"id": "zh-3", "revision_id": "smoke-zh-v1", "text": "天气预报说今晚会下雨。"},
+    {"id": "zh-4", "revision_id": "smoke-zh-v1", "text": "请保存实验结果。"}
+  ],
+  "target": [
+    {"id": "en-1", "revision_id": "smoke-en-v1", "text": "The library opens at nine every morning."},
+    {"id": "en-2", "revision_id": "smoke-en-v1", "text": "This study includes 20 students."},
+    {"id": "en-3", "revision_id": "smoke-en-v1", "text": "Please save the experimental results."}
+  ]
+}

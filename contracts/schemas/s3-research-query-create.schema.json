@@ -1,0 +1,416 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-research-query-create.schema.json",
+  "$defs": {
+    "CharacterQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "dsl_version": {
+          "const": "corpus-query/v1",
+          "title": "Dsl Version",
+          "type": "string"
+        },
+        "within": {
+          "const": "sentence",
+          "title": "Within",
+          "type": "string"
+        },
+        "overlap": {
+          "const": "all",
+          "title": "Overlap",
+          "type": "string"
+        },
+        "normalization": {
+          "const": "none",
+          "default": "none",
+          "title": "Normalization",
+          "type": "string"
+        },
+        "sort": {
+          "default": [
+            "document_ordinal",
+            "start",
+            "end"
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": "document_ordinal",
+              "type": "string"
+            },
+            {
+              "const": "start",
+              "type": "string"
+            },
+            {
+              "const": "end",
+              "type": "string"
+            }
+          ],
+          "title": "Sort",
+          "type": "array"
+        },
+        "unit": {
+          "const": "character",
+          "title": "Unit",
+          "type": "string"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteralPattern"
+            },
+            {
+              "$ref": "#/$defs/CharacterSequence"
+            },
+            {
+              "$ref": "#/$defs/CharacterUnion"
+            }
+          ],
+          "title": "Pattern"
+        }
+      },
+      "required": [
+        "dsl_version",
+        "within",
+        "overlap",
+        "unit",
+        "pattern"
+      ],
+      "title": "CharacterQuery",
+      "type": "object"
+    },
+    "CharacterSequence": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "sequence",
+          "title": "Type",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LiteralPattern"
+              },
+              {
+                "$ref": "#/$defs/GapPattern"
+              }
+            ]
+          },
+          "minItems": 2,
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "items"
+      ],
+      "title": "CharacterSequence",
+      "type": "object"
+    },
+    "CharacterUnion": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "any_of",
+          "title": "Type",
+          "type": "string"
+        },
+        "patterns": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LiteralPattern"
+              },
+              {
+                "$ref": "#/$defs/CharacterSequence"
+              }
+            ]
+          },
+          "minItems": 2,
+          "title": "Patterns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "patterns"
+      ],
+      "title": "CharacterUnion",
+      "type": "object"
+    },
+    "GapPattern": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "gap",
+          "title": "Type",
+          "type": "string"
+        },
+        "min": {
+          "minimum": 0,
+          "title": "Min",
+          "type": "integer"
+        },
+        "max": {
+          "minimum": 0,
+          "title": "Max",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "min",
+        "max"
+      ],
+      "title": "GapPattern",
+      "type": "object"
+    },
+    "LiteralPattern": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "literal",
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ],
+      "title": "LiteralPattern",
+      "type": "object"
+    },
+    "TermPattern": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "term",
+          "title": "Type",
+          "type": "string"
+        },
+        "attr": {
+          "const": "form",
+          "title": "Attr",
+          "type": "string"
+        },
+        "op": {
+          "const": "eq",
+          "title": "Op",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "attr",
+        "op",
+        "value"
+      ],
+      "title": "TermPattern",
+      "type": "object"
+    },
+    "TokenQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "dsl_version": {
+          "const": "corpus-query/v1",
+          "title": "Dsl Version",
+          "type": "string"
+        },
+        "within": {
+          "const": "sentence",
+          "title": "Within",
+          "type": "string"
+        },
+        "overlap": {
+          "const": "all",
+          "title": "Overlap",
+          "type": "string"
+        },
+        "normalization": {
+          "const": "none",
+          "default": "none",
+          "title": "Normalization",
+          "type": "string"
+        },
+        "sort": {
+          "default": [
+            "document_ordinal",
+            "start",
+            "end"
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": "document_ordinal",
+              "type": "string"
+            },
+            {
+              "const": "start",
+              "type": "string"
+            },
+            {
+              "const": "end",
+              "type": "string"
+            }
+          ],
+          "title": "Sort",
+          "type": "array"
+        },
+        "unit": {
+          "const": "token",
+          "title": "Unit",
+          "type": "string"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TermPattern"
+            },
+            {
+              "$ref": "#/$defs/TokenSequence"
+            },
+            {
+              "$ref": "#/$defs/TokenUnion"
+            }
+          ],
+          "title": "Pattern"
+        }
+      },
+      "required": [
+        "dsl_version",
+        "within",
+        "overlap",
+        "unit",
+        "pattern"
+      ],
+      "title": "TokenQuery",
+      "type": "object"
+    },
+    "TokenSequence": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "sequence",
+          "title": "Type",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TermPattern"
+              },
+              {
+                "$ref": "#/$defs/GapPattern"
+              }
+            ]
+          },
+          "minItems": 2,
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "items"
+      ],
+      "title": "TokenSequence",
+      "type": "object"
+    },
+    "TokenUnion": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "any_of",
+          "title": "Type",
+          "type": "string"
+        },
+        "patterns": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TermPattern"
+              },
+              {
+                "$ref": "#/$defs/TokenSequence"
+              }
+            ]
+          },
+          "minItems": 2,
+          "title": "Patterns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "patterns"
+      ],
+      "title": "TokenUnion",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "snapshot_id": {
+      "format": "uuid",
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "query": {
+      "discriminator": {
+        "mapping": {
+          "character": "#/$defs/CharacterQuery",
+          "token": "#/$defs/TokenQuery"
+        },
+        "propertyName": "unit"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CharacterQuery"
+        },
+        {
+          "$ref": "#/$defs/TokenQuery"
+        }
+      ],
+      "title": "Query"
+    },
+    "page_size": {
+      "default": 50,
+      "maximum": 50,
+      "minimum": 1,
+      "title": "Page Size",
+      "type": "integer"
+    },
+    "context_codepoints": {
+      "default": 40,
+      "maximum": 200,
+      "minimum": 0,
+      "title": "Context Codepoints",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "snapshot_id",
+    "query"
+  ],
+  "title": "QueryInput",
+  "type": "object"
+}

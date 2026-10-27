@@ -1,0 +1,140 @@
+{
+  "method": "Brute-force raw template enumeration and documented template repetition arithmetic; no PositionIndex calls",
+  "checker_sha256": "876d3428625087f7b0af603ea424d1805e43b89f3ea5f2c801836b672da83a04",
+  "scope": "Counts for the fixed 20-query benchmark and high-frequency pair; coordinate semantics independently checked by 23 hand-written golden cases",
+  "experiments": [
+    {
+      "experiment": "character-10m-optimized",
+      "all_matched": true,
+      "template_count": 20,
+      "repeat_multiplier": 500,
+      "input_sha256": "e80a5198aa97dfee44a58db381bd845ee02f360a7fc64ded5201c5ae4bb10e26",
+      "query_counts": [
+        {
+          "query_id": 0,
+          "expected": 962000,
+          "observed": 962000,
+          "matched": true
+        },
+        {
+          "query_id": 1,
+          "expected": 869000,
+          "observed": 869000,
+          "matched": true
+        },
+        {
+          "query_id": 2,
+          "expected": 842500,
+          "observed": 842500,
+          "matched": true
+        },
+        {
+          "query_id": 3,
+          "expected": 816500,
+          "observed": 816500,
+          "matched": true
+        },
+        {
+          "query_id": 4,
+          "expected": 770000,
+          "observed": 770000,
+          "matched": true
+        },
+        {
+          "query_id": 5,
+          "expected": 727000,
+          "observed": 727000,
+          "matched": true
+        },
+        {
+          "query_id": 6,
+          "expected": 679500,
+          "observed": 679500,
+          "matched": true
+        },
+        {
+          "query_id": 7,
+          "expected": 607500,
+          "observed": 607500,
+          "matched": true
+        },
+        {
+          "query_id": 8,
+          "expected": 571500,
+          "observed": 571500,
+          "matched": true
+        },
+        {
+          "query_id": 9,
+          "expected": 490000,
+          "observed": 490000,
+          "matched": true
+        },
+        {
+          "query_id": 10,
+          "expected": 17000,
+          "observed": 17000,
+          "matched": true
+        },
+        {
+          "query_id": 11,
+          "expected": 19500,
+          "observed": 19500,
+          "matched": true
+        },
+        {
+          "query_id": 12,
+          "expected": 10000,
+          "observed": 10000,
+          "matched": true
+        },
+        {
+          "query_id": 13,
+          "expected": 11000,
+          "observed": 11000,
+          "matched": true
+        },
+        {
+          "query_id": 14,
+          "expected": 9000,
+          "observed": 9000,
+          "matched": true
+        },
+        {
+          "query_id": 15,
+          "expected": 13500,
+          "observed": 13500,
+          "matched": true
+        },
+        {
+          "query_id": 16,
+          "expected": 9000,
+          "observed": 9000,
+          "matched": true
+        },
+        {
+          "query_id": 17,
+          "expected": 3500,
+          "observed": 3500,
+          "matched": true
+        },
+        {
+          "query_id": 18,
+          "expected": 2500,
+          "observed": 2500,
+          "matched": true
+        },
+        {
+          "query_id": 19,
+          "expected": 16000,
+          "observed": 16000,
+          "matched": true
+        }
+      ],
+      "high_frequency_gap": {
+        "expected": 739500,
+        "observed": 739500
+      }
+    }
+  ]
+}

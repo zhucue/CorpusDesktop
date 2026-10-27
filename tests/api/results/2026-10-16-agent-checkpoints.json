@@ -1,0 +1,344 @@
+{
+  "schema": "s1-agent-checkpoints-validation/v1",
+  "date": "2026-10-16",
+  "status": "verified_completed_linear_checkpoint_slice",
+  "production_available": false,
+  "migration": {
+    "revision": "0006_agent_checkpoints",
+    "current_head_verified": true
+  },
+  "postgresql_s3": {
+    "passed": 11,
+    "real_dependency_tests": 9,
+    "format_tests": 2,
+    "skipped": 0,
+    "elapsed_seconds": 20.51,
+    "exit_code": 0,
+    "command": "docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm test-auth python -m unittest discover -s tests/api -p test_agent_checkpoints.py -v",
+    "checks": [
+      "Publish, restore, idempotent store/settle, old cancellation cannot fence new writer",
+      "Cross-session identity, changed historical context and omitted tool results rejected",
+      "Real S3 write followed by injected lost acknowledgement; real PostgreSQL error after object write; neither publishes latest",
+      "Real S3 write deliberately crosses original lease deadline; checkpoint transaction rolls back",
+      "Cancelled staged checkpoint cannot replace previous published pointer",
+      "Real pinned S3 GET then injected corrupt byte yields integrity error and WAITING_REVIEW",
+      "Revoked historical project permission blocks heartbeat/restore; unrelated new membership remains valid",
+      "Pending accepted job and unobserved successful result block publication; jobs.get observation permits it",
+      "Recorded failed tool followed by corrected call can publish; missing reliable SDK context requires review",
+      "Malformed assistant contents, branch, compaction and context edits explicitly rejected"
+    ],
+    "fixture_limits": [
+      "Job gate test uses PostgreSQL upload/job state fixtures; it does not rerun Celery validation or prove complete WAITING_JOB recovery.",
+      "Storage errors are explicit boundary fault injection around actual S3 writes/reads, not a claim that object-store versions mutated.",
+      "Failed storage/DB operations can leave unreferenced private objects; automated retention cleanup is not implemented."
+    ]
+  },
+  "parent_regression": {
+    "python_passed": 109,
+    "python_skipped": 59,
+    "python_subtests": 167,
+    "node_passed": 21,
+    "node_checkpoint_topic_tests": 7,
+    "typecheck": "passed",
+    "ruff_ci_scope": "passed",
+    "remote_ci": "not_run",
+    "skips": {
+      "auth": 9,
+      "upload": 10,
+      "catalog": 7,
+      "agent_runtime": 10,
+      "agent_checkpoints": 9,
+      "previous_rls": 1,
+      "native_cwb": 7,
+      "isolated_parser": 6
+    },
+    "existing_runtime_real_pg": {
+      "passed": 10,
+      "elapsed_seconds": 28.131
+    },
+    "auth_real_pg": {
+      "passed": 9,
+      "elapsed_seconds": 10.84
+    },
+    "warning": "One existing Starlette/httpx deprecation warning",
+    "upload_http": {
+      "groups_passed": 6,
+      "exit_code": 0,
+      "cleanup": true,
+      "script": "tmp/s1_parent_http.py",
+      "script_sha256": "d4fafc158e3811cfdff1edcc8f04bd163605615f6bea6a4fdae5f314edb54785",
+      "transport": "actual_HTTP_to_running_API_with_resident_dispatcher_worker"
+    }
+  },
+  "independent_parent_sdk_smoke": {
+    "status": "passed",
+    "runs": [
+      {
+        "run_id": "3ef07be2-72b4-428f-b10e-de1fdf67f8a2",
+        "session_id": "eee7d1e7-e40a-4447-8b9c-e65f1a3b7b63",
+        "model_requests": 2,
+        "invocation_id": "f22c0385-b3e5-4429-8756-dac85c51b383",
+        "project": {
+          "id": "26189fdd-3483-461a-a3b9-d927347a9b51",
+          "name": "Pi checkpoint verification",
+          "owner_id": "8316b936-7f59-417a-b9f6-9c1c05e1a7ba",
+          "role": "owner",
+          "created_at": "2026-10-16T13:22:23.498118Z",
+          "permissions": {
+            "upload": true,
+            "manage_members": true,
+            "read_jobs": true
+          }
+        },
+        "final_model_content": [
+          {
+            "type": "text",
+            "text": "Existing project 26189fdd-3483-461a-a3b9-d927347a9b51 is retained in this session; no duplicate project is requested."
+          }
+        ],
+        "events": [
+          "agent_start",
+          "turn_start",
+          "message_start",
+          "message_end",
+          "message_start",
+          "message_end",
+          "message_start",
+          "message_end",
+          "tool_execution_start",
+          "tool_execution_end",
+          "message_start",
+          "message_end",
+          "turn_end",
+          "turn_start",
+          "message_start",
+          "message_end",
+          "turn_end",
+          "agent_end",
+          "agent_settled"
+        ],
+        "final": {
+          "run_id": "3ef07be2-72b4-428f-b10e-de1fdf67f8a2",
+          "session_id": "eee7d1e7-e40a-4447-8b9c-e65f1a3b7b63",
+          "state": "SUCCEEDED",
+          "reason": "CHECKPOINT_PUBLISHED",
+          "scope_digest": "09c0dc5ebc494d8e0762bd46562eb6b21f8f1462c455a1ad20df6e87834af316",
+          "lease_epoch": 1,
+          "lease_expires_at": null,
+          "event_sequence": 7,
+          "allowed_tools": [
+            "account.get",
+            "projects.create",
+            "projects.list",
+            "sources.get",
+            "sources.list",
+            "sources.versions"
+          ],
+          "base_checkpoint_id": null,
+          "final_checkpoint_id": "5a2dbebf-2cf6-4274-a9d4-38533a3e0610",
+          "created_at": "2026-10-16T13:22:09.358650+00:00",
+          "updated_at": "2026-10-16T13:22:25.886308+00:00"
+        },
+        "restored": false,
+        "inherited_messages": 0,
+        "inherited_tool_results": 0,
+        "new_tool_executions": 1,
+        "base_checkpoint": null,
+        "checkpoint": {
+          "checkpoint_id": "5a2dbebf-2cf6-4274-a9d4-38533a3e0610",
+          "sha256": "f2aaa5b1bfe294cbdae0e9a07a3ec55546e2a6a2dcc040d0ff2e521cad1b99bf",
+          "byte_size": 6769,
+          "sdk_session_id": "eee7d1e7-e40a-4447-8b9c-e65f1a3b7b63",
+          "leaf_id": "9fafa7ec",
+          "runtime_manifest": {
+            "sdk_package": "@earendil-works/pi-coding-agent",
+            "sdk_version": "1.3.0",
+            "session_version": 3,
+            "host_policy": "corpus-s1-linear-v1",
+            "provider": "corpus-s1-fixed",
+            "model": "fixed-project-v1",
+            "tool_schema": "s1-tools-v1",
+            "resource_config": "corpus-empty-resources-v1"
+          }
+        },
+        "model_network_mode": "disabled_fixed_provider",
+        "production_available": false,
+        "durable_event_kinds": [
+          "run.queued",
+          "run.claimed",
+          "tool.succeeded",
+          "sdk.agent_end",
+          "sdk.agent_settled",
+          "checkpoint.stored",
+          "run.succeeded"
+        ],
+        "durable_event_count": 7
+      },
+      {
+        "run_id": "b4aa2ddf-4f8c-4909-b385-5a66d32e6a9d",
+        "session_id": "eee7d1e7-e40a-4447-8b9c-e65f1a3b7b63",
+        "model_requests": 1,
+        "invocation_id": "f22c0385-b3e5-4429-8756-dac85c51b383",
+        "project": {
+          "id": "26189fdd-3483-461a-a3b9-d927347a9b51",
+          "name": "Pi checkpoint verification",
+          "owner_id": "8316b936-7f59-417a-b9f6-9c1c05e1a7ba",
+          "role": "owner",
+          "created_at": "2026-10-16T13:22:23.498118Z",
+          "permissions": {
+            "upload": true,
+            "manage_members": true,
+            "read_jobs": true
+          }
+        },
+        "final_model_content": [
+          {
+            "type": "text",
+            "text": "Existing project 26189fdd-3483-461a-a3b9-d927347a9b51 is retained in this session; no duplicate project is requested."
+          }
+        ],
+        "events": [
+          "agent_start",
+          "turn_start",
+          "message_start",
+          "message_end",
+          "message_start",
+          "message_end",
+          "message_start",
+          "message_end",
+          "turn_end",
+          "agent_end",
+          "agent_settled"
+        ],
+        "final": {
+          "run_id": "b4aa2ddf-4f8c-4909-b385-5a66d32e6a9d",
+          "session_id": "eee7d1e7-e40a-4447-8b9c-e65f1a3b7b63",
+          "state": "SUCCEEDED",
+          "reason": "CHECKPOINT_PUBLISHED",
+          "scope_digest": "09c0dc5ebc494d8e0762bd46562eb6b21f8f1462c455a1ad20df6e87834af316",
+          "lease_epoch": 3,
+          "lease_expires_at": null,
+          "event_sequence": 6,
+          "allowed_tools": [
+            "account.get",
+            "projects.create",
+            "projects.list",
+            "sources.get",
+            "sources.list",
+            "sources.versions"
+          ],
+          "base_checkpoint_id": "5a2dbebf-2cf6-4274-a9d4-38533a3e0610",
+          "final_checkpoint_id": "420abc1e-0558-4f78-8172-5173ddedb47e",
+          "created_at": "2026-10-16T13:22:26.978260+00:00",
+          "updated_at": "2026-10-16T13:22:40.489402+00:00"
+        },
+        "restored": true,
+        "inherited_messages": 5,
+        "inherited_tool_results": 1,
+        "new_tool_executions": 0,
+        "base_checkpoint": {
+          "checkpoint_id": "5a2dbebf-2cf6-4274-a9d4-38533a3e0610",
+          "sha256": "f2aaa5b1bfe294cbdae0e9a07a3ec55546e2a6a2dcc040d0ff2e521cad1b99bf",
+          "byte_size": 6769,
+          "sdk_session_id": "eee7d1e7-e40a-4447-8b9c-e65f1a3b7b63",
+          "leaf_id": "9fafa7ec",
+          "runtime_manifest": {
+            "model": "fixed-project-v1",
+            "provider": "corpus-s1-fixed",
+            "host_policy": "corpus-s1-linear-v1",
+            "sdk_package": "@earendil-works/pi-coding-agent",
+            "sdk_version": "1.3.0",
+            "tool_schema": "s1-tools-v1",
+            "resource_config": "corpus-empty-resources-v1",
+            "session_version": 3
+          }
+        },
+        "checkpoint": {
+          "checkpoint_id": "420abc1e-0558-4f78-8172-5173ddedb47e",
+          "sha256": "a0138d746b98f5f3eb958aaf58a620a20cca9fd90b4a76d8eec3b4e4afa90c81",
+          "byte_size": 7953,
+          "sdk_session_id": "eee7d1e7-e40a-4447-8b9c-e65f1a3b7b63",
+          "leaf_id": "8d6a7861",
+          "runtime_manifest": {
+            "sdk_package": "@earendil-works/pi-coding-agent",
+            "sdk_version": "1.3.0",
+            "session_version": 3,
+            "host_policy": "corpus-s1-linear-v1",
+            "provider": "corpus-s1-fixed",
+            "model": "fixed-project-v1",
+            "tool_schema": "s1-tools-v1",
+            "resource_config": "corpus-empty-resources-v1"
+          }
+        },
+        "model_network_mode": "disabled_fixed_provider",
+        "production_available": false,
+        "durable_event_kinds": [
+          "run.queued",
+          "run.claimed",
+          "sdk.agent_end",
+          "sdk.agent_settled",
+          "checkpoint.stored",
+          "run.succeeded"
+        ],
+        "durable_event_count": 6
+      }
+    ],
+    "api_database": "actual_postgresql",
+    "transport": "actual_http",
+    "archive_storage": "private_versioned_S3_through_API",
+    "processes": 2,
+    "same_session": true,
+    "project_count": 1,
+    "old_invocation_reexecuted": false,
+    "model_network_mode": "disabled_fixed_provider",
+    "production_available": false,
+    "limits": [
+      "Completed linear checkpoints only; ambiguous in-flight calls require review.",
+      "No real external model, research material egress, or complete production recovery acceptance."
+    ]
+  },
+  "smoke_original": {
+    "path": "tmp/pi-s1/9cdce0a05d2943e8b48e8c99a691ab75/result.json",
+    "sha256": "3a6064d87afc4b3a16e75070b4cd036de2820063970f1be99ab501d68c4ec6ee",
+    "command": ".venv/Scripts/python.exe scripts/agent_runtime_smoke.py",
+    "exit_code": 0,
+    "cleanup_finally_completed": true
+  },
+  "limits": [
+    "Only completed linear Pi v3 sessions with fixed SDK 1.3.0, fixed local provider and empty research-material scope.",
+    "No external paid model, research material egress approval, model quality or production tools acceptance.",
+    "No automatic recovery at arbitrary in-flight positions, branching/compaction restore, resident host, or credential renewal.",
+    "Unknown invocations and unreliable model-visible tool contexts remain WAITING_REVIEW; committed mutations are not blindly replayed.",
+    "No complete WAITING_JOB restart/scheduler acceptance; necessary job completion and observation are tested publication gates."
+  ],
+  "source_sha256": {
+    "services/api/agent_checkpoints.py": "787bd8a9eb1ccd06c4092e17d1c1371613cbc31f415bd47d8bce8f7ce9964b55",
+    "services/api/agent_control.py": "29598e5419f19ad328cabc32ad5af18805db621bff9ac50aa536696c1ac5cf2c",
+    "services/api/agent_internal.py": "0156ed7c5af441b8b678291958084aacc6a7a719c69115f3454bd75079791e04",
+    "services/api/agent_models.py": "4a6431c5aeb72bd8f7ca21e2112c67faca983ddc2171b4ca9deb0058c85258e0",
+    "services/api/agent_routes.py": "68eda2f6b97e35196bc489938ba9aa396bc18cf1df443c38de47bfd479a5c79c",
+    "services/api/agent_tools.py": "10ae5a7f0d179df8a2d77ecc9a90909e4d3181b2d42ba6b884dbf73e117f8e6b",
+    "services/api/storage.py": "b8544a914e9351c7f181e2ccc5c563458995868f6ce1caf8ab9ebb88cbdd1b58",
+    "services/api/db.py": "100f79409d6a5a2ad17ed240e3e809cb799f48d7fd6baa3181ca9b85eb6fca63",
+    "services/api/migrations/versions/0006_agent_checkpoints.py": "153fa77c93cfe13988f07ec4f08afcef46358a41b00a0315aed0eeb7443beba0",
+    "tests/api/test_agent_checkpoints.py": "eb40944b744513ff6c2b5ead0b419fc01bb2614c68924c7fa6d4a9fbbc48a385",
+    "tests/api/test_agent_runtime.py": "a62696ddd06b5140d0986c221f28518861157858278de109406934df6c4bd9d3",
+    "services/agent-runtime/src/s1-run-host.ts": "caeae99bd0ab6c6466970b35b1fcc58a16e25f55a3dafbb840e96c4b4d9d3d8d",
+    "services/agent-runtime/src/s1-run-client.ts": "a3cba48e54e5a5baf3274a0469be96ef56c74841f71e54d9d047cd9b3b327d53",
+    "services/agent-runtime/src/s1-run-checkpoint.ts": "a1305c6d9cc83ad1cc8e5e572891b28a393e6cdca0e2c8450da18abf44915a8c",
+    "services/agent-runtime/src/s1-run-smoke.ts": "f3ae12a69e2a3d713d4481b8b1bb78c928582f4dc2ed4bfbb76f74f8336a165e",
+    "services/agent-runtime/test/s1-run-checkpoint.test.ts": "b679149fa65ef1fb11fac39ba2b0d0b92eb78ac49d6108ee68dececd22852a48",
+    "services/agent-runtime/test/s1-run-client.test.ts": "48b13bfbdeaab712c935f8caf6cd73bd1ecf0d231e5cc6ab15c9665e460d2fe9",
+    "scripts/agent_runtime_smoke.py": "1843580ebcf24052c91c7825d97a73a20deb12f2b7dca5caf7e7a701db283cc8",
+    ".github/workflows/ci.yml": "e663a1358c305ca5497e4783b5ae20e408fff1b5df31d572727a955e50b47487",
+    "deploy/compose.yaml": "02acc5a3c6a006f2e3d5a1eca2778cd5790dddb80f55fb6f6aac7105f081fd68"
+  },
+  "operational_health": {
+    "observed": "Nine health checks had pong output but exceeded outer 6 second command deadline in shared environment",
+    "change": "worker healthcheck outer timeout 6s to 20s; Celery inspect ping internal timeout remains 3s",
+    "command": "docker compose --env-file deploy/.env -f deploy/compose.yaml --profile worker up -d --wait worker",
+    "exit_code": 0,
+    "state": "healthy",
+    "all_services_restored": true
+  }
+}

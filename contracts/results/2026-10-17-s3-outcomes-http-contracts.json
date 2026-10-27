@@ -1,0 +1,39 @@
+{
+  "status": "passed",
+  "require_all": true,
+  "validated_response_counts": {
+    "evidence": 2,
+    "evidence_actions": 2,
+    "evidence_lists": 1,
+    "notes": 1,
+    "note_actions": 3,
+    "note_lists": 2,
+    "exports": 5,
+    "export_actions": 5,
+    "export_lists": 1,
+    "policies": 4,
+    "policy_actions": 4
+  },
+  "not_recorded": [],
+  "failures": [],
+  "inputs": [
+    {
+      "path": "tmp\\outcomes-smoke\\3e3f99e5074b43cf93bbe94df1b0fa77\\result.json",
+      "sha256": "abc7d3c1079b73f732aed88069b2f39ed5172e7e42ad524c84ce578fe70d8c85"
+    }
+  ],
+  "schema_sha256": {
+    "evidence": "e1f2aaacff2ad2f2e46eec87d77bd8f1dcd753141c34f6b7b91d5e61ac5d0864",
+    "evidence_actions": "8b1c01f6a0d07444c6380fd4c2018fbdaef229f49b8d833eea92eefa9eb56756",
+    "evidence_lists": "21fd855fbddce17c15ddbc0b9df8dbe740849fca75ae6f55aa0f172308b18685",
+    "notes": "c0e85ad2ff4427d6f7bdbaf5de744af006af46bd18e66f9ae3b84c3daefcb651",
+    "note_actions": "ba33d91fd29c82f85dac5cc61112543eed7e11b09e4e4e664e23c235535e9afc",
+    "note_lists": "4f842cdacdd07aa30687254b82a7cf0927be62188df66ef9f264942a61061bb4",
+    "exports": "51cab0d42a89162b16c984412d8765647c0a8582ece9d6470385c2139152b981",
+    "export_actions": "103d28b2e437837ec4ddee06febe3f378585fb107fc613fe79484ee76c86743d",
+    "export_lists": "99c49b1f20b899dcbeffd43c0d63252e701a3344d1a307eae29574f5faddec27",
+    "policies": "cc899e6a42ac72144da267923ae7af989ab3c80898098a47e09c49419a018b5a",
+    "policy_actions": "29bed58b05801c7f1d256f6fcb073e6b664f85b0fc7aad9325d89d55e7dead8c"
+  },
+  "limits": "Captured HTTP schema and semantic invariants only; authorization, immutable evidence, note conflicts, complete export bytes and browser flows require execution evidence."
+}

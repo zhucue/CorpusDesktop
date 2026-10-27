@@ -1,0 +1,21 @@
+FROM python@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142b1877b5830d36
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY deploy/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt
+RUN useradd --create-home --uid 10001 corpus
+RUN mkdir -p /app/tmp/uploads /app/tmp/source-sync /app/tmp/research-cache && chown -R corpus:corpus /app/tmp
+ENV SQLITE_TMPDIR=/app/tmp/source-sync
+COPY scripts /app/scripts
+COPY services/api /app/services/api
+COPY workers /app/workers
+COPY pipelines/sources /app/pipelines/sources
+COPY pipelines/query /app/pipelines/query
+COPY pipelines/materials /app/pipelines/materials
+COPY pipelines/exports /app/pipelines/exports
+COPY alembic.ini /app/alembic.ini
+COPY contracts /app/contracts
+COPY apps/web/dist /app/apps/web/dist
+USER corpus
+EXPOSE 8000
+CMD ["uvicorn", "services.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,561 @@
+{
+  "status": "completed",
+  "formal_acceptance": false,
+  "engine": "CWB/CQP 3.5.0 actual installed binary, full dump through cqp_spans",
+  "container_image": "corpus-s0-query:3.5.0",
+  "container_image_digest": "sha256:620cd25bc75bff32d8fcf94d9691f3ee824084ca27e94566909cbd4e9f28b5ef",
+  "environment": "Linux container limited to 4 CPU / 8 GiB on a shared Docker Desktop host; Windows workspace bind mount; storage type not verified.",
+  "workload": "Each size: 20 queries, each repeated 20 times with concurrency 5; plus 20 first executions, 20 warm-ups and one high-frequency gap 0..8.",
+  "data_recipe": "s0-synthetic-v1 seed 20261016; 20 repeated templates of 100 whitespace tokens; one revision=document=sentence. This does not model natural corpus diversity.",
+  "coordinate_method": "Every hit reads persisted token-to-Unicode-codepoint coordinates. All hits are mapped and counted before selecting 50 ordered KWIC rows from actual persisted text.",
+  "independent_count_method": "Brute-force raw token matching for all 20 templates weighted by documented full/partial repetition, without CQP or PositionIndex; portable tests compare this weighting against full enumeration.",
+  "timing_scope": [
+    "First executions do not represent cold disk: OS page cache was not evicted.",
+    "Every call launches a fresh CQP subprocess. Its startup, full span output and pipe backpressure are included in raw child wall time; this is not index-only query execution.",
+    "Adapter wall time includes the raw child plus wrapper startup, stdout capture, parsing and deduplication. It overlaps the raw metric and must not be added to it.",
+    "Full mapping/KWIC wall time is subsequent to the adapter stage; both are included in end-to-end first-page-and-complete-count time. Concurrent wall times include scheduling and Python GIL contention.",
+    "Child CPU and peak RSS come from resource.getrusage in a fresh wrapper, while cgroup memory includes page cache. Disk peak is sampled every 0.25s, not an absolute peak."
+  ],
+  "acceptance_scope": "Exploratory candidate adapter only, not a deployed business API. The 3s first-page and 120s complete high-frequency count thresholds remain unchanged. Shared 4CPU/8GiB measurements do not satisfy dedicated 8-vCPU/32-GiB formal acceptance.",
+  "next_development": "Separate bounded first-page retrieval from background complete counting; preserve exact overlapping span union, coordinate provenance and document/segment counts. Benchmark that actual path against independent complete results before any performance claim.",
+  "experiments": [
+    {
+      "tokens": 1000000,
+      "report": "pipelines/query/results/2026-10-16-cwb-token-1m.json",
+      "report_sha256": "73e10959cd3d3cf3ed685c974b9946ffd58dc87d35c9c8b6d1dfe27881e36fa7",
+      "code_sha256": {
+        "cwb.py": "b7f10ca9e24cb484156c7f4727c47a7bd6d8c1fb7f2c7c064ac0938a01fc079d",
+        "cwb_benchmark.py": "2b23e89f8245a5bde83a01d3028ee4dceb5eaadccdd00d04453aec620d3bb374",
+        "benchmark.py": "84e5e109a38490b0d889ae24c06b1c1fbca5fd1a0cc1033c7cfe25e1c33eeb8d",
+        "reference_counts.py": "876d3428625087f7b0af603ea424d1805e43b89f3ea5f2c801836b672da83a04"
+      },
+      "build_seconds": 4.148614453000846,
+      "built_disk_bytes": 28805391,
+      "sampled_peak_disk_bytes": 41088736,
+      "disk_sampling_interval_seconds": 0.25,
+      "memory": {
+        "parent_max_rss_bytes": 180994048,
+        "child_max_rss_bytes": 180994048,
+        "cgroup_peak_bytes_including_file_cache": "196538368"
+      },
+      "actual_cqp_max_rss_bytes": 11665408,
+      "cqp_child_cpu_seconds_all_441_runs": 47.106415999999996,
+      "wall_seconds": 104.87974985000074,
+      "all_441_complete_counts_match_independent_reference": true,
+      "worst_query_p95": {
+        "query_id": 0,
+        "complete_hits": 101500,
+        "first_page_and_complete_count_p95_seconds": 2.316266699001062,
+        "raw_cqp_child_p95_seconds": 0.7047192389982229,
+        "adapter_dump_parse_dedup_p95_seconds": 1.3631852110011096,
+        "full_mapping_and_kwic_p95_seconds": 0.7879631199994037
+      },
+      "pooled_p95_seconds_auxiliary_only": 1.7665526010005124,
+      "max_complete_count_seconds_400_measured_runs": 2.5917254430005414,
+      "max_complete_count_seconds_all_441_runs": 2.5917254430005414,
+      "high_frequency_gap": {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "token",
+          "within": "sentence",
+          "overlap": "all",
+          "pattern": {
+            "type": "sequence",
+            "items": [
+              {
+                "type": "term",
+                "attr": "form",
+                "op": "eq",
+                "value": "w00"
+              },
+              {
+                "type": "gap",
+                "min": 0,
+                "max": 8
+              },
+              {
+                "type": "term",
+                "attr": "form",
+                "op": "eq",
+                "value": "w01"
+              }
+            ]
+          }
+        },
+        "unit": "token_gap_not_character_gap",
+        "run": {
+          "name": "high-frequency",
+          "total_hits": 80500,
+          "matched_segments": 10000,
+          "matched_documents": 10000,
+          "first_page_rows": 50,
+          "first_page_sha256": "8be30e53138df61e7b972057f5806fa2657356785dac83b1427000c6b612995e",
+          "first_page_sample": [
+            {
+              "revision_id": "0",
+              "start": 64,
+              "end": 103,
+              "left": "w09 w16 w06 w06 w00 w09 w11 w07 w10 w08 ",
+              "match": "w00 w00 w13 w05 w06 w08 w16 w04 w04 w01",
+              "right": " w08 w03 w06 w02 w09 w05 w06 w03 w10 w10"
+            },
+            {
+              "revision_id": "0",
+              "start": 68,
+              "end": 103,
+              "left": "w16 w06 w06 w00 w09 w11 w07 w10 w08 w00 ",
+              "match": "w00 w13 w05 w06 w08 w16 w04 w04 w01",
+              "right": " w08 w03 w06 w02 w09 w05 w06 w03 w10 w10"
+            }
+          ],
+          "raw_cqp": {
+            "wall_seconds": 0.5199653330000729,
+            "user_cpu_seconds": 0.34299999999999997,
+            "system_cpu_seconds": 0.089833,
+            "max_rss_bytes": 11403264,
+            "exit_code": 0
+          },
+          "adapter_dump_parse_dedup_seconds": 0.7475008450001042,
+          "full_coordinate_map_and_kwic_seconds": 0.09460946899889677,
+          "first_page_and_complete_count_seconds": 0.8421103139990009,
+          "count_matches_independent_reference": true
+        }
+      },
+      "per_query": [
+        {
+          "query_id": 0,
+          "complete_hits": 101500,
+          "first_page_and_complete_count_p95_seconds": 2.316266699001062,
+          "raw_cqp_child_p95_seconds": 0.7047192389982229,
+          "adapter_dump_parse_dedup_p95_seconds": 1.3631852110011096,
+          "full_mapping_and_kwic_p95_seconds": 0.7879631199994037
+        },
+        {
+          "query_id": 1,
+          "complete_hits": 85000,
+          "first_page_and_complete_count_p95_seconds": 1.9968123250000644,
+          "raw_cqp_child_p95_seconds": 0.5698724250014493,
+          "adapter_dump_parse_dedup_p95_seconds": 1.1113267129985616,
+          "full_mapping_and_kwic_p95_seconds": 0.7000599339990004
+        },
+        {
+          "query_id": 2,
+          "complete_hits": 88500,
+          "first_page_and_complete_count_p95_seconds": 2.1067544300003647,
+          "raw_cqp_child_p95_seconds": 0.8401647760001651,
+          "adapter_dump_parse_dedup_p95_seconds": 1.4956543869993766,
+          "full_mapping_and_kwic_p95_seconds": 0.7518942939987028
+        },
+        {
+          "query_id": 3,
+          "complete_hits": 78500,
+          "first_page_and_complete_count_p95_seconds": 1.9099285180000152,
+          "raw_cqp_child_p95_seconds": 0.7857675409995863,
+          "adapter_dump_parse_dedup_p95_seconds": 1.3335091400003876,
+          "full_mapping_and_kwic_p95_seconds": 0.6121089389998815
+        },
+        {
+          "query_id": 4,
+          "complete_hits": 64500,
+          "first_page_and_complete_count_p95_seconds": 1.8500370140009181,
+          "raw_cqp_child_p95_seconds": 0.7741676160003408,
+          "adapter_dump_parse_dedup_p95_seconds": 1.439819813000213,
+          "full_mapping_and_kwic_p95_seconds": 0.624858574999962
+        },
+        {
+          "query_id": 5,
+          "complete_hits": 69000,
+          "first_page_and_complete_count_p95_seconds": 1.8455928240000503,
+          "raw_cqp_child_p95_seconds": 0.6295741220001219,
+          "adapter_dump_parse_dedup_p95_seconds": 1.3588812520010833,
+          "full_mapping_and_kwic_p95_seconds": 0.5165075980003166
+        },
+        {
+          "query_id": 6,
+          "complete_hits": 70000,
+          "first_page_and_complete_count_p95_seconds": 1.5481638460005342,
+          "raw_cqp_child_p95_seconds": 0.5280743130006158,
+          "adapter_dump_parse_dedup_p95_seconds": 1.1632958530008182,
+          "full_mapping_and_kwic_p95_seconds": 0.453722292000748
+        },
+        {
+          "query_id": 7,
+          "complete_hits": 74000,
+          "first_page_and_complete_count_p95_seconds": 1.787665374999051,
+          "raw_cqp_child_p95_seconds": 0.6213418070001353,
+          "adapter_dump_parse_dedup_p95_seconds": 1.5012497520001489,
+          "full_mapping_and_kwic_p95_seconds": 0.47416668699952425
+        },
+        {
+          "query_id": 8,
+          "complete_hits": 64500,
+          "first_page_and_complete_count_p95_seconds": 1.705283805000363,
+          "raw_cqp_child_p95_seconds": 0.6196613600004639,
+          "adapter_dump_parse_dedup_p95_seconds": 1.2896038340004452,
+          "full_mapping_and_kwic_p95_seconds": 0.4441001289997075
+        },
+        {
+          "query_id": 9,
+          "complete_hits": 44000,
+          "first_page_and_complete_count_p95_seconds": 1.2216569730007905,
+          "raw_cqp_child_p95_seconds": 0.46912398700078484,
+          "adapter_dump_parse_dedup_p95_seconds": 0.9372897670000384,
+          "full_mapping_and_kwic_p95_seconds": 0.3998871420008072
+        },
+        {
+          "query_id": 10,
+          "complete_hits": 1000,
+          "first_page_and_complete_count_p95_seconds": 0.7533275339992542,
+          "raw_cqp_child_p95_seconds": 0.2757940880001115,
+          "adapter_dump_parse_dedup_p95_seconds": 0.7501998600000661,
+          "full_mapping_and_kwic_p95_seconds": 0.01109828100015875
+        },
+        {
+          "query_id": 11,
+          "complete_hits": 2500,
+          "first_page_and_complete_count_p95_seconds": 0.6635407829999167,
+          "raw_cqp_child_p95_seconds": 0.22177605999968364,
+          "adapter_dump_parse_dedup_p95_seconds": 0.6478652349996992,
+          "full_mapping_and_kwic_p95_seconds": 0.017218037999555236
+        },
+        {
+          "query_id": 12,
+          "complete_hits": 2000,
+          "first_page_and_complete_count_p95_seconds": 0.6281567879996146,
+          "raw_cqp_child_p95_seconds": 0.21954356899914274,
+          "adapter_dump_parse_dedup_p95_seconds": 0.6230458270001691,
+          "full_mapping_and_kwic_p95_seconds": 0.008770881999225821
+        },
+        {
+          "query_id": 13,
+          "complete_hits": 1000,
+          "first_page_and_complete_count_p95_seconds": 0.5212338230012392,
+          "raw_cqp_child_p95_seconds": 0.1816204419992573,
+          "adapter_dump_parse_dedup_p95_seconds": 0.5193391460015846,
+          "full_mapping_and_kwic_p95_seconds": 0.0032737179990363074
+        },
+        {
+          "query_id": 14,
+          "complete_hits": 1000,
+          "first_page_and_complete_count_p95_seconds": 0.5076568179993046,
+          "raw_cqp_child_p95_seconds": 0.22436536199893453,
+          "adapter_dump_parse_dedup_p95_seconds": 0.5059666349989129,
+          "full_mapping_and_kwic_p95_seconds": 0.008518565000485978
+        },
+        {
+          "query_id": 15,
+          "complete_hits": 500,
+          "first_page_and_complete_count_p95_seconds": 0.52372482499959,
+          "raw_cqp_child_p95_seconds": 0.2733886630012421,
+          "adapter_dump_parse_dedup_p95_seconds": 0.5220659500009788,
+          "full_mapping_and_kwic_p95_seconds": 0.0015438159989571432
+        },
+        {
+          "query_id": 16,
+          "complete_hits": 0,
+          "first_page_and_complete_count_p95_seconds": 0.5097632460001478,
+          "raw_cqp_child_p95_seconds": 0.2733954699997412,
+          "adapter_dump_parse_dedup_p95_seconds": 0.5097391899998911,
+          "full_mapping_and_kwic_p95_seconds": 2.7013000362785533e-05
+        },
+        {
+          "query_id": 17,
+          "complete_hits": 0,
+          "first_page_and_complete_count_p95_seconds": 0.5362558409997291,
+          "raw_cqp_child_p95_seconds": 0.2734381199989002,
+          "adapter_dump_parse_dedup_p95_seconds": 0.5362295600007201,
+          "full_mapping_and_kwic_p95_seconds": 2.6280999009031802e-05
+        },
+        {
+          "query_id": 18,
+          "complete_hits": 500,
+          "first_page_and_complete_count_p95_seconds": 0.5222505469992029,
+          "raw_cqp_child_p95_seconds": 0.228312155999447,
+          "adapter_dump_parse_dedup_p95_seconds": 0.5199540249996062,
+          "full_mapping_and_kwic_p95_seconds": 0.001998881998588331
+        },
+        {
+          "query_id": 19,
+          "complete_hits": 1000,
+          "first_page_and_complete_count_p95_seconds": 0.42396348100010073,
+          "raw_cqp_child_p95_seconds": 0.19346815799872275,
+          "adapter_dump_parse_dedup_p95_seconds": 0.414818473998821,
+          "full_mapping_and_kwic_p95_seconds": 0.007522227999288589
+        }
+      ],
+      "exploratory_threshold_observation": {
+        "worst_query_p95_within_3_seconds": true,
+        "high_frequency_complete_within_120_seconds": true
+      }
+    },
+    {
+      "tokens": 10000000,
+      "report": "pipelines/query/results/2026-10-16-cwb-token-10m.json",
+      "report_sha256": "fc3cddac97be8206c875b31a9663cc856102f92f5ec3c3b6b78c66e64cd8ad1f",
+      "code_sha256": {
+        "cwb.py": "b7f10ca9e24cb484156c7f4727c47a7bd6d8c1fb7f2c7c064ac0938a01fc079d",
+        "cwb_benchmark.py": "2b23e89f8245a5bde83a01d3028ee4dceb5eaadccdd00d04453aec620d3bb374",
+        "benchmark.py": "84e5e109a38490b0d889ae24c06b1c1fbca5fd1a0cc1033c7cfe25e1c33eeb8d",
+        "reference_counts.py": "876d3428625087f7b0af603ea424d1805e43b89f3ea5f2c801836b672da83a04"
+      },
+      "build_seconds": 39.18865565099986,
+      "built_disk_bytes": 287825394,
+      "sampled_peak_disk_bytes": 408436188,
+      "disk_sampling_interval_seconds": 0.25,
+      "memory": {
+        "parent_max_rss_bytes": 1507893248,
+        "child_max_rss_bytes": 1507893248,
+        "cgroup_peak_bytes_including_file_cache": "1503330304"
+      },
+      "actual_cqp_max_rss_bytes": 58617856,
+      "cqp_child_cpu_seconds_all_441_runs": 384.00188299999996,
+      "wall_seconds": 797.0387699410003,
+      "all_441_complete_counts_match_independent_reference": true,
+      "worst_query_p95": {
+        "query_id": 0,
+        "complete_hits": 1015000,
+        "first_page_and_complete_count_p95_seconds": 21.554221804999543,
+        "raw_cqp_child_p95_seconds": 7.702938771000845,
+        "adapter_dump_parse_dedup_p95_seconds": 13.669626898001297,
+        "full_mapping_and_kwic_p95_seconds": 9.65497858299932
+      },
+      "pooled_p95_seconds_auxiliary_only": 17.906462785000258,
+      "max_complete_count_seconds_400_measured_runs": 22.04819873999986,
+      "max_complete_count_seconds_all_441_runs": 22.04819873999986,
+      "high_frequency_gap": {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "token",
+          "within": "sentence",
+          "overlap": "all",
+          "pattern": {
+            "type": "sequence",
+            "items": [
+              {
+                "type": "term",
+                "attr": "form",
+                "op": "eq",
+                "value": "w00"
+              },
+              {
+                "type": "gap",
+                "min": 0,
+                "max": 8
+              },
+              {
+                "type": "term",
+                "attr": "form",
+                "op": "eq",
+                "value": "w01"
+              }
+            ]
+          }
+        },
+        "unit": "token_gap_not_character_gap",
+        "run": {
+          "name": "high-frequency",
+          "total_hits": 805000,
+          "matched_segments": 100000,
+          "matched_documents": 100000,
+          "first_page_rows": 50,
+          "first_page_sha256": "8be30e53138df61e7b972057f5806fa2657356785dac83b1427000c6b612995e",
+          "first_page_sample": [
+            {
+              "revision_id": "0",
+              "start": 64,
+              "end": 103,
+              "left": "w09 w16 w06 w06 w00 w09 w11 w07 w10 w08 ",
+              "match": "w00 w00 w13 w05 w06 w08 w16 w04 w04 w01",
+              "right": " w08 w03 w06 w02 w09 w05 w06 w03 w10 w10"
+            },
+            {
+              "revision_id": "0",
+              "start": 68,
+              "end": 103,
+              "left": "w16 w06 w06 w00 w09 w11 w07 w10 w08 w00 ",
+              "match": "w00 w13 w05 w06 w08 w16 w04 w04 w01",
+              "right": " w08 w03 w06 w02 w09 w05 w06 w03 w10 w10"
+            }
+          ],
+          "raw_cqp": {
+            "wall_seconds": 4.686259469999641,
+            "user_cpu_seconds": 3.363485,
+            "system_cpu_seconds": 0.857042,
+            "max_rss_bytes": 58617856,
+            "exit_code": 0
+          },
+          "adapter_dump_parse_dedup_seconds": 5.847111536999364,
+          "full_coordinate_map_and_kwic_seconds": 2.429722679000406,
+          "first_page_and_complete_count_seconds": 8.27683421599977,
+          "count_matches_independent_reference": true
+        }
+      },
+      "per_query": [
+        {
+          "query_id": 0,
+          "complete_hits": 1015000,
+          "first_page_and_complete_count_p95_seconds": 21.554221804999543,
+          "raw_cqp_child_p95_seconds": 7.702938771000845,
+          "adapter_dump_parse_dedup_p95_seconds": 13.669626898001297,
+          "full_mapping_and_kwic_p95_seconds": 9.65497858299932
+        },
+        {
+          "query_id": 1,
+          "complete_hits": 850000,
+          "first_page_and_complete_count_p95_seconds": 17.958624881001015,
+          "raw_cqp_child_p95_seconds": 4.693228734000513,
+          "adapter_dump_parse_dedup_p95_seconds": 9.165919900000517,
+          "full_mapping_and_kwic_p95_seconds": 10.43006992499977
+        },
+        {
+          "query_id": 2,
+          "complete_hits": 885000,
+          "first_page_and_complete_count_p95_seconds": 20.413630452998405,
+          "raw_cqp_child_p95_seconds": 6.202434380000341,
+          "adapter_dump_parse_dedup_p95_seconds": 10.944789582999874,
+          "full_mapping_and_kwic_p95_seconds": 10.834132162999595
+        },
+        {
+          "query_id": 3,
+          "complete_hits": 785000,
+          "first_page_and_complete_count_p95_seconds": 17.932316401000207,
+          "raw_cqp_child_p95_seconds": 4.828355347999604,
+          "adapter_dump_parse_dedup_p95_seconds": 10.187976094999613,
+          "full_mapping_and_kwic_p95_seconds": 9.82603974199992
+        },
+        {
+          "query_id": 4,
+          "complete_hits": 645000,
+          "first_page_and_complete_count_p95_seconds": 13.459752509999817,
+          "raw_cqp_child_p95_seconds": 3.235932440999022,
+          "adapter_dump_parse_dedup_p95_seconds": 5.617987159999757,
+          "full_mapping_and_kwic_p95_seconds": 7.03067995100173
+        },
+        {
+          "query_id": 5,
+          "complete_hits": 690000,
+          "first_page_and_complete_count_p95_seconds": 17.383360088999325,
+          "raw_cqp_child_p95_seconds": 9.071627863000685,
+          "adapter_dump_parse_dedup_p95_seconds": 11.592628893999063,
+          "full_mapping_and_kwic_p95_seconds": 7.915402227001323
+        },
+        {
+          "query_id": 6,
+          "complete_hits": 700000,
+          "first_page_and_complete_count_p95_seconds": 17.018015249999735,
+          "raw_cqp_child_p95_seconds": 6.242468679000012,
+          "adapter_dump_parse_dedup_p95_seconds": 9.591712177998488,
+          "full_mapping_and_kwic_p95_seconds": 7.426303072001247
+        },
+        {
+          "query_id": 7,
+          "complete_hits": 740000,
+          "first_page_and_complete_count_p95_seconds": 17.73808800900042,
+          "raw_cqp_child_p95_seconds": 6.239403659001255,
+          "adapter_dump_parse_dedup_p95_seconds": 10.223513629000081,
+          "full_mapping_and_kwic_p95_seconds": 7.146510272999876
+        },
+        {
+          "query_id": 8,
+          "complete_hits": 645000,
+          "first_page_and_complete_count_p95_seconds": 15.717879563999304,
+          "raw_cqp_child_p95_seconds": 5.9608957469990855,
+          "adapter_dump_parse_dedup_p95_seconds": 10.065755825000451,
+          "full_mapping_and_kwic_p95_seconds": 6.452849652998339
+        },
+        {
+          "query_id": 9,
+          "complete_hits": 440000,
+          "first_page_and_complete_count_p95_seconds": 11.163013807001334,
+          "raw_cqp_child_p95_seconds": 4.441357487001369,
+          "adapter_dump_parse_dedup_p95_seconds": 7.025822215000517,
+          "full_mapping_and_kwic_p95_seconds": 4.6396573780002655
+        },
+        {
+          "query_id": 10,
+          "complete_hits": 10000,
+          "first_page_and_complete_count_p95_seconds": 1.8759892429989122,
+          "raw_cqp_child_p95_seconds": 0.9738975379987096,
+          "adapter_dump_parse_dedup_p95_seconds": 1.8191557579993969,
+          "full_mapping_and_kwic_p95_seconds": 0.11446314800014079
+        },
+        {
+          "query_id": 11,
+          "complete_hits": 25000,
+          "first_page_and_complete_count_p95_seconds": 2.193111366001176,
+          "raw_cqp_child_p95_seconds": 1.0862673230003566,
+          "adapter_dump_parse_dedup_p95_seconds": 1.9566937319996214,
+          "full_mapping_and_kwic_p95_seconds": 0.3859274330006883
+        },
+        {
+          "query_id": 12,
+          "complete_hits": 20000,
+          "first_page_and_complete_count_p95_seconds": 2.1531319480000093,
+          "raw_cqp_child_p95_seconds": 1.1703491429998394,
+          "adapter_dump_parse_dedup_p95_seconds": 2.003744360001292,
+          "full_mapping_and_kwic_p95_seconds": 0.31165025100017374
+        },
+        {
+          "query_id": 13,
+          "complete_hits": 10000,
+          "first_page_and_complete_count_p95_seconds": 2.123396443999809,
+          "raw_cqp_child_p95_seconds": 0.9740881990001071,
+          "adapter_dump_parse_dedup_p95_seconds": 2.0367677160011226,
+          "full_mapping_and_kwic_p95_seconds": 0.10762131800038333
+        },
+        {
+          "query_id": 14,
+          "complete_hits": 10000,
+          "first_page_and_complete_count_p95_seconds": 2.1251069139998435,
+          "raw_cqp_child_p95_seconds": 1.0221849890003796,
+          "adapter_dump_parse_dedup_p95_seconds": 2.03778060500008,
+          "full_mapping_and_kwic_p95_seconds": 0.07657906200074649
+        },
+        {
+          "query_id": 15,
+          "complete_hits": 5000,
+          "first_page_and_complete_count_p95_seconds": 1.6987178789986501,
+          "raw_cqp_child_p95_seconds": 1.0284877739995864,
+          "adapter_dump_parse_dedup_p95_seconds": 1.685724297998604,
+          "full_mapping_and_kwic_p95_seconds": 0.0326094580013887
+        },
+        {
+          "query_id": 16,
+          "complete_hits": 0,
+          "first_page_and_complete_count_p95_seconds": 1.4817626839994773,
+          "raw_cqp_child_p95_seconds": 0.9765654020011425,
+          "adapter_dump_parse_dedup_p95_seconds": 1.4817397690003418,
+          "full_mapping_and_kwic_p95_seconds": 2.7504000172484666e-05
+        },
+        {
+          "query_id": 17,
+          "complete_hits": 0,
+          "first_page_and_complete_count_p95_seconds": 1.3415766030011582,
+          "raw_cqp_child_p95_seconds": 0.725365749998673,
+          "adapter_dump_parse_dedup_p95_seconds": 1.341555793000225,
+          "full_mapping_and_kwic_p95_seconds": 2.8245000066817738e-05
+        },
+        {
+          "query_id": 18,
+          "complete_hits": 5000,
+          "first_page_and_complete_count_p95_seconds": 1.3250290989999485,
+          "raw_cqp_child_p95_seconds": 0.8781383429995913,
+          "adapter_dump_parse_dedup_p95_seconds": 1.306477789001292,
+          "full_mapping_and_kwic_p95_seconds": 0.02158115499878477
+        },
+        {
+          "query_id": 19,
+          "complete_hits": 10000,
+          "first_page_and_complete_count_p95_seconds": 1.2970363669992366,
+          "raw_cqp_child_p95_seconds": 0.8721828409998125,
+          "adapter_dump_parse_dedup_p95_seconds": 1.266053984998507,
+          "full_mapping_and_kwic_p95_seconds": 0.03993893100050627
+        }
+      ],
+      "exploratory_threshold_observation": {
+        "worst_query_p95_within_3_seconds": false,
+        "high_frequency_complete_within_120_seconds": true
+      }
+    }
+  ]
+}

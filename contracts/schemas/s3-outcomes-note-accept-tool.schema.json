@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-outcomes-note-accept-tool.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "expected_revision": {
+      "minimum": 1,
+      "title": "Expected Revision",
+      "type": "integer"
+    },
+    "note_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "required": [
+    "expected_revision",
+    "note_id"
+  ],
+  "title": "NoteAccept",
+  "type": "object"
+}

@@ -1,0 +1,277 @@
+name: corpus-s0
+services:
+  agent-host:
+    profiles: ["agent"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.agent
+    environment:
+      AGENT_RUNTIME_MODE: ${CORPUS_AGENT_RUNTIME_MODE:-unconfigured}
+      AGENT_HOST_KEY: ${CORPUS_AGENT_HOST_KEY:?Set CORPUS_AGENT_HOST_KEY}
+      AGENT_MODEL_API_KEY: ${AGENT_MODEL_API_KEY:-}
+      AGENT_MODEL_API: ${AGENT_MODEL_API:-}
+      AGENT_MODEL_BASE_URL: ${AGENT_MODEL_BASE_URL:-}
+      AGENT_MODEL_ID: ${AGENT_MODEL_ID:-}
+      AGENT_MODEL_CONTEXT_WINDOW: ${AGENT_MODEL_CONTEXT_WINDOW:-8192}
+      AGENT_MODEL_MAX_OUTPUT_TOKENS: ${AGENT_MODEL_MAX_OUTPUT_TOKENS:-1024}
+      AGENT_MODEL_REQUEST_TIMEOUT_MS: ${AGENT_MODEL_REQUEST_TIMEOUT_MS:-60000}
+      AGENT_MODEL_ALLOW_LOOPBACK_HTTP: ${AGENT_MODEL_ALLOW_LOOPBACK_HTTP:-false}
+      AGENT_API_ORIGIN: http://api:8000
+      AGENT_WORK_DIR: /app/tmp/agent-host
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/health/live').then(r=>{process.exitCode=r.ok?0:1}).catch(()=>{process.exitCode=1})"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    stop_grace_period: 40s
+  agent-host-fixture:
+    profiles: ["agent-fixture"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.agent
+    environment:
+      AGENT_RUNTIME_MODE: fixture
+      AGENT_ENABLE_LOCAL_FIXTURE: "true"
+      AGENT_API_ORIGIN: http://api:8000
+      AGENT_HOST_KEY: ${CORPUS_AGENT_HOST_KEY:?Set CORPUS_AGENT_HOST_KEY}
+      AGENT_WORK_DIR: /app/tmp/agent-host
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/health/ready').then(r=>{process.exitCode=r.ok?0:1}).catch(()=>{process.exitCode=1})"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    stop_grace_period: 40s
+  database:
+    image: postgres@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
+    environment:
+      POSTGRES_USER: corpus
+      POSTGRES_DB: corpus
+      POSTGRES_PASSWORD: ${CORPUS_DB_PASSWORD:?Set CORPUS_DB_PASSWORD}
+    volumes: ["database:/var/lib/postgresql"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U corpus -d corpus"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  broker:
+    image: rabbitmq@sha256:6e6e8952c2b56245de7ac61f06c9af9fdd38da675cd82cdbf7e3f30b33494dcc
+    environment:
+      RABBITMQ_DEFAULT_USER: corpus
+      RABBITMQ_DEFAULT_PASS: ${CORPUS_BROKER_PASSWORD:?Set CORPUS_BROKER_PASSWORD}
+    volumes: ["broker:/var/lib/rabbitmq"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  object-storage:
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: corpus
+      MINIO_ROOT_PASSWORD: ${CORPUS_S3_PASSWORD:?Set CORPUS_S3_PASSWORD}
+    volumes: ["objects:/data"]
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    environment:
+      RESEARCH_CACHE_DIR: /app/tmp/research-cache
+      DATABASE_URL: postgresql+psycopg://corpus_app:${CORPUS_APP_DB_PASSWORD:?Set CORPUS_APP_DB_PASSWORD}@database:5432/corpus
+      PUBLIC_ORIGIN: http://127.0.0.1:${CORPUS_HTTP_PORT:-18080}
+      AGENT_HOST_KEY: ${CORPUS_AGENT_HOST_KEY:?Set CORPUS_AGENT_HOST_KEY}
+      ALLOW_INSECURE_HTTP: "true"
+      AGENT_RUNTIME_MODE: ${CORPUS_AGENT_RUNTIME_MODE:-unconfigured}
+      AGENT_MODEL_API: ${AGENT_MODEL_API:-}
+      AGENT_MODEL_BASE_URL: ${AGENT_MODEL_BASE_URL:-}
+      AGENT_MODEL_ID: ${AGENT_MODEL_ID:-}
+      AGENT_MODEL_CONTEXT_WINDOW: ${AGENT_MODEL_CONTEXT_WINDOW:-8192}
+      AGENT_MODEL_MAX_OUTPUT_TOKENS: ${AGENT_MODEL_MAX_OUTPUT_TOKENS:-1024}
+      AGENT_MODEL_REQUEST_TIMEOUT_MS: ${AGENT_MODEL_REQUEST_TIMEOUT_MS:-60000}
+      AGENT_MODEL_ALLOW_LOOPBACK_HTTP: ${AGENT_MODEL_ALLOW_LOOPBACK_HTTP:-false}
+      S3_ENDPOINT_URL: http://object-storage:9000
+      S3_ACCESS_KEY_ID: corpus
+      S3_SECRET_ACCESS_KEY: ${CORPUS_S3_PASSWORD}
+      S3_BUCKET: corpus-private
+      UPLOAD_TEMP_DIR: /app/tmp/uploads
+      BROKER_URL: amqp://corpus:${CORPUS_BROKER_PASSWORD}@broker:5672//
+      OBJECT_STORAGE_URL: http://object-storage:9000
+      INDEX_BUILD_RESERVED_BYTES: "8589934592"
+      INDEX_STORAGE_QUOTA_BYTES: "21474836480"
+    volumes: ["research-cache:/app/tmp/research-cache:ro"]
+    ports: ["127.0.0.1:${CORPUS_HTTP_PORT:-18080}:8000"]
+    depends_on:
+      database: {condition: service_healthy}
+      broker: {condition: service_healthy}
+      object-storage: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=10)"]
+      interval: 10s
+      timeout: 12s
+      retries: 6
+  worker:
+    profiles: ["worker"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    command: ["python", "-m", "celery", "-A", "workers.app", "worker", "--loglevel=INFO", "--concurrency=1", "--queues=corpus.jobs,corpus.sync"]
+    environment:
+      BROKER_URL: amqp://corpus:${CORPUS_BROKER_PASSWORD}@broker:5672//
+      DATABASE_URL: postgresql+psycopg://corpus_worker:${CORPUS_WORKER_DB_PASSWORD:?Set CORPUS_WORKER_DB_PASSWORD}@database:5432/corpus
+      S3_ENDPOINT_URL: http://object-storage:9000
+      S3_ACCESS_KEY_ID: corpus
+      S3_SECRET_ACCESS_KEY: ${CORPUS_S3_PASSWORD}
+      S3_BUCKET: corpus-private
+    depends_on:
+      broker: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-m", "celery", "-A", "workers.app", "inspect", "ping", "--timeout", "3"]
+      interval: 10s
+      timeout: 20s
+      retries: 6
+  index-worker:
+    profiles: ["worker"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.index
+    cpus: 4
+    mem_limit: 8g
+    volumes: ["research-cache:/app/tmp/research-cache"]
+    environment:
+      RESEARCH_CACHE_DIR: /app/tmp/research-cache
+      QUERY_INDEX_CACHE_MAX_BYTES: "12884901888"
+      QUERY_CACHE_MAX_BYTES: "17179869184"
+      EXPORT_WORK_DIR: /app/tmp/exports
+      EXPORT_MAX_BYTES: "536870912"
+      EXPORT_PROJECT_MAX_BYTES: "2147483648"
+      EXPORT_STORAGE_MAX_BYTES: "4294967296"
+      MATERIAL_WORK_DIR: /app/tmp/material-imports
+      MATERIAL_IMPORT_MAX_BYTES: "268435456"
+      MATERIAL_STORAGE_MAX_BYTES: "2147483648"
+      MATERIAL_PROJECT_MAX_BYTES: "1073741824"
+      PROJECT_INDEX_BUILD_MAX_BYTES: "4294967296"
+      PROJECT_INDEX_STORAGE_MAX_BYTES: "12884901888"
+      PROJECT_INDEX_PROJECT_MAX_BYTES: "8589934592"
+      QUERY_RESULT_MAX_BYTES: "536870912"
+      QUERY_STORAGE_MAX_BYTES: "2147483648"
+      QUERY_PROJECT_MAX_BYTES: "1073741824"
+      BROKER_URL: amqp://corpus:${CORPUS_BROKER_PASSWORD}@broker:5672//
+      DATABASE_URL: postgresql+psycopg://corpus_worker:${CORPUS_WORKER_DB_PASSWORD}@database:5432/corpus
+      S3_ENDPOINT_URL: http://object-storage:9000
+      S3_ACCESS_KEY_ID: corpus
+      S3_SECRET_ACCESS_KEY: ${CORPUS_S3_PASSWORD}
+      S3_BUCKET: corpus-private
+      INDEX_BUILD_TEMP_DIR: /app/tmp/index-build
+      INDEX_BUILD_TEMP_BYTES: "8589934592"
+      INDEX_STORAGE_QUOTA_BYTES: "21474836480"
+    depends_on:
+      database: {condition: service_healthy}
+      broker: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "python -m celery -A workers.app inspect ping --destination=index@$$HOSTNAME --timeout 3"]
+      interval: 15s
+      timeout: 20s
+      retries: 6
+  storage-init:
+    profiles: ["setup"]
+    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    environment:
+      MC_HOST_local: http://corpus:${CORPUS_S3_PASSWORD}@object-storage:9000
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["mc mb --ignore-existing local/corpus-private && mc anonymous set none local/corpus-private && mc version enable local/corpus-private"]
+    depends_on:
+      object-storage: {condition: service_started}
+  db-bootstrap:
+    profiles: ["setup"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    command: ["python", "-m", "scripts.bootstrap_db"]
+    environment:
+      ADMIN_DATABASE_URL: postgresql+psycopg://corpus:${CORPUS_DB_PASSWORD}@database:5432/corpus
+      CORPUS_OWNER_DB_PASSWORD: ${CORPUS_OWNER_DB_PASSWORD:?Set CORPUS_OWNER_DB_PASSWORD}
+      CORPUS_APP_DB_PASSWORD: ${CORPUS_APP_DB_PASSWORD:?Set CORPUS_APP_DB_PASSWORD}
+      CORPUS_WORKER_DB_PASSWORD: ${CORPUS_WORKER_DB_PASSWORD:?Set CORPUS_WORKER_DB_PASSWORD}
+    depends_on:
+      database: {condition: service_healthy}
+  migrate:
+    profiles: ["setup"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://corpus_owner:${CORPUS_OWNER_DB_PASSWORD}@database:5432/corpus
+    depends_on:
+      database: {condition: service_healthy}
+  manage-account:
+    profiles: ["setup"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    entrypoint: ["python", "-m", "scripts.manage_account"]
+    environment:
+      MIGRATION_DATABASE_URL: postgresql+psycopg://corpus_owner:${CORPUS_OWNER_DB_PASSWORD}@database:5432/corpus
+  dispatcher:
+    profiles: ["worker"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    command: ["python", "-m", "workers.dispatcher"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://corpus_worker:${CORPUS_WORKER_DB_PASSWORD}@database:5432/corpus
+      BROKER_URL: amqp://corpus:${CORPUS_BROKER_PASSWORD}@broker:5672//
+    depends_on:
+      database: {condition: service_healthy}
+      broker: {condition: service_healthy}
+  test-index:
+    profiles: ["test"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.index
+    cpus: 4
+    mem_limit: 8g
+    command: ["python", "-m", "unittest", "discover", "-s", "tests/integration", "-p", "test_index_build_pipeline.py", "-v"]
+    volumes: ["../tests:/app/tests:ro", "research-cache:/app/tmp/research-cache"]
+    environment:
+      RESEARCH_CACHE_DIR: /app/tmp/research-cache
+      DATABASE_URL: postgresql+psycopg://corpus_app:${CORPUS_APP_DB_PASSWORD}@database:5432/corpus
+      TEST_OWNER_DATABASE_URL: postgresql+psycopg://corpus_owner:${CORPUS_OWNER_DB_PASSWORD}@database:5432/corpus
+      TEST_ADMIN_DATABASE_URL: postgresql+psycopg://corpus:${CORPUS_DB_PASSWORD}@database:5432/corpus
+      TEST_WORKER_DATABASE_URL: postgresql+psycopg://corpus_worker:${CORPUS_WORKER_DB_PASSWORD}@database:5432/corpus
+      S3_ENDPOINT_URL: http://object-storage:9000
+      S3_ACCESS_KEY_ID: corpus
+      S3_SECRET_ACCESS_KEY: ${CORPUS_S3_PASSWORD}
+      S3_BUCKET: corpus-private
+      BROKER_URL: amqp://corpus:${CORPUS_BROKER_PASSWORD}@broker:5672//
+      INDEX_BUILD_TEMP_DIR: /app/tmp/index-build
+      INDEX_BUILD_TEMP_BYTES: "8589934592"
+      PUBLIC_ORIGIN: http://127.0.0.1:${CORPUS_HTTP_PORT:-18080}
+      ALLOW_INSECURE_HTTP: "true"
+  test-auth:
+    profiles: ["test"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    command: ["python", "-m", "unittest", "discover", "-s", "tests/api", "-p", "test_auth_projects.py", "-v"]
+    volumes: ["../tests:/app/tests:ro"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://corpus_app:${CORPUS_APP_DB_PASSWORD}@database:5432/corpus
+      TEST_OWNER_DATABASE_URL: postgresql+psycopg://corpus_owner:${CORPUS_OWNER_DB_PASSWORD}@database:5432/corpus
+      TEST_ADMIN_DATABASE_URL: postgresql+psycopg://corpus:${CORPUS_DB_PASSWORD}@database:5432/corpus
+      TEST_WORKER_DATABASE_URL: postgresql+psycopg://corpus_worker:${CORPUS_WORKER_DB_PASSWORD}@database:5432/corpus
+      S3_ENDPOINT_URL: http://object-storage:9000
+      S3_ACCESS_KEY_ID: corpus
+      S3_SECRET_ACCESS_KEY: ${CORPUS_S3_PASSWORD}
+      S3_BUCKET: corpus-private
+      BROKER_URL: amqp://corpus:${CORPUS_BROKER_PASSWORD}@broker:5672//
+      UPLOAD_TEMP_DIR: /app/tmp/uploads
+      PUBLIC_ORIGIN: http://127.0.0.1:${CORPUS_HTTP_PORT:-18080}
+      ALLOW_INSECURE_HTTP: "true"
+volumes:
+  research-cache:
+  database:
+  broker:
+  objects:

@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/k09-agent-run-list.schema.json",
+  "$defs": {
+    "RunView": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "session_id": {
+          "format": "uuid",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "QUEUED",
+            "RUNNING",
+            "WAITING_JOB",
+            "WAITING_REVIEW",
+            "CANCELLED",
+            "SUCCEEDED",
+            "FAILED"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "scope_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Scope Digest",
+          "type": "string"
+        },
+        "config_id": {
+          "pattern": "^(local-fixture-v1|openai-[a-f0-9]{48})$",
+          "title": "Config Id",
+          "type": "string"
+        },
+        "lease_epoch": {
+          "minimum": 0,
+          "title": "Lease Epoch",
+          "type": "integer"
+        },
+        "lease_expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lease Expires At"
+        },
+        "event_sequence": {
+          "minimum": 0,
+          "title": "Event Sequence",
+          "type": "integer"
+        },
+        "allowed_tools": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Tools",
+          "type": "array"
+        },
+        "base_checkpoint_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Base Checkpoint Id"
+        },
+        "final_checkpoint_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Final Checkpoint Id"
+        },
+        "resume_checkpoint_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Resume Checkpoint Id"
+        },
+        "waiting_jobs": {
+          "items": {
+            "$ref": "#/$defs/WaitingJob"
+          },
+          "title": "Waiting Jobs",
+          "type": "array"
+        },
+        "active_deadline_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Active Deadline At"
+        },
+        "wait_deadline_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wait Deadline At"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "session_id",
+        "state",
+        "reason",
+        "scope_digest",
+        "config_id",
+        "lease_epoch",
+        "lease_expires_at",
+        "event_sequence",
+        "allowed_tools",
+        "base_checkpoint_id",
+        "final_checkpoint_id",
+        "resume_checkpoint_id",
+        "waiting_jobs",
+        "active_deadline_at",
+        "wait_deadline_at",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "RunView",
+      "type": "object"
+    },
+    "WaitingJob": {
+      "additionalProperties": false,
+      "properties": {
+        "invocation_id": {
+          "format": "uuid",
+          "title": "Invocation Id",
+          "type": "string"
+        },
+        "job_id": {
+          "format": "uuid",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "job",
+            "sync",
+            "index",
+            "research"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "report_tool": {
+          "title": "Report Tool",
+          "type": "string"
+        },
+        "report_arguments": {
+          "additionalProperties": true,
+          "title": "Report Arguments",
+          "type": "object"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "invocation_id",
+        "job_id",
+        "kind",
+        "report_tool",
+        "report_arguments",
+        "state"
+      ],
+      "title": "WaitingJob",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/RunView"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "next_before": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Before"
+    }
+  },
+  "required": [
+    "items",
+    "next_before"
+  ],
+  "title": "RunList",
+  "type": "object"
+}

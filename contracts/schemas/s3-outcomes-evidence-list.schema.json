@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-outcomes-evidence-list.schema.json",
+  "$defs": {
+    "CreateAction": {
+      "additionalProperties": false,
+      "properties": {
+        "create": {
+          "title": "Create",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "create"
+      ],
+      "title": "CreateAction",
+      "type": "object"
+    },
+    "EvidenceSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "project_id": {
+          "format": "uuid",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "created_by": {
+          "format": "uuid",
+          "title": "Created By",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "query_run_id": {
+          "format": "uuid",
+          "title": "Query Run Id",
+          "type": "string"
+        },
+        "result_set_id": {
+          "format": "uuid",
+          "title": "Result Set Id",
+          "type": "string"
+        },
+        "snapshot_id": {
+          "format": "uuid",
+          "title": "Snapshot Id",
+          "type": "string"
+        },
+        "hit_ref": {
+          "$ref": "#/$defs/HitRef"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "created_by",
+        "created_at",
+        "query_run_id",
+        "result_set_id",
+        "snapshot_id",
+        "hit_ref"
+      ],
+      "title": "EvidenceSummary",
+      "type": "object"
+    },
+    "HitRef": {
+      "additionalProperties": false,
+      "properties": {
+        "result_set_id": {
+          "format": "uuid",
+          "title": "Result Set Id",
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 0,
+          "title": "Ordinal",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "result_set_id",
+        "ordinal"
+      ],
+      "title": "HitRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/EvidenceSummary"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "total": {
+      "minimum": 0,
+      "title": "Total",
+      "type": "integer"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Cursor"
+    },
+    "allowed_actions": {
+      "$ref": "#/$defs/CreateAction"
+    }
+  },
+  "required": [
+    "items",
+    "total",
+    "next_cursor",
+    "allowed_actions"
+  ],
+  "title": "EvidenceList",
+  "type": "object"
+}

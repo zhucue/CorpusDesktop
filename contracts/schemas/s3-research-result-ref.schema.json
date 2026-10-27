@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-research-result-ref.schema.json",
+  "type": "object",
+  "properties": {
+    "result_set_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "required": [
+    "result_set_id"
+  ],
+  "additionalProperties": false
+}

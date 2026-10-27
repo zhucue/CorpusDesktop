@@ -1,0 +1,475 @@
+{
+  "schema": "k09-agent-waiting-validation/v1",
+  "date": "2026-10-17",
+  "status": "passed_local_fixture_runtime_foundation",
+  "production_available": false,
+  "scope": {
+    "configuration": "Explicit local-fixture-v1 only; production provider unconfigured",
+    "message": "Persisted verbatim user message, scope-bound idempotency and exact SDK user-entry binding",
+    "waiting": "Same-run reliable settled checkpoint, separate resume pointer, epoch fencing and server-derived job/report identity",
+    "limits": {
+      "active_segment_seconds": 900,
+      "waiting_seconds": 86400
+    },
+    "history": "Current dependency authorization for projected messages, events, invocation and run reads; no raw checkpoints or thinking exposed"
+  },
+  "first_real_integration": {
+    "executed_by": "parent_agent",
+    "log": "tmp/k09-agent-integration-1.log",
+    "tests": 29,
+    "passed": 27,
+    "errors": 2,
+    "elapsed_seconds": 28.921,
+    "exit_code": 1,
+    "failures": [
+      {
+        "test": "AgentWaitingTests.test_failed_or_cancelled_job_is_observed_without_resubmission_or_success",
+        "cause": "Fixture set FAILED without required error, violating existing jobs_check2",
+        "fix": "Set a safe explicit error for FAILED and null for CANCELLED; production constraint unchanged"
+      },
+      {
+        "test": "AgentRuntimeTests.test_downgraded_actor_can_cancel_run_without_impersonating_owner",
+        "cause": "Old test accessed events.items after current historical authorization correctly denied the downgraded actor",
+        "fix": "Assert HTTP409 CHECKPOINT_AUTH_CHANGED; independently read AgentEvent through admin test connection to verify job.cancel_not_applied, while job remains QUEUED"
+      }
+    ]
+  },
+  "combined_business_regression": {
+    "executed_by": "parent_agent",
+    "log": "tmp/k09-business-regression.log",
+    "tests": 42,
+    "passed": 41,
+    "failures": 1,
+    "elapsed_seconds": 62.853,
+    "business_tests_passed": 33,
+    "limitation": "Auth pool test asserts identical backend PID; prior concurrent tests populate the shared pool with multiple connections. Isolated auth execution is the existing CI shape; no production or isolation assertion weakened"
+  },
+  "isolated_auth_regression": {
+    "executed_by": "parent_agent",
+    "log": "tmp/k09-auth-regression-isolated.log",
+    "tests": 9,
+    "passed": 9,
+    "elapsed_seconds": 3.797,
+    "exit_code": 0
+  },
+  "local_python_regression": {
+    "executed_by": "parent_agent",
+    "log": "tmp/k09-pytest.log",
+    "passed": 191,
+    "skipped": 140,
+    "warnings": 1,
+    "elapsed_seconds": 12.36,
+    "warning": "Existing Starlette TestClient httpx deprecation"
+  },
+  "final_real_integration": {
+    "executed_by": "parent_agent",
+    "log": "tmp/k09-agent-integration-final.log",
+    "tests": 29,
+    "passed": 29,
+    "real_dependency_tests": 27,
+    "format_tests": 2,
+    "elapsed_seconds": 30.791,
+    "exit_code": 0,
+    "groups": {
+      "agent_runtime": 10,
+      "agent_checkpoints": 11,
+      "agent_waiting": 8
+    }
+  },
+  "actual_http": {
+    "executed_by": "parent_agent",
+    "status": "passed",
+    "raw_report": "tmp/pi-k09/8c1ae654c4144fff87a37490a9d1c51d/result.json",
+    "raw_sha256": "afa1cf59ae49ee2e8ae3d0d77204dddd142bbbb83a5adc82d65febbeef5061f8",
+    "started_at": "2026-10-17T09:52:22.488855+00:00",
+    "finished_at": "2026-10-17T09:52:49.413292+00:00",
+    "response_families": {
+      "runtimes": 1,
+      "sessions": 2,
+      "session_lists": 1,
+      "runs": 3,
+      "run_lists": 1,
+      "messages": 1,
+      "events": 1
+    },
+    "schema_validation": {
+      "executed_by": "sources_agent",
+      "require_all": true,
+      "families": 7,
+      "responses": 10,
+      "status": "passed"
+    },
+    "runtime_manifest": {
+      "sdk_package": "@earendil-works/pi-coding-agent",
+      "sdk_version": "1.3.0",
+      "session_version": 3,
+      "host_policy": "corpus-k09-linear-v1",
+      "provider": "corpus-s1-fixed",
+      "model": "fixed-project-v1",
+      "tool_schema": "s3-outcomes-tools-v1",
+      "resource_config": "corpus-empty-resources-v1"
+    },
+    "same_run": true,
+    "duplicate_write": false,
+    "private_body_in_model": false,
+    "paused": {
+      "run": {
+        "state": "WAITING_JOB",
+        "lease_epoch": 1,
+        "lease_expires_at": null,
+        "base_checkpoint_id": null,
+        "resume_checkpoint_id": "583aec23-9307-413f-9b66-1107cfd7c43c",
+        "final_checkpoint_id": null
+      },
+      "session": {
+        "latest_checkpoint_id": null,
+        "active_run_id": "7ec841a4-6e1f-4f39-88ef-0e06f6b26e68"
+      },
+      "complete_actions": 1
+    },
+    "final": {
+      "run": {
+        "state": "SUCCEEDED",
+        "lease_epoch": 3,
+        "lease_expires_at": null,
+        "base_checkpoint_id": null,
+        "resume_checkpoint_id": "583aec23-9307-413f-9b66-1107cfd7c43c",
+        "final_checkpoint_id": "73ed3ff9-fc66-4caa-8d17-38f9f5230948"
+      },
+      "session": {
+        "latest_checkpoint_id": "73ed3ff9-fc66-4caa-8d17-38f9f5230948",
+        "active_run_id": null
+      },
+      "complete_actions": 1
+    },
+    "job": {
+      "job_id": "50df3d28-1098-412b-a837-fc5711d87ee9",
+      "action_id": "dc60c919-359a-41e2-8e2d-ef4640176d41",
+      "state": "SUCCEEDED",
+      "attempt": 1,
+      "result": {
+        "size": 58,
+        "state": "VALIDATED",
+        "sha256": "f83ada7cd0d96b4fd14842104fed5e226f56767c2932287c72c7d9d556fc8614",
+        "upload_id": "2efc8a09-40e8-440b-833c-3a0cafcee59d",
+        "validation": "utf8-text-and-integrity/v1"
+      }
+    },
+    "invocations": [
+      {
+        "id": "84c8c2d7-eae5-44ae-8b3a-3e11b422d050",
+        "tool_name": "uploads.complete",
+        "action_id": "dc60c919-359a-41e2-8e2d-ef4640176d41",
+        "status": "accepted"
+      },
+      {
+        "id": "6f37ee5d-84fa-4f20-bcb7-805bd14be652",
+        "tool_name": "jobs.get",
+        "action_id": null,
+        "status": "succeeded"
+      }
+    ],
+    "processes": [
+      {
+        "run_id": "7ec841a4-6e1f-4f39-88ef-0e06f6b26e68",
+        "lease_epoch": 1,
+        "restored": false,
+        "inherited_messages": 0,
+        "new_tool_executions": 1,
+        "tool_names": [
+          "uploads_complete"
+        ],
+        "model_requests": 2,
+        "checkpoint": {
+          "checkpoint_id": "583aec23-9307-413f-9b66-1107cfd7c43c",
+          "sha256": "3f5e2a568c9acf1ae4b91e132c604210396e33389d045f1f1b05c074470abd94",
+          "byte_size": 15760,
+          "sdk_session_id": "3ecc0767-f8e2-46e3-ac3b-03b8fb39bc01",
+          "leaf_id": "1913c943",
+          "runtime_manifest": {
+            "sdk_package": "@earendil-works/pi-coding-agent",
+            "sdk_version": "1.3.0",
+            "session_version": 3,
+            "host_policy": "corpus-k09-linear-v1",
+            "provider": "corpus-s1-fixed",
+            "model": "fixed-project-v1",
+            "tool_schema": "s3-outcomes-tools-v1",
+            "resource_config": "corpus-empty-resources-v1"
+          }
+        }
+      },
+      {
+        "run_id": "7ec841a4-6e1f-4f39-88ef-0e06f6b26e68",
+        "lease_epoch": 3,
+        "restored": true,
+        "inherited_messages": 5,
+        "new_tool_executions": 1,
+        "tool_names": [
+          "jobs_get"
+        ],
+        "model_requests": 2,
+        "checkpoint": {
+          "checkpoint_id": "73ed3ff9-fc66-4caa-8d17-38f9f5230948",
+          "sha256": "43e2b040cf6b2da0b79dacad6d0d4f0dec9ceea91cc0e138ff7167cffe16a6f9",
+          "byte_size": 20969,
+          "sdk_session_id": "3ecc0767-f8e2-46e3-ac3b-03b8fb39bc01",
+          "leaf_id": "a4a829be",
+          "runtime_manifest": {
+            "sdk_package": "@earendil-works/pi-coding-agent",
+            "sdk_version": "1.3.0",
+            "session_version": 3,
+            "host_policy": "corpus-k09-linear-v1",
+            "provider": "corpus-s1-fixed",
+            "model": "fixed-project-v1",
+            "tool_schema": "s3-outcomes-tools-v1",
+            "resource_config": "corpus-empty-resources-v1"
+          }
+        }
+      }
+    ],
+    "durable_event_kinds": [
+      "run.queued",
+      "run.claimed",
+      "tool.accepted",
+      "sdk.agent_end",
+      "sdk.agent_settled",
+      "checkpoint.stored",
+      "run.waiting_job",
+      "run.claimed",
+      "tool.succeeded",
+      "sdk.agent_end",
+      "sdk.agent_settled",
+      "checkpoint.stored",
+      "run.succeeded"
+    ],
+    "event_sequences": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13
+    ],
+    "cleanup": {
+      "upload_versions_deleted": 1,
+      "completed": true
+    },
+    "boundary": "Actual SDK in two independent host processes, actual HTTP/PostgreSQL/S3/Celery upload validation; fixed provider, no external model requests."
+  },
+  "browser": {
+    "reported_by": "parent_agent",
+    "status": "passed",
+    "checks": [
+      "Queued message submission, refresh recovery and cancellation",
+      "Resident fixture receives Chinese user message successfully without business writes",
+      "Account and project scope separation",
+      "Session-list terminal-state presentation repaired and deployed browser verification passed",
+      "Final default-unconfigured page preserves draft with Send disabled, no stale alert after refresh, manual project entry works",
+      "Browser fixture cleanup succeeded; refresh returns login and test tab closed"
+    ],
+    "final_screenshot": "tmp/k09-browser/unconfigured-final.png",
+    "served_asset": "/assets/index-DdhfQ0cy.js",
+    "served_asset_sha256": "05322d2bc41c0b931ed7a91ac56067a0034f7521db32d64ddcd51e3d7525d658"
+  },
+  "limitations": [
+    "Control tests use explicit task ledger outcomes and constructed JSONL to exercise PG/S3 protocol; they do not claim SDK-generated transcripts or real background execution.",
+    "No production model provider or material/model-egress authorization is enabled.",
+    "Unknown or incomplete execution context remains WAITING_REVIEW; no guessed write replay.",
+    "Follow-up message queuing is not implemented; busy sessions reject ordinary new runs."
+  ],
+  "source_sha256": {
+    "services/api/agent_checkpoints.py": "83f9ab999570474f1f85c2739d587a202fd9045ec71797be1d333812fea7e17e",
+    "services/api/agent_config.py": "b2f22001da158c9efc8176c9fe3dedb554b1914508cf3fc94ee6676c019bf2f1",
+    "services/api/agent_control.py": "1d7649e031e30f3eac29025da4233505d0f72fd58d3981830d911d2da80eeb33",
+    "services/api/agent_internal.py": "bc0529834e8e272ec039bde3ac63309542218b4298dab9bbd71a7479602e9902",
+    "services/api/agent_models.py": "a765fd0a06a2625d0a386fe35450ba20e87053aca6c0a40ea5b12d1da4e9ac97",
+    "services/api/agent_projection.py": "835c39b07bbad8e871c287387048cce30efaaa46044b86006768e829c6b2a908",
+    "services/api/agent_routes.py": "fa7bdd645656216dca3a6597227879c5442d29bc9e552e50368ce31b7bb0c2da",
+    "services/api/agent_tools.py": "5bab9496f5219046c560bb52a5720c4f5da494f256d1ae4390a95561e7cccaa5",
+    "services/api/agent_waiting.py": "5643ab7b9a96390c5b8612e47ec218ee88df316c42b83df6d95fdae8eb11c852",
+    "services/api/migrations/versions/0014_agent_waiting.py": "22f769344c79f9b9a02afd4bb0416812bf92c449c716769dae8e73c516b64645",
+    "tests/api/test_agent_waiting.py": "dc2745aff4ddc84509d8cd295e3aec28fa464a02d71979fe4e09e2b20bae1ac9",
+    "tests/api/test_agent_runtime.py": "4025dda26a67733eb8855ab4accbc04fa9a6b9fa24219d1c6ff30a01d55b8ece",
+    "tests/api/test_agent_checkpoints.py": "a0a97cb63210c4cc4741f8cc554eb511610530a8935acc927840230b50d6bc6a",
+    "services/agent-runtime/src/k09-executor.ts": "ab726e430635c5ffcfe211d78d9199ee883edd845fd9756800ba5d61e355aaaf",
+    "services/agent-runtime/src/k09-daemon.ts": "1ae76c037caae443fa2d58856e2f275a904bb7380ced8bd02c11e2a0ae96a22a",
+    "services/agent-runtime/src/k09-segment-smoke.ts": "5750da549a0cbfde2ad2546504f7b762dfcc5bda617ae234a5a4c3c4c1e3977b",
+    "services/agent-runtime/src/s1-run-client.ts": "a9056855cda3eb622e0ddacdabb3f2e3a4fa9d32fce0115d152648e3535856e8",
+    "services/agent-runtime/src/s1-run-checkpoint.ts": "5647d7e1b842363b45d047e029805bbc58039c710b25dcb6b92e39084c9a7df7",
+    "services/agent-runtime/src/s1-run-host.ts": "e60d21562f04bf6054af04cd92b4c637fc9e4492a709eeba60f11f4a17e6b987",
+    "services/agent-runtime/test/k09-host.test.ts": "7cb818de141eb83dbd61e28c5287a07d0f596ebcbe4f6291e9642c080487defd",
+    "deploy/Dockerfile.agent": "69b7a47bf27376c469316caf4d02d762b997f398623cc79aabc29c4721009ab6",
+    "deploy/compose.yaml": "6cabee0fd3a6209641356fa7f4a07e8bd7446198fc04d9d3888d158499a9e575",
+    "scripts/agent_waiting_smoke.py": "5280032de7e2b36c6eecf69189e275430fcbe523cb8c0efc485b842ea2c7a9db",
+    "scripts/agent_runtime_smoke.py": "02c69d628faf1c29308d87af0a8a7081349d6b8cb8330b021a1370cbfad5f5d1",
+    ".github/workflows/ci.yml": "ea1dabc60772cc7473bff3f4556e136b5fc8aef643d18638df4917021f48f56e"
+  },
+  "evidence_sha256": {
+    "tmp/k09-agent-integration-1.log": "26184a56685cf819f1d274f4b6944d08485d7b7830cee8d2aae79d773c09ce57",
+    "tmp/k09-business-regression.log": "421b9efd95c907a04ff6012e6a4f25602bfd47021317562b5d7d710cf96cd729",
+    "tmp/k09-auth-regression-isolated.log": "5fdcb62bcbf4e9dbe3e54cbb62d6ba13cacdecd2029d12314a67d9c460fc5c97",
+    "tmp/k09-pytest.log": "62bd3ade9bc423e1048acf5281714753ff350ccbe179b1605096de0d83142567",
+    "tmp/k09-agent-integration-final.log": "5f46719164cf4845aa176b72816eb484cbc65b765470d3c71f9c431e8efddf23",
+    "tmp/k09-node-final.log": "482ae23be2b1aee944e5284a05b771eb47ab138dfa0afaf3fcba78e90cc82854"
+  },
+  "completed_session_continuation": {
+    "raw_report": "tmp/pi-s1/a81ed37a4bbe45b3ac44857211dfa087/result.json",
+    "raw_sha256": "428eae3420ac8dbd687a1ac4f799a0b39b3a1e59ad707702205c14534e3bbb0c",
+    "status": "passed",
+    "processes": 2,
+    "same_session": true,
+    "project_count": 1,
+    "old_invocation_reexecuted": false,
+    "runs": [
+      {
+        "run_id": "c2f94243-cd0c-4596-bfaa-34726b5450ff",
+        "model_requests": 2,
+        "restored": false,
+        "inherited_messages": 0,
+        "inherited_tool_results": 0,
+        "new_tool_executions": 1,
+        "checkpoint": {
+          "checkpoint_id": "c988989b-d937-400d-9e72-9089668c486a",
+          "sha256": "64707c1db7dba29befeca5961494f71fb1afa6c000e4bde2095c855c5975ab92",
+          "byte_size": 7173,
+          "sdk_session_id": "198fb087-1a2b-46cf-9698-609b00b2ae0d",
+          "leaf_id": "b613717e",
+          "runtime_manifest": {
+            "sdk_package": "@earendil-works/pi-coding-agent",
+            "sdk_version": "1.3.0",
+            "session_version": 3,
+            "host_policy": "corpus-k09-linear-v1",
+            "provider": "corpus-s1-fixed",
+            "model": "fixed-project-v1",
+            "tool_schema": "s3-outcomes-tools-v1",
+            "resource_config": "corpus-empty-resources-v1"
+          }
+        }
+      },
+      {
+        "run_id": "b1b00970-ab96-44f6-8e77-5e2a4555ff3b",
+        "model_requests": 1,
+        "restored": true,
+        "inherited_messages": 5,
+        "inherited_tool_results": 1,
+        "new_tool_executions": 0,
+        "checkpoint": {
+          "checkpoint_id": "ab42c0f7-725c-4d8e-a463-10daf36ae730",
+          "sha256": "6ff701e81ac16ee7e9454aff407bea687810d59e076fd621df2c760dface4a91",
+          "byte_size": 8356,
+          "sdk_session_id": "198fb087-1a2b-46cf-9698-609b00b2ae0d",
+          "leaf_id": "b00f2f4c",
+          "runtime_manifest": {
+            "sdk_package": "@earendil-works/pi-coding-agent",
+            "sdk_version": "1.3.0",
+            "session_version": 3,
+            "host_policy": "corpus-k09-linear-v1",
+            "provider": "corpus-s1-fixed",
+            "model": "fixed-project-v1",
+            "tool_schema": "s3-outcomes-tools-v1",
+            "resource_config": "corpus-empty-resources-v1"
+          }
+        }
+      }
+    ],
+    "cleanup": {
+      "completed": true,
+      "reported_by": "parent_agent",
+      "evidence": "scripts/agent_runtime_smoke.py finally unconditionally calls exact actor cleanup; parent observed process exit0. Raw legacy report does not contain a cleanup field."
+    }
+  },
+  "node_targeted": {
+    "reported_by": "sources_agent",
+    "passed": 7,
+    "elapsed_seconds": 4.951,
+    "typescript_check": "passed",
+    "includes": "Default fixture daemon local working-copy cleanup"
+  },
+  "node_full_suite": {
+    "executed_by": "parent_agent",
+    "log": "tmp/k09-node-final.log",
+    "passed": 51,
+    "failed": 0,
+    "skipped": 0,
+    "elapsed_seconds": 53.5106215,
+    "exit_code": 0
+  },
+  "final_environment": {
+    "reported_by": "parent_agent",
+    "mode": "unconfigured",
+    "fixture_host": "stopped",
+    "browser_unconfigured_send_disabled": true,
+    "browser_fixture_cleanup": "completed; precise fixture cleanup exit0 and independent read-only counts all zero",
+    "provider_state": "unconfigured; no external model request accepted or performed in this validation"
+  },
+  "cleanup_database_verification": {
+    "executed_by": "pi_runtime_agent",
+    "verified_at": "2026-10-17T13:06:19.463657+00:00",
+    "exit_code": 0,
+    "transaction": "READ ONLY",
+    "script": "tmp/k09-cleanup-readonly.py",
+    "script_sha256": "801e9020f6833c98f230aeee6acd4744184f398f2e9b84b48adc66fa9e0041f1",
+    "actors": {
+      "8e3aceb4-9a41-445b-a0c3-7baf803bd22d": {
+        "users": 0,
+        "login_sessions": 0,
+        "projects": 0,
+        "project_members": 0,
+        "agent_sessions": 0,
+        "agent_runs": 0,
+        "agent_credentials": 0,
+        "agent_invocations": 0,
+        "agent_events": 0,
+        "agent_checkpoints": 0,
+        "upload_sessions": 0,
+        "jobs": 0,
+        "job_actions": 0
+      },
+      "2c300dd0-e92e-418b-ab09-202448e1a37e": {
+        "users": 0,
+        "login_sessions": 0,
+        "projects": 0,
+        "project_members": 0,
+        "agent_sessions": 0,
+        "agent_runs": 0,
+        "agent_credentials": 0,
+        "agent_invocations": 0,
+        "agent_events": 0,
+        "agent_checkpoints": 0,
+        "upload_sessions": 0,
+        "jobs": 0,
+        "job_actions": 0
+      },
+      "6ece984b-b045-4bef-a334-e5b9613626ff": {
+        "users": 0,
+        "login_sessions": 0,
+        "projects": 0,
+        "project_members": 0,
+        "agent_sessions": 0,
+        "agent_runs": 0,
+        "agent_credentials": 0,
+        "agent_invocations": 0,
+        "agent_events": 0,
+        "agent_checkpoints": 0,
+        "upload_sessions": 0,
+        "jobs": 0,
+        "job_actions": 0
+      }
+    },
+    "migration": "0014_agent_waiting",
+    "d12_policies": 0,
+    "boundary": "Exact actor database counts; object deletion was performed by fixture cleanup and reported separately, not re-inferred from SQL."
+  },
+  "source_hash_finalization": {
+    "mismatch_count_before_refresh": 0,
+    "changed_paths": [],
+    "mismatch_count_after_refresh": 0
+  }
+}

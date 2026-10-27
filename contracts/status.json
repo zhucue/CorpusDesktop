@@ -1,0 +1,72 @@
+{
+  "stage": "S3",
+  "status": "implemented_http_slice_with_experimental_tool_adapters",
+  "available_business_capabilities": 0,
+  "availability_scope": "production Pi tools; manual HTTP implementation is tracked separately",
+  "manual_http": {
+    "status": "implemented",
+    "capability_count": 18,
+    "coverage": "s1-capabilities.json",
+    "acceptance": "results/2026-10-16-s1-http-slice.json and results/2026-10-16-s1-catalog.json record separate scoped browser acceptance; not whole S1 acceptance"
+  },
+  "source_sync": {
+    "status": "scoped_http_acquisition_accepted",
+    "coverage": "s2-capabilities.json",
+    "acceptance": "results/2026-10-16-s2-http-contracts-final.json validates captured HTTP; full acquisition evidence is in tests/integration/results/2026-10-16-source-sync.json",
+    "scope": "D12 platform-only acquisition; no public release or searchable index"
+  },
+  "source_index": {
+    "status": "scoped_http_private_index_accepted",
+    "coverage": "s3-capabilities.json",
+    "acceptance": "results/2026-10-16-s3-index-contracts.json records scoped HTTP/browser and separate functional engine evidence; formal query performance remains unaccepted",
+    "scope": "D12 fixed acquisition to private INDEXED artifacts; no release, policy approval, mount or research access"
+  },
+  "tool_adapters": {
+    "status": "contract_test_only",
+    "capability_count": 52,
+    "production_authorization": "not_accepted"
+  },
+  "source_publication": {
+    "status": "scoped_fixture_http_mounts_accepted",
+    "coverage": "s3-release-capabilities.json",
+    "acceptance": "results/2026-10-17-s3-release-contracts.json and tests/integration/results/2026-10-17-source-releases.json",
+    "scope": "Explicit fixed-acquisition internal-research policy, fixed release and whole-source project mounts; real D12 not approved, no public query or model egress"
+  },
+  "project_research": {
+    "status": "scoped_http_and_browser_accepted",
+    "coverage": "s3-research-capabilities.json",
+    "acceptance": "results/2026-10-17-s3-research-contracts.json and results/2026-10-17-s3-research-http-contracts.json; 8 response families, 12 captured responses; not whole S3 or production Pi acceptance",
+    "scope": "One fixed whole-source snapshot, manual sentence-local query, first page and asynchronous complete counts. Pi metadata only; two material adapters deny; production available remains zero"
+  },
+  "private_materials": {
+    "status": "scoped_http_and_browser_accepted",
+    "coverage": "s3-private-capabilities.json",
+    "scope": "Fixed-language TXT to immutable revision; private/mixed snapshot indexing and exact document-unit counts; model material scope unchanged"
+  },
+  "research_outcomes": {
+    "status": "scoped_http_and_browser_accepted",
+    "coverage": "s3-outcomes-capabilities.json",
+    "acceptance": "results/2026-10-17-s3-outcomes-contracts.json and results/2026-10-17-s3-outcomes-http-contracts-final.json; 11 response families and 30 captured responses; unsaved-leave dialog interaction remains unverified",
+    "scope": "Explicit complete-hit evidence, immutable notes and manual revision acceptance, complete CSV/JSON export under independent acquisition permission; no production Pi material scope"
+  },
+  "documented_action_inventory_count": 143,
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "validation_dependency": "jsonschema==4.26.0",
+  "pending": [
+    "Remaining planned actions need concrete schemas, handlers, permission rules and version inputs; S1 has a hand-maintained typed client",
+    "Production Pi real-model, material authorization, in-flight recovery and full asynchronous continuation remain unaccepted; completed linear checkpoint restoration has separate passing evidence, all production tools remain planned",
+    "Per-feature A/B/C/D and UI/operations acceptance audit; feature_ids are planning associations, not acceptance proof",
+    "Continuation currently models corpus.search only; additional typed steps must be added with their business schemas",
+    "Production tool model egress and authorization revalidation; S1 manual HTTP already enforces account/project permissions and fenced job cancellation",
+    "Production Pi human-authorization credentials for alignment and notes; manual note revision acceptance has separate scoped passing evidence",
+    "Production query integration and capacity acceptance; S0 subset engine/golden/measurement evidence does not enable regex or production tools",
+    "Explicit permanent purge action contract and retention-policy authorization"
+  ],
+  "sources": [
+    "doc/assistant-capabilities.md",
+    "doc/business-architecture.md",
+    "doc/frontend-specification.md",
+    "https://json-schema.org/draft/2020-12/json-schema-validation",
+    "https://python-jsonschema.readthedocs.io/en/stable/validate/"
+  ]
+}

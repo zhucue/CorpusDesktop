@@ -1,0 +1,107 @@
+{
+  "status": "engine_passed",
+  "unit_tests": {
+    "command": ".venv/Scripts/python.exe -m unittest tests.exports.test_render -v",
+    "passed": 11,
+    "seconds": 0.497
+  },
+  "ruff": "passed",
+  "existing_full_bundle_check": {
+    "status": "passed",
+    "scope": "existing full bundle and complete persisted 76-hit result; no rematch/download/publish",
+    "index_identity_sha256": "edc78fd1c6c1b128862bfd174cfbe299edd4f4222a49262bcc95ad8a453fa85f",
+    "span_sha256": "cb39ee789491e09bd6e6e19c0829e00b68cf3fac882d5398638b4316ca9a2e77",
+    "rows": 76,
+    "source_records": 74,
+    "independent_checks": "all rows/CSV decoding/source owner/license/URL/raw codepoint slice",
+    "wall_seconds": 40.625,
+    "formal_performance_acceptance": false,
+    "source_export_permission": "NOT_APPROVED; isolated local engine check only",
+    "artifacts": [
+      {
+        "path": "tmp\\export-s3-existing-20261017\\json\\results.json",
+        "name": "results.json",
+        "media_type": "application/json",
+        "bytes": 90132,
+        "sha256": "4b0a55e02ff907fdaa17d22a59b955ded4b3ab69b67cb86d10d9a05dcea57f21",
+        "row_count": 76,
+        "format": "json",
+        "recipe_id": "research-export/v1",
+        "recipe_sha256": "e97ad4a0ad47f69ecf0faa5c1de42b254656ed69997aa91281e7049f8f1b8966",
+        "sampled_workspace_bytes": 90132
+      },
+      {
+        "path": "tmp\\export-s3-existing-20261017\\csv\\results.zip",
+        "name": "results.zip",
+        "media_type": "application/zip",
+        "bytes": 67158,
+        "sha256": "5effa9717f93e7fbf49e9d84a92c8a087fdf35e627216052666054a80413b82f",
+        "row_count": 76,
+        "format": "csv",
+        "recipe_id": "research-export/v1",
+        "recipe_sha256": "e97ad4a0ad47f69ecf0faa5c1de42b254656ed69997aa91281e7049f8f1b8966",
+        "sampled_workspace_bytes": 67158
+      }
+    ],
+    "input_manifest_sha256": "9e4255456253a10b2913e5ec1f2393b6dc14a128a154d2b5affe36d59986462f",
+    "members_file": {
+      "bytes": 1339883817,
+      "name": "members.jsonl",
+      "sha256": "248d63ef15e3ab5814b6db0aa205235fbde1a15be3256de14f6d19c0cd0b2b1f"
+    },
+    "verification_scope": "Reused previous verified complete bundle; this run checked manifest identity/file sizes and all output rows, not a fresh full bundle hash.",
+    "execution_source_sha256": {
+      "pipelines/exports/render.py": "4b6ee7bb19bde1703a67f705e78631b6b79a0459020db7a2c09bfbe5049ec32b",
+      "pipelines/exports/rows.py": "5ab909788cef779c3b3e49fa2b28f974486af592b65b56ffb60327ff3f140429",
+      "tests/exports/test_render.py": "d763b613207ce342e5697c1fc815eebc900de2ea9bebef6bcc3ece1e6b5a2a07"
+    }
+  },
+  "raw_evidence": {
+    "path": "tmp/export-s3-existing-20261017/result.json",
+    "sha256": "6caaf703d1e52474faf45fdb0667d11cb3d31d1bb343bd5291e82fb70ffade56"
+  },
+  "source_sha256": {
+    "pipelines/exports/render.py": "4b6ee7bb19bde1703a67f705e78631b6b79a0459020db7a2c09bfbe5049ec32b",
+    "pipelines/exports/rows.py": "b4779f62ca1c4d88cbecac6da0ca59ed3db7740b73c56966125a49f0ddf36615",
+    "tests/exports/test_render.py": "9b4f964e550138863d9d777caf45fc197cd1b1ea7347d7c873775889e7e9b587"
+  },
+  "primary_references": [
+    {
+      "url": "https://www.rfc-editor.org/rfc/rfc4180.html",
+      "basis": "Informational CSV record/quote/MIME specification"
+    },
+    {
+      "url": "https://community.owasp.org/attacks/CSV_Injection",
+      "basis": "Formula injection and limits of spreadsheet-dependent mitigations"
+    }
+  ],
+  "limitations": [
+    "Pure engine checks do not authorize exports.",
+    "Real D12 remains unapproved; local artifacts are not published.",
+    "CSV null and empty string are indistinguishable; JSON preserves them.",
+    "Text-prefix CSV is not guaranteed safe after arbitrary spreadsheet save/reopen cycles.",
+    "Shared local functional checks are not formal capacity acceptance."
+  ],
+  "local_script": {
+    "path": "tmp/export_existing_bundle.py",
+    "sha256": "574f416bd3ee6f637fa66f1a9c5b271a74452d03b34f52970631ae776d75a6a7"
+  },
+  "parent_independent_review": {
+    "unit_tests": {
+      "passed": 11,
+      "seconds": 0.58
+    },
+    "existing_output_checks": "Both 76-row artifact sizes/SHA, exact two ZIP members, every CSV field inverse-encoded equals corresponding JSON field; passed"
+  },
+  "followup_verification": {
+    "reason": "Add at-most-100-reference note attribution helper; existing query iterator/render semantics unchanged",
+    "unit_tests_passed": 11,
+    "seconds": 0.377,
+    "ruff": "passed"
+  },
+  "business_validation_reference": {
+    "path": "tests/integration/results/2026-10-17-research-outcomes.json",
+    "reported_by": "parent_agent",
+    "scope": "Separate real PG/S3/CWB, HTTP and browser acceptance; not a source permission grant"
+  }
+}

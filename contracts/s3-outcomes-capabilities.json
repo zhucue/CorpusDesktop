@@ -1,0 +1,104 @@
+{
+  "stage": "S3",
+  "runtime_tool_schema": "s3-outcomes-tools-v1",
+  "manual_http": "scoped_http_and_browser_accepted",
+  "available_tools": [],
+  "acceptance": "results/2026-10-17-s3-outcomes-contracts.json; 11 captured HTTP response families and scoped browser acceptance; unsaved-leave dialog interaction remains unverified",
+  "coverage": [
+    {
+      "capability_id": "evidence.create",
+      "input_schema": "schemas/s3-outcomes-evidence-create.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "evidence.list",
+      "input_schema": "schemas/s3-outcomes-list-input.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "evidence.get",
+      "input_schema": "schemas/s3-outcomes-evidence-ref.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "notes.list",
+      "input_schema": "schemas/s3-outcomes-list-input.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "notes.get",
+      "input_schema": "schemas/s3-outcomes-note-ref.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "notes.create",
+      "input_schema": "schemas/s3-outcomes-note-create.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "notes.update",
+      "input_schema": "schemas/s3-outcomes-note-update-tool.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "notes.accept",
+      "input_schema": "schemas/s3-outcomes-note-accept-tool.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "exports.create",
+      "input_schema": "schemas/s3-outcomes-export-create.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "exports.list",
+      "input_schema": "schemas/s3-outcomes-list-input.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "exports.get",
+      "input_schema": "schemas/s3-outcomes-export-ref.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "tool_availability": "planned"
+    }
+  ],
+  "limits": [
+    "Evidence is explicitly registered from a complete fixed hit.",
+    "Note revisions retain inherited authorization dependencies.",
+    "CSV is a ZIP with results.csv and methods.json; JSON preserves text.",
+    "Shared export permission is independently approved per acquisition.",
+    "No material-bearing Pi scope or production model egress is enabled."
+  ]
+}

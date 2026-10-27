@@ -1,0 +1,247 @@
+{
+  "date": "2026-10-17",
+  "status": "scoped_http_and_browser_accepted",
+  "registry_count": 140,
+  "registered_contract_adapters": 41,
+  "production_available_tools": 0,
+  "runtime_tool_schema": "s3-private-tools-v1",
+  "tests": {
+    "contracts": {
+      "command": ".venv/Scripts/python.exe -m unittest discover -s tests/contracts -q",
+      "passed": 51,
+      "seconds": 3.543
+    },
+    "node": {
+      "command": "npm run agent:test",
+      "passed": 38,
+      "seconds": 28.7267604
+    },
+    "typescript_and_web": {
+      "command": "npm run check",
+      "exit_code": 0
+    },
+    "contracts_after_metadata": {
+      "command": ".venv/Scripts/python.exe -m unittest discover -s tests/contracts -q",
+      "passed": 51,
+      "seconds": 2.929
+    },
+    "parent_final_private_and_runtime": {
+      "passed": 20,
+      "seconds": 21.003,
+      "private": 10,
+      "runtime": 10
+    }
+  },
+  "frontend": {
+    "path": "apps/web/dist/assets/index-BcGnEBC3.js",
+    "sha256": "e53a2a29dfc32e7bae3e537c1e4d5ff57e51614831d5534f0687271ac9857d64",
+    "css_path": "apps/web/dist/assets/index-D5kwKyq2.css",
+    "css_sha256": "1ad4ca6dbf77bd9ee065f465d2f67db6ece0322559f766bd6956a02b0c04c367"
+  },
+  "source_sha256": {
+    "contracts/materials.py": "d56cf54b532005607e09f9376e0e0a436ea76c41e8ccad78cf73cb6b510167c5",
+    "contracts/research.py": "28ed72ce0d6f73b1d027665874eff2ab8b8b80f9d55b279685c79943dc608756",
+    "contracts/build.py": "916d4f312526f6d6d7a3391bd4dbd6231655a166e91fcd2295a824fad7a34e76",
+    "contracts/s1.py": "c4d0f35b0aa0561fc302b2b6a9e758707a725dedee67816e1a23b1de0534a0a6",
+    "contracts/types/materials.ts": "333618b538c9f97b235e53b49b0635fd157b5f9afa65ae3eab59f4823488a8bb",
+    "contracts/types/research.ts": "76f28c530e0e72ba0ca259716ba5c3a9c745d3650f9f3011ae2ee7ae123be6dd",
+    "contracts/types/s1.ts": "aee35be3a84bb568c369dc8a3c08683b09d26a9da314663217199e4e21b9fa0c",
+    "contracts/capabilities.json": "c404d17c4e4e409c8e95a9319d42915082da2ed31374aa90974c651f006992e2",
+    "contracts/status.json": "5244d1671b9721f6b0b802e7774dee982fbf225b92342b8767336326045417ce",
+    "contracts/s3-private-capabilities.json": "b61a566d1d710634429f43dd408c1da362026e0812ff3784e776dc414e9b7ce5",
+    "contracts/s3-research-capabilities.json": "eb8d7d8a7ec5914381edfe24dbfc61ac00e712b8aaf0c8eeffe791c4dbc8772c",
+    "apps/web/src/PrivateMaterials.tsx": "b0a2cd119939357229724f533c527c30e33fb34a9250c385205f507487be3a1b",
+    "apps/web/src/Research.tsx": "993c776744e6036ced0a0fc5494df4025f4d02ea1473e2b63f4f793b6480324f",
+    "apps/web/src/main.tsx": "9c0ce3d574de1f81f76bba6df904bbc7093ec81f4e9956efd4f956ed627310f9",
+    "services/agent-runtime/src/s1-tools.ts": "ef28ca00a8687e153e4c306b3b08fe0e36b3d4c61a67fcf5480a2a060dddf2af",
+    "services/agent-runtime/src/s1-run-client.ts": "61e39c9b0a6bf93a36bdb0fbacced1f971df1a096fbfb0bd3a159dbca5f11c4b",
+    "services/agent-runtime/test/private.test.ts": "37ffe6141c96bb8cc8b1b33d92407ac0c79d6a915ccd00dee3e84ed841fb62ea",
+    "services/agent-runtime/test/research.test.ts": "4fefba8318240235d721d64d34197cbdd4068932c2ebc0637be1b9f97fd247f0",
+    "tests/contracts/test_private.py": "6b3f4f1259572290ffeb8fd24494eea6d2996acadff4409bbc01e59fe5343ad0",
+    "tests/contracts/test_research.py": "ae30678071c1a84eb2d874e5b3101f721c846d472a297742644d2a86d5aaa6eb",
+    "tests/contracts/validate_private_report.py": "9e5ff688352a685074d3983ec4f68853a4fac9b79cbf046b0eeaf16f15084e95",
+    "tests/contracts/validate_research_report.py": "41d266bc8768c24142a6b679054f87ad239f9c6733728a13eb54ffb36c69d0c4",
+    "apps/web/src/style.css": "a650f5e5c962ae080f708cf72f458701921ece883ae6239ac3a296baaab259e7"
+  },
+  "schema_sha256": {
+    "contracts/schemas/s3-private-import-action.schema.json": "7a8bfd533d5aee44ff85193db35199218f8df0debe11ae53b6afc976b387fdf4",
+    "contracts/schemas/s3-private-import-create.schema.json": "9d64cfe0f0510276629366fa1a5c03a4cd84ec1374a11297d6509fd1837f8831",
+    "contracts/schemas/s3-private-import-ref.schema.json": "70b8b96c56322b5ac0256643bcca3fb32f5248021abeb70ac78a3da5c94e8d94",
+    "contracts/schemas/s3-private-import.schema.json": "d8a95e9bac9f82ec3dbc8da68020098dd5e79e3031b4355d1b11225cbdad0c34",
+    "contracts/schemas/s3-private-imports.schema.json": "fb9f190b2603e1b439a3e0d311d396bccf7e7334e1396b16068258376a02abaf",
+    "contracts/schemas/s3-private-material-list-input.schema.json": "868c529bcabe1296b71d7544cebd17e004ed657c9fdaad5bd081abd8bf2dd30a",
+    "contracts/schemas/s3-private-material-ref.schema.json": "0afd41a7cfe81e0f56b3784caf8e2e5713308d254cbe8baf2e51ad089f287cd8",
+    "contracts/schemas/s3-private-material-revision.schema.json": "5d8eaa53c95e437cd63ce8649c4ee6bcc7e660adcf28ae31b2d5f0be574d0108",
+    "contracts/schemas/s3-private-material.schema.json": "9843f98931d4cc00b00f1b73454a6b2821cce0a8119f0f3265696a682d482b87",
+    "contracts/schemas/s3-private-materials.schema.json": "6dc79cca7db49a94a90c96db1626f9b5da181198ba54af1f558d2bdd8e78095e",
+    "contracts/schemas/s3-private-uploads.schema.json": "237e7213308b183af261280ab4d8bf372ab732fae07b4b0cf9fb9bc9bb21e677",
+    "contracts/schemas/s3-research-context-ref.schema.json": "88cc5653024889e13feebf1b18b957dc19f97b57ceb32e2b4ec24c578f9201d3",
+    "contracts/schemas/s3-research-context.schema.json": "a705e3ff107aa989feb922e3f3fd4279bd8a0fbc43c91e430bd9c77d6caf6901",
+    "contracts/schemas/s3-research-hits.schema.json": "013d338b93908efef254212902f5141cf318867f39fa12e367c2894088abf06f",
+    "contracts/schemas/s3-research-queries.schema.json": "d6092c449b045a6a7aefb2fec57b969d34bb0403f0cc3da8641c3c6999cac3d5",
+    "contracts/schemas/s3-research-query-action.schema.json": "d555a20400733a6c375fea912bbcec3257735b82a68beeb997400f57ce411a5b",
+    "contracts/schemas/s3-research-query-create.schema.json": "9d0872b393ad8a4bb52409aeee7158469bc5cac373e1599b3778a8b594468234",
+    "contracts/schemas/s3-research-query.schema.json": "2bf763d10ffb2f8b9ebff98e32e8bb2638fa8bf5f858638eb7e5d943281cb6ec",
+    "contracts/schemas/s3-research-result-ref.schema.json": "5609bee92106c50d85f5cdd9b1f6a77365fdf17cc4512dfaa0fc9c20fb8ca7cc",
+    "contracts/schemas/s3-research-snapshot-action.schema.json": "2fb1409511bc0afafff2d5fb81fd3eee8ee853e970d9dfdc0e9be1f065f55c6f",
+    "contracts/schemas/s3-research-snapshot-create.schema.json": "5ea62baa47b1f5f6d35d7328af71268a1e68688b4d2dd62e43c1ad26be30e346",
+    "contracts/schemas/s3-research-snapshot-ref.schema.json": "7e803851dc0d28f3e16433752586d5817720709e5cce16f21251c8e9fe80f444",
+    "contracts/schemas/s3-research-snapshot.schema.json": "2932740db0c270fd4de35be132a373774fdd0c4a8cb6fc92b8a9d3f2442d430c",
+    "contracts/schemas/s3-research-snapshots.schema.json": "571e349142f9d6e3e0e1f20446f5a29412346e35a579914b23329324b99deb45",
+    "contracts/schemas/s1-job.schema.json": "225bc89125cc58e857133750f94d318f478e6264e97c5b97b80d6a5e8fe77c47"
+  },
+  "limitations": [
+    "Fixed-language TXT only; parsing publishes immutable revisions, indexing occurs during snapshot preparation.",
+    "Pi remains empty material scope and metadata-only; no filenames, text or derived counts through new adapters or TXT generic jobs.",
+    "No production model egress or formal concurrency performance acceptance."
+  ],
+  "source_sha256_at_http_acceptance": {
+    "contracts/materials.py": "270dc4d148d07606c4795245086ca64bbc9e03eed3427c3e7c4d671316bc34a5",
+    "contracts/research.py": "59487a650487bb4045fa71a660c29a93bc692d95238279d6cd788d15c94ad2a7",
+    "contracts/build.py": "9d5af2b0d3c6a9b2474f835dbe9c69f8075ce3ace12479287e67c02da06c7851",
+    "contracts/s1.py": "c4d0f35b0aa0561fc302b2b6a9e758707a725dedee67816e1a23b1de0534a0a6",
+    "contracts/types/materials.ts": "333618b538c9f97b235e53b49b0635fd157b5f9afa65ae3eab59f4823488a8bb",
+    "contracts/types/research.ts": "76f28c530e0e72ba0ca259716ba5c3a9c745d3650f9f3011ae2ee7ae123be6dd",
+    "contracts/types/s1.ts": "aee35be3a84bb568c369dc8a3c08683b09d26a9da314663217199e4e21b9fa0c",
+    "contracts/capabilities.json": "e71f1604ecd147ac41a5e0ad32203d18f45ff5eb15a9ec8d87845ee708f17aa2",
+    "contracts/status.json": "36d171c714ace8090451f29347c970a8adfc3f57dd568b1ecb69abffb2da802f",
+    "contracts/s3-private-capabilities.json": "cd7704cc304eee8348fbc8a3c2d17f1cd70e8af990987b782f2b99f5ce86affa",
+    "contracts/s3-research-capabilities.json": "94a9d77ba6ceffa1c3a59f476cb28ca47dd1a611a8a2a8b5076f3bbd385fa39d",
+    "apps/web/src/PrivateMaterials.tsx": "b0a2cd119939357229724f533c527c30e33fb34a9250c385205f507487be3a1b",
+    "apps/web/src/Research.tsx": "993c776744e6036ced0a0fc5494df4025f4d02ea1473e2b63f4f793b6480324f",
+    "apps/web/src/main.tsx": "9c0ce3d574de1f81f76bba6df904bbc7093ec81f4e9956efd4f956ed627310f9",
+    "services/agent-runtime/src/s1-tools.ts": "ef28ca00a8687e153e4c306b3b08fe0e36b3d4c61a67fcf5480a2a060dddf2af",
+    "services/agent-runtime/src/s1-run-client.ts": "61e39c9b0a6bf93a36bdb0fbacced1f971df1a096fbfb0bd3a159dbca5f11c4b",
+    "services/agent-runtime/test/private.test.ts": "37ffe6141c96bb8cc8b1b33d92407ac0c79d6a915ccd00dee3e84ed841fb62ea",
+    "services/agent-runtime/test/research.test.ts": "4fefba8318240235d721d64d34197cbdd4068932c2ebc0637be1b9f97fd247f0",
+    "tests/contracts/test_private.py": "6b3f4f1259572290ffeb8fd24494eea6d2996acadff4409bbc01e59fe5343ad0",
+    "tests/contracts/test_research.py": "ae30678071c1a84eb2d874e5b3101f721c846d472a297742644d2a86d5aaa6eb",
+    "tests/contracts/validate_private_report.py": "9e5ff688352a685074d3983ec4f68853a4fac9b79cbf046b0eeaf16f15084e95",
+    "tests/contracts/validate_research_report.py": "41d266bc8768c24142a6b679054f87ad239f9c6733728a13eb54ffb36c69d0c4",
+    "apps/web/src/style.css": "a650f5e5c962ae080f708cf72f458701921ece883ae6239ac3a296baaab259e7"
+  },
+  "http": {
+    "report": "tmp/private-material-smoke/3769118ae2f84bd6867de08c3011b5c1/result.json",
+    "sha256": "22145c8fd4b8361f6c1588e3119d46ca75fb7afbf2135773f7cb9a56f811448b",
+    "exit_code": 0,
+    "contract_report": "contracts/results/2026-10-17-s3-private-http-contracts.json",
+    "response_families": 14,
+    "responses": 36,
+    "cleaned": true,
+    "cleanup": {
+      "source_object_versions_deleted": 26,
+      "query_result_versions_deleted": 5,
+      "private_material_index_versions_deleted": 17,
+      "cache_directories_deleted": 9,
+      "cache_target_count": 10,
+      "cache_targets_remaining": 0
+    }
+  },
+  "browser": {
+    "performed_by": "root independent browser acceptance",
+    "status": "passed",
+    "same_config_import_reuses_english_revision_1": true,
+    "english_and_chinese_revisions_retained": true,
+    "private_snapshot": {
+      "files": 2,
+      "segments": 5,
+      "tokens": 12
+    },
+    "private_query": {
+      "matches": 5,
+      "segments": 5,
+      "files": 2,
+      "unicode_highlight_full_cp": [
+        8,
+        13
+      ]
+    },
+    "mixed_query": {
+      "matches": 125,
+      "segments": 65,
+      "document_units": 62,
+      "source_records": 60,
+      "private_files": 2,
+      "page_sizes": [
+        50,
+        50,
+        25
+      ]
+    },
+    "viewer_no_write_controls": true,
+    "source_revocation_clears_mixed_context_and_results": true,
+    "private_query_survives_source_revocation": true,
+    "screenshots": [
+      "tmp/private-material-smoke/3769118ae2f84bd6867de08c3011b5c1/private-query-ui.png",
+      "tmp/private-material-smoke/3769118ae2f84bd6867de08c3011b5c1/mixed-viewer-ui.png",
+      "tmp/private-material-smoke/3769118ae2f84bd6867de08c3011b5c1/mixed-revoked-ui.png",
+      "tmp/private-material-smoke/3769118ae2f84bd6867de08c3011b5c1/private-after-revoke-ui.png"
+    ]
+  },
+  "metadata_closeout": {
+    "status": "frozen",
+    "only_acceptance_descriptions_changed": true,
+    "business_schema_hashes_unchanged": true,
+    "frontend_asset_unchanged": true,
+    "note": "HTTP/browser acceptance used the pre-closeout source hashes and frozen frontend asset. Final source hashes differ only in acceptance descriptions and generated metadata. Root rebuilt and deployed API for static metadata parity; business schemas and frontend asset unchanged, production availability remains zero.",
+    "final_api_image": "sha256:6a7fdc0194f5c8debf81c0424300e28bea7ce359e2c35c6c2ef2d15c9176759f",
+    "deployed": true,
+    "readiness": "database, object store and broker ready (root verified)"
+  },
+  "documents": {
+    "status": "rendered_and_visually_reviewed",
+    "items": [
+      {
+        "document": "doc/前端与接口设计规范.docx",
+        "render_dir": "tmp/s3-private-frontend-final",
+        "pages": 24,
+        "key_changed_pages": [
+          11,
+          12,
+          13,
+          14,
+          22
+        ],
+        "sha256": "f0cb1769964c07aa114bdbc079318e6940414f4cd61e0c758da3b222fac983b2",
+        "structure": "Title/Heading1-3 all four font attributes Songti; every header/footer empty",
+        "visual_review": "All rendered pages inspected; no clipping, overlapping text, missing glyphs or broken tables. Key changed pages additionally inspected individually.",
+        "contact_sheets": [
+          "tmp/s3-private-frontend-final/contact-1.jpg",
+          "tmp/s3-private-frontend-final/contact-2.jpg",
+          "tmp/s3-private-frontend-final/contact-3.jpg",
+          "tmp/s3-private-frontend-final/contact-4.jpg",
+          "tmp/s3-private-frontend-final/contact-5.jpg",
+          "tmp/s3-private-frontend-final/contact-6.jpg"
+        ]
+      },
+      {
+        "document": "doc/研究助手业务能力与工具契约.docx",
+        "render_dir": "tmp/s3-private-assistant-final",
+        "pages": 15,
+        "key_changed_pages": [
+          3,
+          5,
+          6
+        ],
+        "sha256": "60d107ee658a87f9bb7f645b7dc35314f2dc2f650ca320aec3def7df5bed87f6",
+        "structure": "Title/Heading1-3 all four font attributes Songti; every header/footer empty",
+        "visual_review": "All rendered pages inspected; no clipping, overlapping text, missing glyphs or broken tables. Key changed pages additionally inspected individually.",
+        "contact_sheets": [
+          "tmp/s3-private-assistant-final/contact-1.jpg",
+          "tmp/s3-private-assistant-final/contact-2.jpg",
+          "tmp/s3-private-assistant-final/contact-3.jpg",
+          "tmp/s3-private-assistant-final/contact-4.jpg"
+        ]
+      }
+    ],
+    "root_independent_checks": "All five repository Word heading fonts and empty headers/footers passed; root visually checked frontend page12 and assistant page6.",
+    "markdown_sha256": {
+      "doc/frontend-specification.md": "30f875918c1c463c7b53507b2b9adaa8c2d59520f9f3112020355693da1afe4d",
+      "doc/assistant-capabilities.md": "997de0d1c4a8d06e4870c02b1bc9847f439dd46ff975e041e0be87fba37c31e0"
+    }
+  },
+  "backend_evidence": {
+    "path": "tests/integration/results/2026-10-17-private-materials.json",
+    "sha256": "bb49ac80a4870c2bd4ceca1f61c10b714149b002b93ebcc799686fe2b4cb2520"
+  }
+}

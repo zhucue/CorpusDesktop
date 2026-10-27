@@ -1,0 +1,433 @@
+{
+  "schema": "corpus-private-material-validation/v1",
+  "status": "passed",
+  "scope": "Immutable UTF-8 TXT revisions, pure-private and mixed project snapshots, background indexing and file-relative Unicode query coordinates",
+  "formal_capacity_acceptance": false,
+  "real_D12_permission_approved": false,
+  "production_pi_available_tools": 0,
+  "migration": {
+    "revision": "0011_private_materials",
+    "reported_by": "parent_agent",
+    "status": "applied",
+    "sha256": "1ee2413b21286f903f19578093c9729a68c6acdf02baae0a05af2538a5d74b9d"
+  },
+  "validation": {
+    "real_private_integration_initial": {
+      "reported_by": "parent_agent",
+      "passed": 8,
+      "elapsed_seconds": 13.503,
+      "session_id": 49697
+    },
+    "checkpoint_and_private_followup": {
+      "reported_by": "parent_agent",
+      "passed": 20,
+      "groups": {
+        "private_integration": 9,
+        "checkpoints": 11
+      },
+      "elapsed_seconds": 18.281,
+      "session_id": 20792
+    },
+    "related_real_regression_initial": {
+      "reported_by": "parent_agent",
+      "passed": 79,
+      "errors": 1,
+      "total": 80,
+      "elapsed_seconds": 75.779,
+      "session_id": 71956
+    },
+    "local_python_initial": {
+      "reported_by": "parent_agent",
+      "passed": 165,
+      "skipped": 122,
+      "elapsed_seconds": 11.41
+    },
+    "ci_scope_ruff": {
+      "status": "passed",
+      "executed_by": "pi_runtime_agent",
+      "remote_CI_executed": false
+    },
+    "final_targeted": {
+      "reported_by": "parent_agent",
+      "status": "passed",
+      "passed": 20,
+      "groups": {
+        "private_material_integration": 10,
+        "agent_runtime": 10
+      },
+      "elapsed_seconds": 21.003,
+      "session_id": 91966,
+      "exit_code": 0,
+      "command": "docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm test-index python -m unittest tests.integration.test_private_materials tests.api.test_agent_runtime -v",
+      "covers": [
+        "Real fixed upload versions and strict parser receipts; immutable private revisions and mixed CWB indexes",
+        "Whole-file document counts and full-revision Unicode coordinates with BOM/CRLF/emoji/decomposed accent",
+        "Same-input reuse and different-language new revision; old snapshot fixed; two revisions of same document rejected",
+        "Viewer/nonmember/platform-admin RLS and metadata-only Pi projections",
+        "UPLOAD_VALIDATE cannot claim TXT_IMPORT; fixed corpus.index task routing; failed delivery and queued cancellation release unused reservations",
+        "Successful database commit with lost acknowledgement retains registered immutable objects",
+        "Unknown PUT acknowledgement retains reservation and disallows retry",
+        "Cancellation after storage does not publish a revision or change validated upload",
+        "Two mutually invisible projects cannot bypass worker global persistent-output admission",
+        "Actual Pi imports.start accepted: pending and successful-but-unobserved block checkpoint; imports.get observes exact revision before terminal gate",
+        "Agent cancellation cancels only a newly owned import; a reused independently created import continues"
+      ]
+    },
+    "actual_http_contracts": {
+      "status": "passed",
+      "require_all": true,
+      "validated_response_counts": {
+        "snapshots": 3,
+        "snapshot_actions": 2,
+        "snapshot_lists": 2,
+        "queries": 2,
+        "query_actions": 4,
+        "query_lists": 1,
+        "hit_pages": 7,
+        "contexts": 2,
+        "imports": 3,
+        "import_actions": 4,
+        "import_lists": 1,
+        "materials": 3,
+        "material_lists": 1,
+        "validated_upload_lists": 1
+      },
+      "not_recorded": [],
+      "failures": [],
+      "inputs": [
+        {
+          "path": "tmp\\private-material-smoke\\3769118ae2f84bd6867de08c3011b5c1\\result.json",
+          "sha256": "22145c8fd4b8361f6c1588e3119d46ca75fb7afbf2135773f7cb9a56f811448b"
+        }
+      ],
+      "schema_sha256": {
+        "snapshots": "2932740db0c270fd4de35be132a373774fdd0c4a8cb6fc92b8a9d3f2442d430c",
+        "snapshot_actions": "2fb1409511bc0afafff2d5fb81fd3eee8ee853e970d9dfdc0e9be1f065f55c6f",
+        "snapshot_lists": "571e349142f9d6e3e0e1f20446f5a29412346e35a579914b23329324b99deb45",
+        "queries": "2bf763d10ffb2f8b9ebff98e32e8bb2638fa8bf5f858638eb7e5d943281cb6ec",
+        "query_actions": "d555a20400733a6c375fea912bbcec3257735b82a68beeb997400f57ce411a5b",
+        "query_lists": "d6092c449b045a6a7aefb2fec57b969d34bb0403f0cc3da8641c3c6999cac3d5",
+        "hit_pages": "013d338b93908efef254212902f5141cf318867f39fa12e367c2894088abf06f",
+        "contexts": "a705e3ff107aa989feb922e3f3fd4279bd8a0fbc43c91e430bd9c77d6caf6901",
+        "imports": "d8a95e9bac9f82ec3dbc8da68020098dd5e79e3031b4355d1b11225cbdad0c34",
+        "import_actions": "7a8bfd533d5aee44ff85193db35199218f8df0debe11ae53b6afc976b387fdf4",
+        "import_lists": "fb9f190b2603e1b439a3e0d311d396bccf7e7334e1396b16068258376a02abaf",
+        "materials": "9843f98931d4cc00b00f1b73454a6b2821cce0a8119f0f3265696a682d482b87",
+        "material_lists": "6dc79cca7db49a94a90c96db1626f9b5da181198ba54af1f558d2bdd8e78095e",
+        "validated_upload_lists": "237e7213308b183af261280ab4d8bf372ab732fae07b4b0cf9fb9bc9bb21e677"
+      },
+      "limits": "Recorded HTTP shape and semantic invariants only; authorization, durable spans, exact query correctness and performance require independent execution evidence.",
+      "executed_by": "contracts_agent; independently repeated by pi_runtime_agent",
+      "total_responses": 36,
+      "path": "tmp/s3-private-http-contracts-final.json",
+      "sha256": "2f55af4ee9ac6e3b025ef7e6b0869b97bfa12bd4dd73ec86f67ff0ec406db448"
+    }
+  },
+  "retained_failures": [
+    {
+      "stage": "first_private_integration",
+      "errors": 8,
+      "elapsed_seconds": 5.934,
+      "session_id": 54675,
+      "cause": "Job-only fields were mistakenly included on JobEvent ORM although no event-table DDL existed",
+      "resolution": "Removed five unintended JobEvent mapped columns; database migration unchanged; all eight tests passed on rebuilt image"
+    },
+    {
+      "stage": "related_real_regression",
+      "errors": 1,
+      "test": "AgentCheckpointTests.test_job_pending_and_result_not_observed_gate_publication",
+      "cause": "Local Job import in the new imports branch shadowed access from existing upload branch",
+      "resolution": "Moved Job import to module scope; all eleven checkpoint tests passed with nine private tests, including actual import accepted/result-observation gate"
+    }
+  ],
+  "boundaries": [
+    "Only strict UTF-8 TXT with human-selected cmn or eng; deterministic segmentation is not linguistic gold",
+    "One source BOM is removed with explicit source mapping; remaining CRLF/Unicode codepoints are preserved",
+    "Material READY means parsed immutable revision; snapshot READY requires the actual fixed project index",
+    "Private matched documents count whole files; shared source documents count imported source records; mixed totals expose both units",
+    "Snapshot members are fixed revisions, not automatically upgraded when a language correction succeeds",
+    "Source license remains acquisition-bound and real D12 is not approved by the synthetic tests",
+    "Private bytes never become model context; metadata adapters remain under empty-material scope and production available_tools remains empty",
+    "Persistent output and in-progress reservations are separately accounted; unknown PUT outcome retains budget pending exact cleanup",
+    "No formal million-scale private/mixed performance or production external model acceptance is claimed"
+  ],
+  "source_sha256": {
+    "services/api/materials.py": "3bb23e39e470a3e933995c394e9ad9de50f2a26874b1a93c18d4555fa5d70b42",
+    "services/api/material_models.py": "e5eeff18409eb5d3fc85510b9103394f9428441ca0c1fdf99f1d50689f5a647a",
+    "services/api/job_models.py": "8ecb4980385e3d891559f0ee6f387409fb5cb368a395de021dd7667199c3f0e3",
+    "services/api/jobs.py": "0ce78764a59f62829e9adcd3bb8c18dd8cf80d4ec633ace06c452ccfec75eac7",
+    "services/api/uploads.py": "4e914f8351d1f2fc6bac1923c499c475c6f11cd6e1dc6b8e0058d0790bdda759",
+    "services/api/research.py": "d8177ed1f9e750af0f1f53de7dadfaf1d47352eb7c59c36b6f126ff2ec7c3eef",
+    "services/api/research_models.py": "66c6639207fd3943e5bc0c63776382a3706dcb09da02846930dffdf4a7d0fde7",
+    "services/api/agent_tools.py": "75ba6569dc1b2bb0aa678a718ba112ddaea5c57b6e1b0edf62fe100ab2714066",
+    "services/api/agent_control.py": "3aadd3248936d432b457e0545ae56374823551ef79d4ece99ba5d01edd5c3d61",
+    "services/api/agent_checkpoints.py": "55defc9e4ebf437539073e382cbe49d5eba67c50536dc4dcdf82351c97824d99",
+    "services/api/agent_routes.py": "14fbe5b2c9f61d9e0763d48480a7818b32b6fc29b86ba7916d3b1f3d0c009e16",
+    "services/api/main.py": "dbc352421079041ce15c0591c06a117fa06b7e716038d7a3be3321bbbc4c31d4",
+    "services/api/migrations/versions/0011_private_materials.py": "1ee2413b21286f903f19578093c9729a68c6acdf02baae0a05af2538a5d74b9d",
+    "workers/materials.py": "1a52cbf42b75840d8ad434650ff1e2747e04faeceed8956abf9b975fdb4f62c4",
+    "workers/project_material_index.py": "5565c42908042e1ae9fc14ab2be6069a021b85b763f9b3b1fd983e604e67aa3d",
+    "workers/research.py": "8ffdc011cf360145ade3b3b3bfa8e5293276c228f7f427ad48bc2d8e7d33e57d",
+    "workers/validation.py": "20bf5aab94b5f1314a28808410d67eac395de24b225ba69dab41e96ac320dd7c",
+    "workers/dispatcher.py": "262a7d09090a16964b10d7cc0568b7ef3daa99bd5d203f06cc1fa345a7dd4b28",
+    "workers/app.py": "4790eee10fd1f558d21addfb637bfb1ac97d717c9c05868a4f0986b04909758a",
+    "scripts/private_material_smoke.py": "e22138653c7c73b0035d790e36e73dd6bdc14c45ff2237f4cc40e73adc3c0dca",
+    "scripts/query_fixture.py": "ff9a766b85bcc0f20a5538540da90c5287ece600829ddf6abb9afab4ca82a3d1",
+    "tests/integration/test_private_materials.py": "029aa7d53673f57560a38dde68dcce69712128bcfe07195c999ec4fe0ad39529",
+    "pipelines/materials/txt.py": "17194c2cf6b5b9e7660f16af3038a16afd6ee754fc9e66d5fe623d64ba235d27",
+    "pipelines/query/project_index.py": "53a1d552d5422faf7594b8494974765e4f2d3832a246b4cbaa9a19b4f5137123",
+    "pipelines/query/project_recipe.py": "7f3eb799097c7b9afb27533748336e436cc42de0de2b6e15c5c876b69d30f0ea",
+    "pipelines/query/source_reader.py": "809be43728932424b4fe4101ba9075df8e79eabdc986d104b0cdd433516d8b8f",
+    "pipelines/query/source_results.py": "98ec02784866dc9638d83ff1d4637a63f9955d102668e2c1b85463613f0342c5",
+    "pipelines/query/source_cache.py": "f93e1eb53d5ae12744ced872c92ee9ccc1ba171b93213a5a35ee3265604e1108",
+    "contracts/materials.py": "d56cf54b532005607e09f9376e0e0a436ea76c41e8ccad78cf73cb6b510167c5",
+    "contracts/research.py": "28ed72ce0d6f73b1d027665874eff2ab8b8b80f9d55b279685c79943dc608756",
+    "contracts/s1.py": "c4d0f35b0aa0561fc302b2b6a9e758707a725dedee67816e1a23b1de0534a0a6",
+    "contracts/types/materials.ts": "333618b538c9f97b235e53b49b0635fd157b5f9afa65ae3eab59f4823488a8bb",
+    "contracts/types/research.ts": "76f28c530e0e72ba0ca259716ba5c3a9c745d3650f9f3011ae2ee7ae123be6dd",
+    "services/agent-runtime/src/s1-tools.ts": "ef28ca00a8687e153e4c306b3b08fe0e36b3d4c61a67fcf5480a2a060dddf2af",
+    "deploy/Dockerfile.api": "f6899958c338409f8e130fb536fbbe63b0cdcdbca0d145200b02ed0f8f0abd87",
+    "deploy/Dockerfile.index": "25acbcfb2e24223e643e156c7e6925833c6d85665618a7fa2d01132341bce218",
+    "deploy/compose.yaml": "f177f231738bc34a78eadef379041fd5c85988f8136c37d38fdd28d539214f4a",
+    ".github/workflows/ci.yml": "fb76f35408092a46fb39a0b412fc31ce110705874190337f85a0d715f9916ad4",
+    "contracts/build.py": "916d4f312526f6d6d7a3391bd4dbd6231655a166e91fcd2295a824fad7a34e76"
+  },
+  "recorded_date": "2026-10-17",
+  "started_at": "2026-10-16T18:04:26.205352+00:00",
+  "finished_at": "2026-10-16T18:11:15.922898+00:00",
+  "http_smoke": {
+    "reported_by": "parent_agent",
+    "status": "passed",
+    "exit_code": 0,
+    "path": "tmp/private-material-smoke/3769118ae2f84bd6867de08c3011b5c1/result.json",
+    "sha256": "22145c8fd4b8361f6c1588e3119d46ca75fb7afbf2135773f7cb9a56f811448b",
+    "script_sha256": "e22138653c7c73b0035d790e36e73dd6bdc14c45ff2237f4cc40e73adc3c0dca",
+    "started_at": "2026-10-16T18:04:26.205352+00:00",
+    "finished_at": "2026-10-16T18:11:15.922898+00:00",
+    "fixture_only": true,
+    "project_id": "4a90c584-efa7-455c-819f-692f24eea4ac",
+    "source_id": "fixture-release-3769118ae2f84bd6867de08c3011b5c1",
+    "results": {
+      "private": {
+        "snapshot_id": "58919ef5-2963-4315-aa64-5bb160a4e067",
+        "query_run_id": "0510cda1-a7d6-4140-83bf-995098084923",
+        "result_set_id": "031f4738-6fdd-4204-9709-2cd143d5bbee",
+        "result_path": "/projects/4a90c584-efa7-455c-819f-692f24eea4ac/result-sets/031f4738-6fdd-4204-9709-2cd143d5bbee"
+      },
+      "mixed": {
+        "snapshot_id": "fc49ae16-9dad-436b-9b45-cbbc0a7ec6b7",
+        "query_run_id": "bf4d7b8b-a55a-4e03-b83a-258c0fe7c1cf",
+        "result_set_id": "41aa199d-9b6d-4064-a9e0-2fea13dd7267",
+        "result_path": "/projects/4a90c584-efa7-455c-819f-692f24eea4ac/result-sets/41aa199d-9b6d-4064-a9e0-2fea13dd7267"
+      }
+    },
+    "private_complete_counts": {
+      "total_hits": 5,
+      "matched_segments": 5,
+      "matched_documents": 2,
+      "matched_document_units": {
+        "source_records": 0,
+        "private_files": 2
+      }
+    },
+    "mixed_complete_counts": {
+      "total_hits": 125,
+      "matched_segments": 65,
+      "matched_documents": 62,
+      "matched_document_units": {
+        "source_records": 60,
+        "private_files": 2
+      }
+    },
+    "shared_withdrawal_blocks_mixed_but_preserves_private": true,
+    "cleanup": {
+      "cleaned": true,
+      "source_id": "fixture-release-3769118ae2f84bd6867de08c3011b5c1",
+      "object_versions_deleted": 26,
+      "query_result_versions_deleted": 5,
+      "private_material_index_versions_deleted": 17,
+      "cache_directories_deleted": 9,
+      "cache_target_count": 10,
+      "cache_targets_remaining": 0
+    }
+  },
+  "cleanup_database_verification": {
+    "status": "passed",
+    "method": "read-only SQL scoped to fixture IDs; D12 policy count separately audited",
+    "fixture": {
+      "actors": [
+        "81878ea3-484e-424e-99bf-56e2a9890c3e",
+        "a87f3bac-f7f3-4212-bca8-1c579befea38",
+        "39d20a59-bdfd-452b-b891-0e65a83e848e",
+        "eff67736-88a1-437d-b4e4-136e6b08f5ec",
+        "7401b6ef-1b96-428d-96a6-400f96a40f19"
+      ],
+      "project": "4a90c584-efa7-455c-819f-692f24eea4ac",
+      "source": "fixture-release-3769118ae2f84bd6867de08c3011b5c1"
+    },
+    "counts": {
+      "fixture_accounts": 0,
+      "fixture_source": 0,
+      "fixture_project": 0,
+      "research_queries": 0,
+      "research_snapshots": 0,
+      "material_documents": 0,
+      "material_revisions": 0,
+      "txt_import_jobs": 0,
+      "fixed_project_indexes": 0,
+      "d12_policies": 0
+    },
+    "migration": "0011_private_materials",
+    "reported_by": "parent_agent",
+    "path": "tmp/private-cleanup-verification.json",
+    "sha256": "327d9331cd0aa061f9f35cba7038b2bb5e055a838b91e01c5a1e48fec8703732",
+    "script": "tmp/verify_private_cleanup.py",
+    "script_sha256": "883b58603f49e09b6569f4ce77e254705cfa782b2fb0537ad623226ed9e4f406"
+  },
+  "runtime": {
+    "reported_by": "parent_agent",
+    "http_browser_api_image_id": "sha256:4d7a48206870b021e6ac537b0f10162e5507913ef8c0091070c08f57b0bc728c",
+    "final_targeted_test_index_image_id": "sha256:64d5491f288fa2ab37ebcd94bd4964b5e79c4c1f3a356f491089ff7593dab924",
+    "services_restored": true,
+    "services_health_reported": "Seven services running; API, database, broker, worker and index-worker healthy. Dispatcher and object-storage have no healthcheck, so only running status is asserted.",
+    "shared_host": true,
+    "formal_capacity_acceptance": false,
+    "after_exclusive_import_cancel_fix_api_image_id": "sha256:3072acb2898ac397a19b9dbf31b6dc77f1b52be2248531dcc827f11529bcacce",
+    "http_browser_tests_rerun_after_cancel_fix": false,
+    "http_browser_worker_image_id": "sha256:14bf729e13cb956f32084ddf1a068c88ac88deff464e62975e0a175b4a803a92",
+    "http_browser_index_worker_image_id": "sha256:ba49625ff2b3b153868900c21202d9909350c5aa56cd84e121d80bdc32390ba0",
+    "worker_images_unchanged_after_http": true
+  },
+  "browser": {
+    "reported_by": "parent_agent",
+    "status": "passed",
+    "specific_checks": [
+      "Owner repeating the same TXT language/recipe reuses English revision1 and keeps English/Chinese revision history",
+      "Browser creates a pure-private snapshot: READY, 2 files / 5 segments / 12 tokens",
+      "Private Hello query returns 5 hits / 5 segments / 2 whole-file documents; emoji/decomposed-accent segment highlights complete-revision [8,13) correctly",
+      "Viewer mixed query returns 125 hits / 65 segments / 62 document units (60 source records + 2 files); pages contain 50 / 50 / 25 hits",
+      "Private context of ordinal124 is correct on the third page",
+      "Source policy deny automatically clears mixed results and context and disables its search; pure-private query remains readable with 5 / 5 / 2"
+    ],
+    "screenshots": [
+      {
+        "path": "tmp/private-material-smoke/3769118ae2f84bd6867de08c3011b5c1/mixed-revoked-ui.png",
+        "sha256": "47ab7c7492b1a5fe3933221d429c2e183b1e8573ea37a64509c7620e627539c9"
+      },
+      {
+        "path": "tmp/private-material-smoke/3769118ae2f84bd6867de08c3011b5c1/mixed-viewer-ui.png",
+        "sha256": "d1c54828f1910e434cf490c3850f0c1d277342f89443c83913d9b993ea63be85"
+      },
+      {
+        "path": "tmp/private-material-smoke/3769118ae2f84bd6867de08c3011b5c1/private-after-revoke-ui.png",
+        "sha256": "1b2042fd7439afb5634cbda2774df20639483bd5c7ef8cf4afdaf80f1e1d1896"
+      },
+      {
+        "path": "tmp/private-material-smoke/3769118ae2f84bd6867de08c3011b5c1/private-query-ui.png",
+        "sha256": "cb21459967ccef828cecf568916557d72b0a99d153f8218f63915ee4bd261666"
+      }
+    ],
+    "frontend": {
+      "javascript": {
+        "path": "apps/web/dist/assets/index-BcGnEBC3.js",
+        "sha256": "e53a2a29dfc32e7bae3e537c1e4d5ff57e51614831d5534f0687271ac9857d64"
+      },
+      "css": {
+        "path": "apps/web/dist/assets/index-D5kwKyq2.css",
+        "sha256": "1ad4ca6dbf77bd9ee065f465d2f67db6ece0322559f766bd6956a02b0c04c367"
+      }
+    }
+  },
+  "independent_engine_evidence": {
+    "path": "pipelines/query/results/2026-10-17-private-materials-engine.json",
+    "sha256": "d7604b1d1260841cefe43fc18126d757d87fae9462f580572ba27f9fee87e057",
+    "status": "passed",
+    "separate_from_http_authorization_acceptance": true
+  },
+  "http_acceptance_source_sha256": {
+    "services/api/materials.py": "3bb23e39e470a3e933995c394e9ad9de50f2a26874b1a93c18d4555fa5d70b42",
+    "services/api/material_models.py": "e5eeff18409eb5d3fc85510b9103394f9428441ca0c1fdf99f1d50689f5a647a",
+    "services/api/job_models.py": "8ecb4980385e3d891559f0ee6f387409fb5cb368a395de021dd7667199c3f0e3",
+    "services/api/jobs.py": "0ce78764a59f62829e9adcd3bb8c18dd8cf80d4ec633ace06c452ccfec75eac7",
+    "services/api/uploads.py": "4e914f8351d1f2fc6bac1923c499c475c6f11cd6e1dc6b8e0058d0790bdda759",
+    "services/api/research.py": "d8177ed1f9e750af0f1f53de7dadfaf1d47352eb7c59c36b6f126ff2ec7c3eef",
+    "services/api/research_models.py": "66c6639207fd3943e5bc0c63776382a3706dcb09da02846930dffdf4a7d0fde7",
+    "services/api/agent_tools.py": "75ba6569dc1b2bb0aa678a718ba112ddaea5c57b6e1b0edf62fe100ab2714066",
+    "services/api/agent_control.py": "3aadd3248936d432b457e0545ae56374823551ef79d4ece99ba5d01edd5c3d61",
+    "services/api/agent_checkpoints.py": "55defc9e4ebf437539073e382cbe49d5eba67c50536dc4dcdf82351c97824d99",
+    "services/api/agent_routes.py": null,
+    "services/api/main.py": "dbc352421079041ce15c0591c06a117fa06b7e716038d7a3be3321bbbc4c31d4",
+    "services/api/migrations/versions/0011_private_materials.py": "1ee2413b21286f903f19578093c9729a68c6acdf02baae0a05af2538a5d74b9d",
+    "workers/materials.py": "1a52cbf42b75840d8ad434650ff1e2747e04faeceed8956abf9b975fdb4f62c4",
+    "workers/project_material_index.py": "5565c42908042e1ae9fc14ab2be6069a021b85b763f9b3b1fd983e604e67aa3d",
+    "workers/research.py": "8ffdc011cf360145ade3b3b3bfa8e5293276c228f7f427ad48bc2d8e7d33e57d",
+    "workers/validation.py": "20bf5aab94b5f1314a28808410d67eac395de24b225ba69dab41e96ac320dd7c",
+    "workers/dispatcher.py": "262a7d09090a16964b10d7cc0568b7ef3daa99bd5d203f06cc1fa345a7dd4b28",
+    "workers/app.py": "4790eee10fd1f558d21addfb637bfb1ac97d717c9c05868a4f0986b04909758a",
+    "scripts/private_material_smoke.py": "e22138653c7c73b0035d790e36e73dd6bdc14c45ff2237f4cc40e73adc3c0dca",
+    "scripts/query_fixture.py": "ff9a766b85bcc0f20a5538540da90c5287ece600829ddf6abb9afab4ca82a3d1",
+    "tests/integration/test_private_materials.py": null,
+    "pipelines/materials/txt.py": "17194c2cf6b5b9e7660f16af3038a16afd6ee754fc9e66d5fe623d64ba235d27",
+    "pipelines/query/project_index.py": "53a1d552d5422faf7594b8494974765e4f2d3832a246b4cbaa9a19b4f5137123",
+    "pipelines/query/project_recipe.py": "7f3eb799097c7b9afb27533748336e436cc42de0de2b6e15c5c876b69d30f0ea",
+    "pipelines/query/source_reader.py": "809be43728932424b4fe4101ba9075df8e79eabdc986d104b0cdd433516d8b8f",
+    "pipelines/query/source_results.py": "98ec02784866dc9638d83ff1d4637a63f9955d102668e2c1b85463613f0342c5",
+    "pipelines/query/source_cache.py": "f93e1eb53d5ae12744ced872c92ee9ccc1ba171b93213a5a35ee3265604e1108",
+    "contracts/materials.py": "270dc4d148d07606c4795245086ca64bbc9e03eed3427c3e7c4d671316bc34a5",
+    "contracts/research.py": "59487a650487bb4045fa71a660c29a93bc692d95238279d6cd788d15c94ad2a7",
+    "contracts/s1.py": "c4d0f35b0aa0561fc302b2b6a9e758707a725dedee67816e1a23b1de0534a0a6",
+    "contracts/types/materials.ts": "333618b538c9f97b235e53b49b0635fd157b5f9afa65ae3eab59f4823488a8bb",
+    "contracts/types/research.ts": "76f28c530e0e72ba0ca259716ba5c3a9c745d3650f9f3011ae2ee7ae123be6dd",
+    "services/agent-runtime/src/s1-tools.ts": "ef28ca00a8687e153e4c306b3b08fe0e36b3d4c61a67fcf5480a2a060dddf2af",
+    "deploy/Dockerfile.api": "f6899958c338409f8e130fb536fbbe63b0cdcdbca0d145200b02ed0f8f0abd87",
+    "deploy/Dockerfile.index": "25acbcfb2e24223e643e156c7e6925833c6d85665618a7fa2d01132341bce218",
+    "deploy/compose.yaml": "f177f231738bc34a78eadef379041fd5c85988f8136c37d38fdd28d539214f4a",
+    ".github/workflows/ci.yml": "fb76f35408092a46fb39a0b412fc31ce110705874190337f85a0d715f9916ad4"
+  },
+  "http_acceptance_source_hash_limits": {
+    "unrecorded": [
+      "services/api/agent_routes.py",
+      "tests/integration/test_private_materials.py"
+    ],
+    "reason": "The final exclusive-import cancellation fix and its regression test were made after HTTP/browser execution. Their earlier file hashes were not captured; final hashes must not be attributed retroactively to HTTP execution. Other listed hashes cover files frozen for this run; they are not a complete runtime-image filesystem snapshot."
+  },
+  "post_acceptance_metadata_update": {
+    "reported_by": "contracts_agent",
+    "scope": "Static acceptance descriptions in contracts/materials.py, research.py, build.py and generated capability/status metadata; business schemas, frontend and runtime behavior unchanged",
+    "business_tests_rerun_after_metadata_update": false,
+    "contract_tests": {
+      "passed": 51,
+      "elapsed_seconds": 2.929
+    },
+    "changed_report_source_hashes": [
+      {
+        "path": "contracts/materials.py",
+        "before_sha256": "270dc4d148d07606c4795245086ca64bbc9e03eed3427c3e7c4d671316bc34a5",
+        "final_sha256": "d56cf54b532005607e09f9376e0e0a436ea76c41e8ccad78cf73cb6b510167c5"
+      },
+      {
+        "path": "contracts/research.py",
+        "before_sha256": "59487a650487bb4045fa71a660c29a93bc692d95238279d6cd788d15c94ad2a7",
+        "final_sha256": "28ed72ce0d6f73b1d027665874eff2ab8b8b80f9d55b279685c79943dc608756"
+      }
+    ],
+    "metadata_source_sha256": {
+      "contracts/build.py": "916d4f312526f6d6d7a3391bd4dbd6231655a166e91fcd2295a824fad7a34e76",
+      "contracts/capabilities.json": "c404d17c4e4e409c8e95a9319d42915082da2ed31374aa90974c651f006992e2",
+      "contracts/status.json": "5244d1671b9721f6b0b802e7774dee982fbf225b92342b8767336326045417ce",
+      "contracts/s3-private-capabilities.json": "b61a566d1d710634429f43dd408c1da362026e0812ff3784e776dc414e9b7ce5",
+      "contracts/s3-research-capabilities.json": "eb8d7d8a7ec5914381edfe24dbfc61ac00e712b8aaf0c8eeffe791c4dbc8772c"
+    },
+    "final_api_image_id": "sha256:6a7fdc0194f5c8debf81c0424300e28bea7ce359e2c35c6c2ef2d15c9176759f",
+    "final_api_manifest_digest": "sha256:993d5b59123fd8bc7437dfc650dc66c2daf312e3e1e3704699c3dbe459826a1e",
+    "deployment_reported_by": "parent_agent",
+    "compose_up_wait_exit_code": 0,
+    "final_api_health": "healthy"
+  },
+  "post_http_cancel_fix": {
+    "reported_by": "parent_agent",
+    "scope": "Agent run cancellation also cancels its own newly created TXT import; reuse of another logical import remains independent. Identity/action/actor/state checks unchanged.",
+    "api_image_id": "sha256:3072acb2898ac397a19b9dbf31b6dc77f1b52be2248531dcc827f11529bcacce",
+    "validation": "final_targeted: private10 plus agent_runtime10, 20 passed in21.003s; no rerun of HTTP/browser workflow on this image"
+  }
+}

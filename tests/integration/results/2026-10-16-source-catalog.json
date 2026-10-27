@@ -1,0 +1,166 @@
+{
+  "schema": "catalog-s1-validation/v1",
+  "date": "2026-10-16",
+  "scope": "S1 authenticated discovery catalog and administrator metadata revision",
+  "status": "verified_slice",
+  "migration": {
+    "revision": "0004_source_catalog",
+    "parent_applied_real_postgresql": true,
+    "seed_guard_correction": {
+      "reason": "core.autocrlf=true converts Windows CRLF to Linux LF",
+      "change": "Canonical JSON SHA256 replaces raw-file SHA256; seed content and DDL unchanged; existing database requires no change",
+      "canonical_seed_sha256": "d57088bcfbffa4c77a6dff9bbdfb0db7301febbdb42d894937ab50df2ab4b2d4",
+      "verification": "LF and CRLF decode identically; altered name rejected"
+    }
+  },
+  "baseline": {
+    "file": "doc/product-design.md",
+    "sha256": "ae5ea57908fc5e8076c8edb91ecbae6cc76660c5d280fc373278cfd03f3afcc6",
+    "count": 46,
+    "ids": [
+      "D01",
+      "D02",
+      "D03",
+      "D04",
+      "D05",
+      "D06",
+      "D07",
+      "D08",
+      "D09",
+      "D10",
+      "D11",
+      "D12",
+      "D13",
+      "D14",
+      "D15",
+      "D16",
+      "D17",
+      "D18",
+      "D19",
+      "D20",
+      "D21",
+      "D22",
+      "D23",
+      "D24",
+      "D25",
+      "D26",
+      "D27",
+      "D28",
+      "D29",
+      "D30",
+      "D31",
+      "D32",
+      "D33",
+      "D34",
+      "D35",
+      "D36",
+      "D37",
+      "D38",
+      "D39",
+      "D40",
+      "D41",
+      "D42",
+      "D43",
+      "D44",
+      "D45",
+      "D46"
+    ],
+    "production_releases_seeded": 0,
+    "publisher_semantics": "Baseline publication identity, not an independently verified legal entity",
+    "classification_semantics": "Editorial facets for the registered entry; mul is multiple languages, not a complete inventory"
+  },
+  "contract_tests": {
+    "command": ".venv/Scripts/python.exe -m pytest tests/api/test_catalog_contract.py -q",
+    "passed": 5,
+    "subtests_passed": 62,
+    "independently_repeated_by_parent": false,
+    "prior_parent_verified": {
+      "passed": 4,
+      "subtests_passed": 62
+    }
+  },
+  "postgresql_tests": {
+    "command": "docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm test-auth python -m unittest discover -s tests/integration -p test_catalog_pipeline.py -v",
+    "passed": 7,
+    "skipped": 0,
+    "elapsed_seconds": 0.808,
+    "executor": "parent",
+    "resource_warnings": 0,
+    "existing_starlette_deprecation_warning": true,
+    "checks": [
+      "46 baseline discovery and no production versions",
+      "filter-bound cursor, actual total and fresh-client persistence",
+      "reader API and direct RLS denial, runtime cannot insert release",
+      "concurrent same-key creation, altered-parameter conflict and duplicate source conflict",
+      "two-administrator revision race, replayed response",
+      "current administrator demotion rejects stale Actor and old idempotent response",
+      "identity change drops stale experimental evidence; descriptive change preserves it"
+    ],
+    "fixtures": "Random users and test_ source IDs only; fixed D01-D46 not modified; all fixture rows removed; connection pools disposed"
+  },
+  "ruff": {
+    "status": "passed",
+    "independent_parent_review": true
+  },
+  "running_http_acceptance": {
+    "status": "passed",
+    "executor": "parent",
+    "groups_passed": 4,
+    "exit_code": 0,
+    "cleanup": true,
+    "script": "tmp/catalog_parent_acceptance.py",
+    "script_sha256": "36a7a9be7c3afc46edf176acf3c43f2b566a3a35b35f6d180a63f1fa393bd18d",
+    "checks": [
+      "46 baseline entries exact and complete pagination",
+      "stable ID search, empty results, unavailable fulltext capability and no production versions",
+      "authenticated admin, CSRF, creation idempotency and conflicts",
+      "persistent update, replay, revision conflict and reader detail"
+    ],
+    "scope": "Independent httpx calls to running API and real PostgreSQL, not TestClient"
+  },
+  "browser_acceptance": {
+    "status": "passed",
+    "executor": "parent",
+    "browser": "Codex in-app browser (IAB)",
+    "checks": [
+      "ordinary account without project: login and 46 registered sources",
+      "D12 + zh + parallel filters yield one source",
+      "ordinary source detail has no edit operation and no published versions",
+      "fulltext_analysis capability filter yields zero entries",
+      "administrator creates browser_catalog_20261016; count becomes 47",
+      "administrator edits boundary; refresh preserves session; search/detail show saved text and revision 2",
+      "administrator logs out"
+    ],
+    "fixture_cleanup": {
+      "status": "passed",
+      "exit_code": 0,
+      "users": 2,
+      "sources": 1,
+      "script": "tmp/catalog_browser_fixture.py",
+      "script_sha256": "b199791d7c904a75b29c24c2ccddde1e919429e742236b4ff8e130defdbf209b"
+    },
+    "screenshot": "tmp/s1-catalog-browser-validated.png",
+    "screenshot_sha256": "5e0d4faf60c979cc67201ce02d791842f891a0845b50d2bf880a41f87f0eb067",
+    "limits": [
+      "No simulated network failure",
+      "Only listed UI flow checked; not all frontend states"
+    ]
+  },
+  "boundaries": [
+    "Discovery only; remote_query/fulltext_analysis/export/model_egress false",
+    "License approval pending; metadata editing cannot grant permission",
+    "S0 evidence references are not production release rows or published data scale",
+    "No URL fetching, new download, sync connector, release publication, mounting or indexing",
+    "Catalog writes require current active platform administrator plus CSRF/Origin in real HTTP auth",
+    "Pagination is stable by source_id and filter-bound, but not an immutable multi-request snapshot"
+  ],
+  "source_sha256": {
+    "services/api/catalog.py": "7019550689415cd5ee6b767c1d766a1d63fb39f70568a8a72bfd35dc9c8c317f",
+    "services/api/catalog_models.py": "425f5cfcb1a3cd506eb17ae91dbf1c5641c98cd0ed85cac999ca8bdcea36e365",
+    "services/api/catalog_seed.json": "31df7df63ed56b4cd2aa70747d7f13dd4c7a426bf472fb4db91e1411e1a39c7e",
+    "services/api/migrations/versions/0004_source_catalog.py": "7e71e182c04b77c939cdc9a53717914096821196f42e3d9036007bf9ef16a059",
+    "contracts/catalog.py": "d05d99a3cd8d82186d7ca4e9b357c08934f80e328546083878d5dad786e1f4a3",
+    "tests/api/test_catalog_contract.py": "dad9da76a3fb6ffb713ab30855dfdf5cf811a7cd55c19cc65e37fc815a084be2",
+    "tests/integration/test_catalog_pipeline.py": "25fe36f2cd2637522fca167589a26b402c4a43ac419de2b9ef705e60c19f8a2d"
+  }
+}

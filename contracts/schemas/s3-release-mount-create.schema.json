@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-release-mount-create.schema.json",
+  "type": "object",
+  "properties": {
+    "source_snapshot_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    }
+  },
+  "required": [
+    "source_snapshot_id"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-private-import-create.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "upload_id": {
+      "format": "uuid",
+      "title": "Upload Id",
+      "type": "string"
+    },
+    "language": {
+      "enum": [
+        "cmn",
+        "eng"
+      ],
+      "title": "Language",
+      "type": "string"
+    }
+  },
+  "required": [
+    "upload_id",
+    "language"
+  ],
+  "title": "ImportInput",
+  "type": "object"
+}

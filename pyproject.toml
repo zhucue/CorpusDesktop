@@ -1,0 +1,31 @@
+[project]
+name = "corpus-workbench"
+version = "0.0.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "sqlalchemy>=2.0,<3",
+  "psycopg[binary]>=3.2,<4",
+  "alembic>=1.14,<2",
+  "celery>=5.4,<6",
+  "httpx>=0.28,<1",
+  "jsonschema>=4.23,<5",
+  "argon2-cffi>=25.1,<26",
+  "boto3>=1.40,<2",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3,<10", "ruff>=0.9,<1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+extend-exclude = ["tmp", ".venv", "services/agent-runtime/node_modules"]
+
+[tool.uv]
+package = false

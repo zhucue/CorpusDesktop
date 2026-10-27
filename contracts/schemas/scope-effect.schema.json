@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/scope-effect.schema.json",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "none"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "produces_scope"
+        },
+        "target_scope": {
+          "$ref": "scope.schema.json"
+        }
+      },
+      "required": [
+        "kind",
+        "target_scope"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

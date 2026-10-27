@@ -1,0 +1,45 @@
+{
+  "status": "passed",
+  "require_all": true,
+  "validated_response_counts": {
+    "snapshots": 3,
+    "snapshot_actions": 2,
+    "snapshot_lists": 2,
+    "queries": 2,
+    "query_actions": 4,
+    "query_lists": 1,
+    "hit_pages": 7,
+    "contexts": 2,
+    "imports": 3,
+    "import_actions": 4,
+    "import_lists": 1,
+    "materials": 3,
+    "material_lists": 1,
+    "validated_upload_lists": 1
+  },
+  "not_recorded": [],
+  "failures": [],
+  "inputs": [
+    {
+      "path": "tmp\\private-material-smoke\\3769118ae2f84bd6867de08c3011b5c1\\result.json",
+      "sha256": "22145c8fd4b8361f6c1588e3119d46ca75fb7afbf2135773f7cb9a56f811448b"
+    }
+  ],
+  "schema_sha256": {
+    "snapshots": "2932740db0c270fd4de35be132a373774fdd0c4a8cb6fc92b8a9d3f2442d430c",
+    "snapshot_actions": "2fb1409511bc0afafff2d5fb81fd3eee8ee853e970d9dfdc0e9be1f065f55c6f",
+    "snapshot_lists": "571e349142f9d6e3e0e1f20446f5a29412346e35a579914b23329324b99deb45",
+    "queries": "2bf763d10ffb2f8b9ebff98e32e8bb2638fa8bf5f858638eb7e5d943281cb6ec",
+    "query_actions": "d555a20400733a6c375fea912bbcec3257735b82a68beeb997400f57ce411a5b",
+    "query_lists": "d6092c449b045a6a7aefb2fec57b969d34bb0403f0cc3da8641c3c6999cac3d5",
+    "hit_pages": "013d338b93908efef254212902f5141cf318867f39fa12e367c2894088abf06f",
+    "contexts": "a705e3ff107aa989feb922e3f3fd4279bd8a0fbc43c91e430bd9c77d6caf6901",
+    "imports": "d8a95e9bac9f82ec3dbc8da68020098dd5e79e3031b4355d1b11225cbdad0c34",
+    "import_actions": "7a8bfd533d5aee44ff85193db35199218f8df0debe11ae53b6afc976b387fdf4",
+    "import_lists": "fb9f190b2603e1b439a3e0d311d396bccf7e7334e1396b16068258376a02abaf",
+    "materials": "9843f98931d4cc00b00f1b73454a6b2821cce0a8119f0f3265696a682d482b87",
+    "material_lists": "6dc79cca7db49a94a90c96db1626f9b5da181198ba54af1f558d2bdd8e78095e",
+    "validated_upload_lists": "237e7213308b183af261280ab4d8bf372ab732fae07b4b0cf9fb9bc9bb21e677"
+  },
+  "limits": "Recorded HTTP shape and semantic invariants only; authorization, durable spans, exact query correctness and performance require independent execution evidence."
+}

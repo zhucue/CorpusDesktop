@@ -1,0 +1,99 @@
+{
+  "stage": "S3",
+  "available_tools": [],
+  "runtime_tool_schema": "s3-release-tools-v1",
+  "tool_production_authorization": "not_accepted",
+  "coverage": [
+    {
+      "capability_id": "policies.get",
+      "input_schema": "schemas/s3-release-policy-ref.schema.json",
+      "scope_kind": [
+        "platform"
+      ],
+      "manual_http": "scoped_fixture_http_mounts_accepted",
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "policies.update",
+      "input_schema": "schemas/s3-release-policy-update.schema.json",
+      "scope_kind": [
+        "platform"
+      ],
+      "manual_http": "scoped_fixture_http_mounts_accepted",
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "releases.publish",
+      "input_schema": "schemas/s3-release-publish.schema.json",
+      "scope_kind": [
+        "platform"
+      ],
+      "manual_http": "scoped_fixture_http_mounts_accepted",
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "releases.get",
+      "input_schema": "schemas/s3-release-release-ref.schema.json",
+      "scope_kind": [
+        "account",
+        "platform",
+        "project"
+      ],
+      "manual_http": "scoped_fixture_http_mounts_accepted",
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "mounts.list",
+      "input_schema": "schemas/s3-release-mount-list.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "manual_http": "scoped_fixture_http_mounts_accepted",
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "mounts.get",
+      "input_schema": "schemas/s3-release-mount-ref.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "manual_http": "scoped_fixture_http_mounts_accepted",
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "mounts.manifest",
+      "input_schema": "schemas/s3-release-mount-ref.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "manual_http": "scoped_fixture_http_mounts_accepted",
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "mounts.create",
+      "input_schema": "schemas/s3-release-mount-create.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "manual_http": "scoped_fixture_http_mounts_accepted",
+      "tool_availability": "planned"
+    },
+    {
+      "capability_id": "mounts.remove",
+      "input_schema": "schemas/s3-release-mount-ref.schema.json",
+      "scope_kind": [
+        "project"
+      ],
+      "manual_http": "scoped_fixture_http_mounts_accepted",
+      "tool_availability": "planned"
+    }
+  ],
+  "limits": [
+    "Acquisition-specific internal-research approval never grants export or model egress, or approves another acquisition.",
+    "Catalog-wide license remains pending; publication and mounting do not open a public query endpoint.",
+    "Mount writes bind the current project; whole fixed snapshots only, no filters, URL, recipe or model identity.",
+    "Current policy, source identity and project authority must be rechecked by the backend, including replay/context reuse.",
+    "s3-tools-v1 checkpoints are incompatible; no silent restoration under s3-release-tools-v1.",
+    "Synthetic-fixture approval is not approval of real D12 data."
+  ]
+}

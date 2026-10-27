@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-outcomes-note-list.schema.json",
+  "$defs": {
+    "CreateAction": {
+      "additionalProperties": false,
+      "properties": {
+        "create": {
+          "title": "Create",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "create"
+      ],
+      "title": "CreateAction",
+      "type": "object"
+    },
+    "NoteActions": {
+      "additionalProperties": false,
+      "properties": {
+        "update": {
+          "title": "Update",
+          "type": "boolean"
+        },
+        "accept": {
+          "title": "Accept",
+          "type": "boolean"
+        },
+        "export": {
+          "title": "Export",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "update",
+        "accept",
+        "export"
+      ],
+      "title": "NoteActions",
+      "type": "object"
+    },
+    "NoteSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "project_id": {
+          "format": "uuid",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "created_by": {
+          "format": "uuid",
+          "title": "Created By",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "title": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Evidence Ids",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "query_run_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Query Run Ids",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "authorization_evidence_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Authorization Evidence Ids",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "authorization_query_run_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Authorization Query Run Ids",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "accepted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "accepted_by": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Accepted By"
+        },
+        "accepted_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Accepted At"
+        },
+        "allowed_actions": {
+          "$ref": "#/$defs/NoteActions"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "created_by",
+        "created_at",
+        "updated_at",
+        "revision",
+        "title",
+        "evidence_ids",
+        "query_run_ids",
+        "authorization_evidence_ids",
+        "authorization_query_run_ids",
+        "status",
+        "accepted_by",
+        "accepted_at",
+        "allowed_actions"
+      ],
+      "title": "NoteSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/NoteSummary"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "total": {
+      "minimum": 0,
+      "title": "Total",
+      "type": "integer"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Cursor"
+    },
+    "allowed_actions": {
+      "$ref": "#/$defs/CreateAction"
+    }
+  },
+  "required": [
+    "items",
+    "total",
+    "next_cursor",
+    "allowed_actions"
+  ],
+  "title": "NoteList",
+  "type": "object"
+}

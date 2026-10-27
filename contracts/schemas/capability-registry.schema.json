@@ -1,0 +1,326 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/capability-registry.schema.json",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "v1"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "capability_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "feature_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^F[0-9]{3}$"
+            },
+            "minItems": 1
+          },
+          "module_id": {
+            "type": "string",
+            "pattern": "^M(0[1-9]|1[0-4])$"
+          },
+          "tool_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "schema_version": {
+            "const": "v1"
+          },
+          "availability": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "planned",
+                  "available"
+                ]
+              },
+              "stage": {
+                "type": "string",
+                "pattern": "^S[0-8]$"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "status",
+              "stage",
+              "reason"
+            ],
+            "additionalProperties": false
+          },
+          "handler": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "operation_kind": {
+            "enum": [
+              "read",
+              "write",
+              "task"
+            ]
+          },
+          "input_schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "output_schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "permission": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "scope_kind": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "account",
+                "platform",
+                "project"
+              ]
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "version_inputs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "minItems": 0
+          },
+          "scope_effect": {
+            "enum": [
+              "none",
+              "produces_scope"
+            ]
+          },
+          "authorization_policy": {
+            "enum": [
+              "existing_authorization",
+              "explicit_user_confirmation",
+              "destructive_target_authorization"
+            ]
+          },
+          "execution": {
+            "enum": [
+              "job",
+              "synchronous"
+            ]
+          },
+          "idempotency": {
+            "type": "object",
+            "properties": {
+              "invocation_id": {
+                "const": "host_assigned"
+              },
+              "action_id": {
+                "enum": [
+                  "required",
+                  "not_applicable"
+                ]
+              }
+            },
+            "required": [
+              "invocation_id",
+              "action_id"
+            ],
+            "additionalProperties": false
+          },
+          "result_view": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "reference_field": {
+                "const": "result_ref"
+              }
+            },
+            "required": [
+              "kind",
+              "reference_field"
+            ],
+            "additionalProperties": false
+          },
+          "common_errors": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "AUTH_REQUIRED",
+                "FORBIDDEN",
+                "ACCESS_DENIED",
+                "MODEL_EGRESS_DENIED",
+                "EXPORT_NOT_ALLOWED",
+                "SOURCE_RESTRICTED",
+                "RESOURCE_NOT_FOUND",
+                "NOT_FOUND",
+                "SESSION_SCOPE_CHANGED",
+                "SESSION_BUSY",
+                "EDIT_CONFLICT",
+                "CAPABILITY_UNAVAILABLE",
+                "IDEMPOTENCY_CONFLICT",
+                "RUN_FINISHED",
+                "MESSAGE_ALREADY_STARTED",
+                "JOB_NOT_RETRYABLE",
+                "EXPORT_NOT_READY",
+                "INVALID_INPUT",
+                "VALIDATION_ERROR",
+                "SCOPE_INVALID",
+                "ENDPOINT_OUT_OF_SCOPE",
+                "QUERY_UNSUPPORTED",
+                "ATTRIBUTE_UNAVAILABLE",
+                "FORMAT_UNSUPPORTED",
+                "EVIDENCE_INVALID",
+                "LANGUAGE_PAIR_UNAVAILABLE",
+                "QUOTA_EXCEEDED",
+                "RATE_LIMITED",
+                "SERVICE_UNAVAILABLE",
+                "HUMAN_AUTHORIZATION_REQUIRED",
+                "EXPORT_POLICY_DENIED",
+                "NOTE_REVISION_CONFLICT",
+                "EVIDENCE_UNAVAILABLE",
+                "AUTH_INVALID",
+                "ORIGIN_FORBIDDEN",
+                "CSRF_INVALID",
+                "PROJECT_NOT_FOUND",
+                "PROJECT_FORBIDDEN",
+                "OWNER_REQUIRED",
+                "UPLOAD_TOO_LARGE",
+                "PROJECT_UPLOAD_QUOTA_EXCEEDED",
+                "UNSUPPORTED_FORMAT",
+                "CHECKSUM_MISMATCH",
+                "SIZE_MISMATCH",
+                "IDEMPOTENCY_KEY_REQUIRED",
+                "JOB_FINISHED",
+                "UPLOAD_NOT_READY",
+                "UPLOAD_EXPIRED",
+                "UPLOAD_STATE_CONFLICT",
+                "DELIVERY_FAILED",
+                "INVALID_TEXT_ENCODING",
+                "BINARY_CONTENT",
+                "STORAGE_UNAVAILABLE",
+                "ORIGIN_REJECTED",
+                "CSRF_REJECTED",
+                "AUTH_RATE_LIMITED",
+                "JSON_REQUIRED",
+                "OWNER_IMMUTABLE",
+                "ACCOUNT_NOT_FOUND",
+                "MEMBER_NOT_FOUND",
+                "INVALID_CURSOR",
+                "UPLOAD_ALREADY_USED",
+                "UPLOAD_NOT_COMPLETE",
+                "AUTHORIZATION_REVOKED",
+                "WORKER_LEASE_EXPIRED",
+                "UNSUPPORTED_CONTENT",
+                "VALIDATION_TIMEOUT",
+                "UPLOAD_FAILED",
+                "STORAGE_VERSIONING_REQUIRED",
+                "ADMIN_REQUIRED",
+                "SOURCE_NOT_FOUND",
+                "SOURCE_EXISTS",
+                "REVISION_CONFLICT",
+                "CONNECTOR_UNAVAILABLE",
+                "SOURCE_IDENTITY_CHANGED",
+                "SYNC_RUN_NOT_FOUND",
+                "SYNC_ALREADY_ACTIVE",
+                "SYNC_NOT_RETRYABLE",
+                "SYNC_ACTOR_REVOKED",
+                "INDEX_RUN_NOT_FOUND",
+                "ACQUISITION_NOT_FOUND",
+                "INDEX_ALREADY_ACTIVE",
+                "INDEX_QUOTA_EXCEEDED",
+                "INDEX_ALREADY_BUILT",
+                "INDEX_CLEANUP_REQUIRED",
+                "INDEX_NOT_RETRYABLE",
+                "INDEX_ACTOR_REVOKED",
+                "INDEX_RECIPE_CHANGED",
+                "SOURCE_POLICY_DENIED",
+                "SOURCE_POLICY_MISMATCH",
+                "POLICY_REVISION_CONFLICT",
+                "POLICY_REPLAY_STALE",
+                "RELEASE_OBJECT_UNAVAILABLE",
+                "INDEX_NOT_FOUND",
+                "INDEX_NOT_PUBLISHABLE",
+                "RELEASE_NOT_FOUND",
+                "MOUNT_NOT_FOUND",
+                "MOUNT_REMOVED",
+                "INDEX_NOT_AVAILABLE",
+                "SNAPSHOT_NOT_FOUND",
+                "SNAPSHOT_INVALID",
+                "SNAPSHOT_IDENTITY_CHANGED",
+                "SNAPSHOT_NOT_READY",
+                "QUERY_NOT_FOUND",
+                "QUERY_QUOTA_EXCEEDED",
+                "QUERY_CONTROL_DENIED",
+                "RETRY_NOT_ALLOWED",
+                "RESULT_NOT_COMPLETE",
+                "CACHE_NOT_READY",
+                "HIT_NOT_FOUND",
+                "QUERY_FAILED",
+                "QUERY_CANCELLED",
+                "SNAPSHOT_SCOPE_UNAVAILABLE",
+                "UPLOAD_NOT_VALIDATED",
+                "TXT_REQUIRED",
+                "MATERIAL_REVISION_NOT_FOUND",
+                "MATERIAL_IDENTITY_MISMATCH",
+                "MATERIAL_REVISION_CONFLICT"
+              ]
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "capability_id",
+          "feature_ids",
+          "module_id",
+          "tool_name",
+          "schema_version",
+          "availability",
+          "handler",
+          "operation_kind",
+          "input_schema",
+          "output_schema",
+          "permission",
+          "scope_kind",
+          "version_inputs",
+          "scope_effect",
+          "authorization_policy",
+          "execution",
+          "idempotency",
+          "result_view",
+          "common_errors"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "capabilities"
+  ],
+  "additionalProperties": false
+}

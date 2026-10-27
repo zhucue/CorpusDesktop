@@ -1,0 +1,653 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/entities.schema.json",
+  "$defs": {
+    "source_release": {
+      "type": "object",
+      "properties": {
+        "release_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "manifest_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "checksum": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "license_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "immutable": {
+          "const": true
+        }
+      },
+      "required": [
+        "release_id",
+        "source_id",
+        "manifest_ref",
+        "checksum",
+        "license_ref",
+        "immutable"
+      ],
+      "additionalProperties": false
+    },
+    "material_revision": {
+      "type": "object",
+      "properties": {
+        "revision_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "origin": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "source"
+                },
+                "release_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "upstream_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "required": [
+                "kind",
+                "release_id",
+                "upstream_id"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "private"
+                },
+                "project_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "upload_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "required": [
+                "kind",
+                "project_id",
+                "upload_id"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "canonical_text_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "token_layer_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "revision_id",
+        "origin",
+        "canonical_text_ref",
+        "token_layer_ref"
+      ],
+      "additionalProperties": false
+    },
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "snapshot_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "material_revision_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "mount_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ordinal": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "material_revision_id",
+              "mount_id",
+              "ordinal"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        },
+        "recipe_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "metadata_manifest_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "immutable": {
+          "const": true
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "project_id",
+        "members",
+        "recipe_ref",
+        "metadata_manifest_ref",
+        "immutable"
+      ],
+      "additionalProperties": false
+    },
+    "evidence": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "evidence_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "project_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "kind": {
+              "const": "text"
+            },
+            "snapshot_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "material_revision_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "start": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "end": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "coordinate_unit": {
+              "const": "unicode_codepoint"
+            },
+            "interval": {
+              "const": "half_open"
+            }
+          },
+          "required": [
+            "evidence_id",
+            "project_id",
+            "kind",
+            "snapshot_id",
+            "material_revision_id",
+            "start",
+            "end",
+            "coordinate_unit",
+            "interval"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "evidence_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "project_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "kind": {
+              "const": "result"
+            },
+            "run_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "result_ref": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "row_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "evidence_id",
+            "project_id",
+            "kind",
+            "run_id",
+            "result_ref",
+            "row_id"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "session": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "owner_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "input_scope": {
+          "$ref": "scope.schema.json"
+        },
+        "scope_digest": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "active_run_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lease_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "context_archive_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pi_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "session_id",
+        "owner_id",
+        "input_scope",
+        "scope_digest",
+        "active_run_id",
+        "lease_epoch",
+        "context_archive_ref",
+        "pi_version"
+      ],
+      "additionalProperties": false
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "actor_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "input_scope": {
+          "$ref": "scope.schema.json"
+        },
+        "scope_digest": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "state": {
+          "enum": [
+            "QUEUED",
+            "RUNNING",
+            "WAITING_JOB",
+            "WAITING_REVIEW",
+            "CANCEL_REQUESTED",
+            "CANCELLED",
+            "SUCCEEDED",
+            "FAILED"
+          ]
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lease_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "next_session_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "run_id",
+        "session_id",
+        "actor_id",
+        "input_scope",
+        "scope_digest",
+        "state",
+        "attempt",
+        "lease_epoch",
+        "next_session_id"
+      ],
+      "additionalProperties": false
+    },
+    "invocation": {
+      "type": "object",
+      "properties": {
+        "invocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "tool_name": {
+          "enum": [
+            "sources.list",
+            "sources.get",
+            "sources.versions",
+            "catalog.create",
+            "catalog.update",
+            "sync.check",
+            "sync.start",
+            "sync.report",
+            "releases.publish",
+            "sync.schedule.get",
+            "sync.schedule.update",
+            "indexes.build",
+            "indexes.report",
+            "releases.get",
+            "account.get",
+            "members.list",
+            "members.invite",
+            "members.update",
+            "members.remove",
+            "projects.list",
+            "projects.get",
+            "projects.create",
+            "projects.update",
+            "projects.archive",
+            "mounts.list",
+            "mounts.get",
+            "mounts.manifest",
+            "mounts.create",
+            "mounts.remove",
+            "uploads.create",
+            "uploads.complete",
+            "imports.start",
+            "imports.get",
+            "materials.list",
+            "materials.get",
+            "processing.preview",
+            "processing.run",
+            "quality.get",
+            "subcorpora.list",
+            "subcorpora.create",
+            "subcorpora.update",
+            "snapshots.preview",
+            "snapshots.create",
+            "snapshots.get",
+            "queries.validate",
+            "corpus.describe",
+            "corpus.search",
+            "results.get",
+            "results.context",
+            "evidence.get",
+            "evidence.create",
+            "evidence.list",
+            "results.filter",
+            "results.sample",
+            "bookmarks.list",
+            "bookmarks.create",
+            "bookmarks.remove",
+            "savedQueries.list",
+            "savedQueries.create",
+            "savedQueries.update",
+            "savedQueries.run",
+            "analysis.frequency",
+            "analysis.ngrams",
+            "analysis.collocations",
+            "analysis.keywords",
+            "analysis.distribution",
+            "analysis.compare",
+            "charts.get",
+            "parallel.search",
+            "alignment.start",
+            "alignment.get",
+            "alignment.candidates",
+            "alignment.candidates.review",
+            "alignment.layers.create",
+            "alignment.commits.create",
+            "notes.list",
+            "notes.get",
+            "notes.create",
+            "notes.update",
+            "notes.accept",
+            "research.plan",
+            "exports.create",
+            "exports.get",
+            "exports.list",
+            "artifacts.list",
+            "artifacts.get",
+            "jobs.list",
+            "jobs.get",
+            "jobs.cancel",
+            "jobs.retry",
+            "invocations.get",
+            "sources.impact",
+            "sources.withdraw",
+            "system.status",
+            "system.versions",
+            "account.capabilities",
+            "account.quota",
+            "research.questions.list",
+            "research.questions.create",
+            "research.questions.update",
+            "research.plans.get",
+            "research.plans.save",
+            "metadata.schemas.get",
+            "metadata.schemas.update",
+            "metadata.validate",
+            "metadata.commit",
+            "selection.records.list",
+            "selection.records.commit",
+            "processing.recipes.get",
+            "processing.recipes.create",
+            "dictionaries.get",
+            "dictionaries.update",
+            "discovery.search",
+            "models.list",
+            "policies.get",
+            "policies.update",
+            "usage.get",
+            "audit.list",
+            "references.list",
+            "references.create",
+            "references.update",
+            "claims.list",
+            "claims.create",
+            "claims.update",
+            "projectBackups.create",
+            "projectBackups.get",
+            "projectBackups.validate",
+            "backupUploads.create",
+            "backupUploads.complete",
+            "projectRestores.preview",
+            "projectRestores.start",
+            "quotas.get",
+            "quotas.update",
+            "projects.deletionImpact",
+            "projects.delete",
+            "projects.restore",
+            "materials.deletionImpact",
+            "materials.delete",
+            "materials.restore",
+            "connectors.get",
+            "connectors.update",
+            "mounts.previewUpgrade",
+            "mounts.upgrade"
+          ]
+        },
+        "schema_version": {
+          "const": "v1"
+        },
+        "args_hash": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "scope_digest": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "action_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "result": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "tool-result.schema.json"
+            }
+          ]
+        }
+      },
+      "required": [
+        "invocation_id",
+        "run_id",
+        "tool_name",
+        "schema_version",
+        "args_hash",
+        "scope_digest",
+        "action_id",
+        "result"
+      ],
+      "additionalProperties": false
+    },
+    "action": {
+      "$ref": "s1-action.schema.json"
+    },
+    "job": {
+      "$ref": "s1-job.schema.json"
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/source_release"
+    },
+    {
+      "$ref": "#/$defs/material_revision"
+    },
+    {
+      "$ref": "#/$defs/snapshot"
+    },
+    {
+      "$ref": "#/$defs/evidence"
+    },
+    {
+      "$ref": "#/$defs/session"
+    },
+    {
+      "$ref": "#/$defs/run"
+    },
+    {
+      "$ref": "#/$defs/invocation"
+    },
+    {
+      "$ref": "#/$defs/action"
+    },
+    {
+      "$ref": "#/$defs/job"
+    }
+  ]
+}

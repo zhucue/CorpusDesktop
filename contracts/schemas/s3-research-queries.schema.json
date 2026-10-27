@@ -1,0 +1,859 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-research-queries.schema.json",
+  "$defs": {
+    "CharacterQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "dsl_version": {
+          "const": "corpus-query/v1",
+          "title": "Dsl Version",
+          "type": "string"
+        },
+        "within": {
+          "const": "sentence",
+          "title": "Within",
+          "type": "string"
+        },
+        "overlap": {
+          "const": "all",
+          "title": "Overlap",
+          "type": "string"
+        },
+        "normalization": {
+          "const": "none",
+          "default": "none",
+          "title": "Normalization",
+          "type": "string"
+        },
+        "sort": {
+          "default": [
+            "document_ordinal",
+            "start",
+            "end"
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": "document_ordinal",
+              "type": "string"
+            },
+            {
+              "const": "start",
+              "type": "string"
+            },
+            {
+              "const": "end",
+              "type": "string"
+            }
+          ],
+          "title": "Sort",
+          "type": "array"
+        },
+        "unit": {
+          "const": "character",
+          "title": "Unit",
+          "type": "string"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteralPattern"
+            },
+            {
+              "$ref": "#/$defs/CharacterSequence"
+            },
+            {
+              "$ref": "#/$defs/CharacterUnion"
+            }
+          ],
+          "title": "Pattern"
+        }
+      },
+      "required": [
+        "dsl_version",
+        "within",
+        "overlap",
+        "unit",
+        "pattern"
+      ],
+      "title": "CharacterQuery",
+      "type": "object"
+    },
+    "CharacterSequence": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "sequence",
+          "title": "Type",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LiteralPattern"
+              },
+              {
+                "$ref": "#/$defs/GapPattern"
+              }
+            ]
+          },
+          "minItems": 2,
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "items"
+      ],
+      "title": "CharacterSequence",
+      "type": "object"
+    },
+    "CharacterUnion": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "any_of",
+          "title": "Type",
+          "type": "string"
+        },
+        "patterns": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LiteralPattern"
+              },
+              {
+                "$ref": "#/$defs/CharacterSequence"
+              }
+            ]
+          },
+          "minItems": 2,
+          "title": "Patterns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "patterns"
+      ],
+      "title": "CharacterUnion",
+      "type": "object"
+    },
+    "DocumentUnits": {
+      "additionalProperties": false,
+      "properties": {
+        "source_records": {
+          "minimum": 0,
+          "title": "Source Records",
+          "type": "integer"
+        },
+        "private_files": {
+          "minimum": 0,
+          "title": "Private Files",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_records",
+        "private_files"
+      ],
+      "title": "DocumentUnits",
+      "type": "object"
+    },
+    "GapPattern": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "gap",
+          "title": "Type",
+          "type": "string"
+        },
+        "min": {
+          "minimum": 0,
+          "title": "Min",
+          "type": "integer"
+        },
+        "max": {
+          "minimum": 0,
+          "title": "Max",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "min",
+        "max"
+      ],
+      "title": "GapPattern",
+      "type": "object"
+    },
+    "LiteralPattern": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "literal",
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ],
+      "title": "LiteralPattern",
+      "type": "object"
+    },
+    "QueryActions": {
+      "additionalProperties": false,
+      "properties": {
+        "cancel": {
+          "title": "Cancel",
+          "type": "boolean"
+        },
+        "retry": {
+          "title": "Retry",
+          "type": "boolean"
+        },
+        "prepare": {
+          "title": "Prepare",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cancel",
+        "retry",
+        "prepare"
+      ],
+      "title": "QueryActions",
+      "type": "object"
+    },
+    "QueryRunView": {
+      "additionalProperties": false,
+      "properties": {
+        "count_state": {
+          "enum": [
+            "pending",
+            "complete",
+            "failed"
+          ],
+          "title": "Count State",
+          "type": "string"
+        },
+        "total_hits": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Total Hits"
+        },
+        "matched_segments": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Matched Segments"
+        },
+        "matched_documents": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Matched Documents"
+        },
+        "document_count_unit": {
+          "enum": [
+            "imported_sentence_record",
+            "uploaded_file",
+            "mixed_document_units"
+          ],
+          "title": "Document Count Unit",
+          "type": "string"
+        },
+        "matched_document_units": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentUnits"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "project_id": {
+          "format": "uuid",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "snapshot_id": {
+          "format": "uuid",
+          "title": "Snapshot Id",
+          "type": "string"
+        },
+        "result_set_id": {
+          "format": "uuid",
+          "title": "Result Set Id",
+          "type": "string"
+        },
+        "actor_id": {
+          "format": "uuid",
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "query": {
+          "discriminator": {
+            "mapping": {
+              "character": "#/$defs/CharacterQuery",
+              "token": "#/$defs/TokenQuery"
+            },
+            "propertyName": "unit"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/CharacterQuery"
+            },
+            {
+              "$ref": "#/$defs/TokenQuery"
+            }
+          ],
+          "title": "Query"
+        },
+        "query_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Query Sha256",
+          "type": "string"
+        },
+        "recipe": {
+          "$ref": "#/$defs/RecipeView"
+        },
+        "sort": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": "document_ordinal",
+              "type": "string"
+            },
+            {
+              "const": "start",
+              "type": "string"
+            },
+            {
+              "const": "end",
+              "type": "string"
+            }
+          ],
+          "title": "Sort",
+          "type": "array"
+        },
+        "context_codepoints": {
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Context Codepoints",
+          "type": "integer"
+        },
+        "page_size": {
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Page Size",
+          "type": "integer"
+        },
+        "state": {
+          "enum": [
+            "QUEUED",
+            "RUNNING",
+            "SUCCEEDED",
+            "FAILED",
+            "CANCELLED"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "stage": {
+          "enum": [
+            "QUEUED",
+            "FIRST_PAGE",
+            "FULL_RESULT",
+            "PREPARING_CACHE",
+            "COMPLETE",
+            "FAILED",
+            "CANCELLED"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "attempt": {
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "first_page_state": {
+          "enum": [
+            "pending",
+            "ready",
+            "failed"
+          ],
+          "title": "First Page State",
+          "type": "string"
+        },
+        "prepare_state": {
+          "enum": [
+            "idle",
+            "pending",
+            "ready",
+            "failed"
+          ],
+          "title": "Prepare State",
+          "type": "string"
+        },
+        "progress": {
+          "$ref": "#/$defs/ResearchProgress"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResearchError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "allowed_actions": {
+          "$ref": "#/$defs/QueryActions"
+        }
+      },
+      "required": [
+        "count_state",
+        "total_hits",
+        "matched_segments",
+        "matched_documents",
+        "document_count_unit",
+        "matched_document_units",
+        "id",
+        "project_id",
+        "snapshot_id",
+        "result_set_id",
+        "actor_id",
+        "name",
+        "query",
+        "query_sha256",
+        "recipe",
+        "sort",
+        "context_codepoints",
+        "page_size",
+        "state",
+        "stage",
+        "attempt",
+        "created_at",
+        "updated_at",
+        "first_page_state",
+        "prepare_state",
+        "progress",
+        "error",
+        "allowed_actions"
+      ],
+      "title": "QueryRunView",
+      "type": "object",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "count_state": {
+                "const": "complete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "total_hits": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "matched_segments": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "matched_documents": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "matched_document_units": {
+                "type": "object"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "total_hits": {
+                "type": "null"
+              },
+              "matched_segments": {
+                "type": "null"
+              },
+              "matched_documents": {
+                "type": "null"
+              },
+              "matched_document_units": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "RecipeView": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "sha256"
+      ],
+      "title": "RecipeView",
+      "type": "object"
+    },
+    "ResearchError": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "title": "ResearchError",
+      "type": "object"
+    },
+    "ResearchProgress": {
+      "additionalProperties": false,
+      "properties": {
+        "processed_bytes": {
+          "minimum": 0,
+          "title": "Processed Bytes",
+          "type": "integer"
+        },
+        "total_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Total Bytes"
+        },
+        "processed_records": {
+          "minimum": 0,
+          "title": "Processed Records",
+          "type": "integer"
+        },
+        "total_records": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Total Records"
+        },
+        "file_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "File Name"
+        }
+      },
+      "required": [
+        "processed_bytes",
+        "total_bytes",
+        "processed_records",
+        "total_records",
+        "file_name"
+      ],
+      "title": "ResearchProgress",
+      "type": "object"
+    },
+    "TermPattern": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "term",
+          "title": "Type",
+          "type": "string"
+        },
+        "attr": {
+          "const": "form",
+          "title": "Attr",
+          "type": "string"
+        },
+        "op": {
+          "const": "eq",
+          "title": "Op",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "attr",
+        "op",
+        "value"
+      ],
+      "title": "TermPattern",
+      "type": "object"
+    },
+    "TokenQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "dsl_version": {
+          "const": "corpus-query/v1",
+          "title": "Dsl Version",
+          "type": "string"
+        },
+        "within": {
+          "const": "sentence",
+          "title": "Within",
+          "type": "string"
+        },
+        "overlap": {
+          "const": "all",
+          "title": "Overlap",
+          "type": "string"
+        },
+        "normalization": {
+          "const": "none",
+          "default": "none",
+          "title": "Normalization",
+          "type": "string"
+        },
+        "sort": {
+          "default": [
+            "document_ordinal",
+            "start",
+            "end"
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": "document_ordinal",
+              "type": "string"
+            },
+            {
+              "const": "start",
+              "type": "string"
+            },
+            {
+              "const": "end",
+              "type": "string"
+            }
+          ],
+          "title": "Sort",
+          "type": "array"
+        },
+        "unit": {
+          "const": "token",
+          "title": "Unit",
+          "type": "string"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TermPattern"
+            },
+            {
+              "$ref": "#/$defs/TokenSequence"
+            },
+            {
+              "$ref": "#/$defs/TokenUnion"
+            }
+          ],
+          "title": "Pattern"
+        }
+      },
+      "required": [
+        "dsl_version",
+        "within",
+        "overlap",
+        "unit",
+        "pattern"
+      ],
+      "title": "TokenQuery",
+      "type": "object"
+    },
+    "TokenSequence": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "sequence",
+          "title": "Type",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TermPattern"
+              },
+              {
+                "$ref": "#/$defs/GapPattern"
+              }
+            ]
+          },
+          "minItems": 2,
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "items"
+      ],
+      "title": "TokenSequence",
+      "type": "object"
+    },
+    "TokenUnion": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "any_of",
+          "title": "Type",
+          "type": "string"
+        },
+        "patterns": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TermPattern"
+              },
+              {
+                "$ref": "#/$defs/TokenSequence"
+              }
+            ]
+          },
+          "minItems": 2,
+          "title": "Patterns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "patterns"
+      ],
+      "title": "TokenUnion",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/QueryRunView"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "total": {
+      "minimum": 0,
+      "title": "Total",
+      "type": "integer"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Cursor"
+    }
+  },
+  "required": [
+    "items",
+    "total",
+    "next_cursor"
+  ],
+  "title": "QueryList",
+  "type": "object"
+}

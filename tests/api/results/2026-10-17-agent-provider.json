@@ -1,0 +1,551 @@
+{
+  "schema": "k09-agent-provider-validation/v1",
+  "date": "2026-10-17",
+  "updated_at": "2026-10-17T14:07:58.774320+00:00",
+  "status": "local_protocol_backend_http_browser_passed_cleanup_verification_pending",
+  "production_available": false,
+  "scope": {
+    "backend": "Existing Agent session/run/invocation/checkpoint lifecycle; explicit OpenAI-compatible configuration, no new database migration",
+    "material_scope": "Empty material scope unchanged; source/model-egress permission not expanded",
+    "protocols": [
+      "openai-completions",
+      "openai-responses"
+    ],
+    "identity": "Server-selected config_id binds protocol, endpoint, model, context/output limits, timeout and loopback flag; no credentials in digest",
+    "historical_reads": "Checkpoint own manifest must match immutable session config_id; current dependencies rechecked even after configuration changes",
+    "execution": "Current config must match fixed run/session; fixture and provider checkpoints cannot silently migrate",
+    "errors": "Five safe MODEL_* reasons; no invocation and no resume gives FAILED and frees session, otherwise WAITING_REVIEW; no guessing/replay",
+    "fixture": "Original eight-field local-fixture-v1 runtime manifest retained",
+    "credentials": "API does not read model API keys; no external model request was performed by backend validation"
+  },
+  "shared_identity_vector": {
+    "input": [
+      "openai-compatible-v1",
+      "openai-completions",
+      "https://model.example.test/v1",
+      "research-model-v1",
+      8192,
+      1024,
+      60000,
+      false
+    ],
+    "sha256": "756090785086b08af0069d1cd1165498755ea3895d54c4a0ffb9c8e61fc61b3d",
+    "config_id": "openai-756090785086b08af0069d1cd1165498755ea3895d54c4a0"
+  },
+  "first_integration": {
+    "executed_by": "parent_agent",
+    "log": "tmp/k09-provider-api-tests.log",
+    "tests": 37,
+    "passed": 36,
+    "failures": 1,
+    "elapsed_seconds": 74.177,
+    "exit_code": 1,
+    "failed_test": "AgentWaitingTests.test_disabled_runtime_message_scope_idempotency_and_archive_binding",
+    "cause": "create_run compared session config with unconfigured runtime null before checking runtime availability, returning AGENT_CONFIG_CHANGED instead of AGENT_RUNTIME_UNAVAILABLE",
+    "fix": "Require an available runtime before comparing active configuration; existing test expectation unchanged",
+    "passed_groups": [
+      "New provider 8",
+      "Existing runtime 10",
+      "Existing checkpoint 11",
+      "Other waiting 7"
+    ]
+  },
+  "second_targeted_integration": {
+    "executed_by": "parent_agent",
+    "log": "tmp/k09-provider-api-tests-final.log",
+    "tests": 16,
+    "passed": 15,
+    "failures": 1,
+    "elapsed_seconds": 35.082,
+    "exit_code": 1,
+    "failed_test": "ProviderConfigurationTests.test_missing_and_invalid_configuration_is_safe: U+001C model prefix subcase",
+    "cause": "Image was built immediately before final ASCII-strip correction, while bind-mounted tests already included U+001C rejection; old image and new test were mixed",
+    "fix": "Final image rebuilt with explicit ASCII whitespace strip; no database/permission change",
+    "passed_groups": {
+      "waiting_real": 8,
+      "provider_real_pg_s3": 4,
+      "other_provider_configuration": 3
+    }
+  },
+  "final_configuration_recheck": {
+    "executed_by": "parent_agent",
+    "session": 6210,
+    "log": "tmp/k09-provider-config-frozen.log",
+    "tests": 4,
+    "passed": 4,
+    "failures": 0,
+    "elapsed_seconds": 0.023,
+    "log_terminal": "OK",
+    "scope": "Final image ProviderConfigurationTests only; not a third full database run",
+    "exit_code": 0
+  },
+  "combined_coverage": {
+    "independent_tests": 37,
+    "real_dependency_tests": 31,
+    "configuration_and_format_tests": 6,
+    "status": "All independent cases have a passing result across recorded rounds, including final configuration correction",
+    "single_37_test_passed_run": false,
+    "qualification": "Do not sum repeat runs into distinct tests or present merged coverage as one clean 37-test run. PG/S3 tests use synthetic SDK-format archives, not actual provider transport."
+  },
+  "new_backend_cases": [
+    "Shared configuration digest, fixed fixture identity and key-independent config",
+    "Missing/invalid configuration, explicit HTTPS or local-only HTTP, URL/userinfo/control-byte rejection",
+    "Archived assistant provider/model/API and successful terminal-format checks",
+    "Endpoint/protocol/model changes reject execution while authorized old history remains readable",
+    "Fixture history remains readable under provider selection but denies access after membership removal",
+    "Zero-tool model errors free session; known write and accepted upload tasks remain reviewable",
+    "Error/aborted/length output cannot publish successful checkpoint"
+  ],
+  "local_checks": {
+    "executed_by": "pi_runtime_agent",
+    "provider_configuration": {
+      "passed": 4,
+      "subtests": 39,
+      "elapsed_seconds": 12.79
+    },
+    "ruff": "Passed changed backend files and new provider test",
+    "warning": "Existing Starlette TestClient httpx deprecation; no new warning suppressed"
+  },
+  "node_independent_read_review": {
+    "reviewed_by": "pi_runtime_agent",
+    "files": [
+      "services/agent-runtime/src/model-config.ts",
+      "services/agent-runtime/src/model-transport.ts",
+      "services/agent-runtime/src/k09-executor.ts",
+      "services/agent-runtime/src/k09-daemon.ts"
+    ],
+    "findings": "Python/WHATWG endpoint acceptance differences coordinated and narrowed; fixed endpoint/redirect rejection/error sanitization reviewed. This is code review, not protocol execution evidence."
+  },
+  "protocol_node_http_browser": {
+    "status": "passed_local_synthetic_protocols_and_browser",
+    "executed_by": "parent_agent",
+    "external_provider_requested": false,
+    "network_mode": "synthetic_loopback_builtin_sdk_adapters",
+    "http": [
+      {
+        "path": "tmp/pi-provider/e882822952204be39c64f178ca3b2162/result.json",
+        "sha256": "a008654e0d01478228d1fb6bc1f0954a45f1d3930653daab4c96bb8eee0dc191",
+        "bytes": 160009,
+        "protocol": "openai-completions",
+        "status": "passed",
+        "started_at": "2026-10-17T13:50:52.766079+00:00",
+        "finished_at": "2026-10-17T13:52:10.492458+00:00",
+        "protocol_request_count": 4,
+        "processes": [
+          {
+            "run_id": "b88d76da-60f1-440a-b515-e70ff769f96d",
+            "session_id": "b3a8e42f-85a7-43dc-b520-e75aa46e07dc",
+            "lease_epoch": 1,
+            "restored": false,
+            "inherited_messages": 0,
+            "new_tool_executions": 1,
+            "tool_names": [
+              "uploads_complete"
+            ],
+            "model_requests": 2,
+            "checkpoint": {
+              "checkpoint_id": "23715bc4-1805-4e3d-afc3-592ad669e631",
+              "sha256": "5942c385431a5887f40136a3b2db275f31fdddfc5f9765a5d3a95b80d4e594ee",
+              "byte_size": 16258,
+              "sdk_session_id": "b3a8e42f-85a7-43dc-b520-e75aa46e07dc",
+              "leaf_id": "f28ffdfe",
+              "runtime_manifest": {
+                "sdk_package": "@earendil-works/pi-coding-agent",
+                "sdk_version": "1.3.0",
+                "session_version": 3,
+                "host_policy": "corpus-k09-openai-v1",
+                "provider": "corpus-openai-compatible",
+                "model": "research-model-v1",
+                "tool_schema": "s3-outcomes-tools-v1",
+                "resource_config": "corpus-explicit-resources-v1",
+                "model_api": "openai-completions",
+                "model_config_sha256": "6d1ecedbb4f7faf8d63567bb36abb005cb7de01fa721175867195d7b91e43a36"
+              }
+            }
+          },
+          {
+            "run_id": "b88d76da-60f1-440a-b515-e70ff769f96d",
+            "session_id": "b3a8e42f-85a7-43dc-b520-e75aa46e07dc",
+            "lease_epoch": 3,
+            "restored": true,
+            "inherited_messages": 5,
+            "new_tool_executions": 1,
+            "tool_names": [
+              "jobs_get"
+            ],
+            "model_requests": 2,
+            "checkpoint": {
+              "checkpoint_id": "69a979e5-2734-4142-8b96-5abfa798a086",
+              "sha256": "6a7fb8d15d83d8dfc1b21545a1f10bf258611d60577dccf4cee311f3f8394d52",
+              "byte_size": 21730,
+              "sdk_session_id": "b3a8e42f-85a7-43dc-b520-e75aa46e07dc",
+              "leaf_id": "2fd64076",
+              "runtime_manifest": {
+                "sdk_package": "@earendil-works/pi-coding-agent",
+                "sdk_version": "1.3.0",
+                "session_version": 3,
+                "host_policy": "corpus-k09-openai-v1",
+                "provider": "corpus-openai-compatible",
+                "model": "research-model-v1",
+                "tool_schema": "s3-outcomes-tools-v1",
+                "resource_config": "corpus-explicit-resources-v1",
+                "model_api": "openai-completions",
+                "model_config_sha256": "6d1ecedbb4f7faf8d63567bb36abb005cb7de01fa721175867195d7b91e43a36"
+              }
+            }
+          }
+        ],
+        "paused": {
+          "run": {
+            "state": "WAITING_JOB",
+            "lease_epoch": 1,
+            "lease_expires_at": null,
+            "base_checkpoint_id": null,
+            "resume_checkpoint_id": "23715bc4-1805-4e3d-afc3-592ad669e631",
+            "final_checkpoint_id": null
+          },
+          "session": {
+            "latest_checkpoint_id": null,
+            "active_run_id": "b88d76da-60f1-440a-b515-e70ff769f96d"
+          }
+        },
+        "final": {
+          "run": {
+            "state": "SUCCEEDED",
+            "lease_epoch": 3,
+            "lease_expires_at": null,
+            "base_checkpoint_id": null,
+            "resume_checkpoint_id": "23715bc4-1805-4e3d-afc3-592ad669e631",
+            "final_checkpoint_id": "69a979e5-2734-4142-8b96-5abfa798a086"
+          },
+          "session": {
+            "latest_checkpoint_id": "69a979e5-2734-4142-8b96-5abfa798a086",
+            "active_run_id": null
+          }
+        },
+        "business_job": {
+          "job_id": "547fd5cc-0adc-4d0b-86ef-77a9e90f8a6c",
+          "state": "SUCCEEDED",
+          "attempt": 1,
+          "action_id": "148e40b7-24ee-4df6-ba7b-7ad957dcedf0",
+          "result": {
+            "size": 58,
+            "state": "VALIDATED",
+            "sha256": "f83ada7cd0d96b4fd14842104fed5e226f56767c2932287c72c7d9d556fc8614",
+            "upload_id": "d1bc5635-012f-41e1-8701-3250001add62",
+            "validation": "utf8-text-and-integrity/v1"
+          }
+        },
+        "complete_actions": 1,
+        "same_run": true,
+        "resumed_epoch": true,
+        "duplicate_write": false,
+        "private_body_in_model": false,
+        "cleanup": {
+          "upload_versions_deleted": 1,
+          "completed": true
+        }
+      },
+      {
+        "path": "tmp/pi-provider/29cd6317410c46dfbff6c76552c0a1a8/result.json",
+        "sha256": "6ea8ce772610fa101d0be1a94417246dc60cbdfd8223dc9213c83cdbd4ec3ab0",
+        "bytes": 149030,
+        "protocol": "openai-responses",
+        "status": "passed",
+        "started_at": "2026-10-17T13:53:27.577261+00:00",
+        "finished_at": "2026-10-17T13:54:22.970241+00:00",
+        "protocol_request_count": 4,
+        "processes": [
+          {
+            "run_id": "280528b5-d259-477b-ad4a-d9770f7de9c6",
+            "session_id": "30e87e3e-dbda-44d1-af3b-6fb8c22a5d77",
+            "lease_epoch": 1,
+            "restored": false,
+            "inherited_messages": 0,
+            "new_tool_executions": 1,
+            "tool_names": [
+              "uploads_complete"
+            ],
+            "model_requests": 2,
+            "checkpoint": {
+              "checkpoint_id": "624566a0-5016-4f7c-8d8e-d9249785b9d3",
+              "sha256": "1b7491a1144953f50d52dad03c6fa2712fc1078feb420c231892c445788a2633",
+              "byte_size": 16508,
+              "sdk_session_id": "30e87e3e-dbda-44d1-af3b-6fb8c22a5d77",
+              "leaf_id": "8a84e30b",
+              "runtime_manifest": {
+                "sdk_package": "@earendil-works/pi-coding-agent",
+                "sdk_version": "1.3.0",
+                "session_version": 3,
+                "host_policy": "corpus-k09-openai-v1",
+                "provider": "corpus-openai-compatible",
+                "model": "research-model-v1",
+                "tool_schema": "s3-outcomes-tools-v1",
+                "resource_config": "corpus-explicit-resources-v1",
+                "model_api": "openai-responses",
+                "model_config_sha256": "e9f08384be4aff9c43779feb8d5082a08097ec4c6503b6b7b19d4413e165834c"
+              }
+            }
+          },
+          {
+            "run_id": "280528b5-d259-477b-ad4a-d9770f7de9c6",
+            "session_id": "30e87e3e-dbda-44d1-af3b-6fb8c22a5d77",
+            "lease_epoch": 3,
+            "restored": true,
+            "inherited_messages": 5,
+            "new_tool_executions": 1,
+            "tool_names": [
+              "jobs_get"
+            ],
+            "model_requests": 2,
+            "checkpoint": {
+              "checkpoint_id": "c5920087-5293-4222-89fd-e6f11d0a4493",
+              "sha256": "a47a0ce9223442c2c8c9171439e4849197e2f180315c55ea1c0da5bab48b07a5",
+              "byte_size": 22230,
+              "sdk_session_id": "30e87e3e-dbda-44d1-af3b-6fb8c22a5d77",
+              "leaf_id": "a50cf984",
+              "runtime_manifest": {
+                "sdk_package": "@earendil-works/pi-coding-agent",
+                "sdk_version": "1.3.0",
+                "session_version": 3,
+                "host_policy": "corpus-k09-openai-v1",
+                "provider": "corpus-openai-compatible",
+                "model": "research-model-v1",
+                "tool_schema": "s3-outcomes-tools-v1",
+                "resource_config": "corpus-explicit-resources-v1",
+                "model_api": "openai-responses",
+                "model_config_sha256": "e9f08384be4aff9c43779feb8d5082a08097ec4c6503b6b7b19d4413e165834c"
+              }
+            }
+          }
+        ],
+        "paused": {
+          "run": {
+            "state": "WAITING_JOB",
+            "lease_epoch": 1,
+            "lease_expires_at": null,
+            "base_checkpoint_id": null,
+            "resume_checkpoint_id": "624566a0-5016-4f7c-8d8e-d9249785b9d3",
+            "final_checkpoint_id": null
+          },
+          "session": {
+            "latest_checkpoint_id": null,
+            "active_run_id": "280528b5-d259-477b-ad4a-d9770f7de9c6"
+          }
+        },
+        "final": {
+          "run": {
+            "state": "SUCCEEDED",
+            "lease_epoch": 3,
+            "lease_expires_at": null,
+            "base_checkpoint_id": null,
+            "resume_checkpoint_id": "624566a0-5016-4f7c-8d8e-d9249785b9d3",
+            "final_checkpoint_id": "c5920087-5293-4222-89fd-e6f11d0a4493"
+          },
+          "session": {
+            "latest_checkpoint_id": "c5920087-5293-4222-89fd-e6f11d0a4493",
+            "active_run_id": null
+          }
+        },
+        "business_job": {
+          "job_id": "36f6dac7-892c-4575-a7fa-6e75beb0e2da",
+          "state": "SUCCEEDED",
+          "attempt": 1,
+          "action_id": "a625eff2-84db-422c-a466-1e0a38c66b28",
+          "result": {
+            "size": 58,
+            "state": "VALIDATED",
+            "sha256": "f83ada7cd0d96b4fd14842104fed5e226f56767c2932287c72c7d9d556fc8614",
+            "upload_id": "7a841e3b-d927-4685-9810-934fda6ce3fe",
+            "validation": "utf8-text-and-integrity/v1"
+          }
+        },
+        "complete_actions": 1,
+        "same_run": true,
+        "resumed_epoch": true,
+        "duplicate_write": false,
+        "private_body_in_model": false,
+        "cleanup": {
+          "upload_versions_deleted": 1,
+          "completed": true
+        }
+      }
+    ],
+    "independent_leak_check": {
+      "reported_by": "parent_agent_via_sources_agent",
+      "scope": "Each protocol: four request bodies and three archives recursively checked for unique private-body marker and synthetic API key",
+      "passed": true
+    },
+    "browser": {
+      "status": "passed",
+      "executed_by": "parent_agent",
+      "results": [
+        {
+          "path": "tmp/k09-provider-browser/auth-failure-result.json",
+          "sha256": "7138cc1bf823538dc579607654e25855f87adc02112c3e18568ed2adb9ee41b8",
+          "bytes": 190,
+          "result": {
+            "status": "passed",
+            "mode": "auth-failure",
+            "run_id": "891abc53-22cd-4e06-b0bf-934c381dae07",
+            "state": "FAILED",
+            "code": "MODEL_AUTH_FAILED",
+            "final_checkpoint_id": null,
+            "archive": null
+          },
+          "exit_code": 0
+        },
+        {
+          "path": "tmp/k09-provider-browser/success-result.json",
+          "sha256": "75cc0bcd70bb22dafdd033309220cf02f24840a5ffaea0ac559a493f437f1e5d",
+          "bytes": 356,
+          "result": {
+            "status": "passed",
+            "mode": "success",
+            "run_id": "9e483984-ab07-43e2-8648-705afc00f149",
+            "state": "SUCCEEDED",
+            "code": "CHECKPOINT_PUBLISHED",
+            "final_checkpoint_id": "ff725caf-8def-475f-a4e5-8a50f530818d",
+            "archive": {
+              "checkpoint_id": "ff725caf-8def-475f-a4e5-8a50f530818d",
+              "sha256": "e92df5be9e1d76c4486467e128b3c899a8a9540f411afa75426623f7ced2d7af"
+            }
+          },
+          "exit_code": 0
+        }
+      ],
+      "observations": [
+        "Changed model configuration preserves readable old history and requires a new session for sending.",
+        "Synthetic upstream 401 becomes safe MODEL_AUTH_FAILED / FAILED with no checkpoint.",
+        "Second run in the same session succeeds with the Chinese response and refresh restores the result.",
+        "Final application restored to unconfigured mode; host live HTTP200, ready HTTP503, reason MODEL_NOT_CONFIGURED."
+      ],
+      "screenshots": [
+        {
+          "path": "tmp/k09-provider-browser/config-changed.png",
+          "sha256": "b5a3126e6a6525eb46550c06b764a4b1f3eadad734d8737842c1274765648005",
+          "bytes": 49735
+        },
+        {
+          "path": "tmp/k09-provider-browser/auth-failure.png",
+          "sha256": "db8080634ee57284ca73270336e3bc7309e448e36ab031af584088c2a82e606d",
+          "bytes": 41082
+        },
+        {
+          "path": "tmp/k09-provider-browser/completed-refresh.png",
+          "sha256": "ba89847556ead149c28d0b4e527bc4fdaf14462b28594aafee66791707568641",
+          "bytes": 51455
+        },
+        {
+          "path": "tmp/k09-provider-browser/restored-unconfigured.png",
+          "sha256": "f152236d77ea9ae18d77353a82588269c1fd4910ff43b6039d81db4442035c12",
+          "bytes": 54983
+        }
+      ],
+      "served_asset": {
+        "path": "apps/web/dist/assets/index-DelBod4D.js",
+        "sha256": "be49a22b35ad2327c3bdc688f8fee766a43f0e79da783d9844c22fe206921dd3",
+        "bytes": 336719
+      }
+    }
+  },
+  "limitations": [
+    "No real external compatible endpoint has been exercised; user URL/model/protocol are not yet provided.",
+    "Provider API acceptance readiness does not prove the Node host is alive or credentials are valid.",
+    "Production delegation and material/model-egress permissions remain unavailable.",
+    "Historical and integration logs are retained; no previous K09 waiting evidence is overwritten."
+  ],
+  "log_receipts": [
+    {
+      "path": "tmp/k09-provider-api-tests.log",
+      "sha256": "2ebb95569ada1225b81a9f09a051cdde638054129eb60c8807f0cfeebca3c04a",
+      "bytes": 8782
+    },
+    {
+      "path": "tmp/k09-provider-api-tests-final.log",
+      "sha256": "406ea1aa7541433af4f364b4afa39b20dd7ca865d8593319df35a14a6da6ddcb",
+      "bytes": 4730
+    },
+    {
+      "path": "tmp/k09-provider-config-frozen.log",
+      "sha256": "6243249bd58238338f50cc26954e83487d8d82f5682e1077dcd86847bac2a60b",
+      "bytes": 1123
+    },
+    {
+      "path": "tmp/k09-provider-node-final.log",
+      "sha256": "02d46ad5cbd38cdee6774593efac28d0801c51cc6d0ff67fa5674d034056f5fa",
+      "bytes": 7338
+    }
+  ],
+  "source_sha256": {
+    "services/api/agent_config.py": "c0f70b2d41cbe0f30ecd84716c0d2909af5b50c3e28c76e341f5022a3bca2b36",
+    "services/api/agent_control.py": "f32c1df4e4cc81ebfb69d6ee59e41c98d09a060632e3244d5bef5de07df3441d",
+    "services/api/agent_internal.py": "465ac6e8ba3af17102e516c0959042349f6a6cf087992c74a4b26149c222fdb6",
+    "services/api/agent_checkpoints.py": "0e3d51a0fa6f70f5355133e9bd7883d28867518638cdb23af5ef4e2a85526226",
+    "services/api/agent_projection.py": "b9700f56e4d6c43e2c5ac3980eede009cd362744ca1cbfa89fb7f86a29fc06b2",
+    "tests/api/test_agent_provider.py": "9013aa7ad76c1d1679b51d52dd18838390b403663a7ba31fe56940b9d8a2a07c",
+    "tests/api/test_agent_runtime.py": "4025dda26a67733eb8855ab4accbc04fa9a6b9fa24219d1c6ff30a01d55b8ece",
+    "tests/api/test_agent_checkpoints.py": "a0a97cb63210c4cc4741f8cc554eb511610530a8935acc927840230b50d6bc6a",
+    "tests/api/test_agent_waiting.py": "dc2745aff4ddc84509d8cd295e3aec28fa464a02d71979fe4e09e2b20bae1ac9",
+    "services/api/agent_models.py": "a765fd0a06a2625d0a386fe35450ba20e87053aca6c0a40ea5b12d1da4e9ac97",
+    "services/api/agent_waiting.py": "5643ab7b9a96390c5b8612e47ec218ee88df316c42b83df6d95fdae8eb11c852",
+    "services/api/agent_routes.py": "fa7bdd645656216dca3a6597227879c5442d29bc9e552e50368ce31b7bb0c2da",
+    "services/api/migrations/versions/0014_agent_waiting.py": "22f769344c79f9b9a02afd4bb0416812bf92c449c716769dae8e73c516b64645",
+    "services/agent-runtime/src/model-config.ts": "88932ef1dcab1627c0eaeb3afb0e5b31c01d161454f2d60c3def473c666bd6f5",
+    "services/agent-runtime/src/model-transport.ts": "bc044a8d30dd78e0bbfb726fc4e75affe8211e77e5828265a93e541c51ce0a54",
+    "services/agent-runtime/src/k09-executor.ts": "e236765c4ccc69436d30fffbadc693fe256b0927f22268f999eb4f5a48d72907",
+    "services/agent-runtime/src/k09-daemon.ts": "78d9efc35cf07f8ab758278bc39d016ba1364fbc6c4df44e3fe933f51954b7f5",
+    "services/agent-runtime/src/s1-run-client.ts": "eabd7691a47d9f4b665323919099b090e42deb1c0a746ada0e1953ca5a0b441b",
+    "services/agent-runtime/src/s1-run-checkpoint.ts": "aa4a0a5ad1e2eaedcf04ecd6f4baeecaff1c9776bab6be0c61f648107b66a212",
+    "services/agent-runtime/src/model-segment-smoke.ts": "9c1607d7448d0d2f0b2f943b4d9fab89a13440b75c2a401652555d3ce8a31404",
+    "services/agent-runtime/test/model-provider.test.ts": "d51a9981b815d7d6ed18c263766bfc96aa81205aa787601513f8f525fcc1ba0d",
+    "services/agent-runtime/test/provider-fixture.ts": "3f3ac485f8e9ea8f0a8ac78427c51a1f58b6a6d73e1df5281ad62107f29f3732",
+    "services/agent-runtime/test/provider-server-cli.ts": "36d2884759f42e929ac643ce50aa0a524b0a9cb05cf47ab6c999f8eb10d3cf3b",
+    "deploy/compose.yaml": "807b0b12b4b5f936e0cafb01a1acf62b00c3a0d6cdb5c5fc9c52785d1fe1743a",
+    "deploy/.env.example": "a01b49365a507b5d682051e2e200fb04ae5e82d75c6a7610fea66ba457d65d60",
+    "scripts/agent_provider_smoke.py": "42704b0b6ce9da25a704ef8652df9ed0aa27960fb6ef5e9dd7a625bee0bb4a81",
+    ".github/workflows/ci.yml": "520b7b0318255b36057e30a9c3c96b1ff98c3e04ea46e6667c541eb2ec45691f"
+  },
+  "source_hash_scope": "Current frozen backend after both minimal corrections, not a claim that earlier failing images already contained these bytes",
+  "node_tests": {
+    "executed_by": "sources_agent",
+    "log": "tmp/k09-provider-node-final.log",
+    "tests": 72,
+    "passed": 72,
+    "failures": 0,
+    "new_protocol_tests": 21,
+    "existing_tests": 51,
+    "elapsed_seconds": 90.1333815,
+    "external_provider_requested": false,
+    "post_suite_change": {
+      "reported_by": "sources_agent",
+      "change": "Reject non-ASCII original AGENT_MODEL_API bytes before trim (including NBSP); valid configuration digests unchanged",
+      "verification": "Targeted identity test 1 passed and TypeScript check passed",
+      "full_72_suite_rerun": false
+    }
+  },
+  "cleanup_database_verification": {
+    "status": "pending_parent_execution",
+    "script": {
+      "path": "tmp/k09-provider-cleanup-readonly.py",
+      "sha256": "b123b3f4f8413516fec6f7a654259b9636c62c0d9950f50090211e3e7a0e6857",
+      "bytes": 3814
+    },
+    "scope": "Fixed browser actor 13 tables; two fixed HTTP project/session/run identities, 9 tables each; D12 policy remains absent"
+  },
+  "final_source_only_changes": [
+    {
+      "file": "contracts/agent.py",
+      "change": "ClassVar[ConfigDict] annotation for lint only; all nine schemas unchanged",
+      "reported_by": "contracts_agent",
+      "sha256": "fda3bcd3dfea99dca564cc4f9bcf126ef72f9878a3e77be6a01ea3a02ff27d2f"
+    },
+    {
+      "file": "services/agent-runtime/src/k09-executor.ts",
+      "change": "Remove second duplicate OPENAI_LOG=off assignment/comment; no semantic change and no redeployment/test rerun for this cleanup",
+      "reported_by": "sources_agent",
+      "acceptance_sha256": "2fedbd0340ae79f025db47104b60932eccdd087de31b5ab6165b104e19c19eb6",
+      "sha256": "e236765c4ccc69436d30fffbadc693fe256b0927f22268f999eb4f5a48d72907"
+    }
+  ]
+}

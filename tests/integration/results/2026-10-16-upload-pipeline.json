@@ -1,0 +1,85 @@
+{
+  "schema_version": "s1-upload-validation/v1",
+  "recorded_at": "2026-10-16T12:04:14.376384+00:00",
+  "status": "passed",
+  "scope": "S1/K06 single private UTF-8 file staging validation only; not READY/parser/index/Pi production acceptance",
+  "integration": {
+    "command": "docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm test-auth python -m unittest discover -s tests/integration -p test_upload_pipeline.py -v",
+    "passed": 10,
+    "skipped": 0,
+    "elapsed_seconds": 11.179,
+    "services": [
+      "PostgreSQL 18.3 with corpus_app/corpus_worker nonowner RLS",
+      "versioned private MinIO",
+      "RabbitMQ 4.3.6",
+      "real Celery 5.6.3 child process consuming dedicated queue"
+    ],
+    "scenarios": [
+      "authorization and project quota/expiry/cursor",
+      "actual broker refusal retains outbox then real RabbitMQ recovery",
+      "owner cancels editor task and fences previous worker",
+      "create-only object and pinned version survives later overwrite; duplicate delivery has one result",
+      "expired lease and at most three manual attempts",
+      "actual S3 stream checksum/size mismatch",
+      "concurrent completion idempotency and changed args conflict",
+      "owner retries editor task preserving old attempt",
+      "actual queue consumer validates and survives browser refresh",
+      "revocation after claim prevents result; old action RLS inaccessible"
+    ],
+    "cleanup": "random test users/projects/object versions and exclusive queues removed"
+  },
+  "unit": {
+    "command": ".venv/Scripts/python.exe -m pytest tests/api/test_upload_validation.py -q",
+    "passed": 3,
+    "subtests_passed": 5
+  },
+  "parent_independent_http": {
+    "status": "passed",
+    "checks": 6,
+    "elapsed_seconds": 9.889,
+    "scope": "running API + dispatcher + RabbitMQ + Celery + MinIO + PostgreSQL, no concurrent tests",
+    "checks_summary": [
+      "login/CSRF and viewer/cross-project rejection",
+      "upload creation/completion idempotency and overwrite rejection",
+      "outbox to queue to real worker to pinned object integrity result",
+      "checksum mismatch no result",
+      "task cursor",
+      "logout replay denied"
+    ],
+    "cleanup": true,
+    "script": "tmp/s1_parent_http.py",
+    "script_sha256": "d4fafc158e3811cfdff1edcc8f04bd163605615f6bea6a4fdae5f314edb54785"
+  },
+  "known_boundaries": [
+    "100000000 byte single file; 1000000000 project reservation default",
+    "30 minute upload session; 120 second body receive",
+    "UTF-8 and NUL check only, no CSV/JSON structural parsing",
+    "orphan/expired stored object cleanup requires later retention workflow; reservations retained conservatively",
+    "worker global service role can read ledger; publication checks original actor under shared actor/project locks",
+    "manual retries maximum 3 attempts; outbox maximum 20 publication failures per attempt"
+  ],
+  "source_sha256": {
+    "services/api/job_models.py": "575f81cd3350cad8fcdef2ffe9fb55c65afc8ca10d2209781b46a2fed3cd53b9",
+    "services/api/uploads.py": "ee6d17c6faf041875ab086934a9519588ef4814d225bbfc3e0bcfbf1e29a4d56",
+    "services/api/jobs.py": "29698b556a1d12f7c3774a5bf416cdbc91ea3a233bac63c402c8d438a9b6297a",
+    "services/api/storage.py": "b8544a914e9351c7f181e2ccc5c563458995868f6ce1caf8ab9ebb88cbdd1b58",
+    "services/api/migrations/versions/0003_upload_jobs.py": "4df9936e0cd5102ea4f7a4b5fa0075aaf919bb427f204f33aeb495ce1441f4d1",
+    "workers/app.py": "48aa91bde6e0428f302d3bc2e874d6fb0986c346057ae16c56583cd5e2c3d9b2",
+    "workers/dispatcher.py": "a82bbd932dac16bc78c980d9bc3b28e9a32426731eddff5c33a67fa1a41b29d5",
+    "workers/validation.py": "9983150939f0a40788b118feb5a1bed39882116a8663aef34ea44532147052b5",
+    "tests/api/test_upload_validation.py": "50ac3422fdc60379714c7735a4f046619ae8307f4e7fc8d88ad72409dcd25038",
+    "tests/integration/test_upload_pipeline.py": "f17ff696c7ea683b42da1be1e8273fc4504610ed43f838e930b4eb1c07ff674e"
+  },
+  "post_integration_change": {
+    "file": "workers/dispatcher.py",
+    "change": "Only add timeout=5 and confirm_timeout=5 to Celery send_task publication",
+    "previous_sha256": "2c4d1089bca71503d037d2139cedcb2009114164601bebcd3a1137ffe2aa1e96",
+    "current_sha256": "a82bbd932dac16bc78c980d9bc3b28e9a32426731eddff5c33a67fa1a41b29d5",
+    "verification": {
+      "status": "passed",
+      "reviewer": "parent",
+      "scope": "dispatcher rebuilt; all 6 running-service HTTP groups passed including actual publisher/queue/consumer success and checksum failure without result; cleanup complete",
+      "limit": "5 second write/confirm values checked in installed Kombu/amqp source; missing-ACK scenario not simulated"
+    }
+  }
+}

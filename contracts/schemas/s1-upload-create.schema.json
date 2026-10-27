@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s1-upload-create.schema.json",
+  "type": "object",
+  "properties": {
+    "filename": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "size": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "media_type": {
+      "enum": [
+        "text/plain",
+        "text/csv",
+        "text/tab-separated-values",
+        "application/json",
+        "application/x-ndjson"
+      ]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{64}$"
+    }
+  },
+  "required": [
+    "filename",
+    "size",
+    "media_type",
+    "sha256"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,3 @@
+{
+  "ignorePatterns": ["tmp/**", "**/node_modules/**", "**/dist/**", ".venv/**"]
+}

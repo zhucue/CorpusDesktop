@@ -1,0 +1,35 @@
+{
+  "status": "passed",
+  "require_all": true,
+  "validated_response_counts": {
+    "policies": 4,
+    "policy_actions": 4,
+    "releases": 1,
+    "release_actions": 3,
+    "mounts": 1,
+    "mount_actions": 5,
+    "mount_lists": 2,
+    "manifests": 2,
+    "version_lists": 1
+  },
+  "not_recorded": [],
+  "failures": [],
+  "inputs": [
+    {
+      "path": "tmp\\source-release-smoke\\c04846e0f717433e94ba05edb4c8d7eb\\result.json",
+      "sha256": "30b198cada833ee0ce43c3326e8a684ee67082e58917cbdc43c76169122b9c9d"
+    }
+  ],
+  "schema_sha256": {
+    "policies": "6f33f8e9283d655aa47aa2f3709c4e311ed222e233ea733817ab113ff5d15e86",
+    "policy_actions": "3e02975e61fdfaf08f73ebb6d6172492d8c805ae42009e31c3214907efe5c2b7",
+    "releases": "527554ca4bb66910a5f5c11893a388ad2bc858fc48cb600e5547d1f635a26a6b",
+    "release_actions": "87afe4ba8696b1bd84160e0bee0b87908e7745f86e499552641ab615fd149aaf",
+    "mounts": "748b33af363f039ffce089c54e4b761bbdf62edb985a12ffc9b8cb4ac777501e",
+    "mount_actions": "eabac5c5015be9ca1d2e2d32133f7b42fd90be5f4fdaf6455918735028f4f9f9",
+    "mount_lists": "9afaf1cb850af9d23d21a7b2ee792d8fcb612ec9f10ff19e43c5adfb54ddbdd9",
+    "manifests": "24d48199baca186b548103b0417373e5bc03dae39b899f8f99baaaaa008225a9",
+    "version_lists": "84ff0ff73003b9e8b1d03f4e7d958aba67f2b2928a77a3462928b840ac977f7b"
+  },
+  "limits": "Recorded response shape only; authentication, stored-object integrity and production licensing need separate evidence."
+}

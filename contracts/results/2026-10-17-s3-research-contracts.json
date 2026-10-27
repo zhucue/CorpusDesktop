@@ -1,0 +1,170 @@
+{
+  "status": "scoped_http_and_browser_accepted",
+  "date": "2026-10-17",
+  "runtime_tool_schema": "s3-query-tools-v1",
+  "production_available_tools": 0,
+  "registered_contract_adapters": 37,
+  "material_deny_adapters": 2,
+  "tests": {
+    "lint": {
+      "exit_code": 0,
+      "command": ".venv/Scripts/ruff.exe check --select E4,E7,E9,F,I contracts/research.py contracts/build.py contracts/releases.py tests/contracts/test_research.py tests/contracts/test_research_report.py tests/contracts/validate_research_report.py tests/contracts/test_releases.py tests/contracts/test_s3.py"
+    },
+    "typescript_and_web": {
+      "exit_code": 0,
+      "command": "npm run check"
+    },
+    "contracts": {
+      "passed": 46,
+      "seconds": 2.441,
+      "command": ".venv/Scripts/python.exe -m unittest discover -s tests/contracts -q",
+      "note": "Final rerun after acceptance metadata regeneration; business behavior and schemas unchanged."
+    },
+    "node": {
+      "passed": 34,
+      "seconds": 29.0655761,
+      "command": "npm run agent:test",
+      "metadata_shape_matches_backend": true
+    },
+    "research_node": {
+      "command": "node --test services/agent-runtime/test/research.test.ts",
+      "seconds": 1.3720567,
+      "passed": 4
+    }
+  },
+  "frontend": {
+    "path": "apps/web/dist/assets/index-D2XRaamo.js",
+    "sha256": "787cfc4785d799052289fd315c1d2ebad2b8fa5940268a12477b162b221aa671"
+  },
+  "source_sha256": {
+    "contracts/research.py": "f233dd7d61c2e8c0bab7c3b11745bca901a9d76857592bedd1847fb0c5c7a6c5",
+    "contracts/build.py": "ececb5012f3bc830f7d02e930ef6db8fbbe218a688fc3b0357db4b7cc874737c",
+    "contracts/releases.py": "875d3d4a0b0beea18f9ac85e9385bdab5403d600cbbc367edf8754ec28e08edc",
+    "contracts/types/research.ts": "b579461770aa59355ece7133ea3c2d122b349cced2058a5536b62ccf2e6bc296",
+    "contracts/types/s1.ts": "604205270913ec9a5f159f7acfbbd89d54eb2afbabce0e35297c65f3de755628",
+    "contracts/types/source-release.ts": "84b02d706c0f7ddc072bc93986e6b8b70d8620f80fbcb2922537a12f2d43bb34",
+    "contracts/status.json": "c30c79eaa67fbad4f635b0cc881fd0056a38acdfe894b29aa437275f9894d758",
+    "contracts/capabilities.json": "2a47d4c05a47710925213b67983622365a623d3a895a9daec62baa6383e7c6cb",
+    "contracts/s3-research-capabilities.json": "5cfdf9f4c8d3a46fe6449148335d031dda963b6d2cfec91a95dac3ac8ecf23e6",
+    "apps/web/src/Research.tsx": "de10c31648dab4d4caa02555dcc0dd316488a57dfe2e5a5b9571535456da51fd",
+    "apps/web/src/main.tsx": "aa0fd86d226aba910e1731e62bf8c3e50d470c451495f05c928b046fc4517de3",
+    "apps/web/src/style.css": "c9aea3509e1be8399c2cb6538a78f15c65af3ffc650ede2f98f3cd6d5b07b899",
+    "apps/web/src/ProjectSources.tsx": "66f5d5b8ec7b0fb29b1960b554418495b95d8a8c1ed8246a60dae6cb461d72ce",
+    "apps/web/src/Catalog.tsx": "338f638e56f421cc2fca1f5098b6e14819b27eb21ab3ea424d43d448c52a6da0",
+    "apps/web/src/SourcePublication.tsx": "166b6113c8e53f1558353c7f014bd89c42f27eef61c7fad3fd7b604620c72042",
+    "services/agent-runtime/src/s1-tools.ts": "1edcadf2281a9c4392edd3804dd74ab3cf3f9fec7233f65e5888b17af43cc73e",
+    "services/agent-runtime/src/s1-run-client.ts": "5dea9f4e70aeeb1faba7daca723c6a627101609ef637ffbaf23bf3a8cad0421b",
+    "services/agent-runtime/test/research.test.ts": "56328515c1abf7c7b476c9d552d2aebbe63011747d2890ba10662a70f8bef17b",
+    "services/agent-runtime/test/s1-tools.test.ts": "dba7455fdbf61435110fb31d5852afb493953ed1999093953efdcfd84edbd015",
+    "services/agent-runtime/test/s3-tools.test.ts": "1ef9345b601d717b1d2741b74deffa02e1457b9a97ff2b34e308df8c73ccedc4",
+    "services/agent-runtime/test/releases.test.ts": "6864eda58310dfc347014088de1da9367dc827c352bafad66dc903e0505f2854",
+    "tests/contracts/test_research.py": "4ac35751c986c5f105db4218daa578ef0fb7066185895afa06373f8b20aff401",
+    "tests/contracts/test_research_report.py": "e1505c0f24d6b2ae1cbbafe9ab81f6b0e575ac01731e3349f563e15ce7cd1b96",
+    "tests/contracts/validate_research_report.py": "736f5b3d9ba1743cab17ad7ba77fa742a9f43db933542f8aca7625fb186c0bf9"
+  },
+  "limitations": [
+    "One whole-source mount only; private and mixed snapshots not implemented",
+    "Fixed empty-material Pi scope; no model material egress; production available_tools remains empty",
+    "Schema and unit tests do not establish durable query correctness or query performance",
+    "Shared 4 CPU / 8 GiB single-pass engine timing is not production concurrency P95 acceptance.",
+    "Real D12 policy remains unapproved; HTTP/browser used a synthetic authorized fixture."
+  ],
+  "engine_evidence": {
+    "scope": "separate full-engine evidence, not HTTP acceptance",
+    "sha256": "3bdfe5ff8f6a50441abb553b340c769d48a7467981dd7f1e819c93951d3aa916",
+    "path": "pipelines/query/results/2026-10-17-source-query-engine.json"
+  },
+  "schema_sha256": {
+    "contracts/schemas/s3-research-context-ref.schema.json": "88cc5653024889e13feebf1b18b957dc19f97b57ceb32e2b4ec24c578f9201d3",
+    "contracts/schemas/s3-research-context.schema.json": "3010954d1a8adc7a4969e8a84747aa3fcf0160883360dd5cee65cebd96b2c152",
+    "contracts/schemas/s3-research-hits.schema.json": "619b920d80a2b6d269a089ce3b3fbc79d08b2884cb66c69d44985892561e1131",
+    "contracts/schemas/s3-research-queries.schema.json": "6fa51c5e4ee7e0753ffdca8e7a47dd0b7995bcc51863f345db3029bee3bd48cc",
+    "contracts/schemas/s3-research-query-action.schema.json": "5ea0b1a3abcb983bd556f9b65d1d0e8e775c581fbd74bbae28fe57184c42003f",
+    "contracts/schemas/s3-research-query-create.schema.json": "9d0872b393ad8a4bb52409aeee7158469bc5cac373e1599b3778a8b594468234",
+    "contracts/schemas/s3-research-query.schema.json": "51b862cdfde2a65d2369639c669f41474e39e6d01a32d148d42f926f68b1b6a1",
+    "contracts/schemas/s3-research-result-ref.schema.json": "5609bee92106c50d85f5cdd9b1f6a77365fdf17cc4512dfaa0fc9c20fb8ca7cc",
+    "contracts/schemas/s3-research-snapshot-action.schema.json": "0ae326a462c4e8d629cfb3a1c611193e40867b960f8b7c138148268b52e7e22a",
+    "contracts/schemas/s3-research-snapshot-create.schema.json": "9739b4fe758b606a5e7e6704ce123f9cb879877b2209b3b1ee060b2dfb95c3d4",
+    "contracts/schemas/s3-research-snapshot-ref.schema.json": "7e803851dc0d28f3e16433752586d5817720709e5cce16f21251c8e9fe80f444",
+    "contracts/schemas/s3-research-snapshot.schema.json": "e4d9c6b93dddd3a80cf906a84bdcdefde8cbdbb7511acba58eb415d53d08477b",
+    "contracts/schemas/s3-research-snapshots.schema.json": "33d1a23dff2958ab476cbc6f482ab16bf4a2cd0dcbcbfc96bd1117196b395a31"
+  },
+  "registered_capability_count": 140,
+  "http_evidence": {
+    "path": "contracts/results/2026-10-17-s3-research-http-contracts.json",
+    "sha256": "d7dced74be7a63fdc953aeff0c32106425f66666401815f48366b77a14fba101",
+    "response_families": 8,
+    "responses": 12,
+    "raw_path": "tmp/query-smoke/807b421bc48f44cdb379aa04e23927a8/result.json",
+    "raw_sha256": "b9ac14641df35bdbcb14636c9cb3ff096031692d0e1b52d0de9bd08adbb6f00f",
+    "status": "passed",
+    "cleanup": {
+      "cleaned": true,
+      "source_object_versions_deleted": 26,
+      "query_result_versions_deleted": 3,
+      "cache_directories_deleted": 4,
+      "cache_targets_remaining": 0
+    }
+  },
+  "browser_evidence": {
+    "accepted_by": "parent agent independent browser acceptance",
+    "status": "passed",
+    "snapshot_sentences": 62,
+    "snapshot_tokens": 304,
+    "checks": [
+      "Owner creates snapshot and observes PREPARING to READY",
+      "Zero-match complete result has all three counts zero",
+      "Viewer token Hello has counts 120/60/60 and page sizes 50/50/20",
+      "Context Unicode interval [11,16) and local token interval [3,4) highlighted correctly",
+      "Executed query stays Hello after editing draft",
+      "Reload restores three histories; selecting old query binds its original snapshot",
+      "Revocation clears KWIC/counts/context, disables search, and refreshed history has zero unauthorized entries",
+      "Logout succeeds"
+    ],
+    "screenshots": [
+      "tmp/query-smoke/807b421bc48f44cdb379aa04e23927a8/browser-query.png",
+      "tmp/query-smoke/807b421bc48f44cdb379aa04e23927a8/browser-revoked.png"
+    ]
+  },
+  "freeze_note": "Served asset is unchanged. Final source updates only acceptance descriptions in contracts/build.py, contracts/research.py and generated capability/status metadata. Parent rebuilds API for static metadata parity; no changed business behavior is claimed as revalidated.",
+  "documents": {
+    "doc/frontend-specification.md": {
+      "sha256": "bc2430a0db909ea7e0ccbd872a71c3b9162624b99a0982a28200e57d94231ef8"
+    },
+    "doc/assistant-capabilities.md": {
+      "sha256": "e42c97c272b820971f1deb8638ef39406378e33603250d11d034378cb3a254ee"
+    },
+    "doc/前端与接口设计规范.docx": {
+      "sha256": "4a00c225165bd0cd64053bf84f9db5d4a2614005ac93bc961d41a3163b58ec8b"
+    },
+    "doc/研究助手业务能力与工具契约.docx": {
+      "sha256": "fb01b2967d52d5a1781cb498d117d3bc8e4f4b7d2687fbeadfb75bb947712afc"
+    }
+  },
+  "document_qa": {
+    "status": "passed",
+    "renderer": "canonical documents/render_docx.py (TEMP/TMP repository tmp)",
+    "structure": "Title/Heading 1-3 all four font attributes SimSun; all header/footer variants empty",
+    "visual": "All 23 frontend and 14 assistant pages inspected in contact sheets; query changes additionally inspected at full size; no clipping or overflow",
+    "frontend_directory": "tmp/s3-query-frontend-final",
+    "frontend_key_pages": [
+      11,
+      12,
+      13,
+      14,
+      22,
+      23
+    ],
+    "assistant_directory": "tmp/s3-query-assistant-final",
+    "assistant_key_pages": [
+      1,
+      4,
+      5,
+      6
+    ]
+  },
+  "backend_evidence": {
+    "path": "tests/integration/results/2026-10-17-research-queries.json",
+    "sha256": "5a732f1a4ab3bddd9b206b636dd578b91b501442eff368551bbd5163afaa57a4"
+  }
+}

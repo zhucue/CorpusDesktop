@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/scope.schema.json",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "scope_kind": {
+          "const": "account"
+        }
+      },
+      "required": [
+        "scope_kind"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "scope_kind": {
+          "const": "platform"
+        }
+      },
+      "required": [
+        "scope_kind"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "scope_kind": {
+          "const": "project"
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "snapshot_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "material_revision_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "alignment_overlay_revision": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "layer_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "layer_id",
+                "revision"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "result_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "scope_kind",
+        "project_id",
+        "snapshot_ids",
+        "material_revision_ids",
+        "alignment_overlay_revision"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/continuation-intent.schema.json",
+  "type": "object",
+  "properties": {
+    "continuation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "source_run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "target_scope": {
+      "$ref": "scope.schema.json"
+    },
+    "authorization_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "capability_id": {
+            "const": "corpus.search"
+          },
+          "parameters": {
+            "$ref": "query-request.schema.json"
+          }
+        },
+        "required": [
+          "capability_id",
+          "parameters"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "continuation_id",
+    "source_run_id",
+    "target_scope",
+    "authorization_ref",
+    "steps"
+  ],
+  "additionalProperties": false
+}

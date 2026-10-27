@@ -1,0 +1,15 @@
+{
+  "name": "corpus-desktop",
+  "private": true,
+  "version": "0.0.0",
+  "engines": { "node": "24.15.x" },
+  "scripts": {
+    "web:dev": "npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build",
+    "agent:check": "npm --prefix services/agent-runtime run check",
+    "agent:test": "npm --prefix services/agent-runtime test",
+    "agent:s0": "npm --prefix services/agent-runtime run s0",
+    "check": "npm run web:build && npm run agent:check",
+    "test": "npm run agent:test"
+  }
+}

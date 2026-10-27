@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/k09-agent-run-create.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "request_key": {
+      "format": "uuid",
+      "title": "Request Key",
+      "type": "string"
+    },
+    "message": {
+      "maxLength": 8000,
+      "minLength": 1,
+      "title": "Message",
+      "type": "string"
+    },
+    "scope_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Scope Digest",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_key",
+    "message",
+    "scope_digest"
+  ],
+  "title": "RunInput",
+  "type": "object"
+}

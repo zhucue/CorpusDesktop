@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-outcomes-export-create.schema.json",
+  "$defs": {
+    "NoteExportTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "note_revision",
+          "title": "Kind",
+          "type": "string"
+        },
+        "note_id": {
+          "format": "uuid",
+          "title": "Note Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "note_id",
+        "revision"
+      ],
+      "title": "NoteExportTarget",
+      "type": "object"
+    },
+    "QueryExportTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "query_runs",
+          "title": "Kind",
+          "type": "string"
+        },
+        "query_run_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Query Run Ids",
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "kind",
+        "query_run_ids"
+      ],
+      "title": "QueryExportTarget",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "target": {
+      "discriminator": {
+        "mapping": {
+          "note_revision": "#/$defs/NoteExportTarget",
+          "query_runs": "#/$defs/QueryExportTarget"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/QueryExportTarget"
+        },
+        {
+          "$ref": "#/$defs/NoteExportTarget"
+        }
+      ],
+      "title": "Target"
+    },
+    "format": {
+      "enum": [
+        "csv",
+        "json"
+      ],
+      "title": "Format",
+      "type": "string"
+    }
+  },
+  "required": [
+    "target",
+    "format"
+  ],
+  "title": "ExportInput",
+  "type": "object"
+}

@@ -1,0 +1,61 @@
+{
+  "stage": "S2",
+  "available_tools": [],
+  "tool_production_authorization": "not_accepted",
+  "coverage": [
+    {
+      "capability_id": "sync.start",
+      "input_schema": "schemas/s2-sync-start.schema.json",
+      "scope_kind": "platform",
+      "manual_http": "implemented",
+      "tool_availability": "planned",
+      "adapter": "explicit_contract_test_only"
+    },
+    {
+      "capability_id": "sync.report",
+      "input_schema": "schemas/s2-sync-ref.schema.json",
+      "scope_kind": "platform",
+      "manual_http": "implemented",
+      "tool_availability": "planned",
+      "adapter": "explicit_contract_test_only"
+    },
+    {
+      "capability_id": "jobs.list",
+      "input_schema": "schemas/s2-scoped-job-list.schema.json",
+      "scope_kind": "platform",
+      "manual_http": "implemented",
+      "tool_availability": "planned",
+      "adapter": "explicit_contract_test_only"
+    },
+    {
+      "capability_id": "jobs.get",
+      "input_schema": "schemas/s2-scoped-job-ref.schema.json",
+      "scope_kind": "platform",
+      "manual_http": "implemented",
+      "tool_availability": "planned",
+      "adapter": "explicit_contract_test_only"
+    },
+    {
+      "capability_id": "jobs.cancel",
+      "input_schema": "schemas/s2-scoped-job-ref.schema.json",
+      "scope_kind": "platform",
+      "manual_http": "implemented",
+      "tool_availability": "planned",
+      "adapter": "explicit_contract_test_only"
+    },
+    {
+      "capability_id": "jobs.retry",
+      "input_schema": "schemas/s2-scoped-job-ref.schema.json",
+      "scope_kind": "platform",
+      "manual_http": "implemented",
+      "tool_availability": "planned",
+      "adapter": "explicit_contract_test_only"
+    }
+  ],
+  "limits": [
+    "D12 fixed connector only; no model-controlled URL, recipe or authorization.",
+    "VALIDATED acquisition is admin-only staging, not a published catalog release, searchable index or approved license.",
+    "Project jobs retain their original branch; platform jobs.list requires source_id=D12, while jobs.get/cancel/retry require sync_run_id.",
+    "No upstream check button, scheduled sync or release publication is implemented."
+  ]
+}

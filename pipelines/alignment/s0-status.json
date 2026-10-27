@@ -1,0 +1,68 @@
+{
+  "recorded_date": "2026-10-16",
+  "stage": "S0 alignment preparation",
+  "implementation_status": "local_cpu_smoke_passed",
+  "quality_status": "NOT_VALIDATED",
+  "thresholds_calibrated": false,
+  "domain_gold_available": false,
+  "production_alignment_available": false,
+  "candidate_manifest": "pipelines/alignment/model-candidates.json",
+  "selected_model": {
+    "id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+    "license_declared_by_publisher": "apache-2.0",
+    "weight_sha256": "98a01d88b7de996cdea58c32ca71208c09968d143798814b2ea09d3439dc334f",
+    "tokenizer_sha256": "2c3387be76557bd40970cec13153b3bbf80407865484b209e655e5e4729076b8",
+    "downloaded_verified_bytes": 127535388,
+    "hash_verification": "passed"
+  },
+  "smoke": {
+    "input": "pipelines/alignment/smoke-input.json",
+    "provenance": "Agent-written engineering sentences; not independent domain gold",
+    "source_segments": 4,
+    "target_segments": 3,
+    "proposed_pairs": [["zh-1", "en-1"], ["zh-2", "en-2"], ["zh-4", "en-3"]],
+    "unmatched_source": ["zh-3"],
+    "score_is_probability": false,
+    "confirmation": "proposed",
+    "method_sha256": "e9c2ed0fa9a32376d30ba31fcd17e51dc08b763018deebd276999baa00655623",
+    "runtime": {
+      "python": "3.12.14",
+      "onnxruntime": "1.31.0",
+      "tokenizers": "0.23.3",
+      "numpy": "2.5.4",
+      "system": "Windows-11-10.0.26200-SP0",
+      "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+      "intra_op_threads": 2,
+      "inter_op_threads": 1,
+      "model_load_seconds": 0.8119246999267489,
+      "encode_seconds_for_7_segments": 0.028055200004018843,
+      "peak_memory": "not_measured",
+      "capacity_conclusion": "none; small functional smoke only"
+    },
+    "detailed_output": "tmp/alignment-s0/smoke-result.json",
+    "independent_rerun_by_parent": "tmp/alignment-s0/independent-smoke-result.json"
+  },
+  "checks": {
+    "constructed_matrix_and_validation_tests_passed": 12,
+    "dp_optimum": "Compared with independent exhaustive enumeration of monotonic pair subsets",
+    "long_segment": "703-token input rejected at 128-token model limit; no silent truncation",
+    "missing_model": "MODEL_UNAVAILABLE report and process exit code 2; no fallback",
+    "network_mode": "local_files_only_no_application_network_calls",
+    "onnx_telemetry": "disabled",
+    "network_capture_verified": false
+  },
+  "remaining_gates": [
+    "Independent domain annotation covering omissions, reordering, short and long sentences",
+    "Model and threshold comparison on the domain gold set",
+    "Precision, coverage and unpaired-rate acceptance criteria",
+    "Capacity and peak-memory measurement at the approved deployment scale",
+    "Production authorization, job execution, result persistence and review workflow"
+  ],
+  "commands": {
+    "download": "python -m pipelines.alignment.download_model",
+    "infer": "python -m pipelines.alignment.local_model --input pipelines/alignment/smoke-input.json --model-directory tmp/alignment-s0/model --output tmp/alignment-s0/smoke-result.json",
+    "test": "python -m pytest tests/alignment -q",
+    "dependencies": "uv pip sync pipelines/alignment/requirements.txt --python tmp/alignment-s0/venv/Scripts/python.exe --cache-dir tmp/uv-cache"
+  }
+}

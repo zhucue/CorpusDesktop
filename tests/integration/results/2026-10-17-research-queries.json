@@ -1,0 +1,350 @@
+{
+  "schema": "corpus-research-query-validation/v1",
+  "status": "passed",
+  "scope": "Fixed whole-source project research snapshot, background first page and complete persisted spans, stable read-only pagination/context and current-authorization withdrawal",
+  "formal_capacity_acceptance": false,
+  "real_D12_permission_approved": false,
+  "production_pi_available_tools": 0,
+  "migration": {
+    "revision": "0010_research_queries",
+    "reported_by": "parent_agent",
+    "status": "applied",
+    "sha256": "6407037d550a2d4951395e633e88f84b9c2d836c9f03b4ce31c1bb80fd822e74"
+  },
+  "validation": {
+    "real_research_integration": {
+      "reported_by": "parent_agent",
+      "status": "passed",
+      "tests_passed": 9,
+      "elapsed_seconds": 12.303,
+      "log": "tmp/s3-query-real-tests.log",
+      "log_sha256": "3bca91d24d9990d8cfd49f5fb2f69be90ab611f220f6f88c11108e990ce01167",
+      "command": "docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm test-index python -m unittest discover -s tests/integration -p test_research_queries.py -v",
+      "covers": [
+        "Bounded first page has null totals until complete; exact 120 hits / 60 segments / 60 imported records; all pages match independent authored text enumeration",
+        "Actual token query uses real sentence-local and global token positions; Unicode codepoint contexts preserve emoji and decomposed accent",
+        "Complete empty result has three zeros; duplicate invocation and completed queue delivery do not rerun matching",
+        "Viewer may run analysis but cannot create snapshot, including direct SQL RLS; platform administrator and outsider cannot read private project results",
+        "Source deny blocks persisted pages, idempotent replay, prepare and model metadata; Pi context remains denied",
+        "Missing cache returns explicit unavailable error; two current viewers can sequentially prepare the same fixed result without changing its identity",
+        "Cancellation and expired lease fence late publication",
+        "Full-result quota failure preserves bounded preview with failed count state and null totals",
+        "Withdrawal after result cache installation but before publication removes exact unpublished S3 version and cache; no registered result or released-but-unaccounted data",
+        "Publisher ACK uncertainty on the final outbox attempt cannot overwrite a separately claimed RUNNING task"
+      ]
+    },
+    "related_real_regression": {
+      "reported_by": "parent_agent",
+      "status": "passed",
+      "tests_passed": 52,
+      "elapsed_seconds": 44.685,
+      "groups": {
+        "source_release": 6,
+        "agent_runtime": 10,
+        "agent_checkpoints": 11,
+        "catalog": 7,
+        "source_sync": 9,
+        "source_index": 9
+      },
+      "log": "tmp/s3-query-regressions.log",
+      "log_sha256": "1e2e2c65419acfd9396edaf78d26ffdae898e8bf936d3a2c2a6561c4a25bc9f5"
+    },
+    "local_python": {
+      "reported_by": "parent_agent",
+      "passed": 155,
+      "skipped": 108,
+      "subtests": 289,
+      "elapsed_seconds": 9.36
+    },
+    "local_boundary_tests": {
+      "executed_by": "pi_runtime_agent",
+      "passed": 2,
+      "elapsed_seconds": 2.9,
+      "path": "tests/api/test_research_boundaries.py"
+    },
+    "ci_scope_ruff": {
+      "status": "passed",
+      "executed_by": "pi_runtime_agent",
+      "remote_CI_executed": false
+    },
+    "actual_http_contracts": {
+      "executed_by": "pi_runtime_agent",
+      "status": "passed",
+      "command": ".venv/Scripts/python.exe tests/contracts/validate_research_report.py tmp/query-smoke/807b421bc48f44cdb379aa04e23927a8/result.json --require-all",
+      "response_counts": {
+        "snapshots": 1,
+        "snapshot_actions": 1,
+        "snapshot_lists": 1,
+        "queries": 1,
+        "query_actions": 2,
+        "query_lists": 1,
+        "hit_pages": 4,
+        "contexts": 1
+      },
+      "missing": [],
+      "validation": "JSON Schema plus Pydantic cross-field invariants",
+      "total_responses": 12
+    }
+  },
+  "independent_full_engine_evidence": {
+    "path": "pipelines/query/results/2026-10-17-source-query-engine.json",
+    "sha256": "3bdfe5ff8f6a50441abb553b340c769d48a7467981dd7f1e819c93951d3aa916",
+    "separate_from_http_authorization_acceptance": true
+  },
+  "boundaries": [
+    "Exactly one whole-source mount per research snapshot; private TXT and mixed snapshots not implemented in this slice",
+    "API performs authorized pure-Python span/text reads only; CWB runs in background index-worker",
+    "First-page and full-span tasks are separate queue stages; no claim of simultaneous production load benchmark",
+    "Full result exports compact 32-byte records and derives exact counts; old size-only performance is not reused",
+    "Cursor is base64 with parameter digest binding, not a keyed signature",
+    "Explicit prepare rehydrates the same fixed result; GET cache misses return 503",
+    "Synthetic authored 62-sentence fixture, including 60 English sentences with 120 Hello matches; no real-source license approval",
+    "Pi metadata-only adapters keep empty-material scope; search/context content remains denied; production available_tools is empty"
+  ],
+  "recorded_at_utc": "2026-10-16T17:24:15.439172+00:00",
+  "fixture": {
+    "independent_source_id": "fixture-release-807b421bc48f44cdb379aa04e23927a8",
+    "official_network_required": false,
+    "authored_cmn_sentences": 2,
+    "authored_eng_sentences": 60,
+    "sentences": 62,
+    "english_sentence": "Hello 😀 é Hello.",
+    "literal_Hello_hits": 120,
+    "matched_segments": 60,
+    "matched_documents": 60,
+    "document_count_unit": "imported_sentence_record",
+    "real_parser_and_CWB_builder": true,
+    "actual_private_versioned_S3": true,
+    "acquisition_versions": [
+      {
+        "acquisition_id": "2a63d6d3-8bcb-41ae-b77c-5eb3b23d3404",
+        "index_id": "170b02b7-8b7b-4c2f-be0c-17cd7b2f4a07",
+        "index_run_id": "d56308fe-87f7-425e-9507-21bd5c7aef1b",
+        "manifest_sha256": "ae4188b1fd5498c2ffbb9cd99f655b2424693a26a64060bbd59375d9675de396",
+        "counts": {
+          "sentences": 62,
+          "cmn_sentences": 2,
+          "eng_sentences": 60,
+          "characters": 1026,
+          "tokens": 304,
+          "direct_edges": 2,
+          "unknown_owner": 0
+        }
+      },
+      {
+        "acquisition_id": "f0ce469f-5a6d-4d07-a50b-acbfbd55b362",
+        "index_id": "2312552e-f605-46fb-bbb3-652b783466b3",
+        "index_run_id": "6ec91354-a63b-415a-8b86-742397e094b4",
+        "manifest_sha256": "058cbaf4b2ffc6c6945de0ee1fec63b954f310f9e4c56ccfb8165d2e04b485bb",
+        "counts": {
+          "sentences": 62,
+          "cmn_sentences": 2,
+          "eng_sentences": 60,
+          "characters": 1386,
+          "tokens": 364,
+          "direct_edges": 2,
+          "unknown_owner": 0
+        }
+      }
+    ]
+  },
+  "deployed_http": {
+    "status": "passed",
+    "executed_by": "parent_agent",
+    "session_id": 66930,
+    "exit_code": 0,
+    "raw_report": "tmp/query-smoke/807b421bc48f44cdb379aa04e23927a8/result.json",
+    "raw_sha256": "b9ac14641df35bdbcb14636c9cb3ff096031692d0e1b52d0de9bd08adbb6f00f",
+    "started_at_utc": "2026-10-16T17:16:20.854822+00:00",
+    "finished_at_utc": "2026-10-16T17:22:25.165983+00:00",
+    "script_sha256_at_execution": "4baa5c2d6d238fea14811de45b142f4f54eb32be3a443d5099f359937e25e3d5",
+    "project_id": "19f3378a-8d00-4c54-bfd8-f5f6101e5763",
+    "snapshot_id": "2a35aaa4-ae87-4b40-8578-aac0f01df652",
+    "query_run_id": "e136ba94-3300-4d9b-946b-572822dc9f0e",
+    "result_set_id": "bbea9dc0-acf9-4eb7-9ad5-8dba0f3672c8",
+    "authorization_withdrawal_verified": true,
+    "cleanup": {
+      "cleaned": true,
+      "source_id": "fixture-release-807b421bc48f44cdb379aa04e23927a8",
+      "object_versions_deleted": 26,
+      "query_result_versions_deleted": 3,
+      "cache_directories_deleted": 4,
+      "cache_target_count": 5,
+      "cache_targets_remaining": 0
+    },
+    "verified_pages": [
+      50,
+      50,
+      20
+    ],
+    "exact_counts": {
+      "total_hits": 120,
+      "matched_segments": 60,
+      "matched_documents": 60
+    },
+    "source_sentence_and_codepoint_ranges_compared_to_independent_literal_enumeration": true,
+    "idempotent_same_query_replay": true,
+    "context_ordinal": 51,
+    "negative_checks": [
+      "viewer snapshot creation denied 403",
+      "platform admin private result read denied 404",
+      "source authorization withdrawal denies old hits 404"
+    ],
+    "cleanup_interpretation": {
+      "source_artifact_versions_deleted": 26,
+      "query_result_versions_deleted": 3,
+      "total_exact_object_versions_deleted": 29,
+      "cache_directories_deleted": 4,
+      "cache_targets_remaining": 0,
+      "note": "object_versions_deleted is the source/release fixture cleanup count and excludes the separately counted query-result versions"
+    }
+  },
+  "browser": {
+    "reported_by": "parent_agent",
+    "status": "passed",
+    "checks": [
+      "Owner creates research snapshot; PREPARING becomes READY with 62 sentences and 304 tokens",
+      "Owner executes no-match query; all three complete counts are zero",
+      "Viewer has no snapshot-create control and can execute token Hello query with 120 / 60 / 60 exact counts",
+      "Three pages contain 50, 50 and 20 hits; second-page second hit context highlights codepoints [11,16) and sentence-local tokens [3,4)",
+      "Changing query draft does not relabel the saved result; summary stays Hello",
+      "Reload restores three query-history entries; selecting an old query binds its original snapshot and restores 120 hits",
+      "Source deny automatically clears old result/table, disables querying and leaves zero readable history after refresh",
+      "Logout returns to sign-in"
+    ],
+    "screenshots": [
+      {
+        "path": "tmp/query-smoke/807b421bc48f44cdb379aa04e23927a8/browser-query.png",
+        "sha256": "fab7581263340f6889e2f7369ffd8608e526b40140b492842fc09468ddf62ceb"
+      },
+      {
+        "path": "tmp/query-smoke/807b421bc48f44cdb379aa04e23927a8/browser-revoked.png",
+        "sha256": "f655c8e8f232cd8d249f434443a21669e2785b9b10939789f8dffa39c81db3ef"
+      }
+    ],
+    "served_asset": {
+      "path": "apps/web/dist/assets/index-D2XRaamo.js",
+      "sha256": "787cfc4785d799052289fd315c1d2ebad2b8fa5940268a12477b162b221aa671",
+      "actual_HTTP_hash_match_reported_by": "parent_agent"
+    }
+  },
+  "deployment": {
+    "reported_by": "parent_agent",
+    "compose_project": "corpus-s0",
+    "api": {
+      "image_id": "sha256:fb1962c01b016733a52f0ea1a5dbac4d4059e834fdf5f8daf7944049f441784a",
+      "user": "corpus",
+      "research_cache_mount": "/app/tmp/research-cache",
+      "cache_read_write": false
+    },
+    "index_worker": {
+      "image_id": "sha256:a886bd361d9662ef678cd211d93a27558f15095ada7ad1b62555881b08be7edf",
+      "user": "corpus",
+      "research_cache_mount": "/app/tmp/research-cache",
+      "cache_read_write": true
+    },
+    "healthy_services": [
+      "api",
+      "worker",
+      "dispatcher",
+      "index-worker",
+      "database",
+      "broker"
+    ],
+    "objectstorage": {
+      "state": "running",
+      "healthcheck_configured": false,
+      "functional_S3_calls_validated": true
+    }
+  },
+  "architecture_evidence": {
+    "snapshot_members": "One ordered whole-source mount descriptor referencing immutable source release and index; no per-sentence duplication in PostgreSQL",
+    "first_page": "Separate bounded matching task persists at most 50 hits; full result is independently queued",
+    "complete_result": "32-byte <QIIQQ ordered deduplicated span records; exact counts derived from the full stream, fixed private S3 VersionId/SHA and verified local cache",
+    "page_reads": "Pure Python reads selected span records and original text from API read-only shared cache; no CWB invocation in API",
+    "count_semantics": "null until full durable completion; zero only after complete empty result",
+    "runtime": "Existing corpus.index queue / index-worker; no new service and no claimed concurrent first-page/full-result performance measurement",
+    "cache_budget": "All indexes/results/work and CQP temporary outputs sampled approximately once per second and checked unconditionally before publication; not an absolute peak guarantee",
+    "authorization": "Current project member and mount/source authorization checked for each page/context/replay/prepare; fixed snapshot never auto-upgrades",
+    "model_boundary": "Only identifiers/state/next_action metadata adapters; original query text, results and counts are not projected to Pi metadata tools; real model egress unapproved"
+  },
+  "source_sha256": {
+    "services/api/research.py": "05fd2707748dc99b4e74688ccc51da7ba2a23171420398ea1152b5114e7e85df",
+    "services/api/research_models.py": "8523f487fe52a20433276259b423b27753940fdcc9c2feb08d0e62ab77ea6b97",
+    "services/api/migrations/versions/0010_research_queries.py": "6407037d550a2d4951395e633e88f84b9c2d836c9f03b4ce31c1bb80fd822e74",
+    "services/api/main.py": "70016617bae2b9a2f4fa4c288592fca61eb0edb97d5d85f50e93b532da0f2ea4",
+    "services/api/source_releases.py": "0a7428c192b6a165174b33ffde2a37d5928ba2396da316b5ce78089f7db4b6d8",
+    "services/api/agent_tools.py": "c7d88f588de9f5c3a1a0db07dd21f633e38daa227aa1bf3acdaae073d928f76c",
+    "services/api/agent_control.py": "686307e4d4c788dc97d5353d684c96f51811ee641814a72863d3f526f794dc5f",
+    "services/api/agent_checkpoints.py": "47222406fe0b407a5e2a62bdaf7813b3933ad0c8e6b04de0bd0d7bfee60aa5dd",
+    "workers/research.py": "0a5a603bc0e8612e48147d3c27ecc5abd6b91e6c7b3506195e95224a3ef0ffec",
+    "workers/research_dispatcher.py": "e93a5c3fbe2e615fcd501483d90bb7d151ec22b8d8fdd9fec58d01fc4afea4b9",
+    "workers/app.py": "b2c438a9d21e5449a1ef2f73c788da7a0a7eac138b3c9b89c0821977b51a6c7d",
+    "workers/dispatcher.py": "8f7d31fd9b56fa2b7b7a290fd5c5000c272a9394fb36476935b5882b6e76915a",
+    "pipelines/query/source_cache.py": "5a5a8731b725282435feaafbd3084b5587bdc7135858873ecc2cc3c4dc5cffef",
+    "pipelines/query/source_results.py": "edb7889718f2fcf0311df4810e49cac5c7e5810f9967ea2e234be0700e05304c",
+    "pipelines/query/source_reader.py": "ae6ab6d0bbaaeda58f8c2abc8ea38927a454f3fd3c9f925a2fd3debdb69cfb4b",
+    "pipelines/query/source_recipe.py": "a3a14e245ac8e19dc6274bb78fdd21add1c6b0d5e5d0f9927a4f551995895394",
+    "contracts/research.py": "f233dd7d61c2e8c0bab7c3b11745bca901a9d76857592bedd1847fb0c5c7a6c5",
+    "scripts/query_fixture.py": "111586e239c59da52203ac613630da7255f792f8243da30c8f6965c0896e567e",
+    "scripts/query_smoke.py": "4baa5c2d6d238fea14811de45b142f4f54eb32be3a443d5099f359937e25e3d5",
+    "scripts/release_fixture.py": "aec5a26eb486c97b1b0f0078e6bacdda19af5ca1a26dc1c2ea38550227f901c3",
+    "tests/integration/test_research_queries.py": "de172ddb18e0c2a06a3babf9b04c916615a534b72cfa6d0516aad2df92563042",
+    "tests/api/test_research_boundaries.py": "d66fa87f8357f4e83b412ed9871a6fdb71bde8e4c566870a41a5774699762b55",
+    "tests/contracts/validate_research_report.py": "736f5b3d9ba1743cab17ad7ba77fa742a9f43db933542f8aca7625fb186c0bf9",
+    "deploy/Dockerfile.api": "d6e33a4e6b14485712ee07ec29a6925a3644177e4fe2d3bd4130bd800f62bf72",
+    "deploy/Dockerfile.index": "25acbcfb2e24223e643e156c7e6925833c6d85665618a7fa2d01132341bce218",
+    "deploy/compose.yaml": "a0ecc03527e19f6127d5acef3d9a14d9aeab498cf1ecdad3e7dac3769f157432",
+    ".github/workflows/ci.yml": "94dee05285805d77af1e6b175ab02f7a6f9583b8de2097e04b5c2f2cb3fa49a0",
+    "contracts/types/research.ts": "b579461770aa59355ece7133ea3c2d122b349cced2058a5536b62ccf2e6bc296"
+  },
+  "schema_sha256": {
+    "s3-research-context-ref.schema.json": "88cc5653024889e13feebf1b18b957dc19f97b57ceb32e2b4ec24c578f9201d3",
+    "s3-research-context.schema.json": "3010954d1a8adc7a4969e8a84747aa3fcf0160883360dd5cee65cebd96b2c152",
+    "s3-research-hits.schema.json": "619b920d80a2b6d269a089ce3b3fbc79d08b2884cb66c69d44985892561e1131",
+    "s3-research-queries.schema.json": "6fa51c5e4ee7e0753ffdca8e7a47dd0b7995bcc51863f345db3029bee3bd48cc",
+    "s3-research-query-action.schema.json": "5ea0b1a3abcb983bd556f9b65d1d0e8e775c581fbd74bbae28fe57184c42003f",
+    "s3-research-query-create.schema.json": "9d0872b393ad8a4bb52409aeee7158469bc5cac373e1599b3778a8b594468234",
+    "s3-research-query.schema.json": "51b862cdfde2a65d2369639c669f41474e39e6d01a32d148d42f926f68b1b6a1",
+    "s3-research-result-ref.schema.json": "5609bee92106c50d85f5cdd9b1f6a77365fdf17cc4512dfaa0fc9c20fb8ca7cc",
+    "s3-research-snapshot-action.schema.json": "0ae326a462c4e8d629cfb3a1c611193e40867b960f8b7c138148268b52e7e22a",
+    "s3-research-snapshot-create.schema.json": "9739b4fe758b606a5e7e6704ce123f9cb879877b2209b3b1ee060b2dfb95c3d4",
+    "s3-research-snapshot-ref.schema.json": "7e803851dc0d28f3e16433752586d5817720709e5cce16f21251c8e9fe80f444",
+    "s3-research-snapshot.schema.json": "e4d9c6b93dddd3a80cf906a84bdcdefde8cbdbb7511acba58eb415d53d08477b",
+    "s3-research-snapshots.schema.json": "33d1a23dff2958ab476cbc6f482ab16bf4a2cd0dcbcbfc96bd1117196b395a31"
+  },
+  "cleanup_database_verification": {
+    "reported_by": "parent_agent",
+    "method": "independent read-only SQL after HTTP/browser fixture cleanup",
+    "fixture_accounts": 0,
+    "fixture_source": 0,
+    "research_queries": 0,
+    "research_snapshots": 0,
+    "d12_policies": 0,
+    "migration": "0010_research_queries",
+    "status": "passed"
+  },
+  "post_acceptance_metadata_update": {
+    "reported_by": "parent_agent and contracts_agent",
+    "scope": "Static acceptance descriptions changed from pending to accepted; business logic, response schemas, Node and served asset unchanged",
+    "changed_report_source_hashes": [
+      {
+        "path": "contracts/research.py",
+        "previous_sha256": "8333c649602ffc40dca3ff2dbe13165e1f6ec985851761e92a444010f489d5eb",
+        "sha256": "f233dd7d61c2e8c0bab7c3b11745bca901a9d76857592bedd1847fb0c5c7a6c5"
+      }
+    ],
+    "final_api_image_id": "sha256:6b6ad4be0dbf1af0e21ef3d83ca792280c438da9ff9213771181e4fef0a77720",
+    "final_api_health": "healthy",
+    "http_browser_acceptance_api_image_id": "sha256:fb1962c01b016733a52f0ea1a5dbac4d4059e834fdf5f8daf7944049f441784a",
+    "business_integration_and_browser_tests_rerun_on_final_image": false,
+    "contract_tests": {
+      "reported_by": "contracts_agent",
+      "passed": 46,
+      "elapsed_seconds": 2.441
+    },
+    "served_asset_sha256": "787cfc4785d799052289fd315c1d2ebad2b8fa5940268a12477b162b221aa671",
+    "final_served_asset_http_hash_verified_by": "parent_agent",
+    "production_available_tools": 0
+  }
+}

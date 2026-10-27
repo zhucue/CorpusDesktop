@@ -1,0 +1,3782 @@
+{
+  "schema_version": "source-reader-native-evidence/v1",
+  "status": "passed",
+  "formal_performance_acceptance": false,
+  "recorded_at_utc": "2026-10-16T16:28:09.597004+00:00",
+  "previous_evidence": [
+    {
+      "path": "pipelines/query/results/2026-10-16-source-index.json",
+      "sha256": "60409b085a3b05455f5d4d79586aa256a5d4053740d310bb7975df59d634c66a"
+    },
+    {
+      "path": "pipelines/query/results/2026-10-17-source-reader.json",
+      "sha256": "d7281269e51c70646ca7045a9640e1e0da6889454f23d068965f36ef4d9e6e0b"
+    }
+  ],
+  "reason": "The rare-posting/monotone strategy still needed 11.363 seconds to confirm endstart had no hit. Native UTF-8 literal search can select exact candidate sentences without enumerating all sentences containing a common character.",
+  "algorithm": {
+    "scope": "Top-level character literal only; compound patterns retain the previously verified posting strategy.",
+    "candidates": "mmap.find of literal UTF-8 bytes, locate containing record by persisted byte starts, reject matches extending past that record byte end, then resume at that record end.",
+    "final_matching": "Unchanged original-text matcher emits all overlapping Unicode codepoint spans once per candidate sentence.",
+    "unchanged": [
+      "Index bytes and identity",
+      "Recipe and tokenizer",
+      "Normalization none",
+      "Sentence boundaries",
+      "Sorted source order",
+      "Counts and KWIC",
+      "Token reader"
+    ],
+    "new_dependency": false,
+    "index_rebuild": false,
+    "source_download": false
+  },
+  "focused_tests": {
+    "tests": 11,
+    "passed": 11,
+    "skipped": 0,
+    "wall_seconds": 14.127,
+    "log": {
+      "path": "tmp/source-index-s3/reader-native-tests-20261017.log",
+      "sha256": "01211b353eee6f1c7a8b7756cc5ef5449655c0a0ab5348f0d7c20cdd4d284c93"
+    },
+    "coverage": "Cross-sentence false byte match followed by a valid next-sentence match; emoji byte/codepoint distinction; combining versus precomposed forms; overlap; compound candidate semantics; monotone seek boundaries; fresh process and existing integrity guards."
+  },
+  "ab": {
+    "receipt": {
+      "path": "tmp/source-index-s3/reader-native-ab-20261017/result.json",
+      "sha256": "cb3e1cc6524ccef4e310a113d188b0c064a62af4636a62fec5147eec1978c800"
+    },
+    "result": {
+      "status": "passed",
+      "formal_acceptance": false,
+      "configuration": {
+        "cpu_max": "400000 100000",
+        "memory_max": "8589934592",
+        "cold_disk": false,
+        "shared_host": true
+      },
+      "source_sha256": {
+        "baseline": "31044c3bfd09abf76690c2ff202b715737e111328dd98acfbd838d1fc8e43f1d",
+        "optimized": "68d15607fbcf3c2632cefaad1169280d4c41bfc2c3b0c9682e3286d1b78e1cd1"
+      },
+      "baseline_resource_path": "Saved baseline __file__ rebound to repository reader for identical schema resolution; algorithm unchanged.",
+      "manifest_sha256": "9e4255456253a10b2913e5ec1f2393b6dc14a128a154d2b5affe36d59986462f",
+      "runs": [
+        {
+          "iteration": 1,
+          "reader": "baseline",
+          "value": "the",
+          "operation": "count",
+          "seconds": 15.092460668998683,
+          "result_equal": true
+        },
+        {
+          "iteration": 1,
+          "reader": "baseline",
+          "value": "é",
+          "operation": "page",
+          "seconds": 0.013875029999326216,
+          "result_equal": true
+        },
+        {
+          "iteration": 1,
+          "reader": "baseline",
+          "value": "endstart",
+          "operation": "page",
+          "seconds": 9.351024732000951,
+          "result_equal": true
+        },
+        {
+          "iteration": 1,
+          "reader": "optimized",
+          "value": "the",
+          "operation": "count",
+          "seconds": 4.11232820800069,
+          "result_equal": true
+        },
+        {
+          "iteration": 1,
+          "reader": "optimized",
+          "value": "é",
+          "operation": "page",
+          "seconds": 0.04964453800130286,
+          "result_equal": true
+        },
+        {
+          "iteration": 1,
+          "reader": "optimized",
+          "value": "endstart",
+          "operation": "page",
+          "seconds": 0.05922800899861613,
+          "result_equal": true
+        },
+        {
+          "iteration": 2,
+          "reader": "optimized",
+          "value": "the",
+          "operation": "count",
+          "seconds": 4.203277029999299,
+          "result_equal": true
+        },
+        {
+          "iteration": 2,
+          "reader": "optimized",
+          "value": "é",
+          "operation": "page",
+          "seconds": 0.0695135690002644,
+          "result_equal": true
+        },
+        {
+          "iteration": 2,
+          "reader": "optimized",
+          "value": "endstart",
+          "operation": "page",
+          "seconds": 0.07670438700006343,
+          "result_equal": true
+        },
+        {
+          "iteration": 2,
+          "reader": "baseline",
+          "value": "the",
+          "operation": "count",
+          "seconds": 12.917636250000214,
+          "result_equal": true
+        },
+        {
+          "iteration": 2,
+          "reader": "baseline",
+          "value": "é",
+          "operation": "page",
+          "seconds": 0.02218949600137421,
+          "result_equal": true
+        },
+        {
+          "iteration": 2,
+          "reader": "baseline",
+          "value": "endstart",
+          "operation": "page",
+          "seconds": 9.550519177999377,
+          "result_equal": true
+        }
+      ]
+    },
+    "limits": "Two sequential AB then BA observations, shared 4 CPU/8 GiB container, not formal repetitions/concurrency or cold disk."
+  },
+  "full_verification": {
+    "receipt": {
+      "path": "tmp/source-index-s3/reader-native-full-20261017/result.json",
+      "sha256": "1d77955aca2beb1dba2d42d72050f5f42c13fad575b2e8d66674316710ef3610"
+    },
+    "result": {
+      "status": "passed",
+      "formal_acceptance": false,
+      "input_sha256": "4da815f0806d6a40677de04c37ea7431a05fc899d41d7f4c6d954f52b8ba6a9f",
+      "reader_manifest_sha256": "9e4255456253a10b2913e5ec1f2393b6dc14a128a154d2b5affe36d59986462f",
+      "source_sha256": "248223bc55397eea50ca716d56790f81ace2c00811adecc862c11f7b2b42f945",
+      "measured_source_sha256": {
+        "source_index_verify.py": "248223bc55397eea50ca716d56790f81ace2c00811adecc862c11f7b2b42f945",
+        "source_reader.py": "68d15607fbcf3c2632cefaad1169280d4c41bfc2c3b0c9682e3286d1b78e1cd1"
+      },
+      "environment": {
+        "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.36",
+        "python": "3.12.15",
+        "cpu_max": "400000 100000",
+        "memory_max": "8589934592",
+        "shared_host": true,
+        "cold_disk": false
+      },
+      "scope": "All source rows and all stored token coordinates; 20 explicit exact queries. No sampled index or full S3 acceptance.",
+      "runs": [
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "character",
+            "within": "sentence",
+            "pattern": {
+              "type": "literal",
+              "value": "I"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 634871,
+          "sentences": 557885,
+          "first50": [
+            [
+              1277,
+              0,
+              1
+            ],
+            [
+              1284,
+              0,
+              1
+            ],
+            [
+              1286,
+              0,
+              1
+            ],
+            [
+              1288,
+              0,
+              1
+            ],
+            [
+              1290,
+              0,
+              1
+            ],
+            [
+              1291,
+              0,
+              1
+            ],
+            [
+              1292,
+              0,
+              1
+            ],
+            [
+              1292,
+              16,
+              17
+            ],
+            [
+              1295,
+              28,
+              29
+            ],
+            [
+              1299,
+              0,
+              1
+            ],
+            [
+              1300,
+              0,
+              1
+            ],
+            [
+              1301,
+              0,
+              1
+            ],
+            [
+              1304,
+              0,
+              1
+            ],
+            [
+              1305,
+              0,
+              1
+            ],
+            [
+              1306,
+              0,
+              1
+            ],
+            [
+              1308,
+              0,
+              1
+            ],
+            [
+              1309,
+              0,
+              1
+            ],
+            [
+              1309,
+              29,
+              30
+            ],
+            [
+              1310,
+              0,
+              1
+            ],
+            [
+              1312,
+              0,
+              1
+            ],
+            [
+              1313,
+              0,
+              1
+            ],
+            [
+              1315,
+              0,
+              1
+            ],
+            [
+              1316,
+              0,
+              1
+            ],
+            [
+              1317,
+              0,
+              1
+            ],
+            [
+              1318,
+              16,
+              17
+            ],
+            [
+              1318,
+              42,
+              43
+            ],
+            [
+              1319,
+              0,
+              1
+            ],
+            [
+              1319,
+              45,
+              46
+            ],
+            [
+              1320,
+              0,
+              1
+            ],
+            [
+              1322,
+              18,
+              19
+            ],
+            [
+              1323,
+              3,
+              4
+            ],
+            [
+              1330,
+              0,
+              1
+            ],
+            [
+              1332,
+              16,
+              17
+            ],
+            [
+              1333,
+              0,
+              1
+            ],
+            [
+              1335,
+              27,
+              28
+            ],
+            [
+              1336,
+              0,
+              1
+            ],
+            [
+              1336,
+              25,
+              26
+            ],
+            [
+              1337,
+              5,
+              6
+            ],
+            [
+              1337,
+              16,
+              17
+            ],
+            [
+              1339,
+              0,
+              1
+            ],
+            [
+              1341,
+              0,
+              1
+            ],
+            [
+              1342,
+              0,
+              1
+            ],
+            [
+              1342,
+              21,
+              22
+            ],
+            [
+              1343,
+              0,
+              1
+            ],
+            [
+              1345,
+              0,
+              1
+            ],
+            [
+              1346,
+              13,
+              14
+            ],
+            [
+              1347,
+              0,
+              1
+            ],
+            [
+              1349,
+              10,
+              11
+            ],
+            [
+              1350,
+              0,
+              1
+            ],
+            [
+              1350,
+              12,
+              13
+            ]
+          ],
+          "page_seconds": 0.11190617499960354,
+          "count_seconds": 3.314523121000093,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "character",
+            "within": "sentence",
+            "pattern": {
+              "type": "literal",
+              "value": "the"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 709405,
+          "sentences": 555392,
+          "first50": [
+            [
+              1290,
+              9,
+              12
+            ],
+            [
+              1292,
+              23,
+              26
+            ],
+            [
+              1305,
+              29,
+              32
+            ],
+            [
+              1306,
+              54,
+              57
+            ],
+            [
+              1309,
+              10,
+              13
+            ],
+            [
+              1313,
+              7,
+              10
+            ],
+            [
+              1313,
+              26,
+              29
+            ],
+            [
+              1319,
+              3,
+              6
+            ],
+            [
+              1319,
+              24,
+              27
+            ],
+            [
+              1321,
+              41,
+              44
+            ],
+            [
+              1327,
+              5,
+              8
+            ],
+            [
+              1328,
+              4,
+              7
+            ],
+            [
+              1333,
+              14,
+              17
+            ],
+            [
+              1335,
+              7,
+              10
+            ],
+            [
+              1344,
+              34,
+              37
+            ],
+            [
+              1353,
+              15,
+              18
+            ],
+            [
+              1356,
+              15,
+              18
+            ],
+            [
+              1362,
+              30,
+              33
+            ],
+            [
+              1364,
+              24,
+              27
+            ],
+            [
+              1367,
+              43,
+              46
+            ],
+            [
+              1367,
+              63,
+              66
+            ],
+            [
+              1369,
+              32,
+              35
+            ],
+            [
+              1371,
+              26,
+              29
+            ],
+            [
+              1374,
+              25,
+              28
+            ],
+            [
+              1377,
+              51,
+              54
+            ],
+            [
+              1378,
+              17,
+              20
+            ],
+            [
+              1381,
+              28,
+              31
+            ],
+            [
+              1382,
+              26,
+              29
+            ],
+            [
+              1382,
+              39,
+              42
+            ],
+            [
+              1389,
+              15,
+              18
+            ],
+            [
+              1389,
+              27,
+              30
+            ],
+            [
+              1390,
+              18,
+              21
+            ],
+            [
+              1394,
+              15,
+              18
+            ],
+            [
+              1396,
+              24,
+              27
+            ],
+            [
+              1396,
+              69,
+              72
+            ],
+            [
+              1400,
+              32,
+              35
+            ],
+            [
+              1406,
+              31,
+              34
+            ],
+            [
+              1415,
+              23,
+              26
+            ],
+            [
+              1415,
+              79,
+              82
+            ],
+            [
+              1420,
+              24,
+              27
+            ],
+            [
+              1422,
+              60,
+              63
+            ],
+            [
+              1430,
+              19,
+              22
+            ],
+            [
+              1430,
+              51,
+              54
+            ],
+            [
+              1431,
+              9,
+              12
+            ],
+            [
+              1440,
+              4,
+              7
+            ],
+            [
+              1448,
+              34,
+              37
+            ],
+            [
+              1449,
+              6,
+              9
+            ],
+            [
+              1452,
+              21,
+              24
+            ],
+            [
+              1465,
+              13,
+              16
+            ],
+            [
+              1467,
+              31,
+              34
+            ]
+          ],
+          "page_seconds": 0.014738772999407956,
+          "count_seconds": 3.747412169999734,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "character",
+            "within": "sentence",
+            "pattern": {
+              "type": "literal",
+              "value": "love"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 19504,
+          "sentences": 18742,
+          "first50": [
+            [
+              1338,
+              13,
+              17
+            ],
+            [
+              1434,
+              2,
+              6
+            ],
+            [
+              1578,
+              9,
+              13
+            ],
+            [
+              1580,
+              13,
+              17
+            ],
+            [
+              1609,
+              13,
+              17
+            ],
+            [
+              1693,
+              40,
+              44
+            ],
+            [
+              1788,
+              18,
+              22
+            ],
+            [
+              1841,
+              2,
+              6
+            ],
+            [
+              1866,
+              11,
+              15
+            ],
+            [
+              1908,
+              41,
+              45
+            ],
+            [
+              1908,
+              100,
+              104
+            ],
+            [
+              1920,
+              50,
+              54
+            ],
+            [
+              1957,
+              87,
+              91
+            ],
+            [
+              2311,
+              2,
+              6
+            ],
+            [
+              2371,
+              11,
+              15
+            ],
+            [
+              2372,
+              3,
+              7
+            ],
+            [
+              14204,
+              16,
+              20
+            ],
+            [
+              15784,
+              30,
+              34
+            ],
+            [
+              16279,
+              7,
+              11
+            ],
+            [
+              16335,
+              15,
+              19
+            ],
+            [
+              16879,
+              9,
+              13
+            ],
+            [
+              17295,
+              19,
+              23
+            ],
+            [
+              17609,
+              4,
+              8
+            ],
+            [
+              17748,
+              22,
+              26
+            ],
+            [
+              17829,
+              2,
+              6
+            ],
+            [
+              17829,
+              25,
+              29
+            ],
+            [
+              18501,
+              12,
+              16
+            ],
+            [
+              18606,
+              31,
+              35
+            ],
+            [
+              20106,
+              12,
+              16
+            ],
+            [
+              20313,
+              10,
+              14
+            ],
+            [
+              20319,
+              11,
+              15
+            ],
+            [
+              20324,
+              7,
+              11
+            ],
+            [
+              20852,
+              10,
+              14
+            ],
+            [
+              20898,
+              22,
+              26
+            ],
+            [
+              21686,
+              13,
+              17
+            ],
+            [
+              22687,
+              7,
+              11
+            ],
+            [
+              23248,
+              18,
+              22
+            ],
+            [
+              23565,
+              20,
+              24
+            ],
+            [
+              23738,
+              20,
+              24
+            ],
+            [
+              24042,
+              47,
+              51
+            ],
+            [
+              24118,
+              16,
+              20
+            ],
+            [
+              24779,
+              2,
+              6
+            ],
+            [
+              24878,
+              5,
+              9
+            ],
+            [
+              24924,
+              7,
+              11
+            ],
+            [
+              25443,
+              23,
+              27
+            ],
+            [
+              25486,
+              14,
+              18
+            ],
+            [
+              25532,
+              3,
+              7
+            ],
+            [
+              25535,
+              2,
+              6
+            ],
+            [
+              25551,
+              27,
+              31
+            ],
+            [
+              25617,
+              19,
+              23
+            ]
+          ],
+          "page_seconds": 0.015276251000614138,
+          "count_seconds": 0.29164980899804505,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "character",
+            "within": "sentence",
+            "pattern": {
+              "type": "literal",
+              "value": "北京"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 76,
+          "sentences": 74,
+          "first50": [
+            [
+              389050,
+              0,
+              2
+            ],
+            [
+              396199,
+              7,
+              9
+            ],
+            [
+              420514,
+              6,
+              8
+            ],
+            [
+              661545,
+              8,
+              10
+            ],
+            [
+              747604,
+              8,
+              10
+            ],
+            [
+              747620,
+              1,
+              3
+            ],
+            [
+              747877,
+              11,
+              13
+            ],
+            [
+              747928,
+              8,
+              10
+            ],
+            [
+              775577,
+              19,
+              21
+            ],
+            [
+              775588,
+              21,
+              23
+            ],
+            [
+              795210,
+              9,
+              11
+            ],
+            [
+              827169,
+              7,
+              9
+            ],
+            [
+              844670,
+              3,
+              5
+            ],
+            [
+              844714,
+              3,
+              5
+            ],
+            [
+              858913,
+              3,
+              5
+            ],
+            [
+              858916,
+              16,
+              18
+            ],
+            [
+              858920,
+              3,
+              5
+            ],
+            [
+              858920,
+              18,
+              20
+            ],
+            [
+              858929,
+              0,
+              2
+            ],
+            [
+              858931,
+              14,
+              16
+            ],
+            [
+              858950,
+              6,
+              8
+            ],
+            [
+              858971,
+              5,
+              7
+            ],
+            [
+              859024,
+              3,
+              5
+            ],
+            [
+              1158135,
+              0,
+              2
+            ],
+            [
+              1173216,
+              4,
+              6
+            ],
+            [
+              1216106,
+              4,
+              6
+            ],
+            [
+              1398676,
+              6,
+              8
+            ],
+            [
+              1416197,
+              0,
+              2
+            ],
+            [
+              1441787,
+              2,
+              4
+            ],
+            [
+              1441838,
+              9,
+              11
+            ],
+            [
+              1477288,
+              3,
+              5
+            ],
+            [
+              1567764,
+              7,
+              9
+            ],
+            [
+              1567781,
+              8,
+              10
+            ],
+            [
+              1633336,
+              3,
+              5
+            ],
+            [
+              1746076,
+              1,
+              3
+            ],
+            [
+              1766267,
+              4,
+              6
+            ],
+            [
+              2312942,
+              0,
+              2
+            ],
+            [
+              2448819,
+              3,
+              5
+            ],
+            [
+              2737457,
+              7,
+              9
+            ],
+            [
+              3320722,
+              3,
+              5
+            ],
+            [
+              3320722,
+              13,
+              15
+            ],
+            [
+              3537667,
+              2,
+              4
+            ],
+            [
+              3709271,
+              0,
+              2
+            ],
+            [
+              3990317,
+              3,
+              5
+            ],
+            [
+              3990337,
+              4,
+              6
+            ],
+            [
+              3990339,
+              3,
+              5
+            ],
+            [
+              4264634,
+              0,
+              2
+            ],
+            [
+              4620886,
+              6,
+              8
+            ],
+            [
+              4620888,
+              0,
+              2
+            ],
+            [
+              4625761,
+              0,
+              2
+            ]
+          ],
+          "page_seconds": 0.026529401999141555,
+          "count_seconds": 0.05826568700285861,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "character",
+            "within": "sentence",
+            "pattern": {
+              "type": "literal",
+              "value": "哈哈"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 16,
+          "sentences": 12,
+          "first50": [
+            [
+              335934,
+              3,
+              5
+            ],
+            [
+              420924,
+              10,
+              12
+            ],
+            [
+              715574,
+              8,
+              10
+            ],
+            [
+              3060455,
+              0,
+              2
+            ],
+            [
+              3709320,
+              11,
+              13
+            ],
+            [
+              5581837,
+              1,
+              3
+            ],
+            [
+              5581837,
+              2,
+              4
+            ],
+            [
+              9144917,
+              13,
+              15
+            ],
+            [
+              10699079,
+              0,
+              2
+            ],
+            [
+              13112195,
+              0,
+              2
+            ],
+            [
+              13112195,
+              1,
+              3
+            ],
+            [
+              13275127,
+              0,
+              2
+            ],
+            [
+              13939368,
+              53,
+              55
+            ],
+            [
+              13939368,
+              54,
+              56
+            ],
+            [
+              13947170,
+              0,
+              2
+            ],
+            [
+              13947170,
+              1,
+              3
+            ]
+          ],
+          "page_seconds": 0.0575865499995416,
+          "count_seconds": 0.054906448000110686,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "character",
+            "within": "sentence",
+            "pattern": {
+              "type": "literal",
+              "value": "😀"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 0,
+          "sentences": 0,
+          "first50": [],
+          "page_seconds": 0.029855297001631698,
+          "count_seconds": 0.028512180000689114,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "character",
+            "within": "sentence",
+            "pattern": {
+              "type": "literal",
+              "value": "é"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 0,
+          "sentences": 0,
+          "first50": [],
+          "page_seconds": 0.0449719800017192,
+          "count_seconds": 0.04590135599937639,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "character",
+            "within": "sentence",
+            "pattern": {
+              "type": "literal",
+              "value": "é"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 960,
+          "sentences": 838,
+          "first50": [
+            [
+              2221,
+              8,
+              9
+            ],
+            [
+              19916,
+              20,
+              21
+            ],
+            [
+              29359,
+              25,
+              26
+            ],
+            [
+              41316,
+              23,
+              24
+            ],
+            [
+              138747,
+              3,
+              4
+            ],
+            [
+              282587,
+              38,
+              39
+            ],
+            [
+              282588,
+              44,
+              45
+            ],
+            [
+              326783,
+              48,
+              49
+            ],
+            [
+              327191,
+              71,
+              72
+            ],
+            [
+              343110,
+              3,
+              4
+            ],
+            [
+              403093,
+              27,
+              28
+            ],
+            [
+              407022,
+              51,
+              52
+            ],
+            [
+              407546,
+              42,
+              43
+            ],
+            [
+              413395,
+              84,
+              85
+            ],
+            [
+              415427,
+              33,
+              34
+            ],
+            [
+              435086,
+              9,
+              10
+            ],
+            [
+              460313,
+              73,
+              74
+            ],
+            [
+              473227,
+              25,
+              26
+            ],
+            [
+              478541,
+              3,
+              4
+            ],
+            [
+              509098,
+              19,
+              20
+            ],
+            [
+              515373,
+              7,
+              8
+            ],
+            [
+              515579,
+              15,
+              16
+            ],
+            [
+              523698,
+              40,
+              41
+            ],
+            [
+              526652,
+              7,
+              8
+            ],
+            [
+              632817,
+              23,
+              24
+            ],
+            [
+              638291,
+              36,
+              37
+            ],
+            [
+              670934,
+              35,
+              36
+            ],
+            [
+              696862,
+              26,
+              27
+            ],
+            [
+              717980,
+              39,
+              40
+            ],
+            [
+              718046,
+              23,
+              24
+            ],
+            [
+              718046,
+              27,
+              28
+            ],
+            [
+              728388,
+              31,
+              32
+            ],
+            [
+              728390,
+              36,
+              37
+            ],
+            [
+              774905,
+              31,
+              32
+            ],
+            [
+              774907,
+              31,
+              32
+            ],
+            [
+              802888,
+              6,
+              7
+            ],
+            [
+              802888,
+              10,
+              11
+            ],
+            [
+              834851,
+              20,
+              21
+            ],
+            [
+              859282,
+              4,
+              5
+            ],
+            [
+              868725,
+              3,
+              4
+            ],
+            [
+              871351,
+              27,
+              28
+            ],
+            [
+              871566,
+              224,
+              225
+            ],
+            [
+              871570,
+              125,
+              126
+            ],
+            [
+              874931,
+              1,
+              2
+            ],
+            [
+              875738,
+              21,
+              22
+            ],
+            [
+              875772,
+              3,
+              4
+            ],
+            [
+              875803,
+              40,
+              41
+            ],
+            [
+              877484,
+              56,
+              57
+            ],
+            [
+              908456,
+              29,
+              30
+            ],
+            [
+              927855,
+              24,
+              25
+            ]
+          ],
+          "page_seconds": 0.021507854002265958,
+          "count_seconds": 0.059041298998636194,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "character",
+            "within": "sentence",
+            "pattern": {
+              "type": "literal",
+              "value": "s3-no-such-phrase-20261016"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 0,
+          "sentences": 0,
+          "first50": [],
+          "page_seconds": 0.027411601000494557,
+          "count_seconds": 0.025692130999232177,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "character",
+            "within": "sentence",
+            "pattern": {
+              "type": "literal",
+              "value": "endstart"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 0,
+          "sentences": 0,
+          "first50": [],
+          "page_seconds": 0.05587686900253175,
+          "count_seconds": 0.05381871999998111,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "token",
+            "within": "sentence",
+            "pattern": {
+              "type": "term",
+              "attr": "form",
+              "op": "eq",
+              "value": "I"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 520005,
+          "sentences": 458796,
+          "first50": [
+            [
+              1277,
+              0,
+              1
+            ],
+            [
+              1284,
+              0,
+              1
+            ],
+            [
+              1286,
+              0,
+              1
+            ],
+            [
+              1288,
+              0,
+              1
+            ],
+            [
+              1290,
+              0,
+              1
+            ],
+            [
+              1292,
+              0,
+              1
+            ],
+            [
+              1292,
+              16,
+              17
+            ],
+            [
+              1295,
+              28,
+              29
+            ],
+            [
+              1299,
+              0,
+              1
+            ],
+            [
+              1300,
+              0,
+              1
+            ],
+            [
+              1304,
+              0,
+              1
+            ],
+            [
+              1305,
+              0,
+              1
+            ],
+            [
+              1306,
+              0,
+              1
+            ],
+            [
+              1308,
+              0,
+              1
+            ],
+            [
+              1309,
+              0,
+              1
+            ],
+            [
+              1309,
+              29,
+              30
+            ],
+            [
+              1310,
+              0,
+              1
+            ],
+            [
+              1312,
+              0,
+              1
+            ],
+            [
+              1313,
+              0,
+              1
+            ],
+            [
+              1315,
+              0,
+              1
+            ],
+            [
+              1316,
+              0,
+              1
+            ],
+            [
+              1317,
+              0,
+              1
+            ],
+            [
+              1318,
+              16,
+              17
+            ],
+            [
+              1318,
+              42,
+              43
+            ],
+            [
+              1319,
+              45,
+              46
+            ],
+            [
+              1322,
+              18,
+              19
+            ],
+            [
+              1323,
+              3,
+              4
+            ],
+            [
+              1332,
+              16,
+              17
+            ],
+            [
+              1335,
+              27,
+              28
+            ],
+            [
+              1336,
+              0,
+              1
+            ],
+            [
+              1336,
+              25,
+              26
+            ],
+            [
+              1337,
+              5,
+              6
+            ],
+            [
+              1337,
+              16,
+              17
+            ],
+            [
+              1339,
+              0,
+              1
+            ],
+            [
+              1341,
+              0,
+              1
+            ],
+            [
+              1342,
+              0,
+              1
+            ],
+            [
+              1342,
+              21,
+              22
+            ],
+            [
+              1343,
+              0,
+              1
+            ],
+            [
+              1345,
+              0,
+              1
+            ],
+            [
+              1346,
+              13,
+              14
+            ],
+            [
+              1349,
+              10,
+              11
+            ],
+            [
+              1350,
+              12,
+              13
+            ],
+            [
+              1351,
+              22,
+              23
+            ],
+            [
+              1352,
+              0,
+              1
+            ],
+            [
+              1355,
+              0,
+              1
+            ],
+            [
+              1355,
+              41,
+              42
+            ],
+            [
+              1357,
+              0,
+              1
+            ],
+            [
+              1359,
+              0,
+              1
+            ],
+            [
+              1359,
+              20,
+              21
+            ],
+            [
+              1360,
+              21,
+              22
+            ]
+          ],
+          "page_seconds": 0.38756935900164535,
+          "count_seconds": 0.8779205339997134,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "token",
+            "within": "sentence",
+            "pattern": {
+              "type": "term",
+              "attr": "form",
+              "op": "eq",
+              "value": "the"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 485310,
+          "sentences": 396809,
+          "first50": [
+            [
+              1290,
+              9,
+              12
+            ],
+            [
+              1292,
+              23,
+              26
+            ],
+            [
+              1305,
+              29,
+              32
+            ],
+            [
+              1306,
+              54,
+              57
+            ],
+            [
+              1319,
+              3,
+              6
+            ],
+            [
+              1319,
+              24,
+              27
+            ],
+            [
+              1333,
+              14,
+              17
+            ],
+            [
+              1335,
+              7,
+              10
+            ],
+            [
+              1353,
+              15,
+              18
+            ],
+            [
+              1356,
+              15,
+              18
+            ],
+            [
+              1362,
+              30,
+              33
+            ],
+            [
+              1369,
+              32,
+              35
+            ],
+            [
+              1374,
+              25,
+              28
+            ],
+            [
+              1382,
+              26,
+              29
+            ],
+            [
+              1382,
+              39,
+              42
+            ],
+            [
+              1389,
+              15,
+              18
+            ],
+            [
+              1400,
+              32,
+              35
+            ],
+            [
+              1422,
+              60,
+              63
+            ],
+            [
+              1431,
+              9,
+              12
+            ],
+            [
+              1440,
+              4,
+              7
+            ],
+            [
+              1448,
+              34,
+              37
+            ],
+            [
+              1465,
+              13,
+              16
+            ],
+            [
+              1480,
+              25,
+              28
+            ],
+            [
+              1481,
+              26,
+              29
+            ],
+            [
+              1489,
+              26,
+              29
+            ],
+            [
+              1489,
+              47,
+              50
+            ],
+            [
+              1492,
+              22,
+              25
+            ],
+            [
+              1506,
+              44,
+              47
+            ],
+            [
+              1507,
+              8,
+              11
+            ],
+            [
+              1507,
+              27,
+              30
+            ],
+            [
+              1508,
+              20,
+              23
+            ],
+            [
+              1511,
+              13,
+              16
+            ],
+            [
+              1519,
+              22,
+              25
+            ],
+            [
+              1523,
+              15,
+              18
+            ],
+            [
+              1523,
+              55,
+              58
+            ],
+            [
+              1528,
+              41,
+              44
+            ],
+            [
+              1531,
+              18,
+              21
+            ],
+            [
+              1533,
+              15,
+              18
+            ],
+            [
+              1534,
+              3,
+              6
+            ],
+            [
+              1534,
+              15,
+              18
+            ],
+            [
+              1534,
+              53,
+              56
+            ],
+            [
+              1534,
+              80,
+              83
+            ],
+            [
+              1536,
+              6,
+              9
+            ],
+            [
+              1536,
+              27,
+              30
+            ],
+            [
+              1544,
+              39,
+              42
+            ],
+            [
+              1550,
+              13,
+              16
+            ],
+            [
+              1550,
+              54,
+              57
+            ],
+            [
+              1551,
+              35,
+              38
+            ],
+            [
+              1555,
+              12,
+              15
+            ],
+            [
+              1559,
+              6,
+              9
+            ]
+          ],
+          "page_seconds": 0.4156850620020123,
+          "count_seconds": 1.37291208500028,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "token",
+            "within": "sentence",
+            "pattern": {
+              "type": "term",
+              "attr": "form",
+              "op": "eq",
+              "value": "love"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 12115,
+          "sentences": 11715,
+          "first50": [
+            [
+              1434,
+              2,
+              6
+            ],
+            [
+              1578,
+              9,
+              13
+            ],
+            [
+              1580,
+              13,
+              17
+            ],
+            [
+              1609,
+              13,
+              17
+            ],
+            [
+              1788,
+              18,
+              22
+            ],
+            [
+              1841,
+              2,
+              6
+            ],
+            [
+              1866,
+              11,
+              15
+            ],
+            [
+              1908,
+              41,
+              45
+            ],
+            [
+              1908,
+              100,
+              104
+            ],
+            [
+              1920,
+              50,
+              54
+            ],
+            [
+              2311,
+              2,
+              6
+            ],
+            [
+              2371,
+              11,
+              15
+            ],
+            [
+              2372,
+              3,
+              7
+            ],
+            [
+              14204,
+              16,
+              20
+            ],
+            [
+              16279,
+              7,
+              11
+            ],
+            [
+              16335,
+              15,
+              19
+            ],
+            [
+              17295,
+              19,
+              23
+            ],
+            [
+              17609,
+              4,
+              8
+            ],
+            [
+              17748,
+              22,
+              26
+            ],
+            [
+              17829,
+              2,
+              6
+            ],
+            [
+              17829,
+              25,
+              29
+            ],
+            [
+              18501,
+              12,
+              16
+            ],
+            [
+              18606,
+              31,
+              35
+            ],
+            [
+              20106,
+              12,
+              16
+            ],
+            [
+              20898,
+              22,
+              26
+            ],
+            [
+              23738,
+              20,
+              24
+            ],
+            [
+              24042,
+              47,
+              51
+            ],
+            [
+              24779,
+              2,
+              6
+            ],
+            [
+              25443,
+              23,
+              27
+            ],
+            [
+              25486,
+              14,
+              18
+            ],
+            [
+              25532,
+              3,
+              7
+            ],
+            [
+              25535,
+              2,
+              6
+            ],
+            [
+              25551,
+              27,
+              31
+            ],
+            [
+              25617,
+              19,
+              23
+            ],
+            [
+              26368,
+              11,
+              15
+            ],
+            [
+              26425,
+              7,
+              11
+            ],
+            [
+              27752,
+              58,
+              62
+            ],
+            [
+              28332,
+              12,
+              16
+            ],
+            [
+              28688,
+              12,
+              16
+            ],
+            [
+              28693,
+              19,
+              23
+            ],
+            [
+              28702,
+              45,
+              49
+            ],
+            [
+              28705,
+              18,
+              22
+            ],
+            [
+              28706,
+              26,
+              30
+            ],
+            [
+              28712,
+              4,
+              8
+            ],
+            [
+              28713,
+              16,
+              20
+            ],
+            [
+              28716,
+              43,
+              47
+            ],
+            [
+              28720,
+              37,
+              41
+            ],
+            [
+              28723,
+              38,
+              42
+            ],
+            [
+              28726,
+              32,
+              36
+            ],
+            [
+              28727,
+              14,
+              18
+            ]
+          ],
+          "page_seconds": 0.3887610040001164,
+          "count_seconds": 0.9180108569998993,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "token",
+            "within": "sentence",
+            "pattern": {
+              "type": "term",
+              "attr": "form",
+              "op": "eq",
+              "value": "北京"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 72,
+          "sentences": 70,
+          "first50": [
+            [
+              389050,
+              0,
+              2
+            ],
+            [
+              396199,
+              7,
+              9
+            ],
+            [
+              420514,
+              6,
+              8
+            ],
+            [
+              747604,
+              8,
+              10
+            ],
+            [
+              747620,
+              1,
+              3
+            ],
+            [
+              747877,
+              11,
+              13
+            ],
+            [
+              747928,
+              8,
+              10
+            ],
+            [
+              775577,
+              19,
+              21
+            ],
+            [
+              775588,
+              21,
+              23
+            ],
+            [
+              827169,
+              7,
+              9
+            ],
+            [
+              844670,
+              3,
+              5
+            ],
+            [
+              844714,
+              3,
+              5
+            ],
+            [
+              858913,
+              3,
+              5
+            ],
+            [
+              858916,
+              16,
+              18
+            ],
+            [
+              858920,
+              3,
+              5
+            ],
+            [
+              858920,
+              18,
+              20
+            ],
+            [
+              858929,
+              0,
+              2
+            ],
+            [
+              858931,
+              14,
+              16
+            ],
+            [
+              858950,
+              6,
+              8
+            ],
+            [
+              858971,
+              5,
+              7
+            ],
+            [
+              859024,
+              3,
+              5
+            ],
+            [
+              1158135,
+              0,
+              2
+            ],
+            [
+              1173216,
+              4,
+              6
+            ],
+            [
+              1216106,
+              4,
+              6
+            ],
+            [
+              1398676,
+              6,
+              8
+            ],
+            [
+              1416197,
+              0,
+              2
+            ],
+            [
+              1441787,
+              2,
+              4
+            ],
+            [
+              1441838,
+              9,
+              11
+            ],
+            [
+              1477288,
+              3,
+              5
+            ],
+            [
+              1567764,
+              7,
+              9
+            ],
+            [
+              1567781,
+              8,
+              10
+            ],
+            [
+              1633336,
+              3,
+              5
+            ],
+            [
+              1746076,
+              1,
+              3
+            ],
+            [
+              1766267,
+              4,
+              6
+            ],
+            [
+              2312942,
+              0,
+              2
+            ],
+            [
+              2448819,
+              3,
+              5
+            ],
+            [
+              2737457,
+              7,
+              9
+            ],
+            [
+              3320722,
+              3,
+              5
+            ],
+            [
+              3320722,
+              13,
+              15
+            ],
+            [
+              3537667,
+              2,
+              4
+            ],
+            [
+              3709271,
+              0,
+              2
+            ],
+            [
+              3990317,
+              3,
+              5
+            ],
+            [
+              3990337,
+              4,
+              6
+            ],
+            [
+              3990339,
+              3,
+              5
+            ],
+            [
+              4620886,
+              6,
+              8
+            ],
+            [
+              4620888,
+              0,
+              2
+            ],
+            [
+              4625761,
+              0,
+              2
+            ],
+            [
+              4704316,
+              0,
+              2
+            ],
+            [
+              4819886,
+              13,
+              15
+            ],
+            [
+              5090919,
+              17,
+              19
+            ]
+          ],
+          "page_seconds": 0.3343045420006092,
+          "count_seconds": 0.27363291299843695,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "token",
+            "within": "sentence",
+            "pattern": {
+              "type": "term",
+              "attr": "form",
+              "op": "eq",
+              "value": "。"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 74737,
+          "sentences": 73485,
+          "first50": [
+            [
+              2,
+              6,
+              7
+            ],
+            [
+              7,
+              13,
+              14
+            ],
+            [
+              8,
+              12,
+              13
+            ],
+            [
+              9,
+              7,
+              8
+            ],
+            [
+              10,
+              4,
+              5
+            ],
+            [
+              11,
+              11,
+              12
+            ],
+            [
+              12,
+              8,
+              9
+            ],
+            [
+              14,
+              10,
+              11
+            ],
+            [
+              15,
+              6,
+              7
+            ],
+            [
+              17,
+              10,
+              11
+            ],
+            [
+              18,
+              18,
+              19
+            ],
+            [
+              19,
+              15,
+              16
+            ],
+            [
+              20,
+              11,
+              12
+            ],
+            [
+              21,
+              30,
+              31
+            ],
+            [
+              22,
+              13,
+              14
+            ],
+            [
+              23,
+              7,
+              8
+            ],
+            [
+              24,
+              8,
+              9
+            ],
+            [
+              25,
+              13,
+              14
+            ],
+            [
+              26,
+              7,
+              8
+            ],
+            [
+              27,
+              10,
+              11
+            ],
+            [
+              28,
+              4,
+              5
+            ],
+            [
+              29,
+              4,
+              5
+            ],
+            [
+              30,
+              14,
+              15
+            ],
+            [
+              31,
+              15,
+              16
+            ],
+            [
+              32,
+              8,
+              9
+            ],
+            [
+              33,
+              4,
+              5
+            ],
+            [
+              34,
+              11,
+              12
+            ],
+            [
+              35,
+              7,
+              8
+            ],
+            [
+              36,
+              13,
+              14
+            ],
+            [
+              37,
+              10,
+              11
+            ],
+            [
+              38,
+              6,
+              7
+            ],
+            [
+              39,
+              10,
+              11
+            ],
+            [
+              49,
+              8,
+              9
+            ],
+            [
+              50,
+              4,
+              5
+            ],
+            [
+              52,
+              7,
+              8
+            ],
+            [
+              53,
+              8,
+              9
+            ],
+            [
+              54,
+              12,
+              13
+            ],
+            [
+              55,
+              18,
+              19
+            ],
+            [
+              58,
+              11,
+              12
+            ],
+            [
+              59,
+              5,
+              6
+            ],
+            [
+              62,
+              10,
+              11
+            ],
+            [
+              63,
+              16,
+              17
+            ],
+            [
+              64,
+              10,
+              11
+            ],
+            [
+              65,
+              15,
+              16
+            ],
+            [
+              66,
+              14,
+              15
+            ],
+            [
+              67,
+              26,
+              27
+            ],
+            [
+              68,
+              11,
+              12
+            ],
+            [
+              69,
+              6,
+              7
+            ],
+            [
+              70,
+              10,
+              11
+            ],
+            [
+              71,
+              24,
+              25
+            ]
+          ],
+          "page_seconds": 0.348053104000428,
+          "count_seconds": 0.5624738209990028,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "token",
+            "within": "sentence",
+            "pattern": {
+              "type": "term",
+              "attr": "form",
+              "op": "eq",
+              "value": "😀"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 0,
+          "sentences": 0,
+          "first50": [],
+          "page_seconds": 0.07131125800151494,
+          "count_seconds": 0.06990755000151694,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "token",
+            "within": "sentence",
+            "pattern": {
+              "type": "term",
+              "attr": "form",
+              "op": "eq",
+              "value": "é"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 0,
+          "sentences": 0,
+          "first50": [],
+          "page_seconds": 0.06619043300088379,
+          "count_seconds": 0.06924556100057089,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "token",
+            "within": "sentence",
+            "pattern": {
+              "type": "term",
+              "attr": "form",
+              "op": "eq",
+              "value": "é"
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 5,
+          "sentences": 5,
+          "first50": [
+            [
+              343110,
+              3,
+              4
+            ],
+            [
+              3649485,
+              37,
+              38
+            ],
+            [
+              9832053,
+              79,
+              80
+            ],
+            [
+              12520160,
+              4,
+              5
+            ],
+            [
+              14065742,
+              39,
+              40
+            ]
+          ],
+          "page_seconds": 0.10205703999963589,
+          "count_seconds": 0.12900092600102653,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "token",
+            "within": "sentence",
+            "pattern": {
+              "type": "sequence",
+              "items": [
+                {
+                  "type": "term",
+                  "attr": "form",
+                  "op": "eq",
+                  "value": "I"
+                },
+                {
+                  "type": "term",
+                  "attr": "form",
+                  "op": "eq",
+                  "value": "am"
+                }
+              ]
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 9801,
+          "sentences": 9572,
+          "first50": [
+            [
+              1295,
+              28,
+              32
+            ],
+            [
+              1369,
+              0,
+              4
+            ],
+            [
+              1371,
+              0,
+              4
+            ],
+            [
+              1436,
+              0,
+              4
+            ],
+            [
+              1450,
+              0,
+              4
+            ],
+            [
+              1477,
+              18,
+              22
+            ],
+            [
+              1511,
+              24,
+              28
+            ],
+            [
+              1758,
+              0,
+              4
+            ],
+            [
+              1762,
+              19,
+              23
+            ],
+            [
+              1798,
+              25,
+              29
+            ],
+            [
+              1912,
+              42,
+              46
+            ],
+            [
+              2053,
+              0,
+              4
+            ],
+            [
+              2053,
+              23,
+              27
+            ],
+            [
+              2055,
+              0,
+              4
+            ],
+            [
+              2065,
+              12,
+              16
+            ],
+            [
+              2107,
+              11,
+              15
+            ],
+            [
+              2150,
+              0,
+              4
+            ],
+            [
+              2158,
+              12,
+              16
+            ],
+            [
+              2180,
+              80,
+              84
+            ],
+            [
+              2206,
+              22,
+              26
+            ],
+            [
+              2206,
+              42,
+              46
+            ],
+            [
+              2235,
+              0,
+              4
+            ],
+            [
+              2264,
+              0,
+              4
+            ],
+            [
+              2264,
+              42,
+              46
+            ],
+            [
+              4908,
+              45,
+              49
+            ],
+            [
+              4909,
+              19,
+              23
+            ],
+            [
+              15960,
+              22,
+              26
+            ],
+            [
+              16096,
+              27,
+              31
+            ],
+            [
+              16648,
+              27,
+              31
+            ],
+            [
+              16911,
+              0,
+              4
+            ],
+            [
+              16977,
+              0,
+              4
+            ],
+            [
+              17027,
+              0,
+              4
+            ],
+            [
+              17042,
+              0,
+              4
+            ],
+            [
+              17120,
+              0,
+              4
+            ],
+            [
+              17164,
+              0,
+              4
+            ],
+            [
+              17193,
+              0,
+              4
+            ],
+            [
+              17218,
+              38,
+              42
+            ],
+            [
+              17341,
+              0,
+              4
+            ],
+            [
+              17375,
+              0,
+              4
+            ],
+            [
+              17476,
+              0,
+              4
+            ],
+            [
+              17481,
+              0,
+              4
+            ],
+            [
+              17539,
+              0,
+              4
+            ],
+            [
+              17594,
+              0,
+              4
+            ],
+            [
+              17597,
+              0,
+              4
+            ],
+            [
+              17681,
+              28,
+              32
+            ],
+            [
+              17683,
+              45,
+              49
+            ],
+            [
+              17716,
+              0,
+              4
+            ],
+            [
+              17726,
+              14,
+              18
+            ],
+            [
+              17773,
+              0,
+              4
+            ],
+            [
+              17801,
+              0,
+              4
+            ]
+          ],
+          "page_seconds": 1.2463336940018053,
+          "count_seconds": 1.5117434470012086,
+          "all_counts_spans_kwic_equal": true
+        },
+        {
+          "query": {
+            "dsl_version": "corpus-query/v1",
+            "unit": "token",
+            "within": "sentence",
+            "pattern": {
+              "type": "sequence",
+              "items": [
+                {
+                  "type": "term",
+                  "attr": "form",
+                  "op": "eq",
+                  "value": "我"
+                },
+                {
+                  "type": "term",
+                  "attr": "form",
+                  "op": "eq",
+                  "value": "爱"
+                }
+              ]
+            },
+            "normalization": "none",
+            "overlap": "all"
+          },
+          "hits": 55,
+          "sentences": 55,
+          "first50": [
+            [
+              334596,
+              0,
+              2
+            ],
+            [
+              340479,
+              0,
+              2
+            ],
+            [
+              347822,
+              7,
+              9
+            ],
+            [
+              354448,
+              12,
+              14
+            ],
+            [
+              380195,
+              0,
+              2
+            ],
+            [
+              399115,
+              0,
+              2
+            ],
+            [
+              420018,
+              0,
+              2
+            ],
+            [
+              465838,
+              0,
+              2
+            ],
+            [
+              465839,
+              0,
+              2
+            ],
+            [
+              507219,
+              0,
+              2
+            ],
+            [
+              762029,
+              0,
+              2
+            ],
+            [
+              788621,
+              6,
+              8
+            ],
+            [
+              816446,
+              0,
+              2
+            ],
+            [
+              1151904,
+              3,
+              5
+            ],
+            [
+              1192448,
+              0,
+              2
+            ],
+            [
+              1272222,
+              0,
+              2
+            ],
+            [
+              1311384,
+              2,
+              4
+            ],
+            [
+              1313472,
+              6,
+              8
+            ],
+            [
+              1442801,
+              0,
+              2
+            ],
+            [
+              1504996,
+              0,
+              2
+            ],
+            [
+              1714800,
+              0,
+              2
+            ],
+            [
+              1774097,
+              0,
+              2
+            ],
+            [
+              1783804,
+              0,
+              2
+            ],
+            [
+              1861137,
+              0,
+              2
+            ],
+            [
+              1890391,
+              0,
+              2
+            ],
+            [
+              1944845,
+              0,
+              2
+            ],
+            [
+              2021500,
+              4,
+              6
+            ],
+            [
+              2031880,
+              0,
+              2
+            ],
+            [
+              2196046,
+              0,
+              2
+            ],
+            [
+              2390162,
+              0,
+              2
+            ],
+            [
+              4546932,
+              0,
+              2
+            ],
+            [
+              4620882,
+              0,
+              2
+            ],
+            [
+              4667908,
+              0,
+              2
+            ],
+            [
+              4759974,
+              0,
+              2
+            ],
+            [
+              4831134,
+              0,
+              2
+            ],
+            [
+              5762990,
+              0,
+              2
+            ],
+            [
+              5763007,
+              0,
+              2
+            ],
+            [
+              6139124,
+              0,
+              2
+            ],
+            [
+              6683010,
+              5,
+              7
+            ],
+            [
+              7841384,
+              0,
+              2
+            ],
+            [
+              8640459,
+              0,
+              2
+            ],
+            [
+              8928635,
+              0,
+              2
+            ],
+            [
+              8932479,
+              0,
+              2
+            ],
+            [
+              8932579,
+              0,
+              2
+            ],
+            [
+              9969152,
+              0,
+              2
+            ],
+            [
+              9974960,
+              0,
+              2
+            ],
+            [
+              10054221,
+              0,
+              2
+            ],
+            [
+              10059353,
+              7,
+              9
+            ],
+            [
+              10230466,
+              4,
+              6
+            ],
+            [
+              10262028,
+              0,
+              2
+            ]
+          ],
+          "page_seconds": 1.003221635997761,
+          "count_seconds": 0.6992273690011643,
+          "all_counts_spans_kwic_equal": true
+        }
+      ],
+      "index_identity_sha256": "edc78fd1c6c1b128862bfd174cfbe299edd4f4222a49262bcc95ad8a453fa85f",
+      "recipe_sha256": "39e86f0a995402bf2927732509cc49cf868e98cefbd84dd361a20ae091fbafd1",
+      "full_mapping_check": {
+        "sentences": 2127898,
+        "tokens": 19660489,
+        "characters": 82951215
+      },
+      "wall_seconds": 215.8857035330002
+    },
+    "original_baseline_semantics_identical": true,
+    "oracle_limits": "Full original SQLite text is independently enumerated. Token expectations use the same fixed token layer; this is not independent full re-tokenization quality gold."
+  },
+  "image_id": "sha256:9ea05a80860d0963ab2dae73fe8428011f5c0558f997d5ed3af77ad9df6583e3",
+  "source_snapshots": {
+    "pipelines/query/source_reader.py": {
+      "sha256": "68d15607fbcf3c2632cefaad1169280d4c41bfc2c3b0c9682e3286d1b78e1cd1",
+      "utf8": "\"\"\"Read immutable S3 source indices without loading the corpus into Python objects.\"\"\"\nimport hashlib\nimport json\nimport mmap\nfrom bisect import bisect_left, bisect_right\nfrom pathlib import Path\n\nfrom pipelines.query.cwb import cqp_counts, cqp_page_spans\nfrom pipelines.query.engine import QueryError\nfrom pipelines.query.source_index import RECORD, TOKEN, U64, digest\nfrom pipelines.query.source_recipe import RECIPE_SHA256, encoded, storage_key\n\n\ndef storage_query(query):\n    \"\"\"Translate only exact surface literals on a copy; all other semantics stay compiler-validated.\"\"\"\n    import copy\n    result = copy.deepcopy(query)\n\n    def visit(pattern):\n        if pattern.get(\"type\") == \"term\" and pattern.get(\"attr\") == \"form\" and pattern.get(\"op\") == \"eq\":\n            pattern[\"value\"] = storage_key(pattern[\"value\"])\n        for child in pattern.get(\"items\", pattern.get(\"patterns\", [])):\n            visit(child)\n    visit(result[\"pattern\"])\n    return result\n\n\nclass _Positions:\n    def __init__(self, mapped, offset, count):\n        self.mapped, self.offset, self.count = mapped, offset, count\n\n    def __len__(self):\n        return self.count\n\n    def __getitem__(self, number):\n        if not 0 <= number < self.count:\n            raise IndexError(number)\n        return U64.unpack_from(self.mapped, self.offset + number * 8)[0]\n\n\nclass _RecordStarts:\n    def __init__(self, reader, field=3):\n        self.reader, self.field = reader, field\n\n    def __len__(self):\n        return self.reader.count\n\n    def __getitem__(self, number):\n        return self.reader.record(number)[self.field]\n\n\ndef _monotone_bisect(sequence, value, lower, *, right=False):\n    \"\"\"Bracket a forward seek locally before bisecting a sorted mmap view.\n\n    Successive posting/record seeks usually advance only a few entries. A full\n    remaining-range bisect would unpack millions of distant records repeatedly.\n    Exponential bracketing also bounds work when the next candidate is far away.\n    \"\"\"\n    upper, step, size = lower, 1, len(sequence)\n    while upper < size:\n        current = sequence[upper]\n        if current > value or (current == value and not right):\n            break\n        lower = upper + 1\n        upper += step\n        step *= 2\n    search = bisect_right if right else bisect_left\n    return search(sequence, value, lower, min(upper + 1, size))\n\n\ndef character_anchors(pattern, vocabulary):\n    \"\"\"Select necessary characters only; original text still decides every match.\n\n    A missing character is a zero-cost empty posting. OR needs every branch's\n    candidates; a sequence can use any required (non-gap) item. Posting counts\n    estimate work without reading text or changing persisted index identity.\n    \"\"\"\n    def cost(characters):\n        return sum(vocabulary.get(c, {}).get(\"count\", 0) for c in characters)\n\n    kind = pattern[\"type\"]\n    if kind == \"literal\":\n        return {min(set(pattern[\"value\"]), key=lambda c: (cost({c}), c))}\n    if kind == \"any_of\":\n        return set().union(*(character_anchors(p, vocabulary) for p in pattern[\"patterns\"]))\n    if kind == \"sequence\":\n        choices = [character_anchors(p, vocabulary) for p in pattern[\"items\"] if p[\"type\"] != \"gap\"]\n        return min(choices, key=lambda chars: (cost(chars), tuple(sorted(chars))))\n    raise QueryError(\"QUERY_UNSUPPORTED\")\n\n\nclass SourceIndexReader:\n    def __init__(self, directory, runtime_directory, *, verify=True):\n        self.directory = Path(directory).resolve()\n        self.runtime = Path(runtime_directory).resolve()\n        self.manifest = json.loads((self.directory / \"manifest.json\").read_text(\"utf-8\"))\n        if self.manifest[\"format\"] != \"source-index/v1\" or self.manifest[\"recipe_sha256\"] != RECIPE_SHA256:\n            raise ValueError(\"INDEX_RECIPE_MISMATCH\")\n        if hashlib.sha256(encoded(self.manifest[\"identity\"])).hexdigest() != self.manifest[\"identity_sha256\"]:\n            raise ValueError(\"INDEX_IDENTITY_MISMATCH\")\n        for entry in self.manifest[\"files\"]:\n            path = self.directory / entry[\"name\"]\n            if not path.resolve().is_relative_to(self.directory) or path.is_symlink() or path.stat().st_size != entry[\"bytes\"]:\n                raise ValueError(\"INDEX_FILE_INVALID\")\n            if verify and digest(path) != entry[\"sha256\"]:\n                raise ValueError(\"INDEX_HASH_MISMATCH\")\n        self.handles, self.maps = [], {}\n        try:\n            for name in (\"texts.utf8\", \"records.map\", \"tokens.map\", \"characters.bin\"):\n                handle = (self.directory / name).open(\"rb\")\n                self.handles.append(handle)\n                self.maps[name] = mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ)\n            self.count = self.manifest[\"counts\"][\"sentences\"]\n            if len(self.maps[\"records.map\"]) != self.count * RECORD.size:\n                raise ValueError(\"INDEX_RECORD_COUNT_MISMATCH\")\n            self.starts = _RecordStarts(self)\n            self.byte_starts = _RecordStarts(self, field=1)\n            self.vocabulary = json.loads((self.directory / \"characters.json\").read_text(\"utf-8\"))\n            self.runtime.mkdir(parents=True, exist_ok=False)\n            self.registry = self.runtime / \"registry\"\n            self.registry.mkdir()\n            home = str(self.directory / \"data\")\n            if any(c in home for c in '\\\\\"\\n\\r'):\n                # CWB supported deployment is Linux. Reject ambiguous registry escaping.\n                raise ValueError(\"INDEX_REGISTRY_PATH_INVALID\")\n            registry = (self.directory / \"registry/source\").read_text(\"utf-8\")\n            if registry.count('\"__INDEX_DATA__\"') != 1:\n                raise ValueError(\"INDEX_REGISTRY_INVALID\")\n            (self.registry / \"source\").write_text(registry.replace('\"__INDEX_DATA__\"', '\"' + home + '\"'), encoding=\"utf-8\")\n            # Fixed wrapper suppresses user startup and macro files. No query enters a shell command.\n            self.executable = self.runtime / \"cqp-fixed\"\n            self.executable.write_text('#!/bin/sh\\nexec /usr/bin/cqp -I /dev/null -M /dev/null -m \"$@\"\\n', encoding=\"ascii\")\n            self.executable.chmod(0o700)\n        except BaseException:\n            self.close()\n            raise\n\n    def close(self):\n        for mapped in self.maps.values():\n            mapped.close()\n        for handle in self.handles:\n            handle.close()\n\n    def __enter__(self):\n        return self\n\n    def __exit__(self, *_):\n        self.close()\n\n    def record(self, ordinal):\n        if not 0 <= ordinal < self.count:\n            raise IndexError(ordinal)\n        return RECORD.unpack_from(self.maps[\"records.map\"], ordinal * RECORD.size)\n\n    def text(self, ordinal):\n        _, offset, size, *_ = self.record(ordinal)\n        return self.maps[\"texts.utf8\"][offset:offset + size].decode(\"utf-8\")\n\n    def hit(self, ordinal, left, right):\n        text = self.text(ordinal)\n        sid = self.record(ordinal)[0]\n        return {\"source_sentence_id\": sid, \"revision_id\": f\"tatoeba:{sid}:{hashlib.sha256(text.encode()).hexdigest()}\",\n                \"start\": left, \"end\": right, \"left\": text[max(0, left - 40):left], \"match\": text[left:right],\n                \"right\": text[right:right + 40], \"source_url\": f\"https://tatoeba.org/en/sentences/show/{sid}\"}\n\n    def token_page(self, query, *, offset=0, limit=50):\n        if query.get(\"within\") != \"sentence\":\n            raise QueryError(\"QUERY_UNSUPPORTED\")\n        spans = cqp_page_spans(storage_query(query), self.registry, corpus=\"SOURCE\", offset=offset, limit=limit, executable=str(self.executable), allowed_attributes=frozenset({\"form\"}))\n        page = []\n        for start, end in spans:\n            ordinal, left, _ = TOKEN.unpack_from(self.maps[\"tokens.map\"], start * TOKEN.size)\n            last, _, right = TOKEN.unpack_from(self.maps[\"tokens.map\"], (end - 1) * TOKEN.size)\n            if last != ordinal:\n                raise ValueError(\"INDEX_CROSS_SENTENCE_HIT\")\n            page.append(self.hit(ordinal, left, right))\n        return {\"page\": page, \"total_hits\": None, \"matched_segments\": None, \"matched_documents\": None, \"count_state\": \"pending\"}\n\n    def token_counts(self, query):\n        return {**cqp_counts(storage_query(query), self.registry, corpus=\"SOURCE\", document_attribute=\"doc\", executable=str(self.executable), allowed_attributes=frozenset({\"form\"})), \"count_state\": \"complete\"}\n\n    def _character_matches(self, query):\n        \"\"\"Yield sorted spans without materializing a complete result set.\"\"\"\n        from jsonschema import Draft202012Validator\n\n        from contracts.semantics import validate_query_semantics\n\n        schema = json.loads((Path(__file__).resolve().parents[2] / \"contracts/schemas/corpus-query.schema.json\").read_text(\"utf-8\"))\n        Draft202012Validator(schema).validate(query)\n        validate_query_semantics(query)\n        if query[\"unit\"] != \"character\" or query[\"within\"] != \"sentence\" or query.get(\"condition\") or query.get(\"filters\"):\n            raise QueryError(\"QUERY_UNSUPPORTED\")\n\n        # Merge only posting-derived candidate sentences, not every material object.\n        import heapq\n\n        def candidate_sentences(character):\n            entry = self.vocabulary.get(character)\n            if not entry:\n                return\n            posting = _Positions(self.maps[\"characters.bin\"], entry[\"offset\"], entry[\"count\"])\n            at, lower_ordinal = 0, 0\n            while at < len(posting):\n                ordinal = _monotone_bisect(self.starts, posting[at], lower_ordinal, right=True) - 1\n                yield ordinal\n                _, _, _, start, length, _ = self.record(ordinal)\n                at = _monotone_bisect(posting, start + length, at + 1)\n                lower_ordinal = ordinal + 1\n\n        def literal_sentences(value):\n            # Valid UTF-8 has an unambiguous byte representation. Native find\n            # supplies candidate sentences only: original-text matching below\n            # still computes overlapping Unicode codepoint spans.\n            try:\n                needle = value.encode('utf-8')\n            except UnicodeEncodeError:\n                return  # An isolated surrogate cannot occur in validated UTF-8.\n            at, lower_ordinal = 0, 0\n            texts = self.maps['texts.utf8']\n            while (found := texts.find(needle, at)) >= 0:\n                if time.monotonic() - started > 120:\n                    raise QueryError(\"QUERY_TIMEOUT\")\n                ordinal = _monotone_bisect(self.byte_starts, found, lower_ordinal, right=True) - 1\n                _, start, length, *_ = self.record(ordinal)\n                end = start + length\n                if found + len(needle) <= end:\n                    yield ordinal\n                # Even a rejected cross-sentence candidate must resume at this\n                # sentence's end, not after the needle (which could skip a real\n                # match in the following sentence).\n                at, lower_ordinal = end, ordinal + 1\n\n        def matches(pattern, text):\n            kind = pattern[\"type\"]\n            if kind == \"literal\":\n                value, start, result = pattern[\"value\"], 0, set()\n                while (start := text.find(value, start)) >= 0:\n                    result.add((start, start + len(value)))\n                    start += 1\n                return result\n            if kind == \"any_of\":\n                return set().union(*(matches(p, text) for p in pattern[\"patterns\"]))\n            spans, gap = matches(pattern[\"items\"][0], text), (0, 0)\n            for item in pattern[\"items\"][1:]:\n                if item[\"type\"] == \"gap\":\n                    gap = (item[\"min\"], item[\"max\"])\n                    continue\n                following = sorted(matches(item, text))\n                starts = [a for a, _ in following]\n                spans = {(a, d) for a, b in spans for c, d in following[bisect_left(starts, b + gap[0]):bisect_right(starts, b + gap[1])]}\n                gap = (0, 0)\n            return spans\n\n        import time\n        started = time.monotonic()\n        previous = None\n        pattern = query['pattern']\n        candidates = literal_sentences(pattern['value']) if pattern['type'] == 'literal' else heapq.merge(\n            *(candidate_sentences(c) for c in sorted(character_anchors(pattern, self.vocabulary))))\n        for ordinal in candidates:\n            if time.monotonic() - started > 120:\n                raise QueryError(\"QUERY_TIMEOUT\")\n            if ordinal == previous:\n                continue\n            previous = ordinal\n            spans = sorted(matches(query[\"pattern\"], self.text(ordinal)))\n            for left, right in spans:\n                yield ordinal, left, right\n\n    def character_page(self, query, *, offset=0, limit=50):\n        from itertools import islice\n        if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 50:\n            raise ValueError(\"INVALID_PAGE\")\n        page = [self.hit(*hit) for hit in islice(self._character_matches(query), offset, offset + limit)]\n        return {\"page\": page, \"total_hits\": None, \"matched_segments\": None, \"matched_documents\": None, \"count_state\": \"pending\"}\n\n    def character_counts(self, query):\n        total, documents, previous = 0, 0, None\n        for ordinal, _, _ in self._character_matches(query):\n            total += 1\n            if ordinal != previous:\n                documents += 1\n                previous = ordinal\n        return {\"total_hits\": total, \"matched_segments\": documents, \"matched_documents\": documents,\n                \"count_state\": \"complete\", \"document_count_unit\": \"imported_sentence_record\"}\n\n    def character_query(self, query, *, offset=0, limit=50):\n        \"\"\"Convenience verification path; serving uses independent page/count calls.\"\"\"\n        page = self.character_page(query, offset=offset, limit=limit)[\"page\"]\n        result = self.character_counts(query)\n        total, documents = result[\"total_hits\"], result[\"matched_documents\"]\n        return {\"page\": page, \"total_hits\": total, \"matched_segments\": documents, \"matched_documents\": documents,\n                \"count_state\": \"complete\", \"document_count_unit\": \"imported_sentence_record\"}\n"
+    },
+    "pipelines/query/source_index_verify.py": {
+      "sha256": "248223bc55397eea50ca716d56790f81ace2c00811adecc862c11f7b2b42f945",
+      "utf8": "\"\"\"Fresh-process full-source checks with a direct SQLite/text/token oracle.\n\nNo sample substitution: every source row and persisted token coordinate is read.\nThe small set of literal/phrase queries is explicit; not a 200-gold acceptance.\n\"\"\"\nimport argparse\nimport json\nimport platform\nimport shutil\nimport sqlite3\nimport time\nfrom pathlib import Path\n\nfrom pipelines.query.source_index import TOKEN, digest\nfrom pipelines.query.source_reader import SourceIndexReader\n\nCHARACTERS = [\"I\", \"the\", \"love\", \"北京\", \"哈哈\", \"😀\", \"e\\u0301\", \"é\", \"s3-no-such-phrase-20261016\", \"endstart\"]\nTOKENS = [(\"I\",), (\"the\",), (\"love\",), (\"北京\",), (\"。\",), (\"😀\",), (\"e\\u0301\",), (\"é\",), (\"I\", \"am\"), (\"我\", \"爱\")]\n\n\ndef request(unit, values):\n    if unit == \"character\":\n        pattern = {\"type\": \"literal\", \"value\": values}\n    else:\n        terms = [{\"type\": \"term\", \"attr\": \"form\", \"op\": \"eq\", \"value\": value} for value in values]\n        pattern = terms[0] if len(terms) == 1 else {\"type\": \"sequence\", \"items\": terms}\n    return {\"dsl_version\": \"corpus-query/v1\", \"unit\": unit, \"within\": \"sentence\", \"pattern\": pattern,\n            \"normalization\": \"none\", \"overlap\": \"all\"}\n\n\ndef verify(database, directory, output):\n    output.mkdir(parents=True, exist_ok=False)\n    snapshots = output / 'source'\n    snapshots.mkdir()\n    source_hashes = {}\n    for name in ('source_index_verify.py', 'source_reader.py'):\n        path = Path(__file__).with_name(name)\n        shutil.copyfile(path, snapshots / name)\n        source_hashes[name] = digest(path)\n    started = time.monotonic()\n    oracle = [{\"query\": request(\"character\", v), \"hits\": 0, \"sentences\": 0, \"first50\": []} for v in CHARACTERS]\n    oracle += [{\"query\": request(\"token\", v), \"hits\": 0, \"sentences\": 0, \"first50\": []} for v in TOKENS]\n    db = sqlite3.connect(database.resolve().as_uri() + \"?mode=ro&immutable=1\", uri=True)\n    report = {\"status\": \"failed\", \"formal_acceptance\": False, \"input_sha256\": digest(database),\n              \"reader_manifest_sha256\": digest(directory / \"manifest.json\"), \"source_sha256\": digest(Path(__file__)),\n              \"measured_source_sha256\": source_hashes,\n              \"environment\": {\"platform\": platform.platform(), \"python\": platform.python_version(),\n                              \"cpu_max\": Path('/sys/fs/cgroup/cpu.max').read_text().strip(),\n                              \"memory_max\": Path('/sys/fs/cgroup/memory.max').read_text().strip(),\n                              \"shared_host\": True, \"cold_disk\": False},\n              \"scope\": \"All source rows and all stored token coordinates; 20 explicit exact queries. No sampled index or full S3 acceptance.\", \"runs\": []}\n    try:\n        with SourceIndexReader(directory, output / \"runtime\") as reader:\n            report['index_identity_sha256'] = reader.manifest['identity_sha256']\n            report['recipe_sha256'] = reader.manifest['recipe_sha256']\n            observed_tokens, observed_characters = 0, 0\n            for ordinal, (sid, language, text) in enumerate(db.execute(\"SELECT id,language,text FROM sentences ORDER BY id\")):\n                record = reader.record(ordinal)\n                assert record[0] == sid and reader.text(ordinal) == text\n                next_token = reader.record(ordinal + 1)[5] if ordinal + 1 < reader.count else reader.manifest[\"counts\"][\"tokens\"]\n                forms, positions, cursor = [], [], 0\n                for at in range(record[5], next_token):\n                    doc, start, end = TOKEN.unpack_from(reader.maps[\"tokens.map\"], at * TOKEN.size)\n                    assert doc == ordinal and cursor <= start < end <= len(text) and not text[cursor:start].strip()\n                    forms.append(text[start:end])\n                    positions.append((start, end))\n                    cursor = end\n                assert not text[cursor:].strip()\n                observed_tokens += len(forms)\n                observed_characters += len(text)\n                for index, value in enumerate(CHARACTERS):\n                    spans, at = [], 0\n                    while (at := text.find(value, at)) != -1:\n                        spans.append((at, at + len(value)))\n                        at += 1\n                    _add(oracle[index], sid, spans)\n                for index, words in enumerate(TOKENS, len(CHARACTERS)):\n                    spans = [(positions[i][0], positions[i + len(words) - 1][1])\n                             for i in range(len(forms) - len(words) + 1) if tuple(forms[i:i + len(words)]) == words]\n                    _add(oracle[index], sid, spans)\n                if ordinal % 100000 == 0:\n                    print(json.dumps({\"stage\": \"independent_full_scan\", \"sentences\": ordinal + 1}), flush=True)\n            assert ordinal + 1 == reader.count\n            assert observed_tokens == reader.manifest[\"counts\"][\"tokens\"]\n            assert observed_characters == reader.manifest[\"counts\"][\"characters\"]\n            report[\"full_mapping_check\"] = {\"sentences\": reader.count, \"tokens\": observed_tokens, \"characters\": observed_characters}\n            for expected in oracle:\n                q = expected[\"query\"]\n                stamp = time.monotonic()\n                page = reader.character_page(q) if q[\"unit\"] == \"character\" else reader.token_page(q)\n                first_page_seconds = time.monotonic() - stamp\n                stamp = time.monotonic()\n                counts = reader.character_counts(q) if q[\"unit\"] == \"character\" else reader.token_counts(q)\n                count_seconds = time.monotonic() - stamp\n                assert page[\"total_hits\"] is None and page[\"count_state\"] == \"pending\"\n                assert counts[\"total_hits\"] == expected[\"hits\"]\n                assert counts[\"matched_segments\"] == counts[\"matched_documents\"] == expected[\"sentences\"]\n                assert [(h['source_sentence_id'], h['start'], h['end']) for h in page['page']] == expected['first50']\n                for hit in page['page']:\n                    text = db.execute(\"SELECT text FROM sentences WHERE id=?\", (hit['source_sentence_id'],)).fetchone()[0]\n                    assert hit['match'] == text[hit['start']:hit['end']]\n                    assert hit['left'] == text[max(0,hit['start']-40):hit['start']]\n                    assert hit['right'] == text[hit['end']:hit['end']+40]\n                report[\"runs\"].append({**expected, \"page_seconds\": first_page_seconds, \"count_seconds\": count_seconds,\n                                       \"all_counts_spans_kwic_equal\": True})\n                print(json.dumps({\"stage\": \"query_checked\", \"unit\": q[\"unit\"], \"hits\": expected[\"hits\"], \"page_seconds\": first_page_seconds, \"count_seconds\": count_seconds}), flush=True)\n            report[\"status\"] = \"passed\"\n    finally:\n        db.close()\n        report[\"wall_seconds\"] = time.monotonic() - started\n        (output / \"result.json\").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding=\"utf-8\")\n    return report\n\n\ndef _add(entry, sid, spans):\n    entry[\"hits\"] += len(spans)\n    entry[\"sentences\"] += bool(spans)\n    entry[\"first50\"].extend((sid, left, right) for left, right in spans[:50 - len(entry[\"first50\"])])\n\n\nif __name__ == \"__main__\":\n    parser = argparse.ArgumentParser()\n    parser.add_argument(\"--database\", type=Path, required=True)\n    parser.add_argument(\"--index\", type=Path, required=True)\n    parser.add_argument(\"--output\", type=Path, required=True)\n    args = parser.parse_args()\n    verify(args.database, args.index, args.output)\n"
+    },
+    "tests/query/test_source_index.py": {
+      "sha256": "d77a31921f36ec4af57bc2c4e3c54fd616b70b4462b767a620a7767862771d7b",
+      "utf8": "\"\"\"Independent small gold plus persisted-index restart and actual CWB checks.\"\"\"\nimport hashlib\nimport importlib.util\nimport json\nimport shutil\nimport sqlite3\nimport subprocess\nimport sys\nimport tempfile\nimport unittest\nfrom pathlib import Path\n\nfrom pipelines.query.source_index import IndexBuildError, build\nfrom pipelines.query.source_recipe import encoded\nfrom pipelines.sources.tatoeba import RECIPE as SOURCE_RECIPE\n\nROOT = Path(__file__).resolve().parents[2]\nHAS_ENGINE = bool(shutil.which(\"cwb-encode\") and importlib.util.find_spec(\"jieba\") and importlib.util.find_spec(\"nltk\"))\n\n\ndef fixture(path, *, corrupt=False):\n    db = sqlite3.connect(path)\n    db.executescript(\"\"\"CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT);\n      CREATE TABLE sentences(id INTEGER PRIMARY KEY,language TEXT,text TEXT,owner TEXT,added TEXT,modified TEXT,record_hash TEXT,text_hash TEXT,source_line INTEGER);\n      CREATE TABLE edges(cmn_id INTEGER,eng_id INTEGER,PRIMARY KEY(cmn_id,eng_id));\"\"\")\n    db.execute(\"INSERT INTO metadata VALUES('recipe',?)\", (SOURCE_RECIPE,))\n    for sid, lang, text in [(1,\"cmn\",\"我爱北京。哈哈哈😀\"),(2,\"eng\",\"I can't go. A A A.\"),(3,\"eng\",\"end\"),(4,\"eng\",\"startendstart\"),(5,\"eng\",\"<x> &amp; e\\u0301 😀\"),(6,\"eng\",\"🙂\"),(7,\"eng\",\"🙂🙂\")]:\n        values = (sid,lang,text,'tester',None,None)\n        db.execute(\"INSERT INTO sentences VALUES(?,?,?,?,?,?,?,?,?)\", (*values,hashlib.sha256(encoded(values)).hexdigest(),hashlib.sha256(text.encode()).hexdigest() if not corrupt else '0'*64,sid))\n    db.execute(\"INSERT INTO edges VALUES(1,2)\")\n    db.commit()\n    db.close()\n\n\ndef query(unit, pattern):\n    return {\"dsl_version\":\"corpus-query/v1\",\"unit\":unit,\"within\":\"sentence\",\"pattern\":pattern,\"normalization\":\"none\",\"overlap\":\"all\"}\n\n\nclass MonotoneSeekTests(unittest.TestCase):\n    def test_local_far_duplicate_and_end_seeks(self):\n        from bisect import bisect_left, bisect_right\n\n        from pipelines.query.source_reader import _monotone_bisect\n        values = [0, 1, 1, 3, 8, 100, 1000, 10000]\n        for value, lower in [(-1,0),(0,0),(1,0),(1,2),(7,3),(1000,1),(20000,6),(20000,8)]:\n            for right in (False, True):\n                with self.subTest(value=value,lower=lower,right=right):\n                    expected = lower + sum(x <= value if right else x < value for x in values[lower:])\n                    self.assertEqual(_monotone_bisect(values,value,lower,right=right),expected)\n        for values, value, lower in [([],0,0),([0]*128+[100]*256+[1_000_000],100,128),\n                                     ([0]*128+[100]*256+[1_000_000],100,257),\n                                     ([1,1_000_000,2_000_000],2_000_000,1)]:\n            for right in (False, True):\n                expected = (bisect_right if right else bisect_left)(values,value,lower)\n                self.assertEqual(_monotone_bisect(values,value,lower,right=right),expected)\n\n\n@unittest.skipUnless(HAS_ENGINE, \"Isolated pinned tokenizers and Linux CWB required\")\nclass SourceIndexTests(unittest.TestCase):\n    @classmethod\n    def setUpClass(cls):\n        cls.temp = tempfile.TemporaryDirectory(dir=ROOT/'tmp', prefix='index-test-')\n        cls.root = Path(cls.temp.name)\n        cls.source = cls.root/'source.sqlite3'\n        fixture(cls.source)\n        cls.result = build(cls.source,cls.root/'built','a'*64,lambda _:None)\n\n    @classmethod\n    def tearDownClass(cls):\n        cls.temp.cleanup()\n\n    def reader(self, name):\n        from pipelines.query.source_reader import SourceIndexReader\n        return SourceIndexReader(self.root/'built/bundle',self.root/name)\n\n    def test_independent_tokenization_gold(self):\n        from pipelines.query.source_recipe import SurfaceTokenizer\n        tokenizer = SurfaceTokenizer(self.root/'built/temporary')\n        self.assertEqual(tokenizer.spans('我爱北京。', 'cmn'),[(0,1,'我'),(1,2,'爱'),(2,4,'北京'),(4,5,'。')])\n        self.assertEqual(tokenizer.spans(\"I can't go.\", 'eng'),[(0,1,'I'),(2,4,'ca'),(4,7,\"n't\"),(8,10,'go'),(10,11,'.')])\n        self.assertEqual(tokenizer.spans('e\\u0301 😀','eng'),[(0,2,'e\\u0301'),(3,4,'😀')])\n\n    def test_character_overlap_unicode_sentence_boundary(self):\n        with self.reader('char-runtime') as reader:\n            for value, expected in [('哈哈',[(1,5,7),(1,6,8)]),('😀',[(1,8,9),(5,13,14)]),('e\\u0301',[(5,10,12)]),('é',[]),('endstart',[(4,5,13)]),('absent',[])]:\n                result=reader.character_query(query('character',{'type':'literal','value':value}))\n                self.assertEqual([(h['source_sentence_id'],h['start'],h['end']) for h in result['page']],expected)\n                self.assertEqual(result['total_hits'],len(expected))\n\n    def test_native_literal_cross_sentence_rejection_then_valid_match(self):\n        with self.reader('native-runtime') as reader:\n            for value, expected in [('endstart',[(4,5,13)]),('🙂🙂',[(7,0,2)]),('start<',[]),('\\ud800',[])]:\n                with self.subTest(value=repr(value)):\n                    result=reader.character_query(query('character',{'type':'literal','value':value}))\n                    self.assertEqual([(h['source_sentence_id'],h['start'],h['end']) for h in result['page']],expected)\n                    self.assertEqual(result['total_hits'],len(expected))\n\n    def test_character_candidate_selection_preserves_composite_spans(self):\n        def literal(value):\n            return {'type':'literal','value':value}\n        cases = [\n            (literal('北京'), [(1,2,4)]),\n            (literal('哈哈'), [(1,5,7),(1,6,8)]),\n            ({'type':'any_of','patterns':[literal('missing'),literal('哈哈')]}, [(1,5,7),(1,6,8)]),\n            ({'type':'sequence','items':[literal('我'),{'type':'gap','min':0,'max':3},literal('北京')]}, [(1,0,4)]),\n            ({'type':'sequence','items':[literal('A'),{'type':'gap','min':1,'max':3},literal('A')]}, [(2,12,15),(2,12,17),(2,14,17)]),\n        ]\n        with self.reader('candidate-runtime') as reader:\n            for pattern, expected in cases:\n                with self.subTest(pattern=pattern):\n                    result = reader.character_query(query('character',pattern))\n                    self.assertEqual([(h['source_sentence_id'],h['start'],h['end']) for h in result['page']],expected)\n                    self.assertEqual(result['total_hits'],len(expected))\n                    self.assertEqual(reader.character_page(query('character',pattern),offset=1,limit=1)['page'],result['page'][1:2])\n\n    def test_cwb_counts_kwic_and_missing_attribute(self):\n        with self.reader('token-runtime') as reader:\n            q=query('token',{'type':'term','attr':'form','op':'eq','value':'A'})\n            self.assertEqual(reader.token_counts(q)['total_hits'],3)\n            page=reader.token_page(q)\n            self.assertIsNone(page['total_hits'])\n            self.assertEqual([(h['start'],h['end']) for h in page['page']],[(12,13),(14,15),(16,17)])\n            # CWB implicit NFC must not merge canonically equivalent original forms.\n            for form, expected in [('e\\u0301',1),('é',0)]:\n                exact=query('token',{'type':'term','attr':'form','op':'eq','value':form})\n                self.assertEqual(reader.token_counts(exact)['total_hits'],expected)\n                self.assertEqual(exact['pattern']['value'],form)\n                rows=reader.token_page(exact)['page']\n                self.assertEqual([(h['start'],h['end']) for h in rows],[(10,12)] if expected else [])\n            q['pattern']['attr']='lemma'\n            with self.assertRaisesRegex(ValueError,'ATTRIBUTE_UNAVAILABLE'):\n                reader.token_counts(q)\n\n    def test_fresh_process_reopens_saved_bytes(self):\n        code='''import json,sys\nfrom pipelines.query.source_reader import SourceIndexReader\nfrom tests.query.test_source_index import query\nwith SourceIndexReader(sys.argv[1],sys.argv[2]) as r:\n print(json.dumps(r.character_query(query(\"character\",{\"type\":\"literal\",\"value\":\"哈哈\"}))))\n'''\n        result=subprocess.run([sys.executable,'-c',code,str(self.root/'built/bundle'),str(self.root/'fresh-runtime')],capture_output=True,text=True,check=True,timeout=30)\n        self.assertEqual(json.loads(result.stdout)['total_hits'],2)\n\n    def test_corrupt_input_not_indexed(self):\n        source=self.root/'corrupt.sqlite3'\n        fixture(source,corrupt=True)\n        with self.assertRaisesRegex(IndexBuildError,'INPUT_HASH_MISMATCH'):\n            build(source,self.root/'corrupt','b'*64,lambda _:None)\n        self.assertFalse((self.root/'corrupt/manifest.json').exists())\n\n    def test_callback_cancel_propagates(self):\n        def cancel(event):\n            if event['stage']=='TOKENIZING':\n                raise RuntimeError('fenced')\n        with self.assertRaisesRegex(RuntimeError,'fenced'):\n            build(self.source,self.root/'cancel','b'*64,cancel)\n        self.assertFalse((self.root/'cancel/manifest.json').exists())\n\n    def test_small_quota_rejects_before_success(self):\n        with self.assertRaisesRegex(IndexBuildError,'QUOTA_EXCEEDED'):\n            build(self.source,self.root/'quota','b'*64,lambda _:None,max_temporary_bytes=1)\n        self.assertFalse((self.root/'quota/manifest.json').exists())\n\n    def test_payload_corruption_rejected(self):\n        from pipelines.query.source_reader import SourceIndexReader\n        damaged=self.root/'damaged'\n        shutil.copytree(self.root/'built/bundle',damaged)\n        with (damaged/'characters.bin').open('r+b') as stream:\n            stream.write(b'\\xff'*8)\n        with self.assertRaisesRegex(ValueError,'HASH_MISMATCH'):\n            SourceIndexReader(damaged,self.root/'damaged-runtime')\n"
+    },
+    "tmp/reader_native_ab_probe.py": {
+      "sha256": "6d9a0d5094d200ca9155706d80e22890a4f2585f033eb954206a7ea63711ba19",
+      "utf8": "\"\"\"Bounded sequential A/B; existing immutable full index, no build or fetch.\"\"\"\nimport importlib.util\nimport json\nimport shutil\nimport time\nfrom pathlib import Path\n\nfrom pipelines.query.source_index import digest\nfrom pipelines.query.source_index_verify import request\nfrom pipelines.query.source_reader import SourceIndexReader\n\nroot=Path('tmp/source-index-s3')\noutput=root/'reader-native-ab-20261017'\noutput.mkdir(exist_ok=False)\nbaseline_path=root/'reader-full-verify-20261017/source/source_reader.py'\nspec=importlib.util.spec_from_file_location('baseline_reader',baseline_path)\nbaseline_module=importlib.util.module_from_spec(spec)\nspec.loader.exec_module(baseline_module)\nnew_path=Path('pipelines/query/source_reader.py')\n# The saved module resolves its schema relative to __file__. Both readers must\n# use the same unchanged repository schema; only this resource path is rebound.\nbaseline_module.__file__=str(new_path.resolve())\nshutil.copyfile(new_path,output/'source_reader.py')\nprior=json.loads((root/'full-20261016-fresh-verify/result.json').read_text())\nreport={'status':'failed','formal_acceptance':False,'configuration':{'cpu_max':Path('/sys/fs/cgroup/cpu.max').read_text().strip(),'memory_max':Path('/sys/fs/cgroup/memory.max').read_text().strip(),'cold_disk':False,'shared_host':True},\n        'source_sha256':{'baseline':digest(baseline_path),'optimized':digest(new_path)},\n        'baseline_resource_path':'Saved baseline __file__ rebound to repository reader for identical schema resolution; algorithm unchanged.',\n        'manifest_sha256':digest(root/'full-20261016/build/bundle/manifest.json'),'runs':[]}\nwith baseline_module.SourceIndexReader(root/'full-20261016/build/bundle',output/'old-runtime') as old, SourceIndexReader(root/'full-20261016/build/bundle',output/'new-runtime') as new:\n    for iteration,order in enumerate([('baseline',old,'optimized',new),('optimized',new,'baseline',old)],1):\n        for label,reader in [(order[0],order[1]),(order[2],order[3])]:\n            for value,operation in [('the','count'),('e\\u0301','page'),('endstart','page')]:\n                q=request('character',value)\n                expected=next(row for row in prior['runs'] if row['query']==q)\n                stamp=time.monotonic()\n                result=reader.character_counts(q) if operation=='count' else reader.character_page(q)\n                elapsed=time.monotonic()-stamp\n                if operation=='count':\n                    assert result['total_hits']==expected['hits']\n                    assert result['matched_segments']==result['matched_documents']==expected['sentences']\n                else:\n                    assert [[h['source_sentence_id'],h['start'],h['end']] for h in result['page']]==expected['first50']\n                    assert result['total_hits'] is None\n                row={'iteration':iteration,'reader':label,'value':value,'operation':operation,'seconds':elapsed,'result_equal':True}\n                report['runs'].append(row)\n                print(json.dumps(row),flush=True)\nreport['status']='passed'\n(output/'result.json').write_text(json.dumps(report,indent=2),encoding='utf-8')\n"
+    }
+  },
+  "limits": {
+    "first_page_goal_seconds": 3,
+    "complete_count_goal_seconds": 30,
+    "formal_environment": "Exclusive Linux 8 vCPU / 32 GiB / 200 GiB SSD; 20 queries x 20 repetitions / 5 sessions remains unvalidated.",
+    "authorization": "Reader measurements grant no release, project mounting or model-egress permission."
+  },
+  "summary": {
+    "character": {
+      "queries": 10,
+      "max_page_seconds": 0.11190617499960354,
+      "max_count_seconds": 3.747412169999734
+    },
+    "token": {
+      "queries": 10,
+      "max_page_seconds": 1.2463336940018053,
+      "max_count_seconds": 1.5117434470012086
+    }
+  }
+}

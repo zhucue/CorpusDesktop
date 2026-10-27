@@ -1,0 +1,3960 @@
+{
+  "status": "passed",
+  "date": "2026-10-16",
+  "scope": "S3 D12 fixed complete acquisition persistent index and fresh-process functional verification",
+  "formal_acceptance": false,
+  "published": false,
+  "query_ready": false,
+  "build": {
+    "status": "passed",
+    "source_sha256": {
+      "source_index.py": "d1e4898cff59b381a1bdb7b692939fea270c9930443cc04feae5eedc36db9b3e",
+      "source_recipe.py": "a3a14e245ac8e19dc6274bb78fdd21add1c6b0d5e5d0f9927a4f551995895394",
+      "source_reader.py": "7fae82e5787f295294093eac87912e6e13293a7075140a5acb334424901f39bb",
+      "source_index_run.py": "3d6dbe66a44bc18e88a69f3c70f27efa15c80910178e3b0780d4b6f128fe37e0",
+      "source-index-requirements.txt": "fbe90f09a76e46faec7589071a5f46f27aed3bc4e222c23d24dd43121938ce5f",
+      "source-index-build-requirements.txt": "ef600abe90b897128308237a37bfa89f817daff56f1ca5e953d344da146c8445",
+      "source-index-dependencies.json": "58b4647acac783f748ef3f1ef316169369ba978d044c1987230e4bc5380f36c2"
+    },
+    "input_sqlite_sha256": "4da815f0806d6a40677de04c37ea7431a05fc899d41d7f4c6d954f52b8ba6a9f",
+    "input_manifest_sha256": "f092bf8e30d2dfc3718fa6902b7f685d5b810fb5d1e18cc715ea6e7093419a0a",
+    "formal_acceptance": false,
+    "environment": {
+      "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.36",
+      "python": "3.12.15",
+      "cpu_max": "400000 100000",
+      "memory_max": "8589934592",
+      "storage": "Windows workspace bind mount; shared Docker Desktop host"
+    },
+    "manifest": {
+      "format": "source-index/v1",
+      "recipe": {
+        "id": "tatoeba-surface-index/v1",
+        "builder_algorithm": "source-index-build/v1",
+        "identity_rule": "Any token, mapping or matching semantic change requires a new recipe id/version.",
+        "cwb_package": "3.5.0-1",
+        "cwb_package_sha256": "257ef6f71a055ee70cd57904173e40f8e8f0e6c93ac7edf5d7d2e3a21c023601",
+        "normalization": "none",
+        "sentence_boundary": "one_upstream_sentence_record",
+        "document_count_unit": "imported_sentence_record",
+        "order": "ascending_numeric_source_sentence_id",
+        "cmn": {
+          "package": "jieba",
+          "version": "0.42.1",
+          "mode": "default",
+          "HMM": false,
+          "dictionary_sha256": "7197c3211ddd98962b036cdf40324d1ea2bfaa12bd028e68faa70111a88e12a8",
+          "user_dictionary": false
+        },
+        "eng": {
+          "package": "nltk",
+          "version": "3.10.3",
+          "class": "TreebankWordTokenizer.span_tokenize",
+          "model_download": false
+        },
+        "form": "exact_original_codepoint_slice",
+        "cwb_word_key": "u + lowercase hexadecimal UTF-8 bytes; reversible, avoids CWB implicit NFC",
+        "whitespace_tokens": "excluded",
+        "punctuation_tokens": "included",
+        "case": "preserved",
+        "numbers": "included",
+        "attributes": [
+          "form"
+        ],
+        "coordinates": "unicode_codepoint_half_open",
+        "character_storage": "sorted_vocabulary_little_endian_uint64_global_positions/v1",
+        "token_storage": "cwb-3.5.0+little_endian_uint32_revision_start_end/v1"
+      },
+      "recipe_id": "tatoeba-surface-index/v1",
+      "recipe_sha256": "39e86f0a995402bf2927732509cc49cf868e98cefbd84dd361a20ae091fbafd1",
+      "identity": {
+        "format": "source-index/v1",
+        "recipe_sha256": "39e86f0a995402bf2927732509cc49cf868e98cefbd84dd361a20ae091fbafd1",
+        "acquisition_manifest_sha256": "f092bf8e30d2dfc3718fa6902b7f685d5b810fb5d1e18cc715ea6e7093419a0a",
+        "input_sqlite_sha256": "4da815f0806d6a40677de04c37ea7431a05fc899d41d7f4c6d954f52b8ba6a9f",
+        "ordered_members_sha256": "248d63ef15e3ab5814b6db0aa205235fbde1a15be3256de14f6d19c0cd0b2b1f",
+        "metadata_sha256": "ee2688e6122feb9b2c645634c0f2623695646d924dbc1489fc9a4235b005f474",
+        "token_stream_sha256": "9cee5e59d7a1f47df370ffbc92a4e7fe31a8329f40ec48cec88ddb7cc8d92a05",
+        "character_postings_sha256": "82aaff0b6b519f085e0ce2c79cd331d4d54b0312534bd5e8ec572c7bf2512abe",
+        "engine": {
+          "character": "source-position/v1",
+          "token": "CWB-3.5.0"
+        }
+      },
+      "identity_sha256": "edc78fd1c6c1b128862bfd174cfbe299edd4f4222a49262bcc95ad8a453fa85f",
+      "counts": {
+        "sentences": 2127898,
+        "cmn_sentences": 89179,
+        "eng_sentences": 2038719,
+        "characters": 82951215,
+        "tokens": 19660489,
+        "direct_edges": 78089,
+        "unknown_owner": 44439
+      },
+      "quality": {
+        "all_source_sentences_indexed": true,
+        "rejected_sentences": 0,
+        "token_roundtrip_verified": true,
+        "attributes": [
+          "form"
+        ],
+        "document_count_unit": "imported_sentence_record",
+        "normalization": "none"
+      },
+      "files": [
+        {
+          "name": "characters.bin",
+          "bytes": 663609720,
+          "sha256": "82aaff0b6b519f085e0ce2c79cd331d4d54b0312534bd5e8ec572c7bf2512abe"
+        },
+        {
+          "name": "characters.json",
+          "bytes": 220501,
+          "sha256": "d198e7f5892ee2b5e5fd0dceac541c3bb8b058991bf336309c19b9c40a53b64a"
+        },
+        {
+          "name": "data/doc.rng",
+          "bytes": 17023184,
+          "sha256": "4d31b84ea85cb20f786bcb472fcdab0c2bf67d4250942671368dafd14f751915"
+        },
+        {
+          "name": "data/s.rng",
+          "bytes": 17023184,
+          "sha256": "4d31b84ea85cb20f786bcb472fcdab0c2bf67d4250942671368dafd14f751915"
+        },
+        {
+          "name": "data/word.corpus",
+          "bytes": 78641956,
+          "sha256": "49ff1a2ce921d9d1bd66d3a2735a47cbe4621c7f02ef6fca59ec5ba1fa02377b"
+        },
+        {
+          "name": "data/word.corpus.cnt",
+          "bytes": 603368,
+          "sha256": "f937c1e81524f6656d6aaff93681db4f134eb1b5b3740c3f7994b71c175d97de"
+        },
+        {
+          "name": "data/word.corpus.rdx",
+          "bytes": 603368,
+          "sha256": "936850b86eeae968c9f2bc1d3d43328eda100d7e504dbcb08b9fcb95dba4022f"
+        },
+        {
+          "name": "data/word.corpus.rev",
+          "bytes": 78641956,
+          "sha256": "60af5fe09b2d2046d3e24683fdaeb2d91a9c3a5c75b95530d1375f687b71e506"
+        },
+        {
+          "name": "data/word.lexicon",
+          "bytes": 2683694,
+          "sha256": "5766e4148f762edefdf9122e29c8e309f1cc59df30d67fd5f0b2ffff0c57054c"
+        },
+        {
+          "name": "data/word.lexicon.idx",
+          "bytes": 603368,
+          "sha256": "c36d5bf9075737ad68ef7a15aff1d5a82d4241d90c0ca17ddb9bf68839167660"
+        },
+        {
+          "name": "data/word.lexicon.srt",
+          "bytes": 603368,
+          "sha256": "e2e6af98190930d4d646e6ea3edf672d0a32ca11b58d3cde52c08a5ac4853e31"
+        },
+        {
+          "name": "edges.tsv",
+          "bytes": 1188997,
+          "sha256": "2fb0a985c1ed186dc5665fbe7cb1f2dfd2c079b55b34775e56cc33f10586a2cf"
+        },
+        {
+          "name": "members.jsonl",
+          "bytes": 1339883817,
+          "sha256": "248d63ef15e3ab5814b6db0aa205235fbde1a15be3256de14f6d19c0cd0b2b1f"
+        },
+        {
+          "name": "records.map",
+          "bytes": 102139104,
+          "sha256": "ac08e5c71eacc7db6937fb253f9cbe07c3fdab6ac89e8dc76182369aaddb6b9d"
+        },
+        {
+          "name": "registry/source",
+          "bytes": 663,
+          "sha256": "260a610d7c7b85d65bb8365c4fed17d11207f4ff5e9452fdd718657fc1e51d23"
+        },
+        {
+          "name": "texts.utf8",
+          "bytes": 85044500,
+          "sha256": "01511728a21a6124493ef93d4ad24e5b0ba6305607770ed1f40d8fea5324ff76"
+        },
+        {
+          "name": "tokens.map",
+          "bytes": 235925868,
+          "sha256": "2b333fa644bcc17eb660cb81fbd3b1344a1ddd819920b219e9e79618048b83b3"
+        }
+      ],
+      "stage": "INDEXED",
+      "published": false,
+      "query_ready": false,
+      "package": {
+        "name": "index.tar",
+        "bytes": 2624460800,
+        "sha256": "c3a8f54e0c128e70c7bb3b4cfdc0973e93bdd542422bae9a636d5cb51e1e0b4f"
+      },
+      "measurement": {
+        "wall_seconds": 1037.9208020669976,
+        "sampled_peak_workspace_bytes_including_input": 6148041383,
+        "peak_is_sampled": true,
+        "max_temporary_bytes": 8589934592
+      }
+    },
+    "artifacts": [
+      {
+        "name": "index.tar",
+        "path": "/workspace/tmp/source-index-s3/full-20261016/build/index.tar",
+        "bytes": 2624460800,
+        "sha256": "c3a8f54e0c128e70c7bb3b4cfdc0973e93bdd542422bae9a636d5cb51e1e0b4f"
+      },
+      {
+        "name": "manifest.json",
+        "path": "/workspace/tmp/source-index-s3/full-20261016/build/manifest.json",
+        "bytes": 4928,
+        "sha256": "845459bd13bc57a0d10a6228ec4e19738ac0cb0769af1c969ef33eece55f28a0"
+      }
+    ],
+    "wall_seconds": 1070.9498215409985,
+    "stages": [
+      {
+        "stage": "VALIDATING",
+        "elapsed_seconds": 7.567374530000961
+      },
+      {
+        "stage": "TOKENIZING",
+        "elapsed_seconds": 47.91942802400081
+      },
+      {
+        "stage": "CHARACTER_INDEX",
+        "elapsed_seconds": 633.2005681070004
+      },
+      {
+        "stage": "CWB_INDEX",
+        "elapsed_seconds": 758.3218559289999
+      },
+      {
+        "stage": "VERIFYING",
+        "elapsed_seconds": 806.0157448690006
+      },
+      {
+        "stage": "PACKAGING",
+        "elapsed_seconds": 916.0256699070014
+      }
+    ],
+    "parent_peak_rss_bytes": 782499840,
+    "child_peak_rss_bytes": 782499840,
+    "cgroup_peak_bytes_including_cache": "774815744",
+    "pid": 1
+  },
+  "verification": {
+    "status": "passed",
+    "formal_acceptance": false,
+    "input_sha256": "4da815f0806d6a40677de04c37ea7431a05fc899d41d7f4c6d954f52b8ba6a9f",
+    "reader_manifest_sha256": "9e4255456253a10b2913e5ec1f2393b6dc14a128a154d2b5affe36d59986462f",
+    "source_sha256": "60310920cdef4a8ff887af5eb2beb50f2ddb6053f71e1fd074d4fafebee77da9",
+    "scope": "All source rows and all stored token coordinates; 20 explicit exact queries. No sampled index or full S3 acceptance.",
+    "runs": [
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "character",
+          "within": "sentence",
+          "pattern": {
+            "type": "literal",
+            "value": "I"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 634871,
+        "sentences": 557885,
+        "first50": [
+          [
+            1277,
+            0,
+            1
+          ],
+          [
+            1284,
+            0,
+            1
+          ],
+          [
+            1286,
+            0,
+            1
+          ],
+          [
+            1288,
+            0,
+            1
+          ],
+          [
+            1290,
+            0,
+            1
+          ],
+          [
+            1291,
+            0,
+            1
+          ],
+          [
+            1292,
+            0,
+            1
+          ],
+          [
+            1292,
+            16,
+            17
+          ],
+          [
+            1295,
+            28,
+            29
+          ],
+          [
+            1299,
+            0,
+            1
+          ],
+          [
+            1300,
+            0,
+            1
+          ],
+          [
+            1301,
+            0,
+            1
+          ],
+          [
+            1304,
+            0,
+            1
+          ],
+          [
+            1305,
+            0,
+            1
+          ],
+          [
+            1306,
+            0,
+            1
+          ],
+          [
+            1308,
+            0,
+            1
+          ],
+          [
+            1309,
+            0,
+            1
+          ],
+          [
+            1309,
+            29,
+            30
+          ],
+          [
+            1310,
+            0,
+            1
+          ],
+          [
+            1312,
+            0,
+            1
+          ],
+          [
+            1313,
+            0,
+            1
+          ],
+          [
+            1315,
+            0,
+            1
+          ],
+          [
+            1316,
+            0,
+            1
+          ],
+          [
+            1317,
+            0,
+            1
+          ],
+          [
+            1318,
+            16,
+            17
+          ],
+          [
+            1318,
+            42,
+            43
+          ],
+          [
+            1319,
+            0,
+            1
+          ],
+          [
+            1319,
+            45,
+            46
+          ],
+          [
+            1320,
+            0,
+            1
+          ],
+          [
+            1322,
+            18,
+            19
+          ],
+          [
+            1323,
+            3,
+            4
+          ],
+          [
+            1330,
+            0,
+            1
+          ],
+          [
+            1332,
+            16,
+            17
+          ],
+          [
+            1333,
+            0,
+            1
+          ],
+          [
+            1335,
+            27,
+            28
+          ],
+          [
+            1336,
+            0,
+            1
+          ],
+          [
+            1336,
+            25,
+            26
+          ],
+          [
+            1337,
+            5,
+            6
+          ],
+          [
+            1337,
+            16,
+            17
+          ],
+          [
+            1339,
+            0,
+            1
+          ],
+          [
+            1341,
+            0,
+            1
+          ],
+          [
+            1342,
+            0,
+            1
+          ],
+          [
+            1342,
+            21,
+            22
+          ],
+          [
+            1343,
+            0,
+            1
+          ],
+          [
+            1345,
+            0,
+            1
+          ],
+          [
+            1346,
+            13,
+            14
+          ],
+          [
+            1347,
+            0,
+            1
+          ],
+          [
+            1349,
+            10,
+            11
+          ],
+          [
+            1350,
+            0,
+            1
+          ],
+          [
+            1350,
+            12,
+            13
+          ]
+        ],
+        "page_seconds": 0.12829513900214806,
+        "count_seconds": 9.817088887000864,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "character",
+          "within": "sentence",
+          "pattern": {
+            "type": "literal",
+            "value": "the"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 709405,
+        "sentences": 555392,
+        "first50": [
+          [
+            1290,
+            9,
+            12
+          ],
+          [
+            1292,
+            23,
+            26
+          ],
+          [
+            1305,
+            29,
+            32
+          ],
+          [
+            1306,
+            54,
+            57
+          ],
+          [
+            1309,
+            10,
+            13
+          ],
+          [
+            1313,
+            7,
+            10
+          ],
+          [
+            1313,
+            26,
+            29
+          ],
+          [
+            1319,
+            3,
+            6
+          ],
+          [
+            1319,
+            24,
+            27
+          ],
+          [
+            1321,
+            41,
+            44
+          ],
+          [
+            1327,
+            5,
+            8
+          ],
+          [
+            1328,
+            4,
+            7
+          ],
+          [
+            1333,
+            14,
+            17
+          ],
+          [
+            1335,
+            7,
+            10
+          ],
+          [
+            1344,
+            34,
+            37
+          ],
+          [
+            1353,
+            15,
+            18
+          ],
+          [
+            1356,
+            15,
+            18
+          ],
+          [
+            1362,
+            30,
+            33
+          ],
+          [
+            1364,
+            24,
+            27
+          ],
+          [
+            1367,
+            43,
+            46
+          ],
+          [
+            1367,
+            63,
+            66
+          ],
+          [
+            1369,
+            32,
+            35
+          ],
+          [
+            1371,
+            26,
+            29
+          ],
+          [
+            1374,
+            25,
+            28
+          ],
+          [
+            1377,
+            51,
+            54
+          ],
+          [
+            1378,
+            17,
+            20
+          ],
+          [
+            1381,
+            28,
+            31
+          ],
+          [
+            1382,
+            26,
+            29
+          ],
+          [
+            1382,
+            39,
+            42
+          ],
+          [
+            1389,
+            15,
+            18
+          ],
+          [
+            1389,
+            27,
+            30
+          ],
+          [
+            1390,
+            18,
+            21
+          ],
+          [
+            1394,
+            15,
+            18
+          ],
+          [
+            1396,
+            24,
+            27
+          ],
+          [
+            1396,
+            69,
+            72
+          ],
+          [
+            1400,
+            32,
+            35
+          ],
+          [
+            1406,
+            31,
+            34
+          ],
+          [
+            1415,
+            23,
+            26
+          ],
+          [
+            1415,
+            79,
+            82
+          ],
+          [
+            1420,
+            24,
+            27
+          ],
+          [
+            1422,
+            60,
+            63
+          ],
+          [
+            1430,
+            19,
+            22
+          ],
+          [
+            1430,
+            51,
+            54
+          ],
+          [
+            1431,
+            9,
+            12
+          ],
+          [
+            1440,
+            4,
+            7
+          ],
+          [
+            1448,
+            34,
+            37
+          ],
+          [
+            1449,
+            6,
+            9
+          ],
+          [
+            1452,
+            21,
+            24
+          ],
+          [
+            1465,
+            13,
+            16
+          ],
+          [
+            1467,
+            31,
+            34
+          ]
+        ],
+        "page_seconds": 0.02236581399847637,
+        "count_seconds": 32.79814950900254,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "character",
+          "within": "sentence",
+          "pattern": {
+            "type": "literal",
+            "value": "love"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 19504,
+        "sentences": 18742,
+        "first50": [
+          [
+            1338,
+            13,
+            17
+          ],
+          [
+            1434,
+            2,
+            6
+          ],
+          [
+            1578,
+            9,
+            13
+          ],
+          [
+            1580,
+            13,
+            17
+          ],
+          [
+            1609,
+            13,
+            17
+          ],
+          [
+            1693,
+            40,
+            44
+          ],
+          [
+            1788,
+            18,
+            22
+          ],
+          [
+            1841,
+            2,
+            6
+          ],
+          [
+            1866,
+            11,
+            15
+          ],
+          [
+            1908,
+            41,
+            45
+          ],
+          [
+            1908,
+            100,
+            104
+          ],
+          [
+            1920,
+            50,
+            54
+          ],
+          [
+            1957,
+            87,
+            91
+          ],
+          [
+            2311,
+            2,
+            6
+          ],
+          [
+            2371,
+            11,
+            15
+          ],
+          [
+            2372,
+            3,
+            7
+          ],
+          [
+            14204,
+            16,
+            20
+          ],
+          [
+            15784,
+            30,
+            34
+          ],
+          [
+            16279,
+            7,
+            11
+          ],
+          [
+            16335,
+            15,
+            19
+          ],
+          [
+            16879,
+            9,
+            13
+          ],
+          [
+            17295,
+            19,
+            23
+          ],
+          [
+            17609,
+            4,
+            8
+          ],
+          [
+            17748,
+            22,
+            26
+          ],
+          [
+            17829,
+            2,
+            6
+          ],
+          [
+            17829,
+            25,
+            29
+          ],
+          [
+            18501,
+            12,
+            16
+          ],
+          [
+            18606,
+            31,
+            35
+          ],
+          [
+            20106,
+            12,
+            16
+          ],
+          [
+            20313,
+            10,
+            14
+          ],
+          [
+            20319,
+            11,
+            15
+          ],
+          [
+            20324,
+            7,
+            11
+          ],
+          [
+            20852,
+            10,
+            14
+          ],
+          [
+            20898,
+            22,
+            26
+          ],
+          [
+            21686,
+            13,
+            17
+          ],
+          [
+            22687,
+            7,
+            11
+          ],
+          [
+            23248,
+            18,
+            22
+          ],
+          [
+            23565,
+            20,
+            24
+          ],
+          [
+            23738,
+            20,
+            24
+          ],
+          [
+            24042,
+            47,
+            51
+          ],
+          [
+            24118,
+            16,
+            20
+          ],
+          [
+            24779,
+            2,
+            6
+          ],
+          [
+            24878,
+            5,
+            9
+          ],
+          [
+            24924,
+            7,
+            11
+          ],
+          [
+            25443,
+            23,
+            27
+          ],
+          [
+            25486,
+            14,
+            18
+          ],
+          [
+            25532,
+            3,
+            7
+          ],
+          [
+            25535,
+            2,
+            6
+          ],
+          [
+            25551,
+            27,
+            31
+          ],
+          [
+            25617,
+            19,
+            23
+          ]
+        ],
+        "page_seconds": 0.1563687090019812,
+        "count_seconds": 22.972019338998507,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "character",
+          "within": "sentence",
+          "pattern": {
+            "type": "literal",
+            "value": "北京"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 76,
+        "sentences": 74,
+        "first50": [
+          [
+            389050,
+            0,
+            2
+          ],
+          [
+            396199,
+            7,
+            9
+          ],
+          [
+            420514,
+            6,
+            8
+          ],
+          [
+            661545,
+            8,
+            10
+          ],
+          [
+            747604,
+            8,
+            10
+          ],
+          [
+            747620,
+            1,
+            3
+          ],
+          [
+            747877,
+            11,
+            13
+          ],
+          [
+            747928,
+            8,
+            10
+          ],
+          [
+            775577,
+            19,
+            21
+          ],
+          [
+            775588,
+            21,
+            23
+          ],
+          [
+            795210,
+            9,
+            11
+          ],
+          [
+            827169,
+            7,
+            9
+          ],
+          [
+            844670,
+            3,
+            5
+          ],
+          [
+            844714,
+            3,
+            5
+          ],
+          [
+            858913,
+            3,
+            5
+          ],
+          [
+            858916,
+            16,
+            18
+          ],
+          [
+            858920,
+            3,
+            5
+          ],
+          [
+            858920,
+            18,
+            20
+          ],
+          [
+            858929,
+            0,
+            2
+          ],
+          [
+            858931,
+            14,
+            16
+          ],
+          [
+            858950,
+            6,
+            8
+          ],
+          [
+            858971,
+            5,
+            7
+          ],
+          [
+            859024,
+            3,
+            5
+          ],
+          [
+            1158135,
+            0,
+            2
+          ],
+          [
+            1173216,
+            4,
+            6
+          ],
+          [
+            1216106,
+            4,
+            6
+          ],
+          [
+            1398676,
+            6,
+            8
+          ],
+          [
+            1416197,
+            0,
+            2
+          ],
+          [
+            1441787,
+            2,
+            4
+          ],
+          [
+            1441838,
+            9,
+            11
+          ],
+          [
+            1477288,
+            3,
+            5
+          ],
+          [
+            1567764,
+            7,
+            9
+          ],
+          [
+            1567781,
+            8,
+            10
+          ],
+          [
+            1633336,
+            3,
+            5
+          ],
+          [
+            1746076,
+            1,
+            3
+          ],
+          [
+            1766267,
+            4,
+            6
+          ],
+          [
+            2312942,
+            0,
+            2
+          ],
+          [
+            2448819,
+            3,
+            5
+          ],
+          [
+            2737457,
+            7,
+            9
+          ],
+          [
+            3320722,
+            3,
+            5
+          ],
+          [
+            3320722,
+            13,
+            15
+          ],
+          [
+            3537667,
+            2,
+            4
+          ],
+          [
+            3709271,
+            0,
+            2
+          ],
+          [
+            3990317,
+            3,
+            5
+          ],
+          [
+            3990337,
+            4,
+            6
+          ],
+          [
+            3990339,
+            3,
+            5
+          ],
+          [
+            4264634,
+            0,
+            2
+          ],
+          [
+            4620886,
+            6,
+            8
+          ],
+          [
+            4620888,
+            0,
+            2
+          ],
+          [
+            4625761,
+            0,
+            2
+          ]
+        ],
+        "page_seconds": 0.01735714199821814,
+        "count_seconds": 0.015883153999311617,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "character",
+          "within": "sentence",
+          "pattern": {
+            "type": "literal",
+            "value": "哈哈"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 16,
+        "sentences": 12,
+        "first50": [
+          [
+            335934,
+            3,
+            5
+          ],
+          [
+            420924,
+            10,
+            12
+          ],
+          [
+            715574,
+            8,
+            10
+          ],
+          [
+            3060455,
+            0,
+            2
+          ],
+          [
+            3709320,
+            11,
+            13
+          ],
+          [
+            5581837,
+            1,
+            3
+          ],
+          [
+            5581837,
+            2,
+            4
+          ],
+          [
+            9144917,
+            13,
+            15
+          ],
+          [
+            10699079,
+            0,
+            2
+          ],
+          [
+            13112195,
+            0,
+            2
+          ],
+          [
+            13112195,
+            1,
+            3
+          ],
+          [
+            13275127,
+            0,
+            2
+          ],
+          [
+            13939368,
+            53,
+            55
+          ],
+          [
+            13939368,
+            54,
+            56
+          ],
+          [
+            13947170,
+            0,
+            2
+          ],
+          [
+            13947170,
+            1,
+            3
+          ]
+        ],
+        "page_seconds": 0.015318788999138633,
+        "count_seconds": 0.014006696997967083,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "character",
+          "within": "sentence",
+          "pattern": {
+            "type": "literal",
+            "value": "😀"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 0,
+        "sentences": 0,
+        "first50": [],
+        "page_seconds": 0.012079373002052307,
+        "count_seconds": 0.012906971001939382,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "character",
+          "within": "sentence",
+          "pattern": {
+            "type": "literal",
+            "value": "é"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 0,
+        "sentences": 0,
+        "first50": [],
+        "page_seconds": 38.872633119000966,
+        "count_seconds": 36.14673701099673,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "character",
+          "within": "sentence",
+          "pattern": {
+            "type": "literal",
+            "value": "é"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 960,
+        "sentences": 838,
+        "first50": [
+          [
+            2221,
+            8,
+            9
+          ],
+          [
+            19916,
+            20,
+            21
+          ],
+          [
+            29359,
+            25,
+            26
+          ],
+          [
+            41316,
+            23,
+            24
+          ],
+          [
+            138747,
+            3,
+            4
+          ],
+          [
+            282587,
+            38,
+            39
+          ],
+          [
+            282588,
+            44,
+            45
+          ],
+          [
+            326783,
+            48,
+            49
+          ],
+          [
+            327191,
+            71,
+            72
+          ],
+          [
+            343110,
+            3,
+            4
+          ],
+          [
+            403093,
+            27,
+            28
+          ],
+          [
+            407022,
+            51,
+            52
+          ],
+          [
+            407546,
+            42,
+            43
+          ],
+          [
+            413395,
+            84,
+            85
+          ],
+          [
+            415427,
+            33,
+            34
+          ],
+          [
+            435086,
+            9,
+            10
+          ],
+          [
+            460313,
+            73,
+            74
+          ],
+          [
+            473227,
+            25,
+            26
+          ],
+          [
+            478541,
+            3,
+            4
+          ],
+          [
+            509098,
+            19,
+            20
+          ],
+          [
+            515373,
+            7,
+            8
+          ],
+          [
+            515579,
+            15,
+            16
+          ],
+          [
+            523698,
+            40,
+            41
+          ],
+          [
+            526652,
+            7,
+            8
+          ],
+          [
+            632817,
+            23,
+            24
+          ],
+          [
+            638291,
+            36,
+            37
+          ],
+          [
+            670934,
+            35,
+            36
+          ],
+          [
+            696862,
+            26,
+            27
+          ],
+          [
+            717980,
+            39,
+            40
+          ],
+          [
+            718046,
+            23,
+            24
+          ],
+          [
+            718046,
+            27,
+            28
+          ],
+          [
+            728388,
+            31,
+            32
+          ],
+          [
+            728390,
+            36,
+            37
+          ],
+          [
+            774905,
+            31,
+            32
+          ],
+          [
+            774907,
+            31,
+            32
+          ],
+          [
+            802888,
+            6,
+            7
+          ],
+          [
+            802888,
+            10,
+            11
+          ],
+          [
+            834851,
+            20,
+            21
+          ],
+          [
+            859282,
+            4,
+            5
+          ],
+          [
+            868725,
+            3,
+            4
+          ],
+          [
+            871351,
+            27,
+            28
+          ],
+          [
+            871566,
+            224,
+            225
+          ],
+          [
+            871570,
+            125,
+            126
+          ],
+          [
+            874931,
+            1,
+            2
+          ],
+          [
+            875738,
+            21,
+            22
+          ],
+          [
+            875772,
+            3,
+            4
+          ],
+          [
+            875803,
+            40,
+            41
+          ],
+          [
+            877484,
+            56,
+            57
+          ],
+          [
+            908456,
+            29,
+            30
+          ],
+          [
+            927855,
+            24,
+            25
+          ]
+        ],
+        "page_seconds": 0.014276956997491652,
+        "count_seconds": 0.03039944100237335,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "character",
+          "within": "sentence",
+          "pattern": {
+            "type": "literal",
+            "value": "s3-no-such-phrase-20261016"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 0,
+        "sentences": 0,
+        "first50": [],
+        "page_seconds": 30.94344096900022,
+        "count_seconds": 31.821527362997585,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "character",
+          "within": "sentence",
+          "pattern": {
+            "type": "literal",
+            "value": "endstart"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 0,
+        "sentences": 0,
+        "first50": [],
+        "page_seconds": 37.30647783599852,
+        "count_seconds": 37.04833232400051,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "token",
+          "within": "sentence",
+          "pattern": {
+            "type": "term",
+            "attr": "form",
+            "op": "eq",
+            "value": "I"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 520005,
+        "sentences": 458796,
+        "first50": [
+          [
+            1277,
+            0,
+            1
+          ],
+          [
+            1284,
+            0,
+            1
+          ],
+          [
+            1286,
+            0,
+            1
+          ],
+          [
+            1288,
+            0,
+            1
+          ],
+          [
+            1290,
+            0,
+            1
+          ],
+          [
+            1292,
+            0,
+            1
+          ],
+          [
+            1292,
+            16,
+            17
+          ],
+          [
+            1295,
+            28,
+            29
+          ],
+          [
+            1299,
+            0,
+            1
+          ],
+          [
+            1300,
+            0,
+            1
+          ],
+          [
+            1304,
+            0,
+            1
+          ],
+          [
+            1305,
+            0,
+            1
+          ],
+          [
+            1306,
+            0,
+            1
+          ],
+          [
+            1308,
+            0,
+            1
+          ],
+          [
+            1309,
+            0,
+            1
+          ],
+          [
+            1309,
+            29,
+            30
+          ],
+          [
+            1310,
+            0,
+            1
+          ],
+          [
+            1312,
+            0,
+            1
+          ],
+          [
+            1313,
+            0,
+            1
+          ],
+          [
+            1315,
+            0,
+            1
+          ],
+          [
+            1316,
+            0,
+            1
+          ],
+          [
+            1317,
+            0,
+            1
+          ],
+          [
+            1318,
+            16,
+            17
+          ],
+          [
+            1318,
+            42,
+            43
+          ],
+          [
+            1319,
+            45,
+            46
+          ],
+          [
+            1322,
+            18,
+            19
+          ],
+          [
+            1323,
+            3,
+            4
+          ],
+          [
+            1332,
+            16,
+            17
+          ],
+          [
+            1335,
+            27,
+            28
+          ],
+          [
+            1336,
+            0,
+            1
+          ],
+          [
+            1336,
+            25,
+            26
+          ],
+          [
+            1337,
+            5,
+            6
+          ],
+          [
+            1337,
+            16,
+            17
+          ],
+          [
+            1339,
+            0,
+            1
+          ],
+          [
+            1341,
+            0,
+            1
+          ],
+          [
+            1342,
+            0,
+            1
+          ],
+          [
+            1342,
+            21,
+            22
+          ],
+          [
+            1343,
+            0,
+            1
+          ],
+          [
+            1345,
+            0,
+            1
+          ],
+          [
+            1346,
+            13,
+            14
+          ],
+          [
+            1349,
+            10,
+            11
+          ],
+          [
+            1350,
+            12,
+            13
+          ],
+          [
+            1351,
+            22,
+            23
+          ],
+          [
+            1352,
+            0,
+            1
+          ],
+          [
+            1355,
+            0,
+            1
+          ],
+          [
+            1355,
+            41,
+            42
+          ],
+          [
+            1357,
+            0,
+            1
+          ],
+          [
+            1359,
+            0,
+            1
+          ],
+          [
+            1359,
+            20,
+            21
+          ],
+          [
+            1360,
+            21,
+            22
+          ]
+        ],
+        "page_seconds": 0.5760118590005732,
+        "count_seconds": 0.9931226580010843,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "token",
+          "within": "sentence",
+          "pattern": {
+            "type": "term",
+            "attr": "form",
+            "op": "eq",
+            "value": "the"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 485310,
+        "sentences": 396809,
+        "first50": [
+          [
+            1290,
+            9,
+            12
+          ],
+          [
+            1292,
+            23,
+            26
+          ],
+          [
+            1305,
+            29,
+            32
+          ],
+          [
+            1306,
+            54,
+            57
+          ],
+          [
+            1319,
+            3,
+            6
+          ],
+          [
+            1319,
+            24,
+            27
+          ],
+          [
+            1333,
+            14,
+            17
+          ],
+          [
+            1335,
+            7,
+            10
+          ],
+          [
+            1353,
+            15,
+            18
+          ],
+          [
+            1356,
+            15,
+            18
+          ],
+          [
+            1362,
+            30,
+            33
+          ],
+          [
+            1369,
+            32,
+            35
+          ],
+          [
+            1374,
+            25,
+            28
+          ],
+          [
+            1382,
+            26,
+            29
+          ],
+          [
+            1382,
+            39,
+            42
+          ],
+          [
+            1389,
+            15,
+            18
+          ],
+          [
+            1400,
+            32,
+            35
+          ],
+          [
+            1422,
+            60,
+            63
+          ],
+          [
+            1431,
+            9,
+            12
+          ],
+          [
+            1440,
+            4,
+            7
+          ],
+          [
+            1448,
+            34,
+            37
+          ],
+          [
+            1465,
+            13,
+            16
+          ],
+          [
+            1480,
+            25,
+            28
+          ],
+          [
+            1481,
+            26,
+            29
+          ],
+          [
+            1489,
+            26,
+            29
+          ],
+          [
+            1489,
+            47,
+            50
+          ],
+          [
+            1492,
+            22,
+            25
+          ],
+          [
+            1506,
+            44,
+            47
+          ],
+          [
+            1507,
+            8,
+            11
+          ],
+          [
+            1507,
+            27,
+            30
+          ],
+          [
+            1508,
+            20,
+            23
+          ],
+          [
+            1511,
+            13,
+            16
+          ],
+          [
+            1519,
+            22,
+            25
+          ],
+          [
+            1523,
+            15,
+            18
+          ],
+          [
+            1523,
+            55,
+            58
+          ],
+          [
+            1528,
+            41,
+            44
+          ],
+          [
+            1531,
+            18,
+            21
+          ],
+          [
+            1533,
+            15,
+            18
+          ],
+          [
+            1534,
+            3,
+            6
+          ],
+          [
+            1534,
+            15,
+            18
+          ],
+          [
+            1534,
+            53,
+            56
+          ],
+          [
+            1534,
+            80,
+            83
+          ],
+          [
+            1536,
+            6,
+            9
+          ],
+          [
+            1536,
+            27,
+            30
+          ],
+          [
+            1544,
+            39,
+            42
+          ],
+          [
+            1550,
+            13,
+            16
+          ],
+          [
+            1550,
+            54,
+            57
+          ],
+          [
+            1551,
+            35,
+            38
+          ],
+          [
+            1555,
+            12,
+            15
+          ],
+          [
+            1559,
+            6,
+            9
+          ]
+        ],
+        "page_seconds": 0.42862824799885857,
+        "count_seconds": 0.8886114320011984,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "token",
+          "within": "sentence",
+          "pattern": {
+            "type": "term",
+            "attr": "form",
+            "op": "eq",
+            "value": "love"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 12115,
+        "sentences": 11715,
+        "first50": [
+          [
+            1434,
+            2,
+            6
+          ],
+          [
+            1578,
+            9,
+            13
+          ],
+          [
+            1580,
+            13,
+            17
+          ],
+          [
+            1609,
+            13,
+            17
+          ],
+          [
+            1788,
+            18,
+            22
+          ],
+          [
+            1841,
+            2,
+            6
+          ],
+          [
+            1866,
+            11,
+            15
+          ],
+          [
+            1908,
+            41,
+            45
+          ],
+          [
+            1908,
+            100,
+            104
+          ],
+          [
+            1920,
+            50,
+            54
+          ],
+          [
+            2311,
+            2,
+            6
+          ],
+          [
+            2371,
+            11,
+            15
+          ],
+          [
+            2372,
+            3,
+            7
+          ],
+          [
+            14204,
+            16,
+            20
+          ],
+          [
+            16279,
+            7,
+            11
+          ],
+          [
+            16335,
+            15,
+            19
+          ],
+          [
+            17295,
+            19,
+            23
+          ],
+          [
+            17609,
+            4,
+            8
+          ],
+          [
+            17748,
+            22,
+            26
+          ],
+          [
+            17829,
+            2,
+            6
+          ],
+          [
+            17829,
+            25,
+            29
+          ],
+          [
+            18501,
+            12,
+            16
+          ],
+          [
+            18606,
+            31,
+            35
+          ],
+          [
+            20106,
+            12,
+            16
+          ],
+          [
+            20898,
+            22,
+            26
+          ],
+          [
+            23738,
+            20,
+            24
+          ],
+          [
+            24042,
+            47,
+            51
+          ],
+          [
+            24779,
+            2,
+            6
+          ],
+          [
+            25443,
+            23,
+            27
+          ],
+          [
+            25486,
+            14,
+            18
+          ],
+          [
+            25532,
+            3,
+            7
+          ],
+          [
+            25535,
+            2,
+            6
+          ],
+          [
+            25551,
+            27,
+            31
+          ],
+          [
+            25617,
+            19,
+            23
+          ],
+          [
+            26368,
+            11,
+            15
+          ],
+          [
+            26425,
+            7,
+            11
+          ],
+          [
+            27752,
+            58,
+            62
+          ],
+          [
+            28332,
+            12,
+            16
+          ],
+          [
+            28688,
+            12,
+            16
+          ],
+          [
+            28693,
+            19,
+            23
+          ],
+          [
+            28702,
+            45,
+            49
+          ],
+          [
+            28705,
+            18,
+            22
+          ],
+          [
+            28706,
+            26,
+            30
+          ],
+          [
+            28712,
+            4,
+            8
+          ],
+          [
+            28713,
+            16,
+            20
+          ],
+          [
+            28716,
+            43,
+            47
+          ],
+          [
+            28720,
+            37,
+            41
+          ],
+          [
+            28723,
+            38,
+            42
+          ],
+          [
+            28726,
+            32,
+            36
+          ],
+          [
+            28727,
+            14,
+            18
+          ]
+        ],
+        "page_seconds": 0.24834929200005718,
+        "count_seconds": 0.4229063849998056,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "token",
+          "within": "sentence",
+          "pattern": {
+            "type": "term",
+            "attr": "form",
+            "op": "eq",
+            "value": "北京"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 72,
+        "sentences": 70,
+        "first50": [
+          [
+            389050,
+            0,
+            2
+          ],
+          [
+            396199,
+            7,
+            9
+          ],
+          [
+            420514,
+            6,
+            8
+          ],
+          [
+            747604,
+            8,
+            10
+          ],
+          [
+            747620,
+            1,
+            3
+          ],
+          [
+            747877,
+            11,
+            13
+          ],
+          [
+            747928,
+            8,
+            10
+          ],
+          [
+            775577,
+            19,
+            21
+          ],
+          [
+            775588,
+            21,
+            23
+          ],
+          [
+            827169,
+            7,
+            9
+          ],
+          [
+            844670,
+            3,
+            5
+          ],
+          [
+            844714,
+            3,
+            5
+          ],
+          [
+            858913,
+            3,
+            5
+          ],
+          [
+            858916,
+            16,
+            18
+          ],
+          [
+            858920,
+            3,
+            5
+          ],
+          [
+            858920,
+            18,
+            20
+          ],
+          [
+            858929,
+            0,
+            2
+          ],
+          [
+            858931,
+            14,
+            16
+          ],
+          [
+            858950,
+            6,
+            8
+          ],
+          [
+            858971,
+            5,
+            7
+          ],
+          [
+            859024,
+            3,
+            5
+          ],
+          [
+            1158135,
+            0,
+            2
+          ],
+          [
+            1173216,
+            4,
+            6
+          ],
+          [
+            1216106,
+            4,
+            6
+          ],
+          [
+            1398676,
+            6,
+            8
+          ],
+          [
+            1416197,
+            0,
+            2
+          ],
+          [
+            1441787,
+            2,
+            4
+          ],
+          [
+            1441838,
+            9,
+            11
+          ],
+          [
+            1477288,
+            3,
+            5
+          ],
+          [
+            1567764,
+            7,
+            9
+          ],
+          [
+            1567781,
+            8,
+            10
+          ],
+          [
+            1633336,
+            3,
+            5
+          ],
+          [
+            1746076,
+            1,
+            3
+          ],
+          [
+            1766267,
+            4,
+            6
+          ],
+          [
+            2312942,
+            0,
+            2
+          ],
+          [
+            2448819,
+            3,
+            5
+          ],
+          [
+            2737457,
+            7,
+            9
+          ],
+          [
+            3320722,
+            3,
+            5
+          ],
+          [
+            3320722,
+            13,
+            15
+          ],
+          [
+            3537667,
+            2,
+            4
+          ],
+          [
+            3709271,
+            0,
+            2
+          ],
+          [
+            3990317,
+            3,
+            5
+          ],
+          [
+            3990337,
+            4,
+            6
+          ],
+          [
+            3990339,
+            3,
+            5
+          ],
+          [
+            4620886,
+            6,
+            8
+          ],
+          [
+            4620888,
+            0,
+            2
+          ],
+          [
+            4625761,
+            0,
+            2
+          ],
+          [
+            4704316,
+            0,
+            2
+          ],
+          [
+            4819886,
+            13,
+            15
+          ],
+          [
+            5090919,
+            17,
+            19
+          ]
+        ],
+        "page_seconds": 0.13877404899903922,
+        "count_seconds": 0.17006558499997482,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "token",
+          "within": "sentence",
+          "pattern": {
+            "type": "term",
+            "attr": "form",
+            "op": "eq",
+            "value": "。"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 74737,
+        "sentences": 73485,
+        "first50": [
+          [
+            2,
+            6,
+            7
+          ],
+          [
+            7,
+            13,
+            14
+          ],
+          [
+            8,
+            12,
+            13
+          ],
+          [
+            9,
+            7,
+            8
+          ],
+          [
+            10,
+            4,
+            5
+          ],
+          [
+            11,
+            11,
+            12
+          ],
+          [
+            12,
+            8,
+            9
+          ],
+          [
+            14,
+            10,
+            11
+          ],
+          [
+            15,
+            6,
+            7
+          ],
+          [
+            17,
+            10,
+            11
+          ],
+          [
+            18,
+            18,
+            19
+          ],
+          [
+            19,
+            15,
+            16
+          ],
+          [
+            20,
+            11,
+            12
+          ],
+          [
+            21,
+            30,
+            31
+          ],
+          [
+            22,
+            13,
+            14
+          ],
+          [
+            23,
+            7,
+            8
+          ],
+          [
+            24,
+            8,
+            9
+          ],
+          [
+            25,
+            13,
+            14
+          ],
+          [
+            26,
+            7,
+            8
+          ],
+          [
+            27,
+            10,
+            11
+          ],
+          [
+            28,
+            4,
+            5
+          ],
+          [
+            29,
+            4,
+            5
+          ],
+          [
+            30,
+            14,
+            15
+          ],
+          [
+            31,
+            15,
+            16
+          ],
+          [
+            32,
+            8,
+            9
+          ],
+          [
+            33,
+            4,
+            5
+          ],
+          [
+            34,
+            11,
+            12
+          ],
+          [
+            35,
+            7,
+            8
+          ],
+          [
+            36,
+            13,
+            14
+          ],
+          [
+            37,
+            10,
+            11
+          ],
+          [
+            38,
+            6,
+            7
+          ],
+          [
+            39,
+            10,
+            11
+          ],
+          [
+            49,
+            8,
+            9
+          ],
+          [
+            50,
+            4,
+            5
+          ],
+          [
+            52,
+            7,
+            8
+          ],
+          [
+            53,
+            8,
+            9
+          ],
+          [
+            54,
+            12,
+            13
+          ],
+          [
+            55,
+            18,
+            19
+          ],
+          [
+            58,
+            11,
+            12
+          ],
+          [
+            59,
+            5,
+            6
+          ],
+          [
+            62,
+            10,
+            11
+          ],
+          [
+            63,
+            16,
+            17
+          ],
+          [
+            64,
+            10,
+            11
+          ],
+          [
+            65,
+            15,
+            16
+          ],
+          [
+            66,
+            14,
+            15
+          ],
+          [
+            67,
+            26,
+            27
+          ],
+          [
+            68,
+            11,
+            12
+          ],
+          [
+            69,
+            6,
+            7
+          ],
+          [
+            70,
+            10,
+            11
+          ],
+          [
+            71,
+            24,
+            25
+          ]
+        ],
+        "page_seconds": 0.2371969639971212,
+        "count_seconds": 0.4144322149986692,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "token",
+          "within": "sentence",
+          "pattern": {
+            "type": "term",
+            "attr": "form",
+            "op": "eq",
+            "value": "😀"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 0,
+        "sentences": 0,
+        "first50": [],
+        "page_seconds": 0.06621979400006239,
+        "count_seconds": 0.06272009799795342,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "token",
+          "within": "sentence",
+          "pattern": {
+            "type": "term",
+            "attr": "form",
+            "op": "eq",
+            "value": "é"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 0,
+        "sentences": 0,
+        "first50": [],
+        "page_seconds": 0.0654739019992121,
+        "count_seconds": 0.06542935900142766,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "token",
+          "within": "sentence",
+          "pattern": {
+            "type": "term",
+            "attr": "form",
+            "op": "eq",
+            "value": "é"
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 5,
+        "sentences": 5,
+        "first50": [
+          [
+            343110,
+            3,
+            4
+          ],
+          [
+            3649485,
+            37,
+            38
+          ],
+          [
+            9832053,
+            79,
+            80
+          ],
+          [
+            12520160,
+            4,
+            5
+          ],
+          [
+            14065742,
+            39,
+            40
+          ]
+        ],
+        "page_seconds": 0.09852299400154152,
+        "count_seconds": 0.11646978399949148,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "token",
+          "within": "sentence",
+          "pattern": {
+            "type": "sequence",
+            "items": [
+              {
+                "type": "term",
+                "attr": "form",
+                "op": "eq",
+                "value": "I"
+              },
+              {
+                "type": "term",
+                "attr": "form",
+                "op": "eq",
+                "value": "am"
+              }
+            ]
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 9801,
+        "sentences": 9572,
+        "first50": [
+          [
+            1295,
+            28,
+            32
+          ],
+          [
+            1369,
+            0,
+            4
+          ],
+          [
+            1371,
+            0,
+            4
+          ],
+          [
+            1436,
+            0,
+            4
+          ],
+          [
+            1450,
+            0,
+            4
+          ],
+          [
+            1477,
+            18,
+            22
+          ],
+          [
+            1511,
+            24,
+            28
+          ],
+          [
+            1758,
+            0,
+            4
+          ],
+          [
+            1762,
+            19,
+            23
+          ],
+          [
+            1798,
+            25,
+            29
+          ],
+          [
+            1912,
+            42,
+            46
+          ],
+          [
+            2053,
+            0,
+            4
+          ],
+          [
+            2053,
+            23,
+            27
+          ],
+          [
+            2055,
+            0,
+            4
+          ],
+          [
+            2065,
+            12,
+            16
+          ],
+          [
+            2107,
+            11,
+            15
+          ],
+          [
+            2150,
+            0,
+            4
+          ],
+          [
+            2158,
+            12,
+            16
+          ],
+          [
+            2180,
+            80,
+            84
+          ],
+          [
+            2206,
+            22,
+            26
+          ],
+          [
+            2206,
+            42,
+            46
+          ],
+          [
+            2235,
+            0,
+            4
+          ],
+          [
+            2264,
+            0,
+            4
+          ],
+          [
+            2264,
+            42,
+            46
+          ],
+          [
+            4908,
+            45,
+            49
+          ],
+          [
+            4909,
+            19,
+            23
+          ],
+          [
+            15960,
+            22,
+            26
+          ],
+          [
+            16096,
+            27,
+            31
+          ],
+          [
+            16648,
+            27,
+            31
+          ],
+          [
+            16911,
+            0,
+            4
+          ],
+          [
+            16977,
+            0,
+            4
+          ],
+          [
+            17027,
+            0,
+            4
+          ],
+          [
+            17042,
+            0,
+            4
+          ],
+          [
+            17120,
+            0,
+            4
+          ],
+          [
+            17164,
+            0,
+            4
+          ],
+          [
+            17193,
+            0,
+            4
+          ],
+          [
+            17218,
+            38,
+            42
+          ],
+          [
+            17341,
+            0,
+            4
+          ],
+          [
+            17375,
+            0,
+            4
+          ],
+          [
+            17476,
+            0,
+            4
+          ],
+          [
+            17481,
+            0,
+            4
+          ],
+          [
+            17539,
+            0,
+            4
+          ],
+          [
+            17594,
+            0,
+            4
+          ],
+          [
+            17597,
+            0,
+            4
+          ],
+          [
+            17681,
+            28,
+            32
+          ],
+          [
+            17683,
+            45,
+            49
+          ],
+          [
+            17716,
+            0,
+            4
+          ],
+          [
+            17726,
+            14,
+            18
+          ],
+          [
+            17773,
+            0,
+            4
+          ],
+          [
+            17801,
+            0,
+            4
+          ]
+        ],
+        "page_seconds": 1.1581138879992068,
+        "count_seconds": 1.4432924400025513,
+        "all_counts_spans_kwic_equal": true
+      },
+      {
+        "query": {
+          "dsl_version": "corpus-query/v1",
+          "unit": "token",
+          "within": "sentence",
+          "pattern": {
+            "type": "sequence",
+            "items": [
+              {
+                "type": "term",
+                "attr": "form",
+                "op": "eq",
+                "value": "我"
+              },
+              {
+                "type": "term",
+                "attr": "form",
+                "op": "eq",
+                "value": "爱"
+              }
+            ]
+          },
+          "normalization": "none",
+          "overlap": "all"
+        },
+        "hits": 55,
+        "sentences": 55,
+        "first50": [
+          [
+            334596,
+            0,
+            2
+          ],
+          [
+            340479,
+            0,
+            2
+          ],
+          [
+            347822,
+            7,
+            9
+          ],
+          [
+            354448,
+            12,
+            14
+          ],
+          [
+            380195,
+            0,
+            2
+          ],
+          [
+            399115,
+            0,
+            2
+          ],
+          [
+            420018,
+            0,
+            2
+          ],
+          [
+            465838,
+            0,
+            2
+          ],
+          [
+            465839,
+            0,
+            2
+          ],
+          [
+            507219,
+            0,
+            2
+          ],
+          [
+            762029,
+            0,
+            2
+          ],
+          [
+            788621,
+            6,
+            8
+          ],
+          [
+            816446,
+            0,
+            2
+          ],
+          [
+            1151904,
+            3,
+            5
+          ],
+          [
+            1192448,
+            0,
+            2
+          ],
+          [
+            1272222,
+            0,
+            2
+          ],
+          [
+            1311384,
+            2,
+            4
+          ],
+          [
+            1313472,
+            6,
+            8
+          ],
+          [
+            1442801,
+            0,
+            2
+          ],
+          [
+            1504996,
+            0,
+            2
+          ],
+          [
+            1714800,
+            0,
+            2
+          ],
+          [
+            1774097,
+            0,
+            2
+          ],
+          [
+            1783804,
+            0,
+            2
+          ],
+          [
+            1861137,
+            0,
+            2
+          ],
+          [
+            1890391,
+            0,
+            2
+          ],
+          [
+            1944845,
+            0,
+            2
+          ],
+          [
+            2021500,
+            4,
+            6
+          ],
+          [
+            2031880,
+            0,
+            2
+          ],
+          [
+            2196046,
+            0,
+            2
+          ],
+          [
+            2390162,
+            0,
+            2
+          ],
+          [
+            4546932,
+            0,
+            2
+          ],
+          [
+            4620882,
+            0,
+            2
+          ],
+          [
+            4667908,
+            0,
+            2
+          ],
+          [
+            4759974,
+            0,
+            2
+          ],
+          [
+            4831134,
+            0,
+            2
+          ],
+          [
+            5762990,
+            0,
+            2
+          ],
+          [
+            5763007,
+            0,
+            2
+          ],
+          [
+            6139124,
+            0,
+            2
+          ],
+          [
+            6683010,
+            5,
+            7
+          ],
+          [
+            7841384,
+            0,
+            2
+          ],
+          [
+            8640459,
+            0,
+            2
+          ],
+          [
+            8928635,
+            0,
+            2
+          ],
+          [
+            8932479,
+            0,
+            2
+          ],
+          [
+            8932579,
+            0,
+            2
+          ],
+          [
+            9969152,
+            0,
+            2
+          ],
+          [
+            9974960,
+            0,
+            2
+          ],
+          [
+            10054221,
+            0,
+            2
+          ],
+          [
+            10059353,
+            7,
+            9
+          ],
+          [
+            10230466,
+            4,
+            6
+          ],
+          [
+            10262028,
+            0,
+            2
+          ]
+        ],
+        "page_seconds": 0.6874589869985357,
+        "count_seconds": 0.7272585209975659,
+        "all_counts_spans_kwic_equal": true
+      }
+    ],
+    "full_mapping_check": {
+      "sentences": 2127898,
+      "tokens": 19660489,
+      "characters": 82951215
+    },
+    "wall_seconds": 466.8499370009995
+  },
+  "resource_accounting": {
+    "largest_observed_workspace_bytes_including_input_and_archive": 6148046311,
+    "final_progress": {
+      "stage": "PACKAGING",
+      "processed_records": 2127898,
+      "total_records": 19660489,
+      "processed_bytes": null,
+      "total_bytes": null,
+      "workspace_bytes": 6148046311,
+      "workspace_limit_bytes": 8589934592
+    },
+    "note": "Inner measurement is captured before the final outer manifest is written; final callback includes its additional bytes. File sizes are sampled logical bytes, not filesystem block allocation or an OS hard quota."
+  },
+  "raw_reports": [
+    {
+      "path": "tmp/source-index-s3/full-20261016/result.json",
+      "sha256": "20f48623549a984232c488756e54a1399d56fc5b6bae123f6f7ceb1dbacc809c"
+    },
+    {
+      "path": "tmp/source-index-s3/full-20261016-fresh-verify/result.json",
+      "sha256": "c07f04f9082f2cda484b4161b2cf19585ac01f434234545a37d0efb3c855a04e"
+    }
+  ],
+  "source_sha256": {
+    "pipelines/query/source_index.py": "8f5601bc96cc104536d192be148896c77cf47ca0201265cb46b1fc36584b2428",
+    "pipelines/query/source_index_run.py": "3d6dbe66a44bc18e88a69f3c70f27efa15c80910178e3b0780d4b6f128fe37e0",
+    "pipelines/query/source_index_verify.py": "60310920cdef4a8ff887af5eb2beb50f2ddb6053f71e1fd074d4fafebee77da9",
+    "pipelines/query/source_reader.py": "7fae82e5787f295294093eac87912e6e13293a7075140a5acb334424901f39bb",
+    "pipelines/query/source_recipe.py": "a3a14e245ac8e19dc6274bb78fdd21add1c6b0d5e5d0f9927a4f551995895394",
+    "pipelines/query/source-index-build-requirements.txt": "ef600abe90b897128308237a37bfa89f817daff56f1ca5e953d344da146c8445",
+    "pipelines/query/source-index-dependencies.json": "58b4647acac783f748ef3f1ef316169369ba978d044c1987230e4bc5380f36c2",
+    "pipelines/query/source-index-requirements.txt": "fbe90f09a76e46faec7589071a5f46f27aed3bc4e222c23d24dd43121938ce5f",
+    "tests/query/test_source_index.py": "a12f8f751e3e8e65c3c3f35acd968afa9c12d5957ea923627ec2ab6841074aef",
+    "pipelines/query/cwb.py": "e9b285855dded195210c53a3339c35a4d97aa7533bb684c15ff6a84567baea70",
+    "pipelines/query/engine.py": "647f117f7ba93dc6e21508ff9c8a54c6d4ea4d067d9f937a568de248f1a3eaf5",
+    "contracts/semantics.py": "23b2d96eae36cd3622cfcbe2381ee48bf82b577516469bd81cab5be22584e8ff"
+  },
+  "measured_build_source_snapshots": {
+    "source-index-build-requirements.txt": {
+      "sha256": "ef600abe90b897128308237a37bfa89f817daff56f1ca5e953d344da146c8445",
+      "content": "setuptools==80.9.0 --hash=sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922\nwheel==0.45.1 --hash=sha256:708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248\npackaging==25.0 --hash=sha256:29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484\n"
+    },
+    "source-index-dependencies.json": {
+      "sha256": "58b4647acac783f748ef3f1ef316169369ba978d044c1987230e4bc5380f36c2",
+      "content": "{\n  \"scope\": \"Linux CPython 3.12 x86_64 offline index worker\",\n  \"packages\": [\n    {\n      \"package\": \"click\",\n      \"version\": \"8.5.0\",\n      \"filename\": \"click-8.5.0-py3-none-any.whl\",\n      \"sha256\": \"255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360\",\n      \"bytes\": 125251,\n      \"official_metadata\": \"https://pypi.org/pypi/click/8.5.0/json\",\n      \"url\": \"https://files.pythonhosted.org/packages/58/50/6c0d534c5f134586a8e1ba4e330569e32f057e33372ae556463212fb4cd3/click-8.5.0-py3-none-any.whl\"\n    },\n    {\n      \"package\": \"cloudpickle\",\n      \"version\": \"3.1.2\",\n      \"filename\": \"cloudpickle-3.1.2-py3-none-any.whl\",\n      \"sha256\": \"9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a\",\n      \"bytes\": 22228,\n      \"official_metadata\": \"https://pypi.org/pypi/cloudpickle/3.1.2/json\",\n      \"url\": \"https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl\"\n    },\n    {\n      \"package\": \"colorama\",\n      \"version\": \"0.4.6\",\n      \"filename\": \"colorama-0.4.6-py2.py3-none-any.whl\",\n      \"sha256\": \"4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6\",\n      \"bytes\": 25335,\n      \"official_metadata\": \"https://pypi.org/pypi/colorama/0.4.6/json\",\n      \"url\": \"https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl\"\n    },\n    {\n      \"package\": \"defusedxml\",\n      \"version\": \"0.7.1\",\n      \"filename\": \"defusedxml-0.7.1-py2.py3-none-any.whl\",\n      \"sha256\": \"a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61\",\n      \"bytes\": 25604,\n      \"official_metadata\": \"https://pypi.org/pypi/defusedxml/0.7.1/json\",\n      \"url\": \"https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl\"\n    },\n    {\n      \"package\": \"jieba\",\n      \"version\": \"0.42.1\",\n      \"filename\": \"jieba-0.42.1-py3-none-any.whl\",\n      \"sha256\": \"bbf3fa7ec652b3fddd553e23360f9364440e2f97362547c48cf21b794f5caaed\",\n      \"bytes\": 19314526,\n      \"official_metadata\": \"https://pypi.org/pypi/jieba/0.42.1/json\",\n      \"official_source\": {\n        \"url\": \"https://files.pythonhosted.org/packages/c6/cb/18eeb235f833b726522d7ebed54f2278ce28ba9438e3135ab0278d9792a2/jieba-0.42.1.tar.gz\",\n        \"sha256\": \"055ca12f62674fafed09427f176506079bc135638a14e23e25be909131928db2\",\n        \"bytes\": 19214172\n      },\n      \"wheel_provenance\": \"pip cached built pure Python wheel; module and dictionary equal official pinned sdist\"\n    },\n    {\n      \"package\": \"joblib\",\n      \"version\": \"1.6.0\",\n      \"filename\": \"joblib-1.6.0-py3-none-any.whl\",\n      \"sha256\": \"3dbbf9f6e4b592a2357b854608e980fe6390d131d7a82f011a377ef2ebef7aba\",\n      \"bytes\": 306115,\n      \"official_metadata\": \"https://pypi.org/pypi/joblib/1.6.0/json\",\n      \"url\": \"https://files.pythonhosted.org/packages/18/53/84099323c2ec4be98d935f63c033ac4151ee83836ca1050ede3b3aadf155/joblib-1.6.0-py3-none-any.whl\"\n    },\n    {\n      \"package\": \"nltk\",\n      \"version\": \"3.10.3\",\n      \"filename\": \"nltk-3.10.3-py3-none-any.whl\",\n      \"sha256\": \"ff9598a8e20518ee0d557745890cc4435b9578489e2dcbc69c4f81fa060caf7c\",\n      \"bytes\": 1798643,\n      \"official_metadata\": \"https://pypi.org/pypi/nltk/3.10.3/json\",\n      \"url\": \"https://files.pythonhosted.org/packages/b6/6d/ebd2af4640b12168fdf0cb74b6118df2f32a2f62ec7e0c06fbfd80706639/nltk-3.10.3-py3-none-any.whl\"\n    },\n    {\n      \"package\": \"regex\",\n      \"version\": \"2026.9.29\",\n      \"filename\": \"regex-2026.9.29-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl\",\n      \"sha256\": \"39ab5894d971f9ac68baa6eca5c50387db579cfcacf36ae8df3feceb1815e6d0\",\n      \"bytes\": 807783,\n      \"official_metadata\": \"https://pypi.org/pypi/regex/2026.9.29/json\",\n      \"url\": \"https://files.pythonhosted.org/packages/26/83/d2fbd2e4e3afb1167daa825187d196f313cbaa1a4768f311fb041bb0e3d2/regex-2026.9.29-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl\"\n    },\n    {\n      \"package\": \"tqdm\",\n      \"version\": \"4.70.1\",\n      \"filename\": \"tqdm-4.70.1-py3-none-any.whl\",\n      \"sha256\": \"c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73\",\n      \"bytes\": 80199,\n      \"official_metadata\": \"https://pypi.org/pypi/tqdm/4.70.1/json\",\n      \"url\": \"https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl\"\n    }\n  ],\n  \"build_dependencies\": [\n    {\n      \"package\": \"setuptools\",\n      \"version\": \"80.9.0\",\n      \"url\": \"https://files.pythonhosted.org/packages/a3/dc/17031897dae0efacfea57dfd3a82fdd2a2aeb58e0ff71b77b87e44edc772/setuptools-80.9.0-py3-none-any.whl\",\n      \"sha256\": \"062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922\"\n    },\n    {\n      \"package\": \"wheel\",\n      \"version\": \"0.45.1\",\n      \"url\": \"https://files.pythonhosted.org/packages/0b/2c/87f3254fd8ffd29e4c02732eee68a83a1d3c346ae39bc6822dcbcb697f2b/wheel-0.45.1-py3-none-any.whl\",\n      \"sha256\": \"708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248\"\n    },\n    {\n      \"package\": \"packaging\",\n      \"version\": \"25.0\",\n      \"url\": \"https://files.pythonhosted.org/packages/20/12/38679034af332785aac8774540895e234f4d07f7545804097de4b666afd8/packaging-25.0-py3-none-any.whl\",\n      \"sha256\": \"29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484\"\n    }\n  ]\n}\n"
+    },
+    "source-index-requirements.txt": {
+      "sha256": "fbe90f09a76e46faec7589071a5f46f27aed3bc4e222c23d24dd43121938ce5f",
+      "content": "click==8.5.0 --hash=sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360\ncloudpickle==3.1.2 --hash=sha256:9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a\ncolorama==0.4.6 --hash=sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6\ndefusedxml==0.7.1 --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61\njieba==0.42.1 --hash=sha256:bbf3fa7ec652b3fddd553e23360f9364440e2f97362547c48cf21b794f5caaed --hash=sha256:055ca12f62674fafed09427f176506079bc135638a14e23e25be909131928db2\njoblib==1.6.0 --hash=sha256:3dbbf9f6e4b592a2357b854608e980fe6390d131d7a82f011a377ef2ebef7aba\nnltk==3.10.3 --hash=sha256:ff9598a8e20518ee0d557745890cc4435b9578489e2dcbc69c4f81fa060caf7c\nregex==2026.9.29 --hash=sha256:39ab5894d971f9ac68baa6eca5c50387db579cfcacf36ae8df3feceb1815e6d0\ntqdm==4.70.1 --hash=sha256:c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73\n"
+    },
+    "source_index.py": {
+      "sha256": "d1e4898cff59b381a1bdb7b692939fea270c9930443cc04feae5eedc36db9b3e",
+      "content": "\"\"\"Bounded immutable full-source index builder; no publication or authorization.\"\"\"\nimport hashlib\nimport mmap\nimport re\nimport sqlite3\nimport struct\nimport subprocess\nimport tarfile\nimport time\nfrom collections import Counter\nfrom pathlib import Path\n\nfrom pipelines.query.source_recipe import (\n    RECIPE,\n    RECIPE_ID,\n    RECIPE_SHA256,\n    SurfaceTokenizer,\n    encoded,\n    storage_key,\n)\n\nROOT = Path(__file__).resolve().parents[2]\nTOKEN = struct.Struct(\"<III\")\nRECORD = struct.Struct(\"<QQQQQQ\")  # source id, text byte start/length, global cp start/length, token start\nU64 = struct.Struct(\"<Q\")\nMAX_TEMPORARY_BYTES = 8 * 1024**3\nMAX_ARTIFACT_BYTES = 4 * 1024**3\nLIMITS = {\"sentences\": 3_000_000, \"characters\": 250_000_000, \"tokens\": 250_000_000,\n          \"sentence_characters\": 100_000, \"stage_seconds\": 1800, \"total_seconds\": 7200}\n\n\nclass _ProgressReader:\n    def __init__(self, stream, guard):\n        self.stream, self.guard = stream, guard\n\n    def read(self, size):\n        self.guard.tick()\n        return self.stream.read(size)\n\n\nclass IndexBuildError(ValueError):\n    def __init__(self, code):\n        self.code = code\n        super().__init__(code)\n\n\ndef digest(path, tick=None):\n    h = hashlib.sha256()\n    with Path(path).open(\"rb\") as stream:\n        while chunk := stream.read(1024 * 1024):\n            h.update(chunk)\n            if tick:\n                tick()\n    return h.hexdigest()\n\n\nclass Guard:\n    def __init__(self, output, input_bytes, callback, maximum):\n        self.output, self.input_bytes, self.callback, self.maximum = output, input_bytes, callback, maximum\n        self.started = self.stage_started = time.monotonic()\n        self.last = 0\n        self.stage = \"VALIDATING\"\n        self.records = 0\n        self.total = None\n        self.peak = input_bytes\n\n    def tick(self, *, stage=None, records=None, total=None, force=False):\n        now = time.monotonic()\n        if stage and stage != self.stage:\n            self.stage, self.stage_started = stage, now\n            force = True\n        if records is not None:\n            self.records = records\n        if total is not None:\n            self.total = total\n        if now - self.started > LIMITS[\"total_seconds\"] or now - self.stage_started > LIMITS[\"stage_seconds\"]:\n            raise IndexBuildError(\"INDEX_BUILD_TIMEOUT\")\n        if force or now - self.last >= 1:\n            size = self.input_bytes\n            for path in self.output.rglob(\"*\"):\n                try:\n                    if path.is_file():\n                        size += path.stat().st_size\n                except FileNotFoundError:\n                    pass  # CWB may remove an intermediate between directory scan and stat.\n            self.peak = max(self.peak, size)\n            if size > self.maximum:\n                raise IndexBuildError(\"INDEX_BUILD_QUOTA_EXCEEDED\")\n            self.callback({\"stage\": self.stage, \"processed_records\": self.records,\n                           \"total_records\": self.total, \"processed_bytes\": None,\n                           \"total_bytes\": None, \"workspace_bytes\": size,\n                           \"workspace_limit_bytes\": self.maximum})\n            self.last = now\n\n\ndef run_command(command, directory, guard, name):\n    \"\"\"No shell; output goes to bounded workspace files, heartbeat while waiting.\"\"\"\n    with (directory / (name + \".stdout\")).open(\"wb\") as out, (directory / (name + \".stderr\")).open(\"wb\") as err:\n        process = subprocess.Popen(command, stdout=out, stderr=err)\n        try:\n            while process.poll() is None:\n                guard.tick()\n                time.sleep(.2)\n            guard.tick(force=True)\n            if process.returncode:\n                raise IndexBuildError(\"INDEX_ENGINE_FAILED\")\n        except BaseException:\n            process.kill()\n            process.wait()\n            raise\n\n\ndef _files(directory, guard):\n    result = []\n    for path in sorted(directory.rglob(\"*\")):\n        if path.is_symlink():\n            raise IndexBuildError(\"INDEX_SYMLINK_REJECTED\")\n        if path.is_file():\n            result.append({\"name\": path.relative_to(directory).as_posix(), \"bytes\": path.stat().st_size,\n                           \"sha256\": digest(path, guard.tick)})\n    return result\n\n\ndef build(input_sqlite, output_dir, acquisition_manifest_sha256, progress_callback, *, max_temporary_bytes=MAX_TEMPORARY_BYTES):\n    \"\"\"Return small manifest and two artifacts: manifest.json and index.tar.\n\n    Caller authenticates the fixed input object; this function verifies all source\n    record/text hashes and index contents. Callback exceptions propagate unchanged.\n    A failed attempt keeps diagnostic files but never produces a success manifest.\n    \"\"\"\n    source, output = Path(input_sqlite).resolve(), Path(output_dir).resolve()\n    if not re.fullmatch(r\"[0-9a-f]{64}\", acquisition_manifest_sha256):\n        raise IndexBuildError(\"INDEX_INVALID_INPUT_IDENTITY\")\n    if not output.is_relative_to(ROOT / \"tmp\") or output.exists() or source.is_symlink() or not source.is_file():\n        raise IndexBuildError(\"INDEX_INVALID_PATH\")\n    if type(max_temporary_bytes) is not int or not 0 < max_temporary_bytes <= MAX_TEMPORARY_BYTES:\n        raise IndexBuildError(\"INDEX_INVALID_BUDGET\")\n    output.mkdir(parents=True)\n    bundle, temporary = output / \"bundle\", output / \"temporary\"\n    bundle.mkdir()\n    temporary.mkdir()\n    guard = Guard(output, source.stat().st_size, progress_callback, max_temporary_bytes)\n    db = sqlite3.connect(source.as_uri() + \"?mode=ro&immutable=1\", uri=True)\n    db.execute(\"PRAGMA query_only=ON\")\n    db.execute(\"PRAGMA cache_size=-16384\")\n    # Queries below use primary-key scans and indexed joins, never disk sorting.\n    callback_error = []\n\n    def sql_tick():\n        try:\n            guard.tick()\n        except Exception as exc:  # noqa: BLE001 -- preserve original callback/fencing failure after SQLite abort\n            callback_error.append(exc)\n            return 1\n        return 0\n\n    db.set_progress_handler(sql_tick, 100_000)\n    try:\n        guard.tick(force=True)\n        version = subprocess.run([\"dpkg-query\", \"-W\", \"-f=${Version}\", \"cwb\"], capture_output=True, text=True, timeout=5, check=True).stdout\n        if version != RECIPE[\"cwb_package\"]:\n            raise IndexBuildError(\"INDEX_ENGINE_VERSION_MISMATCH\")\n        if db.execute(\"SELECT value FROM metadata WHERE key='recipe'\").fetchone() != (\"tatoeba-full/v1\",):\n            # Exact parser recipe checked against the producer below; no guessed schemas.\n            from pipelines.sources.tatoeba import RECIPE as INPUT_RECIPE\n            if db.execute(\"SELECT value FROM metadata WHERE key='recipe'\").fetchone() != (INPUT_RECIPE,):\n                raise IndexBuildError(\"INDEX_INPUT_RECIPE_MISMATCH\")\n        count = db.execute(\"SELECT COUNT(*) FROM sentences\").fetchone()[0]\n        if not 0 < count <= LIMITS[\"sentences\"]:\n            raise IndexBuildError(\"INDEX_INPUT_LIMIT\")\n        guard.tick(total=count)\n        input_sha = digest(source, guard.tick)\n        tokenizer = SurfaceTokenizer(temporary)\n        counts = {\"sentences\": count, \"cmn_sentences\": 0, \"eng_sentences\": 0, \"characters\": 0,\n                  \"tokens\": 0, \"direct_edges\": 0, \"unknown_owner\": 0}\n        vocabulary = Counter()\n        token_hash, members_hash, metadata_hash = hashlib.sha256(), hashlib.sha256(), hashlib.sha256()\n        with ((bundle / \"texts.utf8\").open(\"wb\") as texts,\n              (bundle / \"records.map\").open(\"wb\") as records,\n              (bundle / \"tokens.map\").open(\"wb\") as tokens,\n              (bundle / \"members.jsonl\").open(\"wb\") as members,\n              (bundle / \"input.vrt\").open(\"w\", encoding=\"utf-8\", newline=\"\\n\") as vrt):\n            guard.tick(stage=\"TOKENIZING\", records=0, force=True)\n            for ordinal, row in enumerate(db.execute(\"SELECT id,language,text,owner,added,modified,record_hash,text_hash,source_line FROM sentences ORDER BY id\")):\n                sid, language, text, owner, added, modified, record_hash, text_hash, line = row\n                if language not in (\"cmn\", \"eng\") or not 0 < len(text) <= LIMITS[\"sentence_characters\"] or \"\\x00\" in text:\n                    raise IndexBuildError(\"INDEX_INVALID_SOURCE_RECORD\")\n                raw = text.encode(\"utf-8\")\n                if hashlib.sha256(raw).hexdigest() != text_hash or hashlib.sha256(encoded(row[:6])).hexdigest() != record_hash:\n                    raise IndexBuildError(\"INDEX_INPUT_HASH_MISMATCH\")\n                spans = tokenizer.spans(text, language)\n                if counts[\"tokens\"] + len(spans) > LIMITS[\"tokens\"] or counts[\"characters\"] + len(text) > LIMITS[\"characters\"]:\n                    raise IndexBuildError(\"INDEX_INPUT_LIMIT\")\n                records.write(RECORD.pack(sid, texts.tell(), len(raw), counts[\"characters\"], len(text), counts[\"tokens\"]))\n                texts.write(raw)\n                vrt.write(\"<doc>\\n<s>\\n\")\n                local_hash = hashlib.sha256()\n                for number, (start, end, form) in enumerate(spans):\n                    tokens.write(TOKEN.pack(ordinal, start, end))\n                    vrt.write(f\"{number}\\t{storage_key(form)}\\n\")\n                    # Hash the exact cwb-decode -C -n stream independently of mapping storage.\n                    token_hash.update(f\"{counts['tokens']}\\t{form}\\n\".encode())\n                    counts[\"tokens\"] += 1\n                    local_hash.update(encoded([start, end, form]) + b\"\\n\")\n                vrt.write(\"</s>\\n</doc>\\n\")\n                meta = {\"id\": sid, \"language\": language, \"owner\": owner, \"added\": added, \"modified\": modified,\n                        \"source_line\": line, \"source_url\": f\"https://tatoeba.org/en/sentences/show/{sid}\", \"license\": \"CC-BY-2.0-FR\"}\n                metadata_hash.update(encoded(meta) + b\"\\n\")\n                member = {**meta, \"ordinal\": ordinal, \"text_sha256\": text_hash, \"record_sha256\": record_hash,\n                          \"token_sha256\": local_hash.hexdigest(), \"segment\": [0, len(text)],\n                          \"revision_id\": f\"tatoeba:{sid}:{text_hash}\", \"source_map\": \"identity_codepoints\"}\n                line_bytes = encoded(member) + b\"\\n\"\n                members.write(line_bytes)\n                members_hash.update(line_bytes)\n                vocabulary.update(text)\n                counts[\"characters\"] += len(text)\n                counts[language + \"_sentences\"] += 1\n                counts[\"unknown_owner\"] += owner is None\n                if ordinal % 100 == 0:\n                    guard.tick(records=ordinal + 1)\n        with (bundle / \"edges.tsv\").open(\"w\", encoding=\"ascii\", newline=\"\\n\") as edges:\n            invalid = db.execute(\"SELECT COUNT(*) FROM edges e LEFT JOIN sentences c ON c.id=e.cmn_id LEFT JOIN sentences n ON n.id=e.eng_id WHERE c.language IS NOT 'cmn' OR n.language IS NOT 'eng'\").fetchone()[0]\n            if invalid:\n                raise IndexBuildError(\"INDEX_INVALID_EDGE\")\n            for left, right in db.execute(\"SELECT cmn_id,eng_id FROM edges ORDER BY cmn_id,eng_id\"):\n                edges.write(f\"{left}\\t{right}\\n\")\n                counts[\"direct_edges\"] += 1\n                if counts[\"direct_edges\"] % 10000 == 0:\n                    guard.tick()\n        guard.tick(stage=\"CHARACTER_INDEX\", records=0)\n        entries, cursors, offset = {}, {}, 0\n        for char, frequency in sorted(vocabulary.items()):\n            entries[char] = {\"offset\": offset, \"count\": frequency}\n            cursors[char] = offset\n            offset += frequency * 8\n        if guard.peak + offset > max_temporary_bytes:\n            raise IndexBuildError(\"INDEX_BUILD_QUOTA_EXCEEDED\")\n        postings = bundle / \"characters.bin\"\n        with postings.open(\"w+b\") as stream:\n            stream.truncate(offset)\n            with mmap.mmap(stream.fileno(), 0) as mapped:\n                global_position = 0\n                for ordinal, (text,) in enumerate(db.execute(\"SELECT text FROM sentences ORDER BY id\")):\n                    for character in text:\n                        U64.pack_into(mapped, cursors[character], global_position)\n                        cursors[character] += 8\n                        global_position += 1\n                    if ordinal % 1000 == 0:\n                        guard.tick(records=ordinal + 1)\n                mapped.flush()\n        for char, entry in entries.items():\n            if cursors[char] != entry[\"offset\"] + entry[\"count\"] * 8:\n                raise IndexBuildError(\"INDEX_POSTING_COUNT_MISMATCH\")\n        (bundle / \"characters.json\").write_bytes(encoded(entries))\n        guard.tick(stage=\"CWB_INDEX\", records=0)\n        data, registry = bundle / \"data\", bundle / \"registry\"\n        data.mkdir()\n        registry.mkdir()\n        run_command([\"cwb-encode\", \"-n\", \"-d\", str(data), \"-c\", \"utf8\", \"-f\", str(bundle / \"input.vrt\"),\n                     \"-R\", str(registry / \"source\"), \"-S\", \"s\", \"-S\", \"doc\"], temporary, guard, \"encode\")\n        run_command([\"cwb-makeall\", \"-r\", str(registry), \"-V\", \"SOURCE\"], temporary, guard, \"makeall\")\n        guard.tick(stage=\"VERIFYING\", records=0)\n        run_command([\"cwb-decode\", \"-C\", \"-n\", \"-r\", str(registry), \"SOURCE\", \"-P\", \"word\"], temporary, guard, \"decode\")\n        decoded_hash = hashlib.sha256()\n        decoded_count = 0\n        with (temporary / \"decode.stdout\").open(\"r\", encoding=\"ascii\") as decoded:\n            for line in decoded:\n                position, key = line.rstrip(\"\\n\").split(\"\\t\")\n                if position != str(decoded_count) or not re.fullmatch(r\"u(?:[0-9a-f]{2})+\", key):\n                    raise IndexBuildError(\"INDEX_TOKEN_ROUNDTRIP_FAILED\")\n                form = bytes.fromhex(key[1:]).decode(\"utf-8\")\n                decoded_hash.update(f\"{decoded_count}\\t{form}\\n\".encode())\n                decoded_count += 1\n                if decoded_count % 10000 == 0:\n                    guard.tick(records=decoded_count, total=counts[\"tokens\"])\n        if decoded_count != counts[\"tokens\"] or decoded_hash.hexdigest() != token_hash.hexdigest():\n            raise IndexBuildError(\"INDEX_TOKEN_ROUNDTRIP_FAILED\")\n        # Portable immutable registry template; reader materializes HOME only in its private runtime directory.\n        registry_file = registry / \"source\"\n        content = registry_file.read_text(\"utf-8\")\n        content, replacements = re.subn(r\"(?m)^HOME\\s+.*$\", 'HOME \"__INDEX_DATA__\"', content)\n        content = re.sub(r\"(?m)^INFO\\s+.*\\n?\", \"\", content)\n        if replacements != 1:\n            raise IndexBuildError(\"INDEX_REGISTRY_INVALID\")\n        registry_file.write_text(content, encoding=\"utf-8\")\n        # VRT is reproducible construction material; token roundtrip verified before removing it.\n        (bundle / \"input.vrt\").unlink()\n        files = _files(bundle, guard)\n        identity = {\"format\": \"source-index/v1\", \"recipe_sha256\": RECIPE_SHA256,\n                    \"acquisition_manifest_sha256\": acquisition_manifest_sha256, \"input_sqlite_sha256\": input_sha,\n                    \"ordered_members_sha256\": members_hash.hexdigest(), \"metadata_sha256\": metadata_hash.hexdigest(),\n                    \"token_stream_sha256\": token_hash.hexdigest(), \"character_postings_sha256\": next(f['sha256'] for f in files if f['name']=='characters.bin'),\n                    \"engine\": {\"character\": \"source-position/v1\", \"token\": \"CWB-3.5.0\"}}\n        manifest = {\"format\": \"source-index/v1\", \"recipe\": RECIPE, \"recipe_id\": RECIPE_ID, \"recipe_sha256\": RECIPE_SHA256,\n                    \"identity\": identity, \"identity_sha256\": hashlib.sha256(encoded(identity)).hexdigest(), \"counts\": counts,\n                    \"quality\": {\"all_source_sentences_indexed\": True, \"rejected_sentences\": 0, \"token_roundtrip_verified\": True,\n                                \"attributes\": [\"form\"], \"document_count_unit\": \"imported_sentence_record\", \"normalization\": \"none\"},\n                    \"files\": files, \"stage\": \"INDEXED\", \"published\": False, \"query_ready\": False}\n        (bundle / \"manifest.json\").write_bytes(encoded(manifest))\n        guard.tick(stage=\"PACKAGING\", records=count)\n        package = output / \"index.tar\"\n        if sum(f[\"bytes\"] for f in files) + len(encoded(manifest)) + (len(files) + 1) * 2048 > MAX_ARTIFACT_BYTES:\n            raise IndexBuildError(\"INDEX_ARTIFACT_TOO_LARGE\")\n        with tarfile.open(package, \"w\") as archive:\n            for path in sorted(bundle.rglob(\"*\")):\n                if path.is_file():\n                    info = archive.gettarinfo(str(path), arcname=path.relative_to(bundle).as_posix())\n                    info.mtime = 0\n                    info.uid = info.gid = 0\n                    info.uname = info.gname = \"\"\n                    with path.open(\"rb\") as stream:\n                        archive.addfile(info, _ProgressReader(stream, guard))\n                    guard.tick(force=True)\n        guard.tick(force=True)\n        if package.stat().st_size > MAX_ARTIFACT_BYTES:\n            raise IndexBuildError(\"INDEX_ARTIFACT_TOO_LARGE\")\n        package_sha = digest(package, guard.tick)\n        final = {**manifest, \"package\": {\"name\": package.name, \"bytes\": package.stat().st_size, \"sha256\": package_sha},\n                 \"measurement\": {\"wall_seconds\": time.monotonic() - guard.started, \"sampled_peak_workspace_bytes_including_input\": guard.peak,\n                                 \"peak_is_sampled\": True, \"max_temporary_bytes\": max_temporary_bytes}}\n        final_path = output / \"manifest.json\"\n        final_path.write_bytes(encoded(final))\n        return {\"manifest\": final, \"manifest_path\": final_path, \"counts\": counts,\n                \"artifacts\": [{\"name\": p.name, \"path\": p, \"bytes\": p.stat().st_size, \"sha256\": digest(p, guard.tick)} for p in (package, final_path)]}\n    except sqlite3.OperationalError:\n        if callback_error:\n            raise callback_error[0]\n        raise\n    finally:\n        db.close()\n"
+    },
+    "source_index_run.py": {
+      "sha256": "3d6dbe66a44bc18e88a69f3c70f27efa15c80910178e3b0780d4b6f128fe37e0",
+      "content": "\"\"\"Explicit full-input Linux build receipt. Not a publication endpoint.\"\"\"\nimport argparse\nimport hashlib\nimport json\nimport os\nimport platform\nimport resource\nimport time\nfrom pathlib import Path\n\nfrom pipelines.query.source_index import build, digest\n\n\ndef main():\n    parser = argparse.ArgumentParser()\n    parser.add_argument(\"--input\", type=Path, required=True)\n    parser.add_argument(\"--input-manifest\", type=Path, required=True)\n    parser.add_argument(\"--output\", type=Path, required=True)\n    args = parser.parse_args()\n    args.output.mkdir(parents=True, exist_ok=False)\n    source = args.output / \"source\"\n    source.mkdir()\n    hashes = {}\n    for name in (\"source_index.py\", \"source_recipe.py\", \"source_reader.py\", \"source_index_run.py\", \"source-index-requirements.txt\", \"source-index-build-requirements.txt\", \"source-index-dependencies.json\"):\n        raw = Path(__file__).with_name(name).read_bytes()\n        (source / name).write_bytes(raw)\n        hashes[name] = hashlib.sha256(raw).hexdigest()\n    last, previous_stage = 0, None\n    stages = []\n\n    def callback(event):\n        nonlocal last, previous_stage\n        now = time.monotonic()\n        if previous_stage != event[\"stage\"]:\n            stages.append({\"stage\": event[\"stage\"], \"elapsed_seconds\": now - started})\n            previous_stage = event[\"stage\"]\n        (args.output / \"progress.json\").write_text(json.dumps(event), encoding=\"utf-8\")\n        if now - last > 30:\n            print(json.dumps(event), flush=True)\n            last = now\n\n    started = time.monotonic()\n    result = {\"status\": \"failed\", \"source_sha256\": hashes, \"input_sqlite_sha256\": digest(args.input),\n              \"input_manifest_sha256\": digest(args.input_manifest), \"formal_acceptance\": False,\n              \"environment\": {\"platform\": platform.platform(), \"python\": platform.python_version(),\n                              \"cpu_max\": Path('/sys/fs/cgroup/cpu.max').read_text().strip(),\n                              \"memory_max\": Path('/sys/fs/cgroup/memory.max').read_text().strip(),\n                              \"storage\": \"Windows workspace bind mount; shared Docker Desktop host\"}}\n    try:\n        built = build(args.input, args.output / \"build\", result[\"input_manifest_sha256\"], callback)\n        result.update(status=\"passed\", manifest=built[\"manifest\"], artifacts=[{**a, \"path\": str(a[\"path\"])} for a in built[\"artifacts\"]])\n    except Exception as exc:\n        result[\"error\"] = {\"type\": type(exc).__name__, \"code\": getattr(exc, \"code\", str(exc))}\n        raise\n    finally:\n        result.update(wall_seconds=time.monotonic() - started, stages=stages,\n                      parent_peak_rss_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,\n                      child_peak_rss_bytes=resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss * 1024,\n                      cgroup_peak_bytes_including_cache=Path('/sys/fs/cgroup/memory.peak').read_text().strip(), pid=os.getpid())\n        (args.output / \"result.json\").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding=\"utf-8\")\n        print(json.dumps({\"status\": result[\"status\"], \"seconds\": result[\"wall_seconds\"]}), flush=True)\n\n\nif __name__ == \"__main__\":\n    main()\n"
+    },
+    "source_reader.py": {
+      "sha256": "7fae82e5787f295294093eac87912e6e13293a7075140a5acb334424901f39bb",
+      "content": "\"\"\"Read immutable S3 source indices without loading the corpus into Python objects.\"\"\"\nimport hashlib\nimport json\nimport mmap\nfrom bisect import bisect_left, bisect_right\nfrom pathlib import Path\n\nfrom pipelines.query.cwb import cqp_counts, cqp_page_spans\nfrom pipelines.query.engine import QueryError\nfrom pipelines.query.source_index import RECORD, TOKEN, U64, digest\nfrom pipelines.query.source_recipe import RECIPE_SHA256, encoded, storage_key\n\n\ndef storage_query(query):\n    \"\"\"Translate only exact surface literals on a copy; all other semantics stay compiler-validated.\"\"\"\n    import copy\n    result = copy.deepcopy(query)\n\n    def visit(pattern):\n        if pattern.get(\"type\") == \"term\" and pattern.get(\"attr\") == \"form\" and pattern.get(\"op\") == \"eq\":\n            pattern[\"value\"] = storage_key(pattern[\"value\"])\n        for child in pattern.get(\"items\", pattern.get(\"patterns\", [])):\n            visit(child)\n    visit(result[\"pattern\"])\n    return result\n\n\nclass _Positions:\n    def __init__(self, mapped, offset, count):\n        self.mapped, self.offset, self.count = mapped, offset, count\n\n    def __len__(self):\n        return self.count\n\n    def __getitem__(self, number):\n        if not 0 <= number < self.count:\n            raise IndexError(number)\n        return U64.unpack_from(self.mapped, self.offset + number * 8)[0]\n\n\nclass _RecordStarts:\n    def __init__(self, reader):\n        self.reader = reader\n\n    def __len__(self):\n        return self.reader.count\n\n    def __getitem__(self, number):\n        return self.reader.record(number)[3]\n\n\nclass SourceIndexReader:\n    def __init__(self, directory, runtime_directory, *, verify=True):\n        self.directory = Path(directory).resolve()\n        self.runtime = Path(runtime_directory).resolve()\n        self.manifest = json.loads((self.directory / \"manifest.json\").read_text(\"utf-8\"))\n        if self.manifest[\"format\"] != \"source-index/v1\" or self.manifest[\"recipe_sha256\"] != RECIPE_SHA256:\n            raise ValueError(\"INDEX_RECIPE_MISMATCH\")\n        if hashlib.sha256(encoded(self.manifest[\"identity\"])).hexdigest() != self.manifest[\"identity_sha256\"]:\n            raise ValueError(\"INDEX_IDENTITY_MISMATCH\")\n        for entry in self.manifest[\"files\"]:\n            path = self.directory / entry[\"name\"]\n            if not path.resolve().is_relative_to(self.directory) or path.is_symlink() or path.stat().st_size != entry[\"bytes\"]:\n                raise ValueError(\"INDEX_FILE_INVALID\")\n            if verify and digest(path) != entry[\"sha256\"]:\n                raise ValueError(\"INDEX_HASH_MISMATCH\")\n        self.handles, self.maps = [], {}\n        try:\n            for name in (\"texts.utf8\", \"records.map\", \"tokens.map\", \"characters.bin\"):\n                handle = (self.directory / name).open(\"rb\")\n                self.handles.append(handle)\n                self.maps[name] = mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ)\n            self.count = self.manifest[\"counts\"][\"sentences\"]\n            if len(self.maps[\"records.map\"]) != self.count * RECORD.size:\n                raise ValueError(\"INDEX_RECORD_COUNT_MISMATCH\")\n            self.starts = _RecordStarts(self)\n            self.vocabulary = json.loads((self.directory / \"characters.json\").read_text(\"utf-8\"))\n            self.runtime.mkdir(parents=True, exist_ok=False)\n            self.registry = self.runtime / \"registry\"\n            self.registry.mkdir()\n            home = str(self.directory / \"data\")\n            if any(c in home for c in '\\\\\"\\n\\r'):\n                # CWB supported deployment is Linux. Reject ambiguous registry escaping.\n                raise ValueError(\"INDEX_REGISTRY_PATH_INVALID\")\n            registry = (self.directory / \"registry/source\").read_text(\"utf-8\")\n            if registry.count('\"__INDEX_DATA__\"') != 1:\n                raise ValueError(\"INDEX_REGISTRY_INVALID\")\n            (self.registry / \"source\").write_text(registry.replace('\"__INDEX_DATA__\"', '\"' + home + '\"'), encoding=\"utf-8\")\n            # Fixed wrapper suppresses user startup and macro files. No query enters a shell command.\n            self.executable = self.runtime / \"cqp-fixed\"\n            self.executable.write_text('#!/bin/sh\\nexec /usr/bin/cqp -I /dev/null -M /dev/null -m \"$@\"\\n', encoding=\"ascii\")\n            self.executable.chmod(0o700)\n        except BaseException:\n            self.close()\n            raise\n\n    def close(self):\n        for mapped in self.maps.values():\n            mapped.close()\n        for handle in self.handles:\n            handle.close()\n\n    def __enter__(self):\n        return self\n\n    def __exit__(self, *_):\n        self.close()\n\n    def record(self, ordinal):\n        if not 0 <= ordinal < self.count:\n            raise IndexError(ordinal)\n        return RECORD.unpack_from(self.maps[\"records.map\"], ordinal * RECORD.size)\n\n    def text(self, ordinal):\n        _, offset, size, *_ = self.record(ordinal)\n        return self.maps[\"texts.utf8\"][offset:offset + size].decode(\"utf-8\")\n\n    def hit(self, ordinal, left, right):\n        text = self.text(ordinal)\n        sid = self.record(ordinal)[0]\n        return {\"source_sentence_id\": sid, \"revision_id\": f\"tatoeba:{sid}:{hashlib.sha256(text.encode()).hexdigest()}\",\n                \"start\": left, \"end\": right, \"left\": text[max(0, left - 40):left], \"match\": text[left:right],\n                \"right\": text[right:right + 40], \"source_url\": f\"https://tatoeba.org/en/sentences/show/{sid}\"}\n\n    def token_page(self, query, *, offset=0, limit=50):\n        if query.get(\"within\") != \"sentence\":\n            raise QueryError(\"QUERY_UNSUPPORTED\")\n        spans = cqp_page_spans(storage_query(query), self.registry, corpus=\"SOURCE\", offset=offset, limit=limit, executable=str(self.executable), allowed_attributes=frozenset({\"form\"}))\n        page = []\n        for start, end in spans:\n            ordinal, left, _ = TOKEN.unpack_from(self.maps[\"tokens.map\"], start * TOKEN.size)\n            last, _, right = TOKEN.unpack_from(self.maps[\"tokens.map\"], (end - 1) * TOKEN.size)\n            if last != ordinal:\n                raise ValueError(\"INDEX_CROSS_SENTENCE_HIT\")\n            page.append(self.hit(ordinal, left, right))\n        return {\"page\": page, \"total_hits\": None, \"matched_segments\": None, \"matched_documents\": None, \"count_state\": \"pending\"}\n\n    def token_counts(self, query):\n        return {**cqp_counts(storage_query(query), self.registry, corpus=\"SOURCE\", document_attribute=\"doc\", executable=str(self.executable), allowed_attributes=frozenset({\"form\"})), \"count_state\": \"complete\"}\n\n    def _character_matches(self, query):\n        \"\"\"Yield sorted spans without materializing a complete result set.\"\"\"\n        from jsonschema import Draft202012Validator\n\n        from contracts.semantics import validate_query_semantics\n\n        schema = json.loads((Path(__file__).resolve().parents[2] / \"contracts/schemas/corpus-query.schema.json\").read_text(\"utf-8\"))\n        Draft202012Validator(schema).validate(query)\n        validate_query_semantics(query)\n        if query[\"unit\"] != \"character\" or query[\"within\"] != \"sentence\" or query.get(\"condition\") or query.get(\"filters\"):\n            raise QueryError(\"QUERY_UNSUPPORTED\")\n\n        def anchors(pattern):\n            if pattern[\"type\"] == \"literal\":\n                return {pattern[\"value\"][0]}\n            if pattern[\"type\"] == \"any_of\":\n                return set().union(*(anchors(p) for p in pattern[\"patterns\"]))\n            if pattern[\"type\"] == \"sequence\":\n                return anchors(pattern[\"items\"][0])\n            raise QueryError(\"QUERY_UNSUPPORTED\")\n\n        # Merge only posting-derived candidate sentences, not every material object.\n        import heapq\n\n        def candidate_sentences(character):\n            entry = self.vocabulary.get(character)\n            if not entry:\n                return\n            posting = _Positions(self.maps[\"characters.bin\"], entry[\"offset\"], entry[\"count\"])\n            at = 0\n            while at < len(posting):\n                ordinal = bisect_right(self.starts, posting[at]) - 1\n                yield ordinal\n                _, _, _, start, length, _ = self.record(ordinal)\n                at = bisect_left(posting, start + length, at + 1)\n\n        def matches(pattern, text):\n            kind = pattern[\"type\"]\n            if kind == \"literal\":\n                value, start, result = pattern[\"value\"], 0, set()\n                while (start := text.find(value, start)) >= 0:\n                    result.add((start, start + len(value)))\n                    start += 1\n                return result\n            if kind == \"any_of\":\n                return set().union(*(matches(p, text) for p in pattern[\"patterns\"]))\n            spans, gap = matches(pattern[\"items\"][0], text), (0, 0)\n            for item in pattern[\"items\"][1:]:\n                if item[\"type\"] == \"gap\":\n                    gap = (item[\"min\"], item[\"max\"])\n                    continue\n                following = sorted(matches(item, text))\n                starts = [a for a, _ in following]\n                spans = {(a, d) for a, b in spans for c, d in following[bisect_left(starts, b + gap[0]):bisect_right(starts, b + gap[1])]}\n                gap = (0, 0)\n            return spans\n\n        import time\n        started = time.monotonic()\n        previous = None\n        for ordinal in heapq.merge(*(candidate_sentences(c) for c in anchors(query[\"pattern\"]))):\n            if time.monotonic() - started > 120:\n                raise QueryError(\"QUERY_TIMEOUT\")\n            if ordinal == previous:\n                continue\n            previous = ordinal\n            spans = sorted(matches(query[\"pattern\"], self.text(ordinal)))\n            for left, right in spans:\n                yield ordinal, left, right\n\n    def character_page(self, query, *, offset=0, limit=50):\n        from itertools import islice\n        if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 50:\n            raise ValueError(\"INVALID_PAGE\")\n        page = [self.hit(*hit) for hit in islice(self._character_matches(query), offset, offset + limit)]\n        return {\"page\": page, \"total_hits\": None, \"matched_segments\": None, \"matched_documents\": None, \"count_state\": \"pending\"}\n\n    def character_counts(self, query):\n        total, documents, previous = 0, 0, None\n        for ordinal, _, _ in self._character_matches(query):\n            total += 1\n            if ordinal != previous:\n                documents += 1\n                previous = ordinal\n        return {\"total_hits\": total, \"matched_segments\": documents, \"matched_documents\": documents,\n                \"count_state\": \"complete\", \"document_count_unit\": \"imported_sentence_record\"}\n\n    def character_query(self, query, *, offset=0, limit=50):\n        \"\"\"Convenience verification path; serving uses independent page/count calls.\"\"\"\n        page = self.character_page(query, offset=offset, limit=limit)[\"page\"]\n        result = self.character_counts(query)\n        total, documents = result[\"total_hits\"], result[\"matched_documents\"]\n        return {\"page\": page, \"total_hits\": total, \"matched_segments\": documents, \"matched_documents\": documents,\n                \"count_state\": \"complete\", \"document_count_unit\": \"imported_sentence_record\"}\n"
+    },
+    "source_recipe.py": {
+      "sha256": "a3a14e245ac8e19dc6274bb78fdd21add1c6b0d5e5d0f9927a4f551995895394",
+      "content": "\"\"\"Fixed S3 surface-token recipe. Importing this module loads no dictionaries.\"\"\"\nimport hashlib\nimport json\n\nRECIPE = {\n    \"id\": \"tatoeba-surface-index/v1\",\n    \"builder_algorithm\": \"source-index-build/v1\",\n    \"identity_rule\": \"Any token, mapping or matching semantic change requires a new recipe id/version.\",\n    \"cwb_package\": \"3.5.0-1\",\n    \"cwb_package_sha256\": \"257ef6f71a055ee70cd57904173e40f8e8f0e6c93ac7edf5d7d2e3a21c023601\",\n    \"normalization\": \"none\",\n    \"sentence_boundary\": \"one_upstream_sentence_record\",\n    \"document_count_unit\": \"imported_sentence_record\",\n    \"order\": \"ascending_numeric_source_sentence_id\",\n    \"cmn\": {\"package\": \"jieba\", \"version\": \"0.42.1\", \"mode\": \"default\", \"HMM\": False,\n            \"dictionary_sha256\": \"7197c3211ddd98962b036cdf40324d1ea2bfaa12bd028e68faa70111a88e12a8\",\n            \"user_dictionary\": False},\n    \"eng\": {\"package\": \"nltk\", \"version\": \"3.10.3\", \"class\": \"TreebankWordTokenizer.span_tokenize\",\n            \"model_download\": False},\n    \"form\": \"exact_original_codepoint_slice\",\n    \"cwb_word_key\": \"u + lowercase hexadecimal UTF-8 bytes; reversible, avoids CWB implicit NFC\",\n    \"whitespace_tokens\": \"excluded\", \"punctuation_tokens\": \"included\",\n    \"case\": \"preserved\", \"numbers\": \"included\", \"attributes\": [\"form\"],\n    \"coordinates\": \"unicode_codepoint_half_open\",\n    \"character_storage\": \"sorted_vocabulary_little_endian_uint64_global_positions/v1\",\n    \"token_storage\": \"cwb-3.5.0+little_endian_uint32_revision_start_end/v1\",\n}\n\n\ndef encoded(value):\n    return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(\",\", \":\"), allow_nan=False).encode(\"utf-8\")\n\n\nRECIPE_ID = RECIPE[\"id\"]\nRECIPE_SHA256 = hashlib.sha256(encoded(RECIPE)).hexdigest()\n\n\ndef storage_key(form):\n    return \"u\" + form.encode(\"utf-8\").hex()\n\n\nclass SurfaceTokenizer:\n    def __init__(self, temporary_directory):\n        import importlib.metadata\n\n        import jieba\n        from nltk.tokenize import TreebankWordTokenizer\n\n        for name, version in ((\"jieba\", \"0.42.1\"), (\"nltk\", \"3.10.3\")):\n            if importlib.metadata.version(name) != version:\n                raise ValueError(\"TOKENIZER_VERSION_MISMATCH\")\n        self.chinese = jieba.Tokenizer()\n        with self.chinese.get_dict_file() as stream:\n            if hashlib.file_digest(stream, \"sha256\").hexdigest() != RECIPE[\"cmn\"][\"dictionary_sha256\"]:\n                raise ValueError(\"TOKENIZER_DICTIONARY_MISMATCH\")\n        self.chinese.tmp_dir = str(temporary_directory)\n        self.chinese.cache_file = \"jieba-s3.cache\"\n        self.english = TreebankWordTokenizer()\n\n    def spans(self, text, language):\n        if language == \"cmn\":\n            spans = ((a, b) for _, a, b in self.chinese.tokenize(text, mode=\"default\", HMM=False))\n        elif language == \"eng\":\n            spans = self.english.span_tokenize(text)\n        else:\n            raise ValueError(\"UNSUPPORTED_LANGUAGE\")\n        result, cursor = [], 0\n        for start, end in spans:\n            if not 0 <= cursor <= start < end <= len(text) or text[cursor:start].strip():\n                raise ValueError(\"TOKEN_MAPPING_INCOMPLETE\")\n            form = text[start:end]\n            if not form.isspace():\n                if any(c in form for c in \"\\t\\r\\n\\x00\"):\n                    raise ValueError(\"TOKEN_FORM_CONTROL_CHARACTER\")\n                result.append((start, end, form))\n            cursor = end\n        if text[cursor:].strip() or not result:\n            raise ValueError(\"TOKEN_MAPPING_INCOMPLETE\")\n        return result\n"
+    }
+  },
+  "verification_source": {
+    "sha256": "60310920cdef4a8ff887af5eb2beb50f2ddb6053f71e1fd074d4fafebee77da9",
+    "content": "\"\"\"Fresh-process full-source checks with a direct SQLite/text/token oracle.\n\nNo sample substitution: every source row and persisted token coordinate is read.\nThe small set of literal/phrase queries is explicit; not a 200-gold acceptance.\n\"\"\"\nimport argparse\nimport json\nimport sqlite3\nimport time\nfrom pathlib import Path\n\nfrom pipelines.query.source_index import TOKEN, digest\nfrom pipelines.query.source_reader import SourceIndexReader\n\nCHARACTERS = [\"I\", \"the\", \"love\", \"北京\", \"哈哈\", \"😀\", \"e\\u0301\", \"é\", \"s3-no-such-phrase-20261016\", \"endstart\"]\nTOKENS = [(\"I\",), (\"the\",), (\"love\",), (\"北京\",), (\"。\",), (\"😀\",), (\"e\\u0301\",), (\"é\",), (\"I\", \"am\"), (\"我\", \"爱\")]\n\n\ndef request(unit, values):\n    if unit == \"character\":\n        pattern = {\"type\": \"literal\", \"value\": values}\n    else:\n        terms = [{\"type\": \"term\", \"attr\": \"form\", \"op\": \"eq\", \"value\": value} for value in values]\n        pattern = terms[0] if len(terms) == 1 else {\"type\": \"sequence\", \"items\": terms}\n    return {\"dsl_version\": \"corpus-query/v1\", \"unit\": unit, \"within\": \"sentence\", \"pattern\": pattern,\n            \"normalization\": \"none\", \"overlap\": \"all\"}\n\n\ndef verify(database, directory, output):\n    output.mkdir(parents=True, exist_ok=False)\n    started = time.monotonic()\n    oracle = [{\"query\": request(\"character\", v), \"hits\": 0, \"sentences\": 0, \"first50\": []} for v in CHARACTERS]\n    oracle += [{\"query\": request(\"token\", v), \"hits\": 0, \"sentences\": 0, \"first50\": []} for v in TOKENS]\n    db = sqlite3.connect(database.resolve().as_uri() + \"?mode=ro&immutable=1\", uri=True)\n    report = {\"status\": \"failed\", \"formal_acceptance\": False, \"input_sha256\": digest(database),\n              \"reader_manifest_sha256\": digest(directory / \"manifest.json\"), \"source_sha256\": digest(Path(__file__)),\n              \"scope\": \"All source rows and all stored token coordinates; 20 explicit exact queries. No sampled index or full S3 acceptance.\", \"runs\": []}\n    try:\n        with SourceIndexReader(directory, output / \"runtime\") as reader:\n            observed_tokens, observed_characters = 0, 0\n            for ordinal, (sid, language, text) in enumerate(db.execute(\"SELECT id,language,text FROM sentences ORDER BY id\")):\n                record = reader.record(ordinal)\n                assert record[0] == sid and reader.text(ordinal) == text\n                next_token = reader.record(ordinal + 1)[5] if ordinal + 1 < reader.count else reader.manifest[\"counts\"][\"tokens\"]\n                forms, positions, cursor = [], [], 0\n                for at in range(record[5], next_token):\n                    doc, start, end = TOKEN.unpack_from(reader.maps[\"tokens.map\"], at * TOKEN.size)\n                    assert doc == ordinal and cursor <= start < end <= len(text) and not text[cursor:start].strip()\n                    forms.append(text[start:end])\n                    positions.append((start, end))\n                    cursor = end\n                assert not text[cursor:].strip()\n                observed_tokens += len(forms)\n                observed_characters += len(text)\n                for index, value in enumerate(CHARACTERS):\n                    spans, at = [], 0\n                    while (at := text.find(value, at)) != -1:\n                        spans.append((at, at + len(value)))\n                        at += 1\n                    _add(oracle[index], sid, spans)\n                for index, words in enumerate(TOKENS, len(CHARACTERS)):\n                    spans = [(positions[i][0], positions[i + len(words) - 1][1])\n                             for i in range(len(forms) - len(words) + 1) if tuple(forms[i:i + len(words)]) == words]\n                    _add(oracle[index], sid, spans)\n                if ordinal % 100000 == 0:\n                    print(json.dumps({\"stage\": \"independent_full_scan\", \"sentences\": ordinal + 1}), flush=True)\n            assert ordinal + 1 == reader.count\n            assert observed_tokens == reader.manifest[\"counts\"][\"tokens\"]\n            assert observed_characters == reader.manifest[\"counts\"][\"characters\"]\n            report[\"full_mapping_check\"] = {\"sentences\": reader.count, \"tokens\": observed_tokens, \"characters\": observed_characters}\n            for expected in oracle:\n                q = expected[\"query\"]\n                stamp = time.monotonic()\n                page = reader.character_page(q) if q[\"unit\"] == \"character\" else reader.token_page(q)\n                first_page_seconds = time.monotonic() - stamp\n                stamp = time.monotonic()\n                counts = reader.character_counts(q) if q[\"unit\"] == \"character\" else reader.token_counts(q)\n                count_seconds = time.monotonic() - stamp\n                assert page[\"total_hits\"] is None and page[\"count_state\"] == \"pending\"\n                assert counts[\"total_hits\"] == expected[\"hits\"]\n                assert counts[\"matched_segments\"] == counts[\"matched_documents\"] == expected[\"sentences\"]\n                assert [(h['source_sentence_id'], h['start'], h['end']) for h in page['page']] == expected['first50']\n                for hit in page['page']:\n                    text = db.execute(\"SELECT text FROM sentences WHERE id=?\", (hit['source_sentence_id'],)).fetchone()[0]\n                    assert hit['match'] == text[hit['start']:hit['end']]\n                    assert hit['left'] == text[max(0,hit['start']-40):hit['start']]\n                    assert hit['right'] == text[hit['end']:hit['end']+40]\n                report[\"runs\"].append({**expected, \"page_seconds\": first_page_seconds, \"count_seconds\": count_seconds,\n                                       \"all_counts_spans_kwic_equal\": True})\n                print(json.dumps({\"stage\": \"query_checked\", \"unit\": q[\"unit\"], \"hits\": expected[\"hits\"], \"page_seconds\": first_page_seconds, \"count_seconds\": count_seconds}), flush=True)\n            report[\"status\"] = \"passed\"\n    finally:\n        db.close()\n        report[\"wall_seconds\"] = time.monotonic() - started\n        (output / \"result.json\").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding=\"utf-8\")\n    return report\n\n\ndef _add(entry, sid, spans):\n    entry[\"hits\"] += len(spans)\n    entry[\"sentences\"] += bool(spans)\n    entry[\"first50\"].extend((sid, left, right) for left, right in spans[:50 - len(entry[\"first50\"])])\n\n\nif __name__ == \"__main__\":\n    parser = argparse.ArgumentParser()\n    parser.add_argument(\"--database\", type=Path, required=True)\n    parser.add_argument(\"--index\", type=Path, required=True)\n    parser.add_argument(\"--output\", type=Path, required=True)\n    args = parser.parse_args()\n    verify(args.database, args.index, args.output)\n"
+  },
+  "reused_query_module_snapshots": {
+    "pipelines/query/cwb.py": {
+      "sha256": "e9b285855dded195210c53a3339c35a4d97aa7533bb684c15ff6a84567baea70",
+      "content": "\"\"\"Bounded S0 CQP adapter. Only compiler-generated token queries reach stdin.\"\"\"\n\nimport re\nimport subprocess\nfrom itertools import product\n\nfrom contracts.semantics import validate_query_semantics\nfrom pipelines.query.engine import QueryError\n\n\ndef compile_token_pattern(pattern, allowed_attributes):\n    kind = pattern[\"type\"]\n    if kind == \"term\":\n        attr, value = pattern[\"attr\"], pattern[\"value\"]\n        if attr not in allowed_attributes or not re.fullmatch(r\"[a-z][a-z0-9_]*\", attr):\n            raise QueryError(\"ATTRIBUTE_UNAVAILABLE\")\n        if pattern[\"op\"] != \"eq\":\n            raise QueryError(\"QUERY_UNSUPPORTED: regex\")\n        # The first executable subset deliberately rejects CQP quoting/control characters.\n        # Full literal escaping must be separately accepted before expanding this boundary.\n        if any(c in value for c in '\"\\\\;<>') or any(ord(c) < 32 for c in value):\n            raise QueryError(\n                \"QUERY_UNSUPPORTED: CQP literal quoting not accepted in S0\"\n            )\n        return \"[\" + (\"word\" if attr == \"form\" else attr) + '=\"' + value + '\" %l]'\n    if kind == \"sequence\":\n        parts = []\n        for item in pattern[\"items\"]:\n            if item[\"type\"] == \"gap\":\n                parts.append(\n                    \"[]{\" + str(int(item[\"min\"])) + \",\" + str(int(item[\"max\"])) + \"}\"\n                )\n            else:\n                parts.append(compile_token_pattern(item, allowed_attributes))\n        return \" \".join(parts)\n    if kind == \"any_of\":\n        return (\n            \"(\"\n            + \" | \".join(\n                compile_token_pattern(p, allowed_attributes)\n                for p in pattern[\"patterns\"]\n            )\n            + \")\"\n        )\n    raise QueryError(\"QUERY_UNSUPPORTED: only token patterns are CQP candidates\")\n\n\ndef _query_expressions(query, corpus, allowed_attributes):\n    import json\n    from pathlib import Path\n\n    from jsonschema import Draft202012Validator, ValidationError\n\n    schema = json.loads(\n        (\n            Path(__file__).resolve().parents[2]\n            / \"contracts/schemas/corpus-query.schema.json\"\n        ).read_text(encoding=\"utf-8\")\n    )\n    try:\n        Draft202012Validator(schema).validate(query)\n        validate_query_semantics(query)\n    except (ValueError, ValidationError) as error:\n        raise QueryError(\"QUERY_UNSUPPORTED: invalid AST\") from error\n    if query[\"unit\"] != \"token\" or query.get(\"condition\") or query.get(\"filters\"):\n        raise QueryError(\n            \"QUERY_UNSUPPORTED: CQP S0 adapter supports positive token patterns only\"\n        )\n    if not re.fullmatch(\"[A-Z][A-Z0-9_]*\", corpus):\n        raise QueryError(\"Invalid registered corpus identifier\")\n\n    def fixed_patterns(pattern):\n        if pattern[\"type\"] == \"any_of\":\n            return [\n                variant\n                for branch in pattern[\"patterns\"]\n                for variant in fixed_patterns(branch)\n            ]\n        if pattern[\"type\"] != \"sequence\":\n            return [pattern]\n        alternatives = []\n        combinations = 1\n        for item in pattern[\"items\"]:\n            if item[\"type\"] == \"gap\":\n                combinations *= item[\"max\"] - item[\"min\"] + 1\n                if combinations > 256:\n                    raise QueryError(\n                        \"QUERY_UNSUPPORTED: S0 fixed-gap expansion exceeds 256\"\n                    )\n                alternatives.append(\n                    [\n                        {\"type\": \"gap\", \"min\": n, \"max\": n}\n                        for n in range(int(item[\"min\"]), int(item[\"max\"]) + 1)\n                    ]\n                )\n            else:\n                alternatives.append([item])\n        return [\n            {\"type\": \"sequence\", \"items\": list(items)}\n            for items in product(*alternatives)\n        ]\n\n    variants = fixed_patterns(query[\"pattern\"])\n    if len(variants) > 256:\n        raise QueryError(\"QUERY_UNSUPPORTED: S0 branch expansion exceeds 256\")\n    boundary = \"s\" if query[\"within\"] == \"sentence\" else \"p\"\n    return [\n        compile_token_pattern(variant, allowed_attributes) + \" within \" + boundary\n        for variant in variants\n    ]\n\n\ndef cqp_spans(\n    query,\n    registry,\n    corpus=\"S0\",\n    executable=\"cqp\",\n    allowed_attributes=frozenset({\"form\"}),\n    timeout=30,\n):\n    # CQP variable-length queries can discard alternative ends at the same start.\n    # Execute every bounded fixed-length branch, then union full token spans.\n    commands = corpus + \";\\nset MatchingStrategy traditional;\\n\"\n    for expression in _query_expressions(query, corpus, allowed_attributes):\n        commands += \"A = \" + expression + \";\\ndump A;\\n\"\n    commands += \"exit;\\n\"\n    result = subprocess.run(\n        [executable, \"-c\", \"-r\", str(registry)],\n        input=commands,\n        text=True,\n        encoding=\"utf-8\",\n        capture_output=True,\n        timeout=timeout,\n        check=True,\n    )\n    if re.search(r\"\\b(error|syntax error|undefined)\\b\", result.stderr, re.IGNORECASE):\n        raise RuntimeError(result.stderr)\n    spans = set()\n    for line in result.stdout.splitlines():\n        fields = line.split(\"\\t\")\n        if len(fields) >= 2 and fields[0].isdigit() and fields[1].isdigit():\n            spans.add((int(fields[0]), int(fields[1]) + 1))\n    return spans\n\n\ndef _union_commands(query, corpus, allowed_attributes):\n    \"\"\"Full NQR union retains all distinct (start,end), including nested spans.\n\n    Do not use query-level cut: the NQR must contain the complete match set.\n    No lexical sort/count command is applied, so dump uses corpus position order.\n    \"\"\"\n    expressions = _query_expressions(query, corpus, allowed_attributes)\n    commands = corpus + \";\\nset MatchingStrategy traditional;\\n\"\n    commands += \"M = \" + expressions[0] + \";\\n\"\n    for expression in expressions[1:]:\n        commands += \"B = \" + expression + \";\\nM = union M B;\\n\"\n    return commands\n\n\ndef _run_lines(commands, registry, executable, timeout):\n    result = subprocess.run(\n        [executable, \"-c\", \"-r\", str(registry)],\n        input=commands + \"exit;\\n\",\n        text=True,\n        encoding=\"utf-8\",\n        capture_output=True,\n        timeout=timeout,\n        check=True,\n    )\n    if re.search(r\"\\b(error|undefined)\\b\", result.stderr, re.IGNORECASE):\n        raise RuntimeError(result.stderr)\n    return [\n        line\n        for line in result.stdout.splitlines()\n        if line.strip() and not line.startswith(\"CQP version \")\n    ]\n\n\ndef cqp_page_spans(\n    query,\n    registry,\n    *,\n    offset=0,\n    limit=50,\n    corpus=\"S0\",\n    executable=\"cqp\",\n    allowed_attributes=frozenset({\"form\"}),\n    timeout=30,\n):\n    \"\"\"Export only an ordered page from a fully matched, deduplicated CQP NQR.\"\"\"\n    if (\n        type(offset) is not int\n        or offset < 0\n        or type(limit) is not int\n        or not 1 <= limit <= 50\n    ):\n        raise ValueError(\"offset must be nonnegative; page limit must be 1..50\")\n    commands = _union_commands(query, corpus, allowed_attributes)\n    commands += f\"dump M {offset} {offset + limit - 1};\\n\"\n    rows = _run_lines(commands, registry, executable, timeout)\n    spans = []\n    for line in rows:\n        fields = line.split(\"\\t\")\n        if len(fields) != 4 or not all(\n            re.fullmatch(r\"-?\\d+\", field) for field in fields\n        ):\n            raise RuntimeError(\"Unexpected CQP page output\")\n        start, end = int(fields[0]), int(fields[1]) + 1\n        if start < 0 or end <= start:\n            raise RuntimeError(\"Invalid CQP span\")\n        spans.append((start, end))\n    if len(spans) > limit or spans != sorted(set(spans)):\n        raise RuntimeError(\"CQP page is not a bounded unique corpus-position sequence\")\n    return spans\n\n\ndef cqp_counts(\n    query,\n    registry,\n    *,\n    document_attribute,\n    corpus=\"S0\",\n    executable=\"cqp\",\n    allowed_attributes=frozenset({\"form\"}),\n    timeout=30,\n):\n    \"\"\"Independent exact counts, with no hit dump or page truncation.\n\n    The trusted index recipe must supply full sentence/document structural coverage.\n    Paragraph-spanning queries are rejected until touched-sentence counting exists.\n    \"\"\"\n    commands = _union_commands(query, corpus, allowed_attributes)\n    if query[\"within\"] != \"sentence\":\n        raise QueryError(\n            \"QUERY_UNSUPPORTED: paged count currently requires sentence scope\"\n        )\n    if not re.fullmatch(r\"[a-z][a-z0-9_]*\", document_attribute):\n        raise ValueError(\"Invalid document structural attribute\")\n    commands += (\n        \"size M;\\nS = M expand to s;\\nsize S;\\n\"\n        f\"D = M expand to {document_attribute};\\nsize D;\\n\"\n    )\n    rows = _run_lines(commands, registry, executable, timeout)\n    if len(rows) != 3 or not all(row.isdigit() for row in rows):\n        raise RuntimeError(\"Unexpected CQP count output\")\n    hits, segments, documents = map(int, rows)\n    if not 0 <= documents <= segments <= hits:\n        raise RuntimeError(\"Invalid CQP counts or structural coverage\")\n    return {\n        \"total_hits\": hits,\n        \"matched_segments\": segments,\n        \"matched_documents\": documents,\n    }\n"
+    },
+    "pipelines/query/engine.py": {
+      "sha256": "647f117f7ba93dc6e21508ff9c8a54c6d4ea4d067d9f937a568de248f1a3eaf5",
+      "content": "\"\"\"S0 exact-query prototype over immutable, already segmented fixture revisions.\n\nCharacter postings are compact unsigned integer arrays in Unicode codepoint\ncoordinates. Token postings use supplied token attributes, never inferred POS.\nThis is an experimental in-process engine, not a production authorization boundary.\n\"\"\"\nimport json\nfrom array import array\nfrom bisect import bisect_left, bisect_right\nfrom dataclasses import dataclass\nfrom heapq import nsmallest\nfrom pathlib import Path\n\nfrom contracts.semantics import validate_query_semantics\n\n\nclass QueryError(ValueError):\n    pass\n\n\n@dataclass(slots=True)\nclass Revision:\n    revision_id: str\n    text: str\n    sentences: list\n    paragraphs: list\n    tokens: list\n    metadata: dict\n\n    @classmethod\n    def from_dict(cls, value):\n        revision = cls(**value)\n        for ranges in (revision.sentences, revision.paragraphs):\n            previous = 0\n            for start,end in ranges:\n                if not 0 <= previous <= start < end <= len(revision.text):\n                    raise ValueError('Invalid or overlapping canonical-text segment')\n                previous = end\n        previous = 0\n        for token in revision.tokens:\n            if not 0 <= previous <= token['start'] < token['end'] <= len(revision.text):\n                raise ValueError('Invalid or overlapping token coordinates')\n            if token['attrs']['form'] != revision.text[token['start']:token['end']]:\n                raise ValueError('Token form does not match canonical text')\n            previous = token['end']\n        return revision\n\n\nclass PositionIndex:\n    def __init__(self, revisions):\n        self.revisions = []\n        self.offsets = []\n        self.char_postings = {}\n        self.token_postings = {}\n        self.token_offsets = []\n        self.attributes = None\n        self.revision_attributes = []\n        self.segment_ranges = []\n        self.sentence_bounds = []\n        char_offset = token_offset = 0\n        seen = set()\n        for value in revisions:\n            revision = value if isinstance(value, Revision) else Revision.from_dict(value)\n            if revision.revision_id in seen:\n                raise ValueError('Duplicate actual revision in snapshot')\n            seen.add(revision.revision_id)\n            self.revisions.append(revision)\n            sentences = tuple(tuple(r) for r in revision.sentences)\n            paragraphs = tuple(tuple(r) for r in revision.paragraphs)\n            self.segment_ranges.append({'sentence':sentences,'paragraph':paragraphs})\n            self.sentence_bounds.append((tuple(r[0] for r in sentences),tuple(r[1] for r in sentences)))\n            self.offsets.append(char_offset)\n            self.token_offsets.append(token_offset)\n            revision_attrs = None\n            for position,char in enumerate(revision.text, char_offset):\n                self.char_postings.setdefault(char, array('Q')).append(position)\n            for position,token in enumerate(revision.tokens, token_offset):\n                keys = set(token['attrs'])\n                revision_attrs = keys if revision_attrs is None else revision_attrs & keys\n                self.attributes = keys if self.attributes is None else self.attributes & keys\n                for attr,value in token['attrs'].items():\n                    self.token_postings.setdefault((attr,value), array('Q')).append(position)\n            self.revision_attributes.append(revision_attrs or set())\n            char_offset += len(revision.text)\n            token_offset += len(revision.tokens)\n        self.attributes = self.attributes or {'form'}\n        self.character_count = char_offset\n        self.token_count = token_offset\n        from jsonschema import Draft202012Validator\n        schema = json.loads((Path(__file__).resolve().parents[2]/'contracts/schemas/corpus-query.schema.json').read_text(encoding='utf-8'))\n        self.validator = Draft202012Validator(schema)\n\n    def save(self, directory):\n        \"\"\"Persist inspectable corpus/mapping and raw integer postings; no pickle.\"\"\"\n        directory = Path(directory)\n        directory.mkdir(parents=True, exist_ok=True)\n        with (directory/'revisions.jsonl').open('w',encoding='utf-8') as stream:\n            for r in self.revisions:\n                stream.write(json.dumps({name:getattr(r,name) for name in Revision.__slots__},ensure_ascii=False,separators=(',',':'))+'\\n')\n        vocabulary = []\n        with (directory/'postings.bin').open('wb') as stream:\n            for kind, postings in [('character',self.char_postings),('token',self.token_postings)]:\n                for key, positions in postings.items():\n                    vocabulary.append({'kind':kind,'key':key,'byte_offset':stream.tell(),'count':len(positions)})\n                    # Portable little endian, even when built on a big-endian machine.\n                    import sys\n                    values = positions if sys.byteorder == 'little' else array('Q',positions)\n                    if sys.byteorder != 'little': values.byteswap()\n                    values.tofile(stream)\n        (directory/'vocabulary.json').write_text(json.dumps(vocabulary,ensure_ascii=False),encoding='utf-8')\n\n    @staticmethod\n    def _within(span, ranges):\n        start,end = span\n        i = bisect_right(ranges,(start, float('inf'))) - 1\n        if i >= 0 and ranges[i][0] <= start and end <= ranges[i][1]:\n            return i\n        return None\n\n    def execute(self, query, page_size=50):\n        from jsonschema import ValidationError\n        try:\n            self.validator.validate(query)\n            validate_query_semantics(query)\n        except (ValueError, ValidationError) as error:\n            raise QueryError('QUERY_UNSUPPORTED: '+str(error)) from error\n        # Validate capabilities before finding zero matches; unsupported queries never look empty.\n        selected = [i for i,r in enumerate(self.revisions) if not any(\n            r.metadata.get(key) not in values for key,values in query.get('filters',{}).items())]\n        available = None\n        for i in selected:\n            if self.revisions[i].tokens:\n                available = self.revision_attributes[i].copy() if available is None else available & self.revision_attributes[i]\n        available = self.attributes if available is None else available\n        def validate(pattern):\n            if pattern['type'] == 'term':\n                if pattern['op'] != 'eq': raise QueryError('QUERY_UNSUPPORTED: regex is not validated in S0')\n                if pattern['attr'] not in available: raise QueryError('ATTRIBUTE_UNAVAILABLE: '+pattern['attr'])\n            for item in pattern.get('items',pattern.get('patterns',[])): validate(item)\n        validate(query['pattern'])\n        if 'condition' in query: validate(query['condition']['pattern'])\n        total = segments = documents = 0\n        hits = []\n        for ordinal in selected:\n            revision = self.revisions[ordinal]\n            sentence_ranges = self.segment_ranges[ordinal]['sentence']\n            ranges = self.segment_ranges[ordinal][query['within']]\n            matches = self._pattern(query['pattern'],query['unit'],ordinal)\n            if query['unit'] == 'token':\n                matches = {(revision.tokens[start]['start'],revision.tokens[end-1]['end']) for start,end in matches}\n            # Patterns cannot leave this revision. A full-text segment therefore\n            # needs no per-hit containment lookup, regardless of corpus contents.\n            if ranges != ((0,len(revision.text)),):\n                matches = {span for span in matches if self._within(span,ranges) is not None}\n            condition = query.get('condition')\n            if condition:\n                cranges = self.segment_ranges[ordinal][condition['within']]\n                other = self._pattern(condition['pattern'],query['unit'],ordinal)\n                if query['unit'] == 'token':\n                    other = {(revision.tokens[start]['start'],revision.tokens[end-1]['end']) for start,end in other}\n                occupied = {self._within(span,cranges) for span in other} - {None}\n                matches = {span for span in matches if (segment := self._within(span,cranges)) is not None and\n                    ((segment in occupied) == (condition['operator'] == 'and'))}\n            if matches:\n                documents += 1\n                # Segment counts are sentence counts, even for paragraph-scoped queries.\n                if sentence_ranges == ((0,len(revision.text)),):\n                    segments += 1\n                else:\n                    starts,ends = self.sentence_bounds[ordinal]\n                    touched = set()\n                    for start,end in matches:\n                        touched.update(range(bisect_right(ends,start),bisect_left(starts,end)))\n                    segments += len(touched)\n                total += len(matches)\n                remaining = page_size-len(hits)\n                if remaining > 0:\n                    for start,end in nsmallest(remaining,matches):\n                        hits.append({'revision_id':revision.revision_id,'document_ordinal':ordinal,'start':start,'end':end})\n        return {'total_hits':total,'matched_segments':segments,'matched_documents':documents,\n                'counting_unit':'unique_revision_span','complete':True,'hits':hits}\n\n    def _pattern(self, pattern, unit, ordinal):\n        revision = self.revisions[ordinal]\n        if pattern['type'] == 'any_of':\n            return set().union(*(self._pattern(p,unit,ordinal) for p in pattern['patterns']))\n        if pattern['type'] in ('literal','term'):\n            value = pattern['value']\n            offset = self.offsets[ordinal] if unit == 'character' else self.token_offsets[ordinal]\n            limit = offset + (len(revision.text) if unit == 'character' else len(revision.tokens))\n            posting = (self.char_postings.get(value[0],()) if unit == 'character' else\n                       self.token_postings.get((pattern['attr'],value),()))\n            positions = posting[bisect_left(posting,offset):bisect_left(posting,limit)]\n            if unit == 'token' or len(value) == 1:\n                return {(p-offset,p-offset+1) for p in positions}\n            return {(p-offset,p-offset+len(value)) for p in positions if revision.text.startswith(value,p-offset)}\n        items = pattern['items']\n        spans = self._pattern(items[0],unit,ordinal)\n        gap = (0,0)\n        for item in items[1:]:\n            if item['type'] == 'gap':\n                gap = (item['min'],item['max'])\n                continue\n            following = sorted(self._pattern(item,unit,ordinal))\n            starts = [start for start,end in following]\n            joined = set()\n            for first,last in spans:\n                for start,end in following[bisect_left(starts,last+gap[0]):bisect_right(starts,last+gap[1])]:\n                    joined.add((first,end))\n            spans = joined\n            gap = (0,0)\n        return spans\n"
+    },
+    "contracts/semantics.py": {
+      "sha256": "23b2d96eae36cd3622cfcbe2381ee48bf82b577516469bd81cab5be22584e8ff",
+      "content": "\"\"\"Small contract invariants, applied only after JSON Schema validation.\n\nThese helpers neither authorize access nor execute queries. Production APIs must\nalso check current permissions, reference ownership, engine capabilities and limits.\n\"\"\"\nimport hashlib\nimport json\n\n\ndef scope_digest(scope):\n    \"\"\"Derived result references do not enlarge a fixed research scope.\"\"\"\n    identity = {key: value for key, value in scope.items() if key != 'result_refs'}\n    return hashlib.sha256(json.dumps(identity, ensure_ascii=False, sort_keys=True,\n                                    separators=(',', ':')).encode('utf-8')).hexdigest()\n\n\ndef validate_query_semantics(query):\n    def positive(pattern):\n        if pattern['type'] != 'sequence':\n            return\n        items = pattern['items']\n        if items[0]['type'] == 'gap' or items[-1]['type'] == 'gap':\n            raise ValueError('QUERY_UNSUPPORTED: gaps require a positive match on both sides')\n        previous_gap = False\n        for item in items:\n            is_gap = item['type'] == 'gap'\n            if is_gap and (previous_gap or item['min'] > item['max']):\n                raise ValueError('QUERY_UNSUPPORTED: invalid gap interval or consecutive gaps')\n            previous_gap = is_gap\n\n    pattern = query['pattern']\n    if pattern['type'] == 'any_of':\n        for branch in pattern['patterns']:\n            positive(branch)\n    else:\n        positive(pattern)\n    if 'condition' in query:\n        positive(query['condition']['pattern'])\n\n\ndef validate_snapshot_members(snapshot, revisions, mounts):\n    \"\"\"Verify an already-typed fixture graph; not a replacement for DB constraints.\"\"\"\n    seen = set()\n    for ordinal, member in enumerate(snapshot['members']):\n        revision_id = member['material_revision_id']\n        if member['ordinal'] != ordinal or revision_id in seen:\n            raise ValueError('Snapshot members must be ordered and unique by actual revision')\n        seen.add(revision_id)\n        origin = revisions[revision_id]['origin']\n        if origin['kind'] == 'private':\n            if origin['project_id'] != snapshot['project_id'] or member['mount_id'] is not None:\n                raise ValueError('Private revision belongs to another project or masquerades as a mount')\n        else:\n            mount = mounts[member['mount_id']]\n            if mount['project_id'] != snapshot['project_id'] or mount['release_id'] != origin['release_id']:\n                raise ValueError('Source revision requires matching project mount and release')\n\n\ndef validate_tool_result_semantics(result, invocation_id, action_id, operation_kind):\n    \"\"\"Bind an envelope to its host-assigned invocation and action ledger keys.\"\"\"\n    if result['invocation_id'] != invocation_id or result['action_id'] != action_id:\n        raise ValueError('Tool result does not belong to the registered invocation/action')\n    if operation_kind != 'read' and not action_id:\n        raise ValueError('Writes and task submissions require a host-assigned action_id')\n    if operation_kind == 'read' and action_id is not None:\n        raise ValueError('Reads must not claim a write action_id')\n    if result['status'] == 'unknown' and result['reconcile']['invocation_id'] != invocation_id:\n        raise ValueError('Unknown outcome must reconcile the original invocation')\n\n\ndef validate_continuation_semantics(intent, registry):\n    \"\"\"Contract check only; host still checks authorization and cancellation.\"\"\"\n    actions = {entry['capability_id']: entry for entry in registry}\n    for step in intent['steps']:\n        entry = actions[step['capability_id']]\n        if entry['availability']['status'] != 'available':\n            raise ValueError('CAPABILITY_UNAVAILABLE: continuation action is planned')\n        target = intent['target_scope']\n        if target['scope_kind'] not in entry['scope_kind']:\n            raise ValueError('SCOPE_INVALID: continuation action does not support target scope')\n        if step['capability_id'] == 'corpus.search' and step['parameters']['snapshot_id'] not in target['snapshot_ids']:\n            raise ValueError('ENDPOINT_OUT_OF_SCOPE: continuation query is outside target scope')\n"
+    }
+  },
+  "post_measurement_change": {
+    "scope": "progress denominators only",
+    "changes": [
+      "VERIFYING starts with total_records=tokens",
+      "PACKAGING resets total_records=sentences"
+    ],
+    "ast_difference": {
+      "measured_source_sha256": "d1e4898cff59b381a1bdb7b692939fea270c9930443cc04feae5eedc36db9b3e",
+      "current_source_sha256": "8f5601bc96cc104536d192be148896c77cf47ca0201265cb46b1fc36584b2428",
+      "changes": [
+        {
+          "line": 262,
+          "before": "guard.tick(stage='VERIFYING', records=0)",
+          "after": "guard.tick(stage='VERIFYING', records=0, total=counts['tokens'])"
+        },
+        {
+          "line": 300,
+          "before": "guard.tick(stage='PACKAGING', records=count)",
+          "after": "guard.tick(stage='PACKAGING', records=count, total=count)"
+        }
+      ],
+      "entire_ast_equal_after_two_total_keywords": true
+    },
+    "semantics_unchanged": true,
+    "original_measured_snapshots_preserved": true
+  },
+  "regression": {
+    "production_image_engine_tests": 8,
+    "seconds": 4.112,
+    "verified_by": "parent independently after rebuilding progress fix",
+    "cases": "manual token gold; overlaps and sentence boundary; raw combining Unicode versus precomposed query; CWB counts/KWIC; fresh process; invalid source hash; cancellation; quota; saved-file corruption"
+  },
+  "actual_failure_retained": {
+    "path": "tmp/source-index-s3/debug/built",
+    "cause": "Native CWB encode normalizes combining e + accent to precomposed e. Exact none-normalization broke before reversible UTF-8 hex storage keys.",
+    "raw_fixture_evidence": {
+      "bundle/input.vrt": {
+        "sha256": "845c5b0d4491685452bf414c6daa9d7852f08b458753a1d287c527e118154358",
+        "content": "<doc>\n<s>\n0\t我\n1\t爱\n2\t北京\n3\t。\n4\t哈哈哈\n5\t😀\n</s>\n</doc>\n<doc>\n<s>\n0\tI\n1\tca\n2\tn't\n3\tgo.\n4\tA\n5\tA\n6\tA\n7\t.\n</s>\n</doc>\n<doc>\n<s>\n0\tend\n</s>\n</doc>\n<doc>\n<s>\n0\tstart\n</s>\n</doc>\n<doc>\n<s>\n0\t<\n1\tx\n2\t>\n3\t&\n4\tamp\n5\t;\n6\té\n7\t😀\n</s>\n</doc>\n"
+      },
+      "temporary/decode.stdout": {
+        "sha256": "f9e87dcde19b6385d5df672bb8556c2f758673c64d9c0078ed4f1dc90ec6dac8",
+        "content": "0\t我\n1\t爱\n2\t北京\n3\t。\n4\t哈哈哈\n5\t😀\n6\tI\n7\tca\n8\tn't\n9\tgo.\n10\tA\n11\tA\n12\tA\n13\t.\n14\tend\n15\tstart\n16\t<\n17\tx\n18\t>\n19\t&\n20\tamp\n21\t;\n22\té\n23\t😀\n"
+      }
+    },
+    "resolution": "Fixed recipe reversible u + UTF-8 hex; full decode back to original forms; exact query and original two-codepoint span regression."
+  },
+  "dependency_rebuild": {
+    "official_jieba_sdist_sha256": "055ca12f62674fafed09427f176506079bc135638a14e23e25be909131928db2",
+    "production_rebuild": "Parent production Docker build succeeded from official sdist with pinned build requirements; wheel bytes need not match local cached wheel.",
+    "experimental_image": "corpus-source-index:20261016",
+    "experimental_image_id": "sha256:9ea05a80860d0963ab2dae73fe8428011f5c0558f997d5ed3af77ad9df6583e3"
+  },
+  "limitations": [
+    "All sentences and stored token coordinates verified, but token oracle derives from fixed token layer; not independent full-corpus segmentation quality gold.",
+    "20 explicit exact literal/phrase queries in a sequential functional check; not 20x20x5 concurrent P95, cold disk, or all 200 planned golden queries.",
+    "Shared Docker Desktop 4 CPUs / 8 GiB and Windows bind mount; not dedicated 8-vCPU/32-GiB formal baseline.",
+    "Character postings are fixed-width uint64 and mmap, not compressed; resource disk peak is sampled and includes input and archive copy, not OS hard quota.",
+    "Only form surface layer; no POS/lemma, publication, project mount, public query API, licensing approval, or model egress approval."
+  ],
+  "primary_sources": [
+    "https://github.com/fxsjy/jieba",
+    "https://www.nltk.org/api/nltk.tokenize.TreebankWordTokenizer.html",
+    "https://www.nltk.org/_modules/nltk/tokenize/treebank.html",
+    "https://cwb.sourceforge.io/files/CWB_Encoding_Tutorial.pdf"
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-outcomes-note-create.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "body": {
+      "maxLength": 100000,
+      "minLength": 1,
+      "title": "Body",
+      "type": "string"
+    },
+    "evidence_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Evidence Ids",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "query_run_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Query Run Ids",
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "title",
+    "body"
+  ],
+  "title": "NoteInput",
+  "type": "object"
+}

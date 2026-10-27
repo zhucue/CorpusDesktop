@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/query-request.schema.json",
+  "type": "object",
+  "properties": {
+    "snapshot_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "query": {
+      "$ref": "corpus-query.schema.json"
+    },
+    "context_tokens": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "snapshot_id",
+    "query",
+    "context_tokens"
+  ],
+  "additionalProperties": false
+}

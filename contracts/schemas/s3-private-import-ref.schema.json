@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s3-private-import-ref.schema.json",
+  "type": "object",
+  "properties": {
+    "import_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "required": [
+    "import_id"
+  ],
+  "additionalProperties": false
+}

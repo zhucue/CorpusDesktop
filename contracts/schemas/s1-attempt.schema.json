@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://corpus.invalid/contracts/s1-attempt.schema.json",
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "state": {
+      "enum": [
+        "QUEUED",
+        "RUNNING",
+        "CANCEL_REQUESTED",
+        "CANCELLED",
+        "SUCCEEDED",
+        "FAILED"
+      ]
+    },
+    "lease_epoch": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "started_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "finished_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "job_id",
+    "number",
+    "state",
+    "lease_epoch",
+    "started_at",
+    "finished_at"
+  ],
+  "additionalProperties": false
+}
