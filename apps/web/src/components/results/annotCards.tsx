@@ -40,8 +40,8 @@ export function DependencyTreeCard(p: DependencyTreeProps) {
       component="DependencyTree"
       icon="tree"
       title="依存树"
-      meta={`句 ${p.sentence_index}`}
-      pin={{ kind: "text", ref: { document_id: p.document_id }, text, source: `助手 · DependencyTree · 句 ${p.sentence_index}` }}
+      meta={`句 ${p.sentence_index + 1}`}
+      pin={{ kind: "text", ref: { document_id: p.document_id }, text, source: `助手 · DependencyTree · 句 ${p.sentence_index + 1}` }}
       foot={
         <Link className="btn xs" to={annotateUrl(projectId, { doc: p.document_id, s: p.sentence_index })}>
           <Icon name="external" size={14} />
@@ -73,7 +73,7 @@ export function AnnotationDiffCard(p: AnnotationDiffProps) {
       component="AnnotationDiff"
       icon="diff"
       title="预标差异"
-      meta={`句 ${p.sentence_index}`}
+      meta={`句 ${p.sentence_index + 1}`}
       right={
         <span className="row" style={{ gap: 6 }}>
           {c.changed > 0 && <span className="tag t-warn">{c.changed} 处改动</span>}

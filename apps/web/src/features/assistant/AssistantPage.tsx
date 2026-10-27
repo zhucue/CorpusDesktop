@@ -32,6 +32,12 @@ export function refLink(projectId: string, ref: ToolCall["result_ref"]): string 
     case "query":
     case "search":
       return `${base}/search`;
+    case "note":
+    case "kb_document":
+    case "document":
+      return `${base}/knowledge?doc=${encodeURIComponent(ref.id)}`;
+    case "term":
+      return `${base}/knowledge?tab=terms&term=${encodeURIComponent(ref.id)}`;
     default:
       return null;
   }

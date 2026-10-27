@@ -156,14 +156,14 @@ describe("annotation keyboard reducer", () => {
     expect(posts(calls)[2].body).toEqual({ document_id: "d1", sentence_index: 0, token_index: 3, action: "modify", label: "VERB" });
 
     key("j");
-    await waitFor(() => expect(document.querySelector(".sent.on .n")?.textContent).toBe("1"));
+    await waitFor(() => expect(document.querySelector(".sent.on .n")?.textContent).toBe("2"));
     await waitFor(() => expect(document.querySelector(".tokrow")?.textContent).toContain("好"));
     key("Enter");
     await waitFor(() => expect(posts(calls)).toHaveLength(4));
     expect(posts(calls)[3].body).toEqual({ document_id: "d1", sentence_index: 1, token_index: 1, action: "confirm" });
 
     key("k");
-    await waitFor(() => expect(document.querySelector(".sent.on .n")?.textContent).toBe("0"));
+    await waitFor(() => expect(document.querySelector(".sent.on .n")?.textContent).toBe("1"));
     key("Enter", { shiftKey: true });
     await waitFor(() => expect(posts(calls)).toHaveLength(5));
     expect(posts(calls)[4].path).toBe("/api/layers/L1/sentences/d1/0/confirm");

@@ -5,6 +5,7 @@ export const AGENT_TOOLS: { group: string; tools: string[] }[] = [
   { group: "语料", tools: ["corpora.list", "corpora.get", "subcorpora.list", "subcorpora.create", "corpus.parse", "corpus.search", "corpus.context"] },
   { group: "统计", tools: ["stats.frequency", "stats.ngrams", "stats.collocations", "stats.keywords", "stats.distribution"] },
   { group: "标注", tools: ["annot.layers", "annot.create_layer", "annot.sentence", "annot.diff", "annot.stats", "annot.suggest", "annot.export"] },
+  { group: "知识库", tools: ["kb.search", "kb.save", "kb.extract_terms", "kb.summarize", "kb.terms", "kb.documents"] },
   { group: "成果", tools: ["evidence.add", "evidence.list", "queries.save", "queries.list", "export.create", "jobs.get", "jobs.cancel"] },
 ];
 
@@ -38,4 +39,10 @@ export const TOOL_VIEW: Record<string, { title: string; label: string; icon: Ico
   "annot.stats": { title: "标注统计", label: "正在统计标签…", icon: "chart" },
   "annot.suggest": { title: "提出标注建议", label: "正在写入建议…", icon: "spark" },
   "annot.export": { title: "导出 CoNLL-U", label: "正在创建导出…", icon: "download" },
+  "kb.search": { title: "检索知识库", label: "正在检索知识库…", icon: "book" },
+  "kb.save": { title: "保存笔记", label: "正在保存笔记…", icon: "note" },
+  "kb.extract_terms": { title: "抽取术语", label: "正在抽取术语…", icon: "term" },
+  "kb.summarize": { title: "生成摘要", label: "正在生成摘要…", icon: "spark" },
+  "kb.terms": { title: "查术语", label: "正在查术语…", icon: "term" },
+  "kb.documents": { title: "列出文档", label: "正在读取知识库文档…", icon: "book" },
 };

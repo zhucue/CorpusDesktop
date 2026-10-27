@@ -1,8 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
 import { Modal } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import type { Scope } from "../../api";
-import { useCorpora, useProjects, useSavedQueries, useSubcorpora } from "../../lib/data";
+import { api, type KbDocument, type Page, type Scope, type Term } from "../../api";
+import { knowledgeHref } from "../../features/knowledge/data";
+import { listOf, useCorpora, useProjects, useSavedQueries, useSubcorpora } from "../../lib/data";
+import { useDebounced } from "../../lib/useDebounced";
 import { fmt } from "../../lib/format";
 import { QueryChip } from "../common";
 import { Icon, type IconName } from "../Icon";
@@ -14,6 +17,8 @@ interface Item {
   meta?: string;
   icon: IconName;
   query?: boolean;
+  /** Server-side match (文献 / 术语): shown without the local text filter. */
+  remote?: boolean;
   run: () => void;
 }
 
@@ -66,6 +71,7 @@ export default function CommandPalette({
       { group: "页面", label: "检索", icon: "search", run: go(`${base}/search`) },
       { group: "页面", label: "统计", icon: "chart", run: go(`${base}/stats`) },
       { group: "页面", label: "标注", icon: "pen", run: go(`${base}/annotate`) },
+      { group: "页面", label: "知识库", icon: "book", run: go(`${base}/knowledge`) },
       { group: "页面", label: "助手", icon: "spark", run: go(`${base}/assistant`) },
       { group: "页面", label: "任务", icon: "clock", run: go(`${base}/jobs`) },
       { group: "页面", label: "项目设置", icon: "sliders", run: go(`${base}/settings`) },
@@ -108,7 +114,44 @@ export default function CommandPalette({
   }, [projectId, projects.data, corpora.data, subcorpora.data, queries.data]);
 
   const needle = q.trim().toLowerCase();
-  const shown = needle ? items.filter((it) => `${it.group} ${it.label} ${it.meta ?? ""}`.toLowerCase().includes(needle)) : items;
+  const kbQ = useDebounced(q.trim(), 250);
+  const kbOn = open && kbQ.length > 0;
+  const kbDocs = useQuery({
+    queryKey: ["palette-kb-docs", projectId, kbQ],
+    queryFn: async () => listOf(await api.get<KbDocument[] | Page<KbDocument>>(`/projects/${projectId}/kb/documents`, { q: kbQ, page_size: 8 })),
+    enabled: kbOn,
+    staleTime: 30_000,
+    meta: { background: true },
+  });
+  const kbTerms = useQuery({
+    queryKey: ["palette-kb-terms", projectId, kbQ],
+    queryFn: async () => listOf(await api.get<Term[] | Page<Term>>(`/projects/${projectId}/kb/terms`, { q: kbQ, page_size: 8 })),
+    enabled: kbOn,
+    staleTime: 30_000,
+    meta: { background: true },
+  });
+  const kindName: Record<string, string> = { literature: "文献", url: "网页", guideline: "规范", note: "笔记" };
+  const remote: Item[] = kbOn
+    ? [
+        ...(kbDocs.data ?? []).slice(0, 8).map((d) => ({
+          group: "文献",
+          label: d.title,
+          meta: kindName[d.kind] ?? d.kind,
+          icon: (d.kind === "note" ? "note" : "book") as IconName,
+          remote: true,
+          run: go(knowledgeHref(projectId, { doc: d.id })),
+        })),
+        ...(kbTerms.data ?? []).slice(0, 8).map((t) => ({
+          group: "术语",
+          label: t.term,
+          meta: t.translations?.[0]?.text ?? t.language,
+          icon: "term" as IconName,
+          remote: true,
+          run: go(knowledgeHref(projectId, { tab: "terms", term: t.id, tq: t.term })),
+        })),
+      ]
+    : [];
+  const shown = [...(needle ? items.filter((it) => `${it.group} ${it.label} ${it.meta ?? ""}`.toLowerCase().includes(needle)) : items), ...remote];
   const groups: [string, { it: Item; idx: number }[]][] = [];
   shown.forEach((it, idx) => {
     let g = groups.find((x) => x[0] === it.group);
@@ -158,7 +201,7 @@ export default function CommandPalette({
             setActive(0);
           }}
           onKeyDown={onKey}
-          placeholder="搜索页面、语料库、查询、工具"
+          placeholder="搜索页面、语料库、查询、文献、术语"
           aria-label="搜索"
           aria-controls="cmdk-list"
           aria-activedescendant={shown.length ? `cmd-${current}` : undefined}

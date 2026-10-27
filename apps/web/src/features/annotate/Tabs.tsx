@@ -69,7 +69,7 @@ export function DiffTab({ layer, docId, onOpen }: { layer: Layer; docId: string 
           {shown.map(({ s, toks, c }, i) => (
             <div className="diff-blk" key={s.sentence_index} style={{ ["--i" as string]: Math.min(i, 12) }}>
               <div className="row">
-                <span className="mono small muted grow">句 {s.sentence_index}</span>
+                <span className="mono small muted grow">句 {s.sentence_index + 1}</span>
                 {c.changed > 0 && <span className="tag t-warn">{c.changed} 处改动</span>}
                 {c.rejected > 0 && <span className="tag t-err">{c.rejected} 处拒绝</span>}
                 {c.pending > 0 && <span className="tag t-gray">{c.pending} 处待办</span>}

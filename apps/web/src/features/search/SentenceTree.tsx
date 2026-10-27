@@ -7,16 +7,28 @@ import { Icon } from "../../components/Icon";
 import { useSentence } from "../annotate/data";
 import { graphOf, tokenViews } from "../annotate/model";
 
-/** KWIC row expander: the hit's sentence from a dependency layer, hit tokens highlighted. */
-export default function SentenceTree({ layerId, hit, projectId }: { layerId: string; hit: Hit; projectId: string }) {
+/**
+ * KWIC row expander: the hit's sentence from a dependency layer, hit tokens highlighted.
+ * With a POS layer selected, the tags under the words come from that layer (effective value) instead of system tags.
+ */
+export default function SentenceTree({ layerId, posLayerId, hit, projectId }: { layerId: string; posLayerId?: string | null; hit: Hit; projectId: string }) {
   const q = useSentence(layerId, hit.document_id, hit.sentence_index);
-  const graph = useMemo(() => (q.data ? graphOf(tokenViews(q.data, "dep")) : null), [q.data]);
+  const pos = useSentence(posLayerId && posLayerId !== layerId ? posLayerId : undefined, hit.document_id, hit.sentence_index);
+  const graph = useMemo(() => {
+    if (!q.data) return null;
+    const g = graphOf(tokenViews(q.data, "dep"));
+    if (!pos.data) return g;
+    const tags = new Map(tokenViews(pos.data, "pos").map((v) => [v.index, v.status === "rejected" ? null : v.label]));
+    return { ...g, tokens: g.tokens.map((t) => ({ ...t, pos: tags.get(t.index) ?? t.pos })) };
+  }, [q.data, pos.data]);
   const highlight = useMemo(
     () => (q.data?.tokens ?? []).filter((t) => t.start_cp < hit.end_cp && t.end_cp > hit.start_cp).map((t) => t.index),
     [q.data, hit.start_cp, hit.end_cp],
   );
   if (q.error) return <ErrorAlert error={q.error} />;
-  if (!graph) return <span className="skel h20" style={{ display: "block", width: "60%" }} />;
+  // The POS layer only relabels: wait for it briefly, fall back to system tags if it fails.
+  if (!graph || (posLayerId && posLayerId !== layerId && pos.isPending && !pos.error))
+    return <span className="skel h20" style={{ display: "block", width: "60%" }} />;
   return (
     <div className="kwic-tree">
       <div className="depwrap left">

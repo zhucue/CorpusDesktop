@@ -153,7 +153,7 @@ export interface SavedQuery {
 }
 
 export type JobState = "queued" | "running" | "succeeded" | "failed" | "cancelled";
-export type JobKind = "import" | "index" | "export" | "stats" | "preannotate";
+export type JobKind = "import" | "index" | "export" | "stats" | "preannotate" | "kb_import" | "kb_summarize" | "kb_extract";
 
 export interface Job {
   id: string;
@@ -396,4 +396,112 @@ export interface LayerStats {
   progress: LayerProgress;
   /** Shape beyond the contract: assumed to mirror GET /layers/{id}/documents rows. */
   per_document: (Partial<LayerDocument> & { document_id: string })[];
+}
+
+// ---------- P4: knowledge base (contracts/p4.md) ----------
+
+export type KbKind = "literature" | "guideline" | "note" | "url";
+export type KbStatus = "queued" | "parsing" | "embedding" | "ready" | "failed";
+
+/** `{page}`, `{heading_path}` or `{line}`. */
+export interface KbLocator {
+  page?: number;
+  heading_path?: string[] | string;
+  line?: number;
+}
+
+export interface KbMeta {
+  author?: string;
+  year?: number | string;
+  pages?: number;
+  label_set_id?: string;
+  summary?: string;
+  summary_source?: string;
+  [k: string]: unknown;
+}
+
+export interface KbDocument {
+  id: string;
+  project_id: string;
+  kind: KbKind;
+  title: string;
+  source: string;
+  meta: KbMeta;
+  status: KbStatus;
+  error: string | null;
+  chunk_count: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  /** File / URL import: the kb_import job (POST response; assumed on list rows while importing). */
+  job_id?: string | null;
+  /** GET /kb/documents/{id}: note / guideline body, otherwise a text preview. */
+  body?: string;
+  text_preview?: string;
+  /** Assumed on GET of a note: its note_refs. */
+  refs?: NoteRef[];
+}
+
+export interface KbChunk {
+  id: string;
+  document_id: string;
+  ordinal: number;
+  text: string;
+  locator: KbLocator;
+  score?: number;
+}
+
+export interface TermTranslation {
+  language: string;
+  text: string;
+}
+
+export interface TermExample {
+  text: string;
+  source: string;
+  hit_id?: string;
+  document_id?: string;
+  start_cp?: number;
+  end_cp?: number;
+}
+
+export interface Term {
+  id: string;
+  project_id: string;
+  term: string;
+  language: string;
+  translations: TermTranslation[];
+  definition: string;
+  domain: string;
+  examples: TermExample[];
+  source: "manual" | "corpus" | "literature" | "model";
+  status: "draft" | "confirmed";
+  created_by: string;
+  confirmed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type NoteRefKind = "search" | "stat" | "evidence" | "chunk" | "term";
+
+export interface NoteRef {
+  note_id?: string;
+  kind: NoteRefKind;
+  ref: Record<string, unknown>;
+  created_at?: string;
+}
+
+export interface KbSearchHit {
+  chunk: KbChunk;
+  document: { id: string; title: string; kind: KbKind; source: string };
+  score: number;
+  /** Keyword-matched fragment; `<mark>` / `<b>` delimit the matches when present. */
+  highlight?: string | null;
+}
+
+export interface KbSearchResult {
+  items: KbSearchHit[];
+  terms: Term[];
+  /** EMBED_UNAVAILABLE: vector model not ready, keyword results only. */
+  warning?: string | { code: string; message?: string } | null;
 }

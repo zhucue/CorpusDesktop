@@ -12,6 +12,7 @@ const Corpora = lazy(() => import("./features/corpora/Corpora"));
 const Search = lazy(() => import("./features/search/Search"));
 const Stats = lazy(() => import("./features/stats/Stats"));
 const Annotate = lazy(() => import("./features/annotate/Annotate"));
+const Knowledge = lazy(() => import("./features/knowledge/Knowledge"));
 const Assistant = lazy(() => import("./features/assistant/AssistantPage"));
 const Jobs = lazy(() => import("./features/jobs/Jobs"));
 const Settings = lazy(() => import("./features/settings/Settings"));
@@ -77,6 +78,7 @@ function AppRoutes() {
         <Route path="search" element={<Search />} />
         <Route path="stats" element={<Stats />} />
         <Route path="annotate" element={<Annotate />} />
+        <Route path="knowledge" element={<Knowledge />} />
         <Route path="assistant" element={<Assistant />} />
         <Route path="assistant/:sessionId" element={<Assistant />} />
         <Route path="jobs" element={<Jobs />} />

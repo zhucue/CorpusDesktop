@@ -143,3 +143,16 @@ export function describeScope(scope: SearchScope | null | undefined, corpora: Co
   const filtered = "filter" in scope;
   return { corpus, subcorpus: null, name: (corpus?.name ?? "语料库") + (filtered ? " · 临时筛选" : "") };
 }
+
+/** Lists follow the P1 `{items, total}` convention; accept a bare array too. */
+export function listOf<T>(x: T[] | { items: T[] } | undefined | null): T[] {
+  if (!x) return [];
+  return Array.isArray(x) ? x : (x.items ?? []);
+}
+
+/** `{items, total}` or a bare array as a page. */
+export function pageOf<T>(x: T[] | Page<T> | undefined | null): Page<T> {
+  if (!x) return { items: [], total: 0 };
+  if (Array.isArray(x)) return { items: x, total: x.length };
+  return { items: x.items ?? [], total: x.total ?? x.items?.length ?? 0 };
+}

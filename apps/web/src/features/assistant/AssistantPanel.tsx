@@ -7,7 +7,7 @@ import { TOOL_COUNT } from "../../components/global/tools";
 import { Icon } from "../../components/Icon";
 import { ResultContext } from "../../components/results/cards";
 import { AiMessage } from "./ChainView";
-import { useAgentChat, useAgentHealth, type ChatItem } from "./useAgentChat";
+import { useAgentChat, useAgentHealth, useSessions, type ChatItem } from "./useAgentChat";
 import "./assistant.css";
 
 export function HealthNotice({ compact }: { compact?: boolean }) {
@@ -91,6 +91,10 @@ export default function AssistantPanel({
   }
 
   const lastUser = [...chat.items].reverse().find((i) => i.kind === "user");
+  const sessions = useSessions(projectId);
+  const sessionTitle = sessions.data?.items.find((s) => s.id === sessionId)?.title;
+  const firstUser = chat.items.find((i) => i.kind === "user");
+  const noteTitle = sessionTitle || (firstUser?.kind === "user" ? firstUser.content.replace(/\s+/g, " ").slice(0, 40) : "") || "助手回答";
 
   return (
     <ResultContext.Provider value={{ projectId, scope }}>
@@ -114,6 +118,7 @@ export default function AssistantPanel({
                 <AiMessage
                   key={it.m.id || i}
                   m={it.m}
+                  noteTitle={noteTitle}
                   onRegenerate={i === chat.items.length - 1 && lastUser?.kind === "user" && !disabled ? () => void chat.send(lastUser.content) : undefined}
                 />
               ),

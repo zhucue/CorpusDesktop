@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, errorText, type Job, type Page } from "../../api";
 import { ErrorAlert, JobStateTag, Progress, Sparkline } from "../../components/common";
-import { jobKindLabels, progressText } from "../../components/global/TaskTray";
+import { hasDownload, jobKindLabels, progressText } from "../../components/global/TaskTray";
 import { Icon, type IconName } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
 import { isActiveJob, useJob, useProjectId } from "../../lib/data";
@@ -13,7 +13,7 @@ import "./jobs.css";
 
 const PAGE_SIZE = 50;
 type Filter = "all" | "active" | "failed";
-const kindIcon: Record<string, IconName> = { import: "upload", index: "layers", export: "download", stats: "chart", preannotate: "pen" };
+const kindIcon: Record<string, IconName> = { import: "upload", index: "layers", export: "download", stats: "chart", preannotate: "pen", kb_import: "book", kb_summarize: "spark", kb_extract: "term" };
 
 function Actions({ job, onAct, pending }: { job: Job; onAct: (a: "cancel" | "retry") => void; pending: boolean }) {
   return (
@@ -29,7 +29,7 @@ function Actions({ job, onAct, pending }: { job: Job; onAct: (a: "cancel" | "ret
           重试
         </button>
       )}
-      {job.kind === "export" && job.state === "succeeded" && (
+      {hasDownload(job) && (
         <a className="btn xs" href={`/api/jobs/${job.id}/download`}>
           <Icon name="download" size={14} />
           下载
@@ -41,7 +41,8 @@ function Actions({ job, onAct, pending }: { job: Job; onAct: (a: "cancel" | "ret
 
 function resultText(j: Job): React.ReactNode {
   if (!j.result) return null;
-  if (j.kind === "export") return `${j.result.filename ?? ""} · ${fmt(j.result.rows ?? 0)} 行`;
+  if (j.kind === "export" || typeof j.result.filename === "string") return j.result.rows != null ? `${j.result.filename ?? ""} · ${fmt(j.result.rows)} 行` : (j.result.filename ?? "");
+  if (j.kind === "kb_extract") return `新增 ${fmt(Number(j.result.created ?? 0))} 条草稿，跳过 ${fmt(Number(j.result.skipped ?? 0))} 条`;
   if (j.kind === "stats" && j.result.stat_id) return <Link to={`/p/${j.project_id}/stats?stat=${j.result.stat_id}`} onClick={(e) => e.stopPropagation()}>查看结果</Link>;
   return null;
 }
@@ -110,7 +111,7 @@ function Inspector({ id, projectId, onAct, pending }: { id: string; projectId: s
                   <dd className="mono">{fmtDuration(Date.parse(j.finished_at) - Date.parse(j.created_at))}</dd>
                 </>
               )}
-              {j.kind === "export" && j.result && (
+              {(j.kind === "export" || j.kind === "kb_extract" || typeof j.result?.filename === "string") && j.result && (
                 <>
                   <dt>产物</dt>
                   <dd>{resultText(j)}</dd>

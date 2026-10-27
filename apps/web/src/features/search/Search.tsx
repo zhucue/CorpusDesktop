@@ -30,6 +30,8 @@ import { useStatJob } from "../stats/useStatJob";
 import { defaultLayer, useLayers } from "../annotate/data";
 import ContextInspector, { hitEvidence } from "./ContextInspector";
 import SentenceTree from "./SentenceTree";
+import TermExampleButton from "../knowledge/TermExampleButton";
+import { useDebounced } from "../../lib/useDebounced";
 import { loadHistory, pushHistory, type HistoryEntry } from "./history";
 import "./search.css";
 
@@ -56,15 +58,6 @@ const isExpired = (e: unknown) => e instanceof ApiError && e.code === "SEARCH_EX
 function withoutSearchId(r: SearchRequest): SearchRequest {
   const { search_id: _ignored, ...rest } = r;
   return rest;
-}
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return v;
 }
 
 /** Insert `snippet` at the caret; "" places the caret between the quotes, {k=} before the brace. */
@@ -902,11 +895,15 @@ export default function Search() {
                       onSelect={setSelected}
                       expanded={expanded}
                       onExpand={setExpanded}
+                      extraActions={(r) => {
+                        const hit = rows.find((x) => x.id === r.id)?.hit;
+                        return hit ? <TermExampleButton projectId={projectId} hit={hit} source={r.evidence?.source ?? hit.document_title} /> : null;
+                      }}
                       renderExpanded={
                         treeLayer
                           ? (r) => {
                               const hit = rows.find((x) => x.id === r.id)?.hit;
-                              return hit ? <SentenceTree layerId={treeLayer} hit={hit} projectId={projectId} /> : null;
+                              return hit ? <SentenceTree layerId={treeLayer} posLayerId={req?.layers?.pos ?? null} hit={hit} projectId={projectId} /> : null;
                             }
                           : undefined
                       }

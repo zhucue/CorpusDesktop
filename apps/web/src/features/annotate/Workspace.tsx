@@ -282,7 +282,7 @@ export default function Workspace({
                 aria-current={on ? "true" : undefined}
                 onClick={() => go(docId, it.sentence_index)}
               >
-                <span className="n">{it.sentence_index}</span>
+                <span className="n">{it.sentence_index + 1}</span>
                 <span className="grow">{it.text}</span>
                 {it.status === "done" ? <Icon name="check" size={14} className="st" /> : on ? <span className="dot pulse" /> : null}
               </button>
@@ -306,7 +306,7 @@ export default function Workspace({
         <h2>{layer.kind === "pos" ? "词性" : "依存"}</h2>
         {sIdx != null && (
           <span className="mono small muted ellipsis" style={{ maxWidth: 240 }}>
-            {doc?.title ?? docId} · 句 {sIdx}
+            {doc?.title ?? docId} · 句 {sIdx + 1}
           </span>
         )}
         {s && <span className={`tag ${s.status === "done" ? "t-ok" : "t-run"}`}>{s.status === "done" ? "已完成" : "待校对"}</span>}
@@ -329,7 +329,7 @@ export default function Workspace({
             <button className="switch" type="button" role="switch" aria-checked={posColor} aria-label="词性着色" onClick={() => setPosColor((v) => !v)} />
           </Tip>
         </span>
-        {s && <PinButton input={{ kind: "text", ref: { document_id: s.document_id }, text: s.text, source: `${layer.name} · ${doc?.title ?? s.document_id} · 句 ${s.sentence_index}` }} />}
+        {s && <PinButton input={{ kind: "text", ref: { document_id: s.document_id }, text: s.text, source: `${layer.name} · ${doc?.title ?? s.document_id} · 句 ${s.sentence_index + 1}` }} />}
       </div>
       <div className="card-pad">
         <ErrorAlert error={sent.error} />

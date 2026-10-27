@@ -3,6 +3,8 @@ import { App } from "antd";
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { MAX_PAGE_SIZE, api, errorText, type Evidence, type EvidenceInput, type Job, type Page } from "../../api";
+import { knowledgeHref } from "../../features/knowledge/data";
+import { NotePicker, evidenceMarkdown, writeToNote, type NoteTarget } from "../../features/knowledge/NotePicker";
 import { useJobCreated } from "../../lib/data";
 import { reducedMotion } from "../../theme/motion";
 import { Icon, type IconName } from "../Icon";
@@ -145,8 +147,22 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
     onError: (e) => message.error(errorText(e)),
   });
   const [clearing, setClearing] = useState(false);
+  const [picking, setPicking] = useState(false);
   if (!ev) return null;
   const n = ev.items.length;
+
+  /** Append every item to the note as a quote, then record each as an evidence ref. */
+  async function toNote(t: NoteTarget) {
+    const items = ev!.items;
+    const note = await writeToNote(projectId, t, items.map(evidenceMarkdown).join("\n\n"));
+    for (const it of items)
+      await api.post(`/kb/documents/${note.id}/refs`, { kind: "evidence", ref: { evidence_id: it.id, ...it.ref, text: it.text, source: it.source } });
+    message.success(
+      <span>
+        已加入笔记「{note.title}」，<Link to={knowledgeHref(projectId, { tab: "notes", doc: note.id })}>打开笔记</Link>
+      </span>,
+    );
+  }
 
   async function clearAll() {
     if (!ev) return;
@@ -199,6 +215,10 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
           )}
         </div>
         <div className="dp-foot">
+          <button className="btn xs" type="button" disabled={!n} onClick={() => setPicking(true)}>
+            <Icon name="note" size={14} />
+            加入笔记
+          </button>
           <button className="btn xs" type="button" disabled={!n || exportJob.isPending} onClick={() => exportJob.mutate("xlsx")}>
             <Icon name="download" size={14} />
             XLSX
@@ -211,6 +231,7 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
           <ClearButton disabled={!n || clearing} onConfirm={clearAll} projectId={projectId} />
         </div>
       </div>
+      <NotePicker open={picking} projectId={projectId} title={`加入笔记 · ${n} 条证据`} defaultTitle="证据摘录" onClose={() => setPicking(false)} onPick={toNote} />
       <button
         ref={ev.capsuleRef}
         className="capsule"

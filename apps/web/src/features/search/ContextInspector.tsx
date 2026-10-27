@@ -68,7 +68,7 @@ export default function ContextInspector({
         <h2 className="sec-title grow">上下文</h2>
         {hit && (
           <span className="mono small muted ellipsis" style={{ maxWidth: 200 }}>
-            {hit.sentence_index} · {hit.start_cp}:{hit.end_cp}
+            句 {hit.sentence_index + 1} · {hit.start_cp}:{hit.end_cp}
           </span>
         )}
       </div>
@@ -115,7 +115,7 @@ export default function ContextInspector({
               <dt>文档</dt>
               <dd>{hit.document_title}</dd>
               <dt>句序号</dt>
-              <dd className="mono">{hit.sentence_index}</dd>
+              <dd className="mono">{hit.sentence_index + 1}</dd>
               <dt>码点</dt>
               <dd className="mono">
                 {hit.start_cp}–{hit.end_cp}

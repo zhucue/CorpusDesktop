@@ -11,6 +11,7 @@ import {
   KwicTableCard,
 } from "../components/results/cards";
 import { AnnotationDiffCard, DependencyTreeCard } from "../components/results/annotCards";
+import { KbCitationCard, TermCardView } from "../components/results/kbCards";
 
 // Names, prop order and schemas mirror services/agent/src/components.ts (positional OpenUI Lang args).
 export const KwicTable = defineComponent({
@@ -132,7 +133,31 @@ export const AnnotationDiff = defineComponent({
   component: ({ props }) => <AnnotationDiffCard {...props} />,
 });
 
-export const COMPONENTS = [KwicTable, FreqChart, CollocationTable, KeywordTable, DistributionChart, EvidenceCard, JobStatus, Callout, DependencyTree, AnnotationDiff];
+export const TermCard = defineComponent({
+  name: "TermCard",
+  description: "一条术语的词条。",
+  props: z.object({
+    term_id: z.string(),
+    term: z.string(),
+    translations: z.array(z.object({ language: z.string(), text: z.string() })),
+    definition: z.string(),
+    domain: z.string(),
+    examples: z.array(z.object({ text: z.string(), source: z.string() })),
+    status: z.enum(["draft", "confirmed"]),
+  }),
+  component: ({ props }) => <TermCardView {...props} />,
+});
+
+export const KbCitation = defineComponent({
+  name: "KbCitation",
+  description: "回答所依据的知识库片段。",
+  props: z.object({
+    items: z.array(z.object({ chunk_id: z.string(), document_id: z.string(), title: z.string(), locator: z.string(), text: z.string() })),
+  }),
+  component: ({ props }) => <KbCitationCard {...props} />,
+});
+
+export const COMPONENTS = [KwicTable, FreqChart, CollocationTable, KeywordTable, DistributionChart, EvidenceCard, JobStatus, Callout, DependencyTree, AnnotationDiff, TermCard, KbCitation];
 
 /** No root component: each ui block is a program whose entry is `root = <Component>(...)`. */
 export const library = createLibrary({ components: COMPONENTS });
@@ -149,4 +174,6 @@ export const RENDERERS: Record<string, React.FC<never>> = {
   Callout: CalloutView,
   DependencyTree: DependencyTreeCard,
   AnnotationDiff: AnnotationDiffCard,
+  TermCard: TermCardView,
+  KbCitation: KbCitationCard,
 };

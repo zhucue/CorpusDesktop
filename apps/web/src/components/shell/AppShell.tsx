@@ -21,10 +21,11 @@ const NAV: [string, string, IconName][] = [
   ["search", "检索", "search"],
   ["stats", "统计", "chart"],
   ["annotate", "标注", "pen"],
+  ["knowledge", "知识库", "book"],
   ["assistant", "助手", "spark"],
   ["jobs", "任务", "clock"],
 ];
-const EVIDENCE_PAGES = ["search", "stats", "assistant", "annotate"];
+const EVIDENCE_PAGES = ["search", "stats", "assistant", "annotate", "knowledge"];
 
 export function usePageId(): string {
   return useLocation().pathname.split("/")[3] ?? "corpora";

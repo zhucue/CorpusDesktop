@@ -14,6 +14,7 @@ const codeLabels: Record<string, { label: string; detail?: boolean }> = {
   SESSION_BUSY: { label: "该会话正在运行" },
   MODEL_NOT_CONFIGURED: { label: "未配置对话模型" },
   LABEL_SET_IN_USE: { label: "标签集正被标注层使用" },
+  EMBED_UNAVAILABLE: { label: "向量模型未就绪，已改用关键词检索" },
 };
 
 export function codeLabel(code: string, message: string): string {

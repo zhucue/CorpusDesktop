@@ -82,6 +82,7 @@ export function KwicTable({
   onExpand,
   renderExpanded,
   expandLabel = "依存树",
+  extraActions,
 }: {
   rows: KwicRow[];
   terms?: string[];
@@ -95,8 +96,11 @@ export function KwicTable({
   onExpand?: (id: string | null) => void;
   renderExpanded?: (row: KwicRow) => ReactNode;
   expandLabel?: string;
+  /** More row buttons before the pin (e.g. 加入术语例句). */
+  extraActions?: (row: KwicRow) => ReactNode;
 }) {
   const cols = (offset != null ? 1 : 0) + 5;
+  const actionCount = 1 + (renderExpanded ? 1 : 0) + (extraActions ? 1 : 0);
   return (
     <table className={`tbl kwic ${posColor ? "poscolor" : ""}`}>
       <colgroup>
@@ -105,7 +109,7 @@ export function KwicTable({
         <col style={{ width: compact ? 72 : 110 }} />
         <col />
         <col style={{ width: compact ? 96 : 150 }} />
-        <col style={{ width: renderExpanded ? 64 : 36 }} />
+        <col style={{ width: 8 + 28 * actionCount }} />
       </colgroup>
       {!compact && (
         <thead>
@@ -168,6 +172,7 @@ export function KwicTable({
                     <Icon name="tree" size={14} />
                   </button>
                 )}
+                {extraActions?.(r)}
                 {r.evidence && <PinButton input={r.evidence} />}
               </td>
             </tr>

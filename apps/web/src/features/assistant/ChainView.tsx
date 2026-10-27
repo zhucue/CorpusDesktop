@@ -1,5 +1,10 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import type { ToolCall } from "../../api";
+import { App } from "antd";
+import { lazy, Suspense, useContext, useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
+import { errorText, type ToolCall } from "../../api";
+import { ResultContext } from "../../components/results/cards";
+import { knowledgeHref } from "../knowledge/data";
+import { NotePicker, writeToNote, type NoteTarget } from "../knowledge/NotePicker";
 import { Icon } from "../../components/Icon";
 import { TOOL_VIEW } from "../../components/global/tools";
 import { reducedMotion } from "../../theme/motion";
@@ -198,7 +203,54 @@ export function Answer({ m }: { m: ChainMessage }) {
   );
 }
 
-export function AiMessage({ m, onRegenerate }: { m: ChainMessage; onRegenerate?: () => void }) {
+/** 保存为笔记 / 插入到笔记: the answer as Markdown (ui parts become tables or links). */
+function NoteActions({ m, noteTitle }: { m: ChainMessage; noteTitle: string }) {
+  const { projectId } = useContext(ResultContext);
+  const { message } = App.useApp();
+  const [picking, setPicking] = useState(false);
+  const [saving, setSaving] = useState(false);
+  if (!projectId) return null;
+
+  async function write(t: NoteTarget) {
+    const { messageMarkdown } = await import("../knowledge/uiMarkdown");
+    const note = await writeToNote(projectId, t, messageMarkdown(m.parts, projectId));
+    message.success(
+      <span>
+        {"noteId" in t ? "已插入到笔记" : "已保存为笔记"}「{note.title}」，<Link to={knowledgeHref(projectId, { tab: "notes", doc: note.id })}>打开笔记</Link>
+      </span>,
+    );
+  }
+
+  return (
+    <>
+      <button
+        className="btn xs"
+        type="button"
+        disabled={saving}
+        onClick={async () => {
+          setSaving(true);
+          try {
+            await write({ newTitle: noteTitle });
+          } catch (e) {
+            message.error(errorText(e));
+          } finally {
+            setSaving(false);
+          }
+        }}
+      >
+        <Icon name="note" size={14} />
+        保存为笔记
+      </button>
+      <button className="btn xs" type="button" onClick={() => setPicking(true)}>
+        <Icon name="plus" size={14} />
+        插入到笔记
+      </button>
+      <NotePicker open={picking} projectId={projectId} title="插入到笔记" defaultTitle={noteTitle} onClose={() => setPicking(false)} onPick={write} />
+    </>
+  );
+}
+
+export function AiMessage({ m, onRegenerate, noteTitle }: { m: ChainMessage; onRegenerate?: () => void; noteTitle?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="msg-ai" data-status={m.status}>
@@ -222,6 +274,7 @@ export function AiMessage({ m, onRegenerate }: { m: ChainMessage; onRegenerate?:
               重新生成
             </button>
           )}
+          {m.status === "done" && noteTitle != null && <NoteActions m={m} noteTitle={noteTitle} />}
         </div>
       )}
     </div>

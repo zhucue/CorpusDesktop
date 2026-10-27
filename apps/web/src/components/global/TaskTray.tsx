@@ -6,7 +6,19 @@ import { isActiveJob, quietJobs, useProjectJobs } from "../../lib/data";
 import { fmt } from "../../lib/format";
 import { Progress, Sparkline } from "../common";
 
-export const jobKindLabels: Record<string, string> = { import: "导入", index: "建索引", export: "导出", stats: "统计", preannotate: "预标注" };
+export const jobKindLabels: Record<string, string> = {
+  import: "导入",
+  index: "建索引",
+  export: "导出",
+  stats: "统计",
+  preannotate: "预标注",
+  kb_import: "文献导入",
+  kb_summarize: "文献摘要",
+  kb_extract: "术语抽取",
+};
+
+/** Jobs with a file to download (exports; knowledge-base exports may use their own kind). */
+export const hasDownload = (j: Job) => j.state === "succeeded" && (j.kind === "export" || typeof j.result?.filename === "string");
 
 export function jobTitle(j: Job): string {
   return `${jobKindLabels[j.kind] ?? j.kind}${j.progress.message ? ` · ${j.progress.message}` : ""}`;
@@ -39,7 +51,7 @@ export function TaskTray({ projectId, open, onToggle }: { projectId: string; ope
           notification.success({
             message: `${title}完成`,
             description:
-              j.kind === "export" ? (
+              hasDownload(j) ? (
                 <a href={`/api/jobs/${j.id}/download`}>下载 {j.result?.filename ?? ""}</a>
               ) : (
                 <Link to={`/p/${projectId}/jobs`}>查看任务</Link>

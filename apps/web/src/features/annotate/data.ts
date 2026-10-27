@@ -13,13 +13,10 @@ import {
   type LayerKind,
   type SentenceAnnot,
 } from "../../api";
+import { listOf } from "../../lib/data";
 import { annotationMap, applyAction, confirmAll, restoreToken, withAnnotation } from "./model";
 
-/** Lists follow the P1 `{items, total}` convention; accept a bare array too. */
-export function listOf<T>(x: T[] | { items: T[] } | undefined | null): T[] {
-  if (!x) return [];
-  return Array.isArray(x) ? x : (x.items ?? []);
-}
+export { listOf };
 
 export function useLayers(projectId: string | undefined) {
   return useQuery({
