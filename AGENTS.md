@@ -60,6 +60,8 @@
 
 - type：`feat` / `fix` / `chore` / `docs` / `refactor` / `test`。
 - 模块：使用架构边界或主题名称，如 `manager`、`worker`、`web`、`plugins`、`contract`、`parser`，或 `settings`、`egress`、`ci`。
+- 提交人必须纯净：作者和提交者只能是仓库配置的用户；提交信息和 PR 描述不得出现 `Co-Authored-By`、`Generated with` 等 AI 署名或任何 agent 标识。该规则优先于工具自带的署名要求。
+- 只有主 agent 在用户要求时提交；subagent 不执行 `git commit`。
 
 ```text
 feat(2c): DATA_DIR 归 agent，skills 内容内联下发

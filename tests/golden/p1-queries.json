@@ -1,0 +1,126 @@
+{
+  "fixture": "tests/fixtures/ud-en-ewt-sample.conllu",
+  "source": "UD_English-EWT en_ewt-ud-test.conllu, first 16 documents (https://github.com/UniversalDependencies/UD_English-EWT, CC BY-SA 4.0)",
+  "queries": [
+    {
+      "query": "the",
+      "hits": 254,
+      "sentences": 119,
+      "documents": 14
+    },
+    {
+      "query": "\"The\"",
+      "hits": 27,
+      "sentences": 26,
+      "documents": 8
+    },
+    {
+      "query": "Google",
+      "hits": 6,
+      "sentences": 6,
+      "documents": 3
+    },
+    {
+      "query": "/v",
+      "hits": 432,
+      "sentences": 165,
+      "documents": 16
+    },
+    {
+      "query": "/PROPN",
+      "hits": 572,
+      "sentences": 161,
+      "documents": 15
+    },
+    {
+      "query": "have/v",
+      "hits": 8,
+      "sentences": 8,
+      "documents": 7
+    },
+    {
+      "query": "the /n",
+      "hits": 181,
+      "sentences": 105,
+      "documents": 14
+    },
+    {
+      "query": "in the",
+      "hits": 19,
+      "sentences": 18,
+      "documents": 8
+    },
+    {
+      "query": "the $2 of",
+      "hits": 47,
+      "sentences": 33,
+      "documents": 12
+    },
+    {
+      "query": "a $1-3 /n",
+      "hits": 57,
+      "sentences": 51,
+      "documents": 14
+    },
+    {
+      "query": "the|a /adj",
+      "hits": 93,
+      "sentences": 67,
+      "documents": 13
+    },
+    {
+      "query": "is|was|are /adv|/adj",
+      "hits": 33,
+      "sentences": 32,
+      "documents": 12
+    },
+    {
+      "query": "* of the",
+      "hits": 31,
+      "sentences": 29,
+      "documents": 11
+    },
+    {
+      "query": "Google +search",
+      "hits": 2,
+      "sentences": 2,
+      "documents": 2
+    },
+    {
+      "query": "the -of",
+      "hits": 84,
+      "sentences": 57,
+      "documents": 14
+    },
+    {
+      "query": "I +/v -not",
+      "hits": 17,
+      "sentences": 15,
+      "documents": 8
+    },
+    {
+      "query": "th??",
+      "hits": 116,
+      "sentences": 84,
+      "documents": 14
+    },
+    {
+      "query": "go*",
+      "hits": 33,
+      "sentences": 31,
+      "documents": 14
+    },
+    {
+      "query": "\"'s\"",
+      "hits": 31,
+      "sentences": 25,
+      "documents": 9
+    },
+    {
+      "query": "/det /adj /noun -/propn",
+      "hits": 16,
+      "sentences": 13,
+      "documents": 11
+    }
+  ]
+}

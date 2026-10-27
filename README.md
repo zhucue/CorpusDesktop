@@ -14,6 +14,35 @@
 
 2026 年 10 月 27 日起按重构设计重建，当前处于 P1（语料与检索）。重构前的代码归档在提交 `2b0282b`，重建过程中逐步替换。
 
+## 工程结构
+
+```text
+apps/web/          React + TypeScript + Vite + Ant Design
+services/api/      FastAPI 业务接口与 Alembic 迁移
+services/worker/   任务执行器（PostgreSQL 队列）：导入、索引、导出
+engine/            解析、Stanza 标注、CWB 索引与检索、查询语法
+contracts/         阶段接口契约（p1.md）
+deploy/            Compose 与 Dockerfile
+tests/             pytest：engine、api
+```
+
 ## 本地开发
 
-工程重建后在此补充启动命令。
+基线：Python 3.12（uv）、Node 24、Docker。CWB 与 Stanza 只在容器内可用。
+
+```powershell
+# 依赖
+uv sync --frozen
+npm ci --prefix apps/web
+
+# 不依赖容器的测试与前端检查
+uv run --frozen --with pytest pytest tests/engine -k "not cwb and not nlp" -q
+npm run check
+
+# 整套服务：复制 deploy/.env.example 为 deploy/.env 并填 POSTGRES_PASSWORD
+docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
+docker compose --env-file deploy/.env -f deploy/compose.yaml exec api python scripts/create_account.py --email you@example.edu --admin
+docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm test   # api 测试（真实 PostgreSQL）
+```
+
+浏览器打开 http://localhost:8080。前端开发用 `npm run web:dev`（5173，代理 /api 到 8000），此时 `PUBLIC_ORIGIN` 需加入 `http://127.0.0.1:5173`。首次导入会把 Stanza 中英模型（约 500 MB）下载到 `stanza` 卷。

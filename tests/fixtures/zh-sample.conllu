@@ -1,0 +1,34 @@
+# newdoc id = zh1
+# sent_id = zh1-1
+# text = 社会语言学研究语言与社会。
+1	社会	社会	NOUN	NN	_	2	nmod	_	SpaceAfter=No
+2	语言学	语言学	NOUN	NN	_	3	nsubj	_	SpaceAfter=No
+3	研究	研究	VERB	VV	_	0	root	_	SpaceAfter=No
+4	语言	语言	NOUN	NN	_	3	obj	_	SpaceAfter=No
+5	与	与	CCONJ	CC	_	6	cc	_	SpaceAfter=No
+6	社会	社会	NOUN	NN	_	4	conj	_	SpaceAfter=No
+7	。	。	PUNCT	.	_	3	punct	_	SpaceAfter=No
+
+# sent_id = zh1-2
+# text = 语言文化很重要。
+1	语言	语言	NOUN	NN	_	2	nmod	_	SpaceAfter=No
+2	文化	文化	NOUN	NN	_	4	nsubj	_	SpaceAfter=No
+3	很	很	ADV	AD	_	4	advmod	_	SpaceAfter=No
+4	重要	重要	ADJ	JJ	_	0	root	_	SpaceAfter=No
+5	。	。	PUNCT	.	_	4	punct	_	SpaceAfter=No
+
+# newdoc id = zh2
+# sent_id = zh2-1
+# text = 他说语言。
+1	他	他	PRON	PRP	_	2	nsubj	_	SpaceAfter=No
+2	说语	说语	VERB	VV	_	0	root	_	SpaceAfter=No
+3	言	言	NOUN	NN	_	2	obj	_	SpaceAfter=No
+4	。	。	PUNCT	.	_	2	punct	_	SpaceAfter=No
+
+# newpar id = zh2-p2
+# sent_id = zh2-2
+# text = 汉语言文字学
+1	汉	汉	PROPN	NNP	_	2	nmod	_	SpaceAfter=No
+2	语言	语言	NOUN	NN	_	3	nmod	_	SpaceAfter=No
+3	文字学	文字学	NOUN	NN	_	0	root	_	SpaceAfter=No
+

@@ -8,11 +8,15 @@ dependencies = [
   "sqlalchemy>=2.0,<3",
   "psycopg[binary]>=3.2,<4",
   "alembic>=1.14,<2",
-  "celery>=5.4,<6",
-  "httpx>=0.28,<1",
-  "jsonschema>=4.23,<5",
   "argon2-cffi>=25.1,<26",
-  "boto3>=1.40,<2",
+  "httpx>=0.28,<1",
+  "python-multipart>=0.0.20,<1",
+  "openpyxl>=3.1,<4",
+  "python-docx>=1.1,<2",
+  "lxml>=5.3,<7",
+  "stanza>=1.10,<2",
+  "torch>=2.5,<3",
+  "jieba>=0.42,<1",
 ]
 
 [dependency-groups]
@@ -25,7 +29,16 @@ addopts = "-ra"
 
 [tool.ruff]
 target-version = "py312"
-extend-exclude = ["tmp", ".venv", "services/agent-runtime/node_modules"]
+extend-exclude = ["tmp", ".venv", "doc/history"]
 
 [tool.uv]
 package = false
+
+# Stanza 依赖 torch；只用 CPU 版，避免镜像拉入 CUDA 包
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

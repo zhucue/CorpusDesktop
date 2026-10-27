@@ -1,21 +1,27 @@
-FROM python@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142b1877b5830d36
+FROM python:3.12-slim-bookworm AS base
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    UV_PROJECT_ENVIRONMENT=/opt/venv UV_LINK_MODE=copy PATH=/opt/venv/bin:$PATH
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl libpcre3 libglib2.0-0 libreadline8 \
+ && rm -rf /var/lib/apt/lists/*
+RUN curl -L --fail --retry 5 --retry-all-errors https://downloads.sourceforge.net/project/cwb/cwb/cwb-3.5/deb/cwb_3.5.0-1_amd64.deb -o /tmp/cwb.deb \
+ && echo '257ef6f71a055ee70cd57904173e40f8e8f0e6c93ac7edf5d7d2e3a21c023601  /tmp/cwb.deb' | sha256sum -c - \
+ && dpkg -i /tmp/cwb.deb && rm /tmp/cwb.deb
+RUN pip install --no-cache-dir uv==0.11.21
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-COPY deploy/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir --require-hashes -r requirements.txt
-RUN useradd --create-home --uid 10001 corpus
-RUN mkdir -p /app/tmp/uploads /app/tmp/source-sync /app/tmp/research-cache && chown -R corpus:corpus /app/tmp
-ENV SQLITE_TMPDIR=/app/tmp/source-sync
-COPY scripts /app/scripts
-COPY services/api /app/services/api
-COPY workers /app/workers
-COPY pipelines/sources /app/pipelines/sources
-COPY pipelines/query /app/pipelines/query
-COPY pipelines/materials /app/pipelines/materials
-COPY pipelines/exports /app/pipelines/exports
-COPY alembic.ini /app/alembic.ini
-COPY contracts /app/contracts
-COPY apps/web/dist /app/apps/web/dist
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+RUN useradd --create-home --uid 10001 corpus && mkdir -p /data /stanza && chown corpus:corpus /data /stanza
+
+# 仓库挂载到 /app 运行 pytest
+FROM base AS test
+RUN uv sync --frozen --no-install-project
+USER corpus
+
+FROM base AS api
+COPY engine engine
+COPY services/api services/api
+COPY services/worker services/worker
+COPY scripts scripts
 USER corpus
 EXPOSE 8000
-CMD ["uvicorn", "services.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "alembic -c services/api/alembic.ini upgrade head && exec uvicorn services.api.main:app --host 0.0.0.0 --port 8000"]

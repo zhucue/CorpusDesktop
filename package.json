@@ -6,10 +6,7 @@
   "scripts": {
     "web:dev": "npm --prefix apps/web run dev",
     "web:build": "npm --prefix apps/web run build",
-    "agent:check": "npm --prefix services/agent-runtime run check",
-    "agent:test": "npm --prefix services/agent-runtime test",
-    "agent:s0": "npm --prefix services/agent-runtime run s0",
-    "check": "npm run web:build && npm run agent:check",
-    "test": "npm run agent:test"
+    "web:test": "npm --prefix apps/web test",
+    "check": "npm run web:build && npm run web:test"
   }
 }

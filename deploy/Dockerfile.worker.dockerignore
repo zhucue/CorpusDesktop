@@ -1,0 +1,8 @@
+*
+!pyproject.toml
+!uv.lock
+!engine
+!services/api
+!services/worker
+!scripts
+**/__pycache__

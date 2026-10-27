@@ -74,3 +74,7 @@
 - 审查当前实现与设计后确定平台重构方向，新增[重构设计](platform-redesign.md)及对应 Word《语料检索分析与标注研究平台重构设计》。原因：用户指出功能偏移——想要的是类 CCL 语料检索、Agent 分析与标注平台，而现有代码把精力放在同步、索引、Pi 可靠性等基础设施上，统计、双语、标注没有生产实现，两条首版研究流程都走不通；前端未按设计落地，文档与仓库卫生失衡。新方案保留 Pi 作为 Agent 内核以便后期扩展，但去掉租约、检查点、WAITING_JOB 接续和动作登记表；对话接入 OpenUI 生成式界面，标注以可视化方式校对；按用户要求增加知识库建设能力（文献、术语、规范、笔记）；基础设施收缩为 web / api / worker / agent / postgres 五个服务，任务表只保留一张。用户已确认大幅推倒重来；初始提交存档和旧文档迁入 `doc/history/` 仍待确认，本次未移动旧文件。
 
 - 用户确认后完成初始提交 `2b0282b` 归档重构前全部代码与文档；将旧设计 Markdown、Word 和审查记录迁入 `doc/history/2026-10-redesign-before/`，重写 README 为新定位、文档入口和当前状态；新增 `.gitattributes` 固定 LF。原因：重构前需要可找回的完整存档；旧文档与新基线并列会误导后续开发。随后按重构设计 P1 启动重建。
+
+- 在 [AGENTS.md](../AGENTS.md) 提交规范中增加"提交人必须纯净"：作者与提交者只能是仓库配置的用户，提交信息不得出现 AI 署名或 agent 标识；subagent 不执行提交。已按此重写前两次提交，提交身份改为用户的 GitHub 账号 zhucue（现为 `7fdb112`、`019144e`）。原因：用户要求提交记录只体现本人。
+
+- 按 [contracts/p1.md](../contracts/p1.md) 完成 P1 三方实现：`engine/`（解析 txt/docx/csv/tsv/conllu/tmx/Tatoeba、Stanza 标注、CWB 建索引与检索、查询语法编译、子库筛选，20 条 UD 英文金标）、`services/api` 与 `services/worker`（FastAPI、Cookie 会话与项目角色、Alembic 基线 12 张表、单进程 PostgreSQL 队列 worker、导入/索引/导出）、`deploy/`（Compose：postgres+pgvector、api、worker、web、test）、`apps/web`（Vite + React 19 + Ant Design 5：登录、项目、语料库与文档、子库、检索、任务、成员）。原因：重构设计 P1 先贯通"导入 → 索引 → 检索 → 导出"。依赖去掉 celery/boto3/jsonschema，torch 取 CPU 源；契约在实现中补充 search_id 复用、上传字段名、按邮箱添加成员、句 external_id、文档码点、管理员内置语料等，已写入契约第六节。CWB 与 Stanza 只在容器内可用，本机运行纯 Python 测试。

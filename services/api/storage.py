@@ -1,38 +1,29 @@
-"""Server-only S3 access; uploads are create-only and reads pin a version."""
+"""Local data volume layout: uploads, document texts, CWB indexes, exports."""
 
-import os
-from functools import lru_cache
+from uuid import UUID
 
-import boto3
-from botocore.config import Config
+from services.api.db import data_dir
 
 
-@lru_cache
-def client():
-    return boto3.client(
-        "s3", endpoint_url=os.environ["S3_ENDPOINT_URL"],
-        aws_access_key_id=os.environ["S3_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["S3_SECRET_ACCESS_KEY"],
-        region_name="us-east-1",
-        config=Config(connect_timeout=5, read_timeout=30, retries={"total_max_attempts": 1},
-                      s3={"addressing_style": "path"}, signature_version="s3v4"),
-    )
+def upload_dir(job_id):
+    return data_dir() / "uploads" / str(job_id)
 
 
-def bucket():
-    return os.environ.get("S3_BUCKET", "corpus-private")
+def corpus_dir(corpus_id):
+    return data_dir() / "corpora" / str(corpus_id)
 
 
-def put_private(key, stream, size, media_type):
-    response = client().put_object(
-        Bucket=bucket(), Key=key, Body=stream, ContentLength=size,
-        ContentType=media_type, IfNoneMatch="*",
-    )
-    version = response.get("VersionId")
-    if not version or version == "null":
-        raise ValueError("STORAGE_VERSIONING_REQUIRED")
-    return version, response["ETag"]
+def text_path(corpus_id, document_id):
+    return corpus_dir(corpus_id) / "texts" / f"{document_id}.txt"
 
 
-def read_private(key, version, etag):
-    return client().get_object(Bucket=bucket(), Key=key, VersionId=version, IfMatch=etag)["Body"]
+def index_dir(corpus_id):
+    return corpus_dir(corpus_id) / "index"
+
+
+def corpus_key(corpus_id):
+    return "C" + UUID(str(corpus_id)).hex.upper()
+
+
+def export_path(job_id, fmt):
+    return data_dir() / "exports" / f"{job_id}.{fmt}"

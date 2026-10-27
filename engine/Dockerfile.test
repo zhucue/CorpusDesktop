@@ -1,0 +1,14 @@
+# CWB + Stanza test image for tests/engine. The repo is mounted at run time:
+#   docker build -f engine/Dockerfile.test -t corpus-engine-test .
+#   docker run --rm -v "$PWD:/workspace" -v "$PWD/tmp/stanza:/stanza" corpus-engine-test
+FROM python:3.12-slim-bookworm
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl libpcre3 libglib2.0-0 libreadline8 \
+ && rm -rf /var/lib/apt/lists/*
+RUN curl -L --fail --retry 5 --retry-all-errors https://downloads.sourceforge.net/project/cwb/cwb/cwb-3.5/deb/cwb_3.5.0-1_amd64.deb -o /tmp/cwb.deb \
+ && echo '257ef6f71a055ee70cd57904173e40f8e8f0e6c93ac7edf5d7d2e3a21c023601  /tmp/cwb.deb' | sha256sum -c - \
+ && dpkg -i /tmp/cwb.deb && rm /tmp/cwb.deb
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+ && pip install --no-cache-dir stanza jieba lxml python-docx openpyxl pytest
+ENV STANZA_RESOURCES_DIR=/stanza PYTHONDONTWRITEBYTECODE=1
+WORKDIR /workspace
+CMD ["python", "-m", "pytest", "-p", "no:cacheprovider", "tests/engine", "-q"]
