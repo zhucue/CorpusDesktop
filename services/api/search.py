@@ -96,9 +96,9 @@ class SavedQueryInput(BaseModel):
 # ---- shared search steps (API and export worker) ----
 
 
-def parse_view(text):
+def parse_view(text, tagset="mixed"):
     try:
-        ast = query.parse(text)
+        ast = query.parse(text, tagset)
     except query.QueryError as e:
         return {
             "ok": False,
@@ -116,9 +116,14 @@ def parse_view(text):
     }
 
 
-def compile_query(text):
+def corpus_tagset(corpus) -> str:
+    """POS tag set of the corpus index (upos | jieba | mixed); queries and POS filters resolve against it."""
+    return cwb.tagset(index_dir(corpus.id), corpus_key(corpus.id))
+
+
+def compile_query(text, tagset="mixed"):
     try:
-        return query.compile(query.parse(text))
+        return query.compile(query.parse(text, tagset))
     except query.QueryError as e:
         raise ApiError(422, "QUERY_INVALID", f"第 {e.position + 1} 个字符：{e.message}")
 
@@ -316,7 +321,8 @@ def parse(body: ParseInput, user: CurrentUser):
 @router.post("/search")
 def search(body: SearchInput, user: CurrentUser, db: Db):
     corpus, restrict = resolve_scope(db, body.scope, user)
-    cqp = compile_query(body.query)
+    tagset = corpus_tagset(corpus)
+    cqp = compile_query(body.query, tagset)
     sid, entry = searches.open(corpus, restrict, cqp, body)
     req = body.model_copy(update={"seed": entry["seed"]})
     result = run_search(
@@ -330,7 +336,7 @@ def search(body: SearchInput, user: CurrentUser, db: Db):
         attach_tokens(db, items)
     return {
         "search_id": sid,
-        "parse": parse_view(body.query),
+        "parse": parse_view(body.query, tagset),
         "counts": counts,
         "items": items,
         "page": body.page,
@@ -376,7 +382,7 @@ def context(
 @router.post("/search/export")
 def export(body: ExportInput, user: CurrentUser, db: Db):
     corpus, restrict = resolve_scope(db, body.scope, user)
-    cqp = compile_query(body.query)
+    cqp = compile_query(body.query, corpus_tagset(corpus))
     _, entry = searches.open(corpus, restrict, cqp, body)
     body = body.model_copy(update={"seed": entry["seed"], "search_id": None})
     if body.scope.subcorpus_id:

@@ -102,3 +102,44 @@ def test_compile_filter():
         compile_filter({"x": 1}, {})
     with pytest.raises(ValueError):
         compile_filter({"genre": {"gte": 1}}, {"genre": "string"})
+
+
+def test_pos_tagsets():
+    from engine.query import JIEBA_ALIASES, infer_tagset, resolve_pos
+
+    assert resolve_pos("n") == ("NOUN", "PROPN")
+    n = resolve_pos("n", "jieba")
+    assert set(n) == {"n", "ng", "nr", "nrfg", "nrt", "ns", "nt", "nz"}
+    assert set(resolve_pos("v", "jieba")) == {"v", "vd", "vg", "vi", "vn", "vq"}
+    assert set(resolve_pos("a", "jieba")) == {"a", "ad", "ag", "an"}
+    assert set(resolve_pos("u", "jieba")) >= {"u", "uj", "ul", "uz"}
+    assert "eng" not in JIEBA_ALIASES["e"]
+    for tag in ("p", "c", "w", "x", "q", "m", "r", "d"):
+        assert resolve_pos(tag, "jieba")[0] == tag
+    assert resolve_pos("nr", "jieba") == ("nr",)
+    assert resolve_pos("VERB", "jieba") == resolve_pos("v", "jieba")
+    assert "nr" not in resolve_pos("NOUN", "jieba")
+    assert resolve_pos("PROPN", "jieba") == ("nr", "nrfg", "nrt", "ns", "nt", "nz")
+    assert resolve_pos("n", "mixed") == ("NOUN", "PROPN", *n)
+    assert resolve_pos("x") == ("X",)
+    with pytest.raises(QueryError):
+        resolve_pos("nr")  # jieba tag on a UPOS corpus
+    with pytest.raises(QueryError):
+        resolve_pos("DET", "jieba")
+    with pytest.raises(QueryError):
+        resolve_pos("zz", "mixed")
+    assert infer_tagset(["NOUN", None, "PUNCT"]) == "upos"
+    assert infer_tagset(["n", "uj", "eng", "w"]) == "jieba"
+    assert infer_tagset(["NOUN", "n"]) == "mixed" and infer_tagset([]) == "mixed"
+
+
+def test_compile_jieba_pos():
+    assert (
+        compile(parse("语言/n", "jieba"))
+        == '[word="语言" & pos="n|ng|nr|nrfg|nrt|ns|nt|nz"]'
+    )
+    assert compile(parse("/nr 的/uj", "jieba")) == '[pos="nr"] [word="的" & pos="uj"]'
+    assert compile(parse("翻译/v", "jieba")) == '[word="翻译" & pos="v|vd|vg|vi|vn|vq"]'
+    with pytest.raises(QueryError) as e:
+        parse("语言/zz", "jieba")
+    assert e.value.position == 3 and "jieba" in e.value.message

@@ -17,7 +17,7 @@ from services.api.errors import ApiError, forbidden, not_found
 from services.api.jobs import enqueue
 from services.api.metadata import field_types
 from services.api.models import StatResult, Subcorpus
-from services.api.search import Scope, compile_query, resolve_scope
+from services.api.search import Scope, compile_query, corpus_tagset, resolve_scope
 from services.api.views import job_view, stat_view
 
 router = APIRouter(prefix="/api")
@@ -83,11 +83,16 @@ class ExportInput(BaseModel):
     format: Literal["csv", "xlsx"]
 
 
-def _check_pos(*tags):
+def _tagset(db, scope, user):
+    corpus, _ = resolve_scope(db, scope, user)
+    return corpus_tagset(corpus)
+
+
+def _check_pos(tagset, *tags):
     for tag in tags:
         if tag:
             try:
-                engine_stats.pos_tags(tag)
+                engine_stats.pos_tags(tag, tagset)
             except query.QueryError as e:
                 raise ApiError(422, "VALIDATION_ERROR", e.message)
 
@@ -111,20 +116,21 @@ def _submit(db, user, method, body, scope):
 
 @router.post("/stats/frequency")
 def frequency(body: FrequencyInput, user: CurrentUser, db: Db):
-    _check_pos(body.pos)
+    _check_pos(_tagset(db, body.scope, user), body.pos)
     return _submit(db, user, "frequency", body, body.scope)
 
 
 @router.post("/stats/ngrams")
 def ngrams(body: NgramsInput, user: CurrentUser, db: Db):
-    _check_pos(*(body.pos_pattern or []))
+    _check_pos(_tagset(db, body.scope, user), *(body.pos_pattern or []))
     return _submit(db, user, "ngrams", body, body.scope)
 
 
 @router.post("/stats/collocations")
 def collocations(body: CollocationsInput, user: CurrentUser, db: Db):
-    compile_query(body.node)
-    _check_pos(body.pos)
+    tagset = _tagset(db, body.scope, user)
+    compile_query(body.node, tagset)
+    _check_pos(tagset, body.pos)
     return _submit(db, user, "collocations", body, body.scope)
 
 
@@ -137,7 +143,7 @@ def keywords(body: KeywordsInput, user: CurrentUser, db: Db):
 @router.post("/stats/distribution")
 def distribution(body: DistributionInput, user: CurrentUser, db: Db):
     if body.query:
-        compile_query(body.query)
+        compile_query(body.query, _tagset(db, body.scope, user))
     if body.field != "position":
         corpus, _ = resolve_scope(db, body.scope, user)
         if body.field not in field_types(db, corpus.id):

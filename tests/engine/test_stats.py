@@ -118,3 +118,30 @@ def test_scope_restrict_and_totals(ud):
     assert [r["bin_value"] for r in by_n.rows] == list(range(16))
     assert by_n.rows[0]["values"]["hits"] is None
     assert sum(r["values"]["tokens"] for r in by_n.rows) == whole.totals["tokens"]
+
+
+@pytest.mark.cwb
+def test_jieba_tagset(tmp_path):
+    from engine import nlp
+    from engine.model import Document
+
+    text = "语言是文化的载体。我们研究语言和翻译。翻译促进文化交流。"
+    doc = Document("zh", "zh", text, {}, [])
+    nlp.annotate(doc)
+    assert cwb.build(tmp_path, "zh", [doc], ["d1"]).tagset == "jieba"
+    scope = stats.Scope(tmp_path, "zh")
+    toks = [t for s in doc.sentences for t in s.tokens]
+    nouns = [t.form for t in toks if t.pos in query.resolve_pos("n", "jieba")]
+    for tag in ("n", "NOUN", "nr"):
+        stats.frequency(scope, pos=tag)  # accepted on a jieba corpus
+    t = stats.frequency(scope, unit="word", pos="n")
+    assert sum(r["values"]["freq"] for r in t.rows) == len(nouns)
+    by_pos = {r["key"]: r for r in stats.frequency(scope, unit="pos").rows}
+    assert by_pos["uj"]["search_query"] == "/uj"  # exact tag
+    assert by_pos["n"]["search_query"] is None  # `/n` would also match nr, ns …
+    big = stats.ngrams(scope, n=2, pos_pattern=["n", "uj"], min_freq=1)
+    assert [r["key"] for r in big.rows] == ["文化\t的"]
+    with pytest.raises(query.QueryError):
+        stats.frequency(scope, pos="DET")
+    with pytest.raises(query.QueryError):
+        stats.frequency(stats.Scope(tmp_path, "zh", tagset="upos"), pos="nr")

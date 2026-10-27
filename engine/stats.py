@@ -4,7 +4,8 @@ A scope is an index plus an optional CQP restrict expression (engine.query.compi
 tokens satisfy it. Frequencies come from cwb-scan-corpus over the scope's document ranges (`-w s` keeps n-grams
 inside one sentence); query hits come from CQP as in cwb.search (anchor within s, same-sentence +/- conditions).
 Word units are exact CWB forms (NFC, case-sensitive), so a row's `"form"` query finds exactly the counted tokens.
-A missing lemma or POS ("_") is not listed but counts in the token total.
+A missing lemma or POS ("_") is not listed but counts in the token total. POS filters resolve against the
+index tagset (cwb.tagset: UPOS, jieba or mixed), as query POS does.
 
 Measures (N = tokens in scope):
   per_million = f / N * 1e6
@@ -47,6 +48,7 @@ class Scope:
     index_dir: Path
     corpus_key: str
     restrict: str | None = None
+    tagset: str | None = None  # POS tag set; None = read from the index (cwb.tagset)
 
 
 @dataclass
@@ -65,17 +67,17 @@ def _rank(v):
     return round(v, 10)
 
 
-def pos_tags(tag: str) -> tuple[str, ...]:
-    """Query-style POS (`v`, `VERB`) → UPOS tags; raises query.QueryError."""
-    return query._resolve_pos(tag, 0)
+def pos_tags(tag: str, tagset: str = "upos") -> tuple[str, ...]:
+    """Query-style POS (`v`, `VERB`, `nr`) → index tags of a tagset; raises query.QueryError."""
+    return query.resolve_pos(tag, tagset)
 
 
-def _pos_keys(tags) -> list[str]:
+def _pos_keys(tags, tagset) -> list[str]:
     keys = []
     for i, tag in enumerate(tags):
         if tag:
             att = "pos" if i == 0 else f"pos+{i}"
-            keys.append(f"?{att}=/({'|'.join(pos_tags(tag))})/")
+            keys.append(f"?{att}=/({'|'.join(pos_tags(tag, tagset))})/")
     return keys
 
 
@@ -96,6 +98,7 @@ class _Corpus:
         self.key = cwb._key(scope.corpus_key)
         self.index_dir = Path(scope.index_dir)
         self.restrict = scope.restrict
+        self.tagset = scope.tagset or cwb.tagset(self.index_dir, self.key)
         self.reg = str(self.index_dir / "registry")
         ix = cwb._open(str(cwb._home(self.index_dir, self.key)))
         docs = []
@@ -161,7 +164,7 @@ class _Corpus:
 
     def hits(self, text) -> list[tuple[int, int]]:
         """(match, matchend) of every hit of a query in the scope, in corpus order."""
-        anchor, conds, _ = cwb._split(query.compile(query.parse(text)))
+        anchor, conds, _ = cwb._split(query.compile(query.parse(text, self.tagset)))
         if not self.docs:
             return []
         cmds = []
@@ -186,7 +189,7 @@ class _Corpus:
     def forms(self, tag=None) -> dict[str, list[str]]:
         """lemma → its word forms in the scope (most frequent first)."""
         if tag not in self._forms:
-            counts = self.scan(["lemma", "word", *_pos_keys([tag])])
+            counts = self.scan(["lemma", "word", *_pos_keys([tag], self.tagset)])
             by_lemma = {}
             for (lemma, form), f in sorted(counts.items(), key=lambda x: (-x[1], x[0])):
                 by_lemma.setdefault(lemma, []).append(form)
@@ -196,8 +199,14 @@ class _Corpus:
 
 def _slot(c: _Corpus, unit, value, tag=None):
     """One query slot matching a unit value, or None when it cannot be written."""
-    if unit == "pos":
-        return f"/{value}" if value in query.UPOS else None
+    if (
+        unit == "pos"
+    ):  # only when `/value` matches exactly this tag (jieba `n` would also match nr, ns …)
+        try:
+            exact = query.resolve_pos(value, c.tagset) == (value,)
+        except query.QueryError:
+            exact = False
+        return f"/{value}" if exact else None
     words = [value] if unit == "word" else c.forms(tag).get(value, [])
     words = [w for w in words if '"' not in w]
     suffix = f"/{tag}" if tag else ""
@@ -220,7 +229,7 @@ def frequency(scope: Scope, unit="word", pos=None, top=200, min_freq=1) -> Table
     _check_unit(unit, ("word", "lemma", "pos"))
     c = _Corpus(scope)
     freq, docs = Counter(), Counter()
-    for (value, _), f in c.scan([unit, "doc_id", *_pos_keys([pos])]).items():
+    for (value, _), f in c.scan([unit, "doc_id", *_pos_keys([pos], c.tagset)]).items():
         if unit == "word" or value != MISSING:
             freq[value] += f
             docs[value] += 1
@@ -260,7 +269,9 @@ def ngrams(
         raise ValueError("词性模式长度须等于 n")
     tags = [t or None for t in tags]
     c = _Corpus(scope)
-    keys = [unit if i == 0 else f"{unit}+{i}" for i in range(n)] + _pos_keys(tags)
+    keys = [unit if i == 0 else f"{unit}+{i}" for i in range(n)] + _pos_keys(
+        tags, c.tagset
+    )
     counts = {
         k: f
         for k, f in c.scan(keys, within_s=True).items()
@@ -307,8 +318,8 @@ def collocations(
     measures = list(measures) or list(MEASURES)
     if set(measures) - set(MEASURES) or window < 1:
         raise ValueError("搭配参数不正确")
-    ast = query.parse(node)
     c = _Corpus(scope)
+    ast = query.parse(node, c.tagset)
     hits = c.hits(node)
     starts, ends = c.sentences() if hits else ([], [])
     spans = []
@@ -320,7 +331,7 @@ def collocations(
             spans.append((me + 1, min(ends[k], me + window)))
     union = _merge(spans)
     r1 = sum(b - a + 1 for a, b in union)
-    keys = [unit, *_pos_keys([pos])]
+    keys = [unit, *_pos_keys([pos], c.tagset)]
     observed = c.scan(keys, union) if union else Counter()
     totals = c.scan(keys) if observed else Counter()
     n, f_node = c.tokens, len(hits)

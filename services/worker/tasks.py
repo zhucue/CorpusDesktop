@@ -38,6 +38,7 @@ from services.api.search import (
     ExportInput,
     Scope,
     compile_query,
+    corpus_tagset,
     enrich,
     resolve_scope,
     run_search,
@@ -373,7 +374,7 @@ def run_export(run):
     with session() as db:
         user = db.get(User, run.owner_id)
         corpus, restrict = resolve_scope(db, req.scope, user)
-        cqp = compile_query(req.query)
+        cqp = compile_query(req.query, corpus_tagset(corpus))
         page = 1
         while True:
             result = run_search(

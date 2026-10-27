@@ -31,6 +31,7 @@ from collections.abc import Iterable
 from itertools import accumulate
 from pathlib import Path
 
+from engine import query
 from engine.model import Context, Counts, Document, Hit, IndexInfo, SearchResult
 
 FORMAT = "engine-cwb/1"
@@ -127,7 +128,7 @@ def build(
     tmp = Path(tempfile.mkdtemp(prefix=".build-", dir=root))
     try:
         digest = hashlib.sha256(f"{FORMAT} cwb {cwb_version()}\n".encode())
-        docs, metas, n_tokens, n_sents = [], set(), 0, 0
+        docs, metas, n_tokens, n_sents, tags = [], set(), 0, 0, set()
         with (
             open(tmp / "corpus.vrt", "w", encoding="utf-8", newline="\n") as vrt,
             open(tmp / "text.bin", "wb") as text_f,
@@ -164,6 +165,7 @@ def build(
                     offs = array("i")
                     for t in s.tokens:
                         offs.extend((t.start, t.end))
+                        tags.add(t.pos)
                         lines.append(
                             "\t".join(
                                 _xml(v) if v not in (None, "") and v.strip() else "_"
@@ -201,8 +203,19 @@ def build(
         (tmp / "docs.json").write_text(
             json.dumps(docs, ensure_ascii=False), encoding="utf-8"
         )
+        tagset = query.infer_tagset(tags)
+        if (
+            tagset != "upos"
+        ):  # jieba output depends on the jieba release and its dictionary
+            from engine.nlp import jieba_fingerprint
+
+            digest.update(f"\n{jieba_fingerprint()}\n".encode())
         info = IndexInfo(
-            tokens=n_tokens, sentences=n_sents, documents=len(docs), index_version=""
+            tokens=n_tokens,
+            sentences=n_sents,
+            documents=len(docs),
+            index_version="",
+            tagset=tagset,
         )
         info.index_version = digest.hexdigest()[:16]
         final = root / info.index_version
@@ -217,6 +230,9 @@ def build(
         (tmp / "corpus.vrt").unlink()
         (tmp / "info.json").write_text(json.dumps(info.__dict__), encoding="utf-8")
         if final.exists():
+            (final / "info.json").write_text(
+                json.dumps(info.__dict__), encoding="utf-8"
+            )
             shutil.rmtree(tmp)
         else:
             tmp.rename(final)
@@ -245,6 +261,25 @@ def _write_registry(index_dir: Path, key: str, home: Path) -> None:
     tmp = reg / f".{key}.tmp"
     tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, reg / key)
+
+
+def tagset(index_dir: Path, corpus_key: str) -> str:
+    """POS tag set of the current index (engine.query.TAGSETS); "mixed" for indexes built before it was
+    recorded or when there is no index."""
+    try:
+        home = _home(Path(index_dir), _key(corpus_key))
+    except ValueError:
+        return "mixed"
+    return _tagset(str(home))
+
+
+@functools.lru_cache(maxsize=64)
+def _tagset(home: str) -> str:
+    try:
+        info = json.loads((Path(home) / "info.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return "mixed"
+    return info.get("tagset") or "mixed"
 
 
 def _home(index_dir: Path, key: str) -> Path:

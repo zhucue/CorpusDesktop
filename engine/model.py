@@ -47,6 +47,9 @@ class IndexInfo:
     sentences: int
     documents: int
     index_version: str
+    tagset: str = (
+        "upos"  # POS tag set of the index: upos | jieba | mixed (engine.query.TAGSETS)
+    )
 
 
 @dataclass

@@ -363,3 +363,29 @@ def test_agent_token(owner, project, corpus, make_user, fake_stats):
         ).status_code
         == 404
     )
+
+
+def test_pos_validated_against_corpus_tagset(owner, corpus, fake_stats, monkeypatch):
+    from engine import cwb
+    from services.api.storage import corpus_key
+
+    scope = {"corpus_id": corpus["id"]}
+    tagsets = {}
+    monkeypatch.setattr(cwb, "tagset", lambda d, key: tagsets.get(key, "upos"))
+
+    def code(path, body):
+        r = owner.post(path, json=body)
+        return r.json()["error"]["code"] if r.status_code == 422 else r.status_code
+
+    assert (
+        code("/api/stats/frequency", {"scope": scope, "pos": "nr"})
+        == "VALIDATION_ERROR"
+    )
+    assert code("/api/search", {"scope": scope, "query": "语言/nr"}) == "QUERY_INVALID"
+    tagsets[corpus_key(corpus["id"])] = "jieba"
+    for pos in ("nr", "n", "NOUN", "uj"):
+        assert code("/api/stats/frequency", {"scope": scope, "pos": pos}) == 200
+    pattern = {"scope": scope, "n": 2, "pos_pattern": ["v", "DET"]}
+    assert code("/api/stats/ngrams", pattern) == "VALIDATION_ERROR"
+    assert code("/api/search", {"scope": scope, "query": "语言/nr"}) == 200
+    assert code("/api/search", {"scope": scope, "query": "语言/zz"}) == "QUERY_INVALID"

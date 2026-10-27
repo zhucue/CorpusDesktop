@@ -5,6 +5,11 @@ Syntax: `语言` string; `语言/n`, `/v` word + POS; space = adjacent; `$N` (0.
 `+cond` / `-cond` same-sentence conditions after the main query (a condition runs to the next `+`/`-`).
 `{dep=...}` and `[标签]` are recognised but not supported in P1. Parentheses (nesting) are rejected.
 
+POS depends on the corpus tagset (parse(tagset=...), from cwb.tagset): "upos" (Stanza / CoNLL-U): UPOS names
+or CCL short tags (n → NOUN|PROPN …); "jieba" (Chinese via engine.nlp): a one-letter tag matches every jieba
+tag starting with it (n → n|ng|nr|ns|nt|nz…), longer jieba tags match exactly (nr), UPOS names map to jieba
+groups (NOUN, VERB …); "mixed" (both in one corpus): the union of both readings.
+
 Matching: a string with CJK characters matches characters and may cross word boundaries; other strings
 match whole word forms, case-insensitively (`?` = one character, `*` inside a word = any characters).
 Quoted forms match exactly, case-sensitively. One hit per start token, the shortest match from it
@@ -63,6 +68,97 @@ POS_ALIASES = {  # CCL / PKU style short tags → UPOS
     "w": ("PUNCT",),
     "x": ("X", "SYM"),
 }
+
+# jieba / ICTCLAS tags produced by engine.nlp for Chinese: the default dictionary's tags, `eng` (Latin words),
+# `x` (other non-dictionary strings) and `w` (punctuation and symbols, assigned by engine.nlp).
+JIEBA_TAGS = (
+    "a",
+    "ad",
+    "ag",
+    "an",
+    "b",
+    "c",
+    "d",
+    "df",
+    "dg",
+    "e",
+    "eng",
+    "f",
+    "g",
+    "h",
+    "i",
+    "j",
+    "k",
+    "l",
+    "m",
+    "mg",
+    "mq",
+    "n",
+    "ng",
+    "nr",
+    "nrfg",
+    "nrt",
+    "ns",
+    "nt",
+    "nz",
+    "o",
+    "p",
+    "q",
+    "r",
+    "rg",
+    "rr",
+    "rz",
+    "s",
+    "t",
+    "tg",
+    "u",
+    "ud",
+    "ug",
+    "uj",
+    "ul",
+    "uv",
+    "uz",
+    "v",
+    "vd",
+    "vg",
+    "vi",
+    "vn",
+    "vq",
+    "w",
+    "x",
+    "y",
+    "z",
+    "zg",
+)
+# A one-letter tag matches every jieba tag starting with it (`n` → n, nr, ns, nt, nz, ng …), `eng` excepted.
+JIEBA_ALIASES = {
+    k: tuple(t for t in JIEBA_TAGS if t.startswith(k) and t != "eng")
+    for k in "abcdefghijklmnopqrstuvwxyz"
+    if k in JIEBA_TAGS
+}
+_PROPER = ("nr", "nrfg", "nrt", "ns", "nt", "nz")
+UPOS_JIEBA = {  # UPOS names on a jieba-tagged corpus
+    "NOUN": tuple(t for t in JIEBA_ALIASES["n"] if t not in _PROPER),
+    "PROPN": _PROPER,
+    "VERB": JIEBA_ALIASES["v"],
+    "ADJ": JIEBA_ALIASES["a"],
+    "ADV": JIEBA_ALIASES["d"],
+    "PRON": JIEBA_ALIASES["r"],
+    "ADP": JIEBA_ALIASES["p"],
+    "CCONJ": JIEBA_ALIASES["c"],
+    "SCONJ": JIEBA_ALIASES["c"],
+    "PART": JIEBA_ALIASES["u"],
+    "NUM": JIEBA_ALIASES["m"],
+    "INTJ": JIEBA_ALIASES["e"],
+    "PUNCT": ("w",),
+    "SYM": ("w",),
+    "X": ("x", "eng"),
+}
+TAGSETS = (
+    "upos",
+    "jieba",
+    "mixed",
+)  # mixed: both in one corpus (e.g. a zh–en TMX); tags of either apply
 
 _CJK = re.compile(r"[㐀-䶿一-鿿豈-﫿\U00020000-\U0003134f぀-ヿ가-힯]")
 _TERM_STOP = set(' \t\r\n|"{}[]()')
@@ -127,17 +223,54 @@ class QueryAST:
 # ---------------------------------------------------------------- parse
 
 
-def _resolve_pos(tag: str, position: int) -> tuple[str, ...]:
+def _resolve_upos(tag: str) -> tuple[str, ...] | None:
     if tag.upper() in UPOS:
         return (tag.upper(),)
-    if tag in POS_ALIASES:
-        return POS_ALIASES[tag]
-    raise QueryError(
-        position, f"未知词性 {tag}；可用 {'、'.join(POS_ALIASES)} 或 UPOS 标签"
-    )
+    return POS_ALIASES.get(tag)
 
 
-def _lex(text: str) -> list[tuple[QueryToken, Atom | Gap | str | None]]:
+def _resolve_jieba(tag: str) -> tuple[str, ...] | None:
+    if tag in JIEBA_ALIASES:
+        return JIEBA_ALIASES[tag]
+    if tag in JIEBA_TAGS:
+        return (tag,)
+    return UPOS_JIEBA.get(tag.upper())
+
+
+def _resolve_pos(tag: str, position: int, tagset: str = "upos") -> tuple[str, ...]:
+    if tagset not in TAGSETS:
+        raise ValueError(f"未知词性体系：{tagset}")
+    found = []
+    if tagset in ("upos", "mixed"):
+        found += _resolve_upos(tag) or ()
+    if tagset in ("jieba", "mixed"):
+        found += [t for t in _resolve_jieba(tag) or () if t not in found]
+    if found:
+        return tuple(found)
+    hint = {
+        "upos": f"{'、'.join(POS_ALIASES)} 或 UPOS 标签",
+        "jieba": f"{'、'.join(JIEBA_ALIASES)}、jieba 标签（如 nr、vn）或 UPOS 标签",
+        "mixed": f"{'、'.join(POS_ALIASES)}、UPOS 或 jieba 标签",
+    }[tagset]
+    raise QueryError(position, f"未知词性 {tag}；可用 {hint}")
+
+
+def resolve_pos(tag: str, tagset: str = "upos") -> tuple[str, ...]:
+    """Query-style POS (`n`, `NOUN`, `nr`) → index tags for a tagset; raises QueryError at position 0."""
+    return _resolve_pos(tag, 0, tagset)
+
+
+def infer_tagset(tags) -> str:
+    """Tagset of an index from its POS values (None / "" ignored); "mixed" when unclear."""
+    seen = {t for t in tags if t}
+    if seen and seen <= set(UPOS):
+        return "upos"
+    if seen and seen <= set(JIEBA_TAGS):
+        return "jieba"
+    return "mixed"
+
+
+def _lex(text: str, tagset: str) -> list[tuple[QueryToken, Atom | Gap | str | None]]:
     out = []
     i, n = 0, len(text)
     chunk_start = True  # at start of a whitespace-separated chunk
@@ -194,7 +327,7 @@ def _lex(text: str) -> list[tuple[QueryToken, Atom | Gap | str | None]]:
             i = j + 1
             pos = ()
             if i < n and text[i] == "/":
-                i, pos = _lex_pos(text, i)
+                i, pos = _lex_pos(text, i, tagset)
             out.append(
                 (QueryToken("exact", text[start:i], start), Atom("exact", word, pos))
             )
@@ -206,7 +339,7 @@ def _lex(text: str) -> list[tuple[QueryToken, Atom | Gap | str | None]]:
             i = j
             pos = ()
             if i < n and text[i] == "/":
-                i, pos = _lex_pos(text, i)
+                i, pos = _lex_pos(text, i, tagset)
             if word in ("", "*"):
                 kind = "pos" if word == "" else "any"
                 out.append(
@@ -222,14 +355,14 @@ def _lex(text: str) -> list[tuple[QueryToken, Atom | Gap | str | None]]:
     return out
 
 
-def _lex_pos(text: str, i: int) -> tuple[int, tuple[str, ...]]:
+def _lex_pos(text: str, i: int, tagset: str) -> tuple[int, tuple[str, ...]]:
     j = i + 1
     while j < len(text) and text[j] not in _TERM_STOP:
         j += 1
     tag = text[i + 1 : j]
     if not tag:
         raise QueryError(i, "/ 后缺少词性")
-    return j, _resolve_pos(tag, i + 1)
+    return j, _resolve_pos(tag, i + 1, tagset)
 
 
 def _sequence(text: str, toks: list) -> Sequence:
@@ -257,10 +390,11 @@ def _sequence(text: str, toks: list) -> Sequence:
     return Sequence(text.strip(), items)
 
 
-def parse(text: str) -> QueryAST:
+def parse(text: str, tagset: str = "upos") -> QueryAST:
+    """tagset: POS tags of the corpus searched ("upos" | "jieba" | "mixed"); `/tag` resolves against it."""
     # CWB stores NFC; keep queries comparable
     text = unicodedata.normalize("NFC", text or "")
-    lexed = _lex(text)
+    lexed = _lex(text, tagset)
     if not lexed:
         raise QueryError(0, "查询为空")
     if lexed[0][0].kind == "cond":
