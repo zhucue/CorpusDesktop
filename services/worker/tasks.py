@@ -62,6 +62,7 @@ from services.api.storage import (
     stats_path,
     text_path,
 )
+from services.worker import kb_tasks
 from services.worker.main import Cancelled, JobFailed
 
 EXPORT_PAGE = 1000
@@ -539,6 +540,8 @@ EXPORTS = {
     "stats": run_export_stats,
     "evidence": run_export_evidence,
     "layer": run_export_layer,
+    "kb_terms": kb_tasks.run_export_terms,
+    "kb_note": kb_tasks.run_export_note,
 }
 
 
@@ -873,4 +876,7 @@ HANDLERS = {
     "export": run_any_export,
     "stats": run_stats,
     "preannotate": run_preannotate,
+    "kb_import": kb_tasks.run_kb_import,
+    "kb_summarize": kb_tasks.run_kb_summarize,
+    "kb_extract": kb_tasks.run_kb_extract,
 }

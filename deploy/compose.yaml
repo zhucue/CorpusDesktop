@@ -7,6 +7,15 @@ x-python-env: &python-env
   DATA_DIR: /data
   STANZA_RESOURCES_DIR: /stanza
   PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
+  # 知识库向量模型：本地 sentence-transformers 缓存在 models 卷；EMBED_PROVIDER=openai 时走远程 /embeddings
+  MODELS_DIR: /models
+  HF_HOME: /models
+  HF_HUB_DISABLE_TELEMETRY: "1"
+  EMBED_PROVIDER: ${EMBED_PROVIDER:-local}
+  EMBED_MODEL: ${EMBED_MODEL:-}
+  EMBED_BASE_URL: ${EMBED_BASE_URL:-}
+  EMBED_API_KEY: ${EMBED_API_KEY:-}
+  EMBED_DIM: ${EMBED_DIM:-}
 
 services:
   postgres:
@@ -29,6 +38,7 @@ services:
     environment: *python-env
     volumes:
       - data:/data
+      - models:/models
     depends_on:
       postgres: { condition: service_healthy }
     healthcheck:
@@ -38,10 +48,17 @@ services:
 
   worker:
     build: { context: .., dockerfile: deploy/Dockerfile.worker }
-    environment: *python-env
+    environment:
+      <<: *python-env
+      # 摘要与术语草稿调用的对话模型（与 agent 相同）
+      MODEL_BASE_URL: ${MODEL_BASE_URL:-}
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+      MODEL_ID: ${MODEL_ID:-}
+      MODEL_API: ${MODEL_API:-openai-completions}
     volumes:
       - data:/data
       - stanza:/stanza
+      - models:/models
     depends_on:
       api: { condition: service_healthy }
 
@@ -79,6 +96,7 @@ services:
     volumes:
       - ..:/app
       - stanza:/stanza
+      - models:/models
     depends_on:
       postgres: { condition: service_healthy }
     command: ["pytest", "-p", "no:cacheprovider", "-q"]
@@ -88,3 +106,4 @@ volumes:
   data:
   stanza:
   agentdata:
+  models:

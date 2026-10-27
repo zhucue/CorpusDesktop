@@ -15,7 +15,7 @@ from services.api.access import (
 )
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
-from services.api.models import AnnotationLayer, Corpus, Document, Job
+from services.api.models import AnnotationLayer, Corpus, Document, Job, KbDocument
 from services.api.storage import export_path
 from services.api.views import job_view
 
@@ -28,6 +28,8 @@ EXPORT_TYPES = {
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "conllu": "text/plain; charset=utf-8",
+    "tbx": "application/xml",
+    "md": "text/markdown; charset=utf-8",
 }
 
 
@@ -83,6 +85,14 @@ def settle_layer(db, job, message):
         layer.status, layer.error = "failed", message
 
 
+def settle_kb_document(db, job, message):
+    """Document state after its kb_import job stops without success: earlier chunks stay searchable."""
+    doc = db.get(KbDocument, job.params["document_id"])
+    if doc and doc.status != "ready":
+        doc.status = "ready" if doc.chunk_count else "failed"
+        doc.error = message
+
+
 def _load(db, job_id, user, manage=False) -> Job:
     job = db.get(Job, job_id)
     if not job:
@@ -126,6 +136,8 @@ def cancel_job(job_id: UUID, user: CurrentUser, db: Db):
         settle_corpus(db, job.params["corpus_id"], job.id)
     if job.kind == "preannotate":
         settle_layer(db, job, "预标已取消")
+    if job.kind == "kb_import":
+        settle_kb_document(db, job, "导入已取消")
     db.commit()
     return job_view(job)
 
@@ -149,6 +161,11 @@ def retry_job(job_id: UUID, user: CurrentUser, db: Db):
             raise not_found("语料库")
         corpus.status = CORPUS_STATUS_FOR_KIND[job.kind]
         corpus.error = None
+    if job.kind == "kb_import":
+        doc = db.get(KbDocument, job.params["document_id"])
+        if not doc:
+            raise not_found("文档")
+        doc.status, doc.error = "queued", None
     new = enqueue(db, job.kind, job.params, user.id, job.project_id)
     db.commit()
     return job_view(new)

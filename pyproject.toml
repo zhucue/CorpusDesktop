@@ -17,6 +17,10 @@ dependencies = [
   "stanza>=1.10,<2",
   "torch>=2.5,<3",
   "jieba>=0.42,<1",
+  "pypdf>=5,<7",
+  "trafilatura>=2,<3",
+  "sentence-transformers>=3.4,<6",
+  "pgvector>=0.3,<1",
 ]
 
 [dependency-groups]

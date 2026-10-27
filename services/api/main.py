@@ -1,3 +1,4 @@
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -10,6 +11,8 @@ from services.api import (
     errors,
     evidence,
     jobs,
+    kb,
+    kb_terms,
     label_sets,
     projects,
     search,
@@ -24,6 +27,7 @@ async def lifespan(_: FastAPI):
 
     with transaction() as db:
         label_sets.seed_builtin(db)
+    threading.Thread(target=kb.warm_embeddings, daemon=True).start()
     yield
 
 
@@ -60,6 +64,8 @@ for module in (
     jobs,
     label_sets,
     annotations,
+    kb,
+    kb_terms,
 ):
     app.include_router(module.router)
 app.include_router(auth.users_router)

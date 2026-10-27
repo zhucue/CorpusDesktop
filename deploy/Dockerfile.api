@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir uv==0.11.21
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
-RUN useradd --create-home --uid 10001 corpus && mkdir -p /data /stanza && chown corpus:corpus /data /stanza
+RUN useradd --create-home --uid 10001 corpus && mkdir -p /data /stanza /models && chown corpus:corpus /data /stanza /models
 
 # 仓库挂载到 /app 运行 pytest
 FROM base AS test

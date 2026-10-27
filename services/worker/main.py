@@ -1,6 +1,7 @@
 """Single worker process: polls `jobs` with FOR UPDATE SKIP LOCKED and runs one job at a time."""
 
 import logging
+import threading
 import time
 from datetime import UTC, datetime
 
@@ -8,7 +9,7 @@ from sqlalchemy import select, update
 
 from services.api.db import transaction
 from services.api.errors import ApiError
-from services.api.jobs import settle_corpus, settle_layer
+from services.api.jobs import settle_corpus, settle_kb_document, settle_layer
 from services.api.models import Corpus, Job
 
 log = logging.getLogger("worker")
@@ -90,6 +91,8 @@ def recover():
                 _corpus_failed(db, job.params["corpus_id"], job.error["message"])
             if job.kind == "preannotate":
                 settle_layer(db, job, job.error["message"])
+            if job.kind == "kb_import":
+                settle_kb_document(db, job, job.error["message"])
 
 
 def _corpus_failed(db, corpus_id, message):
@@ -107,6 +110,8 @@ def _fail(run, error):
         ).rowcount
         if updated and run.kind in ("import", "index"):
             _corpus_failed(db, run.params["corpus_id"], error["message"])
+        if updated and run.kind == "kb_import":
+            settle_kb_document(db, run, error["message"])
 
 
 def execute(run):
@@ -139,9 +144,26 @@ def run_once():
     return run is not None
 
 
+def warm_embeddings():
+    """Load (on first start: download) the knowledge base embedding model while jobs run."""
+    from engine.kb import embed
+
+    started = time.monotonic()
+    try:
+        embed.load(download=True)
+        log.info(
+            "embedding model %s ready in %.1f s",
+            embed.model_name(),
+            time.monotonic() - started,
+        )
+    except embed.EmbedUnavailable as e:
+        log.warning("embedding model unavailable: %s", e)
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     recover()
+    threading.Thread(target=warm_embeddings, daemon=True).start()
     log.info("worker ready")
     while True:
         if not run_once():

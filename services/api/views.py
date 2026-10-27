@@ -95,3 +95,63 @@ def evidence_view(e):
         "created_by": e.created_by,
         "created_at": e.created_at,
     }
+
+
+def kb_document_view(d, **extra):
+    return {
+        "id": d.id,
+        "project_id": d.project_id,
+        "kind": d.kind,
+        "title": d.title,
+        "source": d.source,
+        "meta": d.meta,
+        "status": d.status,
+        "error": d.error,
+        "chunk_count": d.chunk_count,
+        "created_by": d.created_by,
+        "created_at": d.created_at,
+        "updated_at": d.updated_at,
+        **extra,
+    }
+
+
+def chunk_view(c, score=None):
+    view = {
+        "id": c.id,
+        "document_id": c.document_id,
+        "ordinal": c.ordinal,
+        "text": c.text,
+        "locator": c.locator,
+    }
+    if score is not None:
+        view["score"] = score
+    return view
+
+
+def term_view(t):
+    return {
+        "id": t.id,
+        "project_id": t.project_id,
+        "term": t.term,
+        "language": t.language,
+        "translations": t.translations,
+        "definition": t.definition,
+        "domain": t.domain,
+        "examples": t.examples,
+        "source": t.source,
+        "status": t.status,
+        "created_by": t.created_by,
+        "confirmed_by": t.confirmed_by,
+        "created_at": t.created_at,
+        "updated_at": t.updated_at,
+    }
+
+
+def note_ref_view(r):
+    return {
+        "id": r.id,
+        "note_id": r.note_id,
+        "kind": r.kind,
+        "ref": r.ref,
+        "created_at": r.created_at,
+    }

@@ -8,7 +8,8 @@ RUN curl -L --fail --retry 5 --retry-all-errors https://downloads.sourceforge.ne
  && echo '257ef6f71a055ee70cd57904173e40f8e8f0e6c93ac7edf5d7d2e3a21c023601  /tmp/cwb.deb' | sha256sum -c - \
  && dpkg -i /tmp/cwb.deb && rm /tmp/cwb.deb
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
- && pip install --no-cache-dir stanza jieba lxml python-docx openpyxl pytest
+ && pip install --no-cache-dir stanza jieba lxml python-docx openpyxl pytest \
+    pypdf==6.21.3 trafilatura==2.3.1 sentence-transformers==5.7.0 httpx==0.28.1 conllu==6.0.0
 ENV STANZA_RESOURCES_DIR=/stanza PYTHONDONTWRITEBYTECODE=1
 WORKDIR /workspace
 CMD ["python", "-m", "pytest", "-p", "no:cacheprovider", "tests/engine", "-q"]

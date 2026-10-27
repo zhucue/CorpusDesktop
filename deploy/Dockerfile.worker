@@ -10,10 +10,10 @@ RUN pip install --no-cache-dir uv==0.11.21
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
-RUN useradd --create-home --uid 10001 corpus && mkdir -p /data /stanza && chown corpus:corpus /data /stanza
+RUN useradd --create-home --uid 10001 corpus && mkdir -p /data /stanza /models && chown corpus:corpus /data /stanza /models
 COPY engine engine
 COPY services/api services/api
 COPY services/worker services/worker
 USER corpus
-# Stanza 模型首次使用时下载到 /stanza 卷
+# Stanza 模型首次使用时下载到 /stanza 卷；知识库向量模型启动后下载到 /models 卷
 CMD ["python", "-m", "services.worker.main"]

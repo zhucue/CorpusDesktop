@@ -31,3 +31,8 @@ def export_path(job_id, fmt):
 
 def stats_path(stat_id):
     return data_dir() / "stats" / f"{stat_id}.json"
+
+
+def kb_dir(document_id):
+    """Knowledge base document files: the upload (source.<ext>) and the extracted text (text.txt)."""
+    return data_dir() / "kb" / str(document_id)
