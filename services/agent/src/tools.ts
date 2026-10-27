@@ -828,7 +828,9 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
           document_id: s?.document_id, sentence_index: s?.sentence_index, text: s?.text ?? '',
           tokens: (s?.tokens ?? []).map((t: any) => typeof t === 'string' ? t : String(t?.form ?? '')),
         });
+        // Each pair carries the AlignmentGraph locator fields (layer_id, src_document_id, src_sentence_index).
         const pairs = listItems(page).slice(0, MAX_PAIRS).map((pair: any) => ({
+          layer_id: args.layer_id, src_document_id: pair.src?.document_id, src_sentence_index: pair.src?.sentence_index,
           src: side(pair.src), tgt: side(pair.tgt),
           alignments: (pair.alignments ?? []).map((a: any) => ({
             alignment_id: a.id, level: a.level, src_tokens: a.src_tokens ?? [], tgt_tokens: a.tgt_tokens ?? [],

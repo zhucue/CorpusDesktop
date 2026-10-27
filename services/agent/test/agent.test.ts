@@ -472,7 +472,7 @@ test('catalog lists the 14 components with the P3, P4 and P5 signatures', () => 
   assert.match(catalog, /TermCard\(term_id: string, term: string, translations: .*definition: string, domain: string, examples: .*status: /);
   assert.match(catalog, /KbCitation\(items: /);
   assert.match(catalog, /SpanView\(document_id: string, sentence_index: number, text: string, spans: .*relations: /);
-  assert.match(catalog, /AlignmentGraph\(src_tokens: string\[\], tgt_tokens: string\[\], links: /);
+  assert.match(catalog, /AlignmentGraph\(src_tokens: string\[\], tgt_tokens: string\[\], links: .*layer_id\?: string, src_document_id\?: string, src_sentence_index\?: number\)/);
 });
 
 test('system prompt states 1-based sentence numbering', () => {
@@ -571,7 +571,7 @@ test('annot.suggest_spans rejects spans outside the sentence before posting', as
 
 test('align.pairs then an AlignmentGraph block; align.suggest posts links with the agent token', async () => {
   const graph = [
-    'root = AlignmentGraph(["He", "translated", "the", "book", "."], ["他", "翻译", "了", "这本书", "。"], links)',
+    `root = AlignmentGraph(["He", "translated", "the", "book", "."], ["他", "翻译", "了", "这本书", "。"], links, "${ALIGN_LAYER}", "src-doc", 0)`,
     'links = [{src: [1], tgt: [1], status: "confirmed"}, {src: [3, 4], tgt: [4], status: "suggested"}, {src: [2], tgt: [2, 3], status: "suggested"}]',
   ].join('\n');
   const suggest = {
@@ -593,6 +593,10 @@ test('align.pairs then an AlignmentGraph block; align.suggest posts links with t
   assert.equal(read.path, `/layers/${ALIGN_LAYER}/alignments?src_document_id=src-doc&page_size=10`);
   const [pairs, suggested] = toolResults(model, 2);
   assert.deepEqual(pairs.pairs[0].src.tokens, ['He', 'translated', 'the', 'book', '.']);
+  // the AlignmentGraph locator fields travel with each pair
+  assert.equal(pairs.pairs[0].layer_id, ALIGN_LAYER);
+  assert.equal(pairs.pairs[0].src_document_id, 'src-doc');
+  assert.equal(pairs.pairs[0].src_sentence_index, 0);
   assert.deepEqual(pairs.pairs[0].tgt.tokens, ['他', '翻译', '了', '这本书', '。']);
   assert.deepEqual(pairs.pairs[0].alignments[1], {
     alignment_id: 'al-2', level: 'word', src_tokens: [3, 4], tgt_tokens: [4], score: null, source: 'model:fake-model', status: 'suggested',
@@ -611,6 +615,9 @@ test('align.pairs then an AlignmentGraph block; align.suggest posts links with t
   assert.equal(view?.typeName, 'AlignmentGraph');
   assert.equal(view.props.src_tokens.length, 5);
   assert.deepEqual(view.props.links[1], { src: [3, 4], tgt: [4], status: 'suggested' });
+  assert.equal(view.props.layer_id, ALIGN_LAYER);
+  assert.equal(view.props.src_document_id, 'src-doc');
+  assert.equal(view.props.src_sentence_index, 0);
 });
 
 test('align.pairs starts at a given source sentence via the exclusive cursor', async () => {
