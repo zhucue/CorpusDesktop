@@ -6,7 +6,13 @@ Syntax: `语言` string; `语言/n`, `/v` word + POS; space = adjacent; `$N` (0.
 `{k=v,...}` token attributes (contracts/p3.md §三), alone (`{dep=nsubj}`) or attached to a word, quoted form or
 `/pos` (`学生{dep=nsubj}`, `"run"{pos=v}`, `/DET{dep=det}`); keys pos, dep, lemma; values may use `|`. They are
 resolved by the api against annotation layers, not by CQP, and are allowed only in the main query and not in a
-`|` alternation. `[标签]` is recognised but not supported. Parentheses (nesting) are rejected.
+`|` alternation. Parentheses (nesting) are rejected.
+
+Span labels (contracts/p5.md §三) `[标签]`, `[标签:k=v,k2=a|b]`, `[上级:标签]`, alone (`[时态]`) or attached to a word
+(`去[偏误:时态]`, `"went"[时态]`): resolved by the api against the effective spans of a span layer. Alone, the
+slot is any token inside such a span; a whole query that is one bare `[…]` is answered from PostgreSQL with the
+spans themselves as hits. Attached, the word's token must lie inside such a span. Like `{…}`, only in the main
+query and not in a `|` alternation; a word with `[…]` matches one whole token.
 
 POS depends on the corpus tagset (parse(tagset=...), from cwb.tagset): "upos" (Stanza / CoNLL-U): UPOS names
 or CCL short tags (n → NOUN|PROPN …); "jieba" (Chinese via engine.nlp): a one-letter tag matches every jieba
@@ -32,11 +38,14 @@ compile() output (opaque to callers, passed unchanged to cwb.search), one item p
     #span|#lead|#trail <regex>     code-point narrowing for CJK strings at the edges of the anchor
     #attr <slot> <k>=<v>[|<v>...]  attribute constraint on anchor slot <slot> (0-based, gaps not counted);
                                    pos values are already resolved against the tagset; read by attrs()
+    #spans <slot> <json>           span constraint on anchor slot <slot>: {"path": [label…], "attrs": {k: [v…]}};
+                                   read by spans()
     #target <slot> <CQP>           the anchor with the CQP target marker `@` on that slot, so cwb.search can
                                    find the slot's token in each hit and pass it to the api's attribute filter
 A bare `{…}` slot compiles to `[]` (any token); a string with attributes matches one whole token (like `/pos`).
 """
 
+import json
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -182,7 +191,7 @@ class QueryError(ValueError):
 
 @dataclass
 class QueryToken:
-    kind: str  # word | exact | pos | any | or | gap | cond | attr
+    kind: str  # word | exact | pos | any | or | gap | cond | attr | span
     text: str
     position: int
 
@@ -193,14 +202,16 @@ class Atom:
     text: str = ""
     pos: tuple[str, ...] = ()  # resolved UPOS tags; empty = no POS constraint
     attrs: dict[str, tuple[str, ...]] = field(default_factory=dict)  # pos / dep / lemma
+    span: dict | None = None  # {"path": (label…), "attrs": {key: (value…)}}
 
     @property
     def cjk(self) -> bool:
-        """Character mode: CJK string without POS, attributes and `*`."""
+        """Character mode: CJK string without POS, attributes, span label and `*`."""
         return (
             self.kind == "string"
             and not self.pos
             and not self.attrs
+            and not self.span
             and "*" not in self.text
             and bool(_CJK.search(self.text))
         )
@@ -309,10 +320,10 @@ def _lex(text: str, tagset: str) -> list[tuple[QueryToken, Atom | Gap | str | No
                 (QueryToken("attr", text[start:i], start), Atom("any", attrs=attrs))
             )
         elif c == "[":
-            j = text.find("]", i)
-            if j < 0:
-                raise QueryError(i, "缺少 ]")
-            raise QueryError(i, f"{text[i : j + 1]} 标签查询暂不支持")
+            i, span = _lex_span(text, i)
+            atom = Atom("any", span=span)
+            out.append((QueryToken("span", text[start:i], start), atom))
+            i = _attach_attrs(text, i, tagset, atom, out)
         elif c in "}]":
             raise QueryError(i, f"多余的 {c}")
         elif c == "$":
@@ -361,12 +372,44 @@ def _lex(text: str, tagset: str) -> list[tuple[QueryToken, Atom | Gap | str | No
 
 
 def _attach_attrs(text: str, i: int, tagset: str, atom: Atom, out: list) -> int:
-    """`{…}` right after a term: its attributes go on that atom; the lexed token carries no value."""
-    if i < len(text) and text[i] == "{":
+    """`{…}` / `[…]` right after a term: attributes / span label go on that atom; the lexed token carries no
+    value."""
+    while i < len(text) and text[i] in "{[":
         start = i
-        i, atom.attrs = _lex_attrs(text, i, tagset)
-        out.append((QueryToken("attr", text[start:i], start), None))
+        if text[i] == "{":
+            if atom.attrs:
+                raise QueryError(i, "属性约束重复")
+            i, atom.attrs = _lex_attrs(text, i, tagset)
+            out.append((QueryToken("attr", text[start:i], start), None))
+        else:
+            if atom.span:
+                raise QueryError(i, "片段标签重复")
+            i, atom.span = _lex_span(text, i)
+            out.append((QueryToken("span", text[start:i], start), None))
     return i
+
+
+def _lex_span(text: str, i: int) -> tuple[int, dict]:
+    """`[标签]`, `[上级:标签]`, `[标签:k=v,k2=a|b]` → (end, {"path", "attrs"})."""
+    j = text.find("]", i)
+    if j < 0:
+        raise QueryError(i, "缺少 ]")
+    body = text[i + 1 : j]
+    parts = [p.strip() for p in body.split(":")]
+    attrs = {}
+    if len(parts) > 1 and "=" in parts[-1]:
+        for item in parts.pop().split(","):
+            key, _, raw = item.partition("=")
+            key = key.strip()
+            values = tuple(dict.fromkeys(v.strip() for v in raw.split("|")))
+            if not key or not all(values) or key in attrs:
+                raise QueryError(i, "片段属性写作 [标签:k=v,k2=v2]")
+            attrs[key] = values
+    if not 1 <= len(parts) <= 2 or not all(parts) or any("=" in p for p in parts):
+        raise QueryError(i, "片段标签写作 [标签]、[上级:标签] 或 [标签:k=v]")
+    if any(re.search(r"[\s{}\[\]|]", p) for p in parts):
+        raise QueryError(i, "片段标签不能含空白或 {}[]|")
+    return j + 1, {"path": tuple(parts), "attrs": attrs}
 
 
 def _lex_attrs(text: str, i: int, tagset: str) -> tuple[int, dict]:
@@ -411,7 +454,7 @@ def _lex_pos(text: str, i: int, tagset: str) -> tuple[int, tuple[str, ...]]:
     return j, _resolve_pos(tag, i + 1, tagset)
 
 
-ALT_ATTRS = "属性约束不能用于 | 并列的词；取值可写成 {pos=a|b}"
+ALT_ATTRS = "属性约束与片段标签不能用于 | 并列的词；取值可写成 {pos=a|b}"
 
 
 def _sequence(text: str, toks: list) -> Sequence:
@@ -432,7 +475,7 @@ def _sequence(text: str, toks: list) -> Sequence:
             pending_or = True
         else:
             if pending_or:
-                if val.attrs or items[-1][-1].attrs:
+                if val.attrs or val.span or items[-1][-1].attrs or items[-1][-1].span:
                     raise QueryError(tok.position, ALT_ATTRS)
                 items[-1].append(val)
                 pending_or = False
@@ -467,9 +510,9 @@ def parse(text: str, tagset: str = "upos") -> QueryAST:
             raise QueryError(pos, f"{op} 后缺少条件")
         src = text[(pos + 1 if op else 0) : end]
         parts.append((op, _sequence(src, toks)))
-        if op and any(t.kind == "attr" for t, _ in toks):
-            at = next(t.position for t, _ in toks if t.kind == "attr")
-            raise QueryError(at, "属性约束只能用于主查询，不能用于 +/- 条件")
+        if op and any(t.kind in ("attr", "span") for t, _ in toks):
+            at = next(t.position for t, _ in toks if t.kind in ("attr", "span"))
+            raise QueryError(at, "属性约束与片段标签只能用于主查询，不能用于 +/- 条件")
     for _, seq in parts:
         for item in seq.items:
             for atom in item if isinstance(item, list) else []:
@@ -588,8 +631,13 @@ def compile(ast: QueryAST) -> str:
             lines.append("#trail " + rx)
     slots = [item for item in items if not isinstance(item, Gap)]
     for p, item in enumerate(slots):
-        if item[0].attrs:
-            lines += [f"#attr {p} {k}={'|'.join(v)}" for k, v in item[0].attrs.items()]
+        atom = item[0]
+        if atom.attrs:
+            lines += [f"#attr {p} {k}={'|'.join(v)}" for k, v in atom.attrs.items()]
+        if atom.span:
+            span = {"path": list(atom.span["path"]), "attrs": atom.span["attrs"]}
+            lines.append(f"#spans {p} {json.dumps(span, ensure_ascii=False)}")
+        if atom.attrs or atom.span:
             lines.append(f"#target {p} {compile_sequence(ast.anchor, p)}")
     return "\n".join(lines)
 
@@ -603,6 +651,29 @@ def attrs(compiled: str) -> dict[int, dict[str, tuple[str, ...]]]:
             key, values = kv.split("=", 1)
             out.setdefault(int(slot), {})[key] = tuple(values.split("|"))
     return out
+
+
+def spans(compiled: str) -> dict[int, dict]:
+    """`#spans` lines of a compile() result: {anchor slot: {"path": (label…), "attrs": {key: (value…)}}}."""
+    out = {}
+    for line in compiled.split("\n"):
+        if line.startswith("#spans "):
+            slot, raw = line[7:].split(" ", 1)
+            value = json.loads(raw)
+            out[int(slot)] = {
+                "path": tuple(value["path"]),
+                "attrs": {k: tuple(v) for k, v in value["attrs"].items()},
+            }
+    return out
+
+
+def pure_span(ast: QueryAST) -> bool:
+    """The whole query is one bare `[…]` (no word, POS, attributes or condition): hits are the spans."""
+    items = ast.anchor.items
+    if ast.conditions or len(items) != 1 or len(items[0]) != 1:
+        return False
+    atom = items[0][0]
+    return atom.kind == "any" and bool(atom.span) and not atom.pos and not atom.attrs
 
 
 def compile_filter(filter: dict, fields: dict[str, str]) -> str:

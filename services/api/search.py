@@ -61,10 +61,14 @@ class Scope(BaseModel):
 
 
 class LayersInput(BaseModel):
-    """Annotation layers whose effective values answer `{pos=}` / `{dep=}`; omitted = system values."""
+    """Annotation layers whose effective values answer `{pos=}` / `{dep=}` (omitted = system values) and `[标签]`
+    (span; omitted = the corpus's most recently updated span layer in the user's projects); relation: the
+    relation layer of `unit=relation_label` statistics."""
 
     pos: UUID | None = None
     dep: UUID | None = None
+    span: UUID | None = None
+    relation: UUID | None = None
 
 
 class ContextInput(BaseModel):
@@ -156,10 +160,21 @@ def pure_attr(ast) -> bool:
 
 
 def cache_key(cqp, layers):
-    """Search cache key text: attribute queries also depend on the layers they read."""
-    if not query.attrs(cqp) or not any(layers.values()):
+    """Search cache key text: attribute and span queries also depend on the layers they read."""
+    if not (query.attrs(cqp) or query.spans(cqp)) or not any(layers.values()):
         return cqp
-    return f"{cqp}\n#layers {layers['pos']} {layers['dep']}"
+    return f"{cqp}\n#layers {layers['pos']} {layers['dep']} {layers.get('span')}"
+
+
+def with_span_layer(db, cqp, layers, corpus, user):
+    """Span queries need a span layer: the requested one or the default (422 INVALID_LAYER when none)."""
+    if query.spans(cqp) and not layers.get("span"):
+        layers["span"] = effective.default_layer(db, corpus, user, "span")
+        if layers["span"] is None:
+            raise ApiError(
+                422, "INVALID_LAYER", "该语料库没有片段标注层，[标签] 查询需要片段层"
+            )
+    return layers
 
 
 def scope_filter(db, scope: Scope):
@@ -220,11 +235,27 @@ def run_search(
 
 def search_page(db, corpus, restrict, ast, cqp, layers, req, page, page_size, timeout):
     """One page of hits. Attribute constraints are resolved in PostgreSQL (services.api.effective):
-    pure attribute queries entirely, anchored ones by filtering the CWB hits on the slot tokens."""
+    pure attribute queries entirely, anchored ones by filtering the CWB hits on the slot tokens. Span labels
+    likewise: a pure span query lists the effective spans, anchored ones keep slot tokens inside them."""
     constraints = query.attrs(cqp)
-    if not constraints:
+    span_constraints = query.spans(cqp)
+    if not constraints and not span_constraints:
         return run_search(corpus, restrict, cqp, req, page, page_size, timeout)
-    if pure_attr(ast):
+    if span_constraints and query.pure_span(ast):
+        filt = scope_filter(db, req.scope)
+        fields = field_types(db, corpus.id) if filt else {}
+        return effective.span_search(
+            db,
+            corpus,
+            filt,
+            fields,
+            layers["span"],
+            span_constraints[0],
+            req,
+            page,
+            page_size,
+        )
+    if constraints and pure_attr(ast):
         filt = scope_filter(db, req.scope)
         fields = field_types(db, corpus.id) if filt else {}
         atom = ast.anchor.items[0][0]
@@ -233,7 +264,13 @@ def search_page(db, corpus, restrict, ast, cqp, layers, req, page, page_size, ti
         )
 
     def attr_filter(slot, keys):
-        return effective.filter_tokens(db, layers, constraints[slot], keys)
+        if slot in constraints:
+            keys = effective.filter_tokens(db, layers, constraints[slot], keys)
+        if slot in span_constraints:
+            keys = effective.filter_span_tokens(
+                db, layers["span"], span_constraints[slot], keys
+            )
+        return keys
 
     return run_search(corpus, restrict, cqp, req, page, page_size, timeout, attr_filter)
 
@@ -389,6 +426,7 @@ def search(body: SearchInput, user: CurrentUser, db: Db):
     tagset = corpus_tagset(corpus)
     ast, cqp = plan_query(body.query, tagset)
     layers = effective.check_layers(db, body.layers, corpus, user)
+    with_span_layer(db, cqp, layers, corpus, user)
     sid, entry = searches.open(corpus, restrict, cache_key(cqp, layers), body)
     req = body.model_copy(update={"seed": entry["seed"]})
     result = search_page(
@@ -459,6 +497,15 @@ def export(body: ExportInput, user: CurrentUser, db: Db):
     corpus, restrict = resolve_scope(db, body.scope, user)
     cqp = compile_query(body.query, corpus_tagset(corpus))
     layers = effective.check_layers(db, body.layers, corpus, user)
+    with_span_layer(db, cqp, layers, corpus, user)
+    if layers.get("span"):
+        body = body.model_copy(
+            update={
+                "layers": (body.layers or LayersInput()).model_copy(
+                    update={"span": layers["span"].id}
+                )
+            }
+        )
     _, entry = searches.open(corpus, restrict, cache_key(cqp, layers), body)
     body = body.model_copy(update={"seed": entry["seed"], "search_id": None})
     if body.scope.subcorpus_id:

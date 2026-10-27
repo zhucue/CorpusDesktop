@@ -5,6 +5,8 @@ from fastapi import FastAPI, Request
 
 from services.api import (
     agent_auth,
+    agreement,
+    alignments,
     annotations,
     auth,
     corpora,
@@ -16,6 +18,7 @@ from services.api import (
     label_sets,
     projects,
     search,
+    spans,
     stats,
     subcorpora,
 )
@@ -64,6 +67,9 @@ for module in (
     jobs,
     label_sets,
     annotations,
+    spans,
+    alignments,
+    agreement,
     kb,
     kb_terms,
 ):

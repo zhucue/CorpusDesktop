@@ -165,8 +165,8 @@ class _Corpus:
     def hits(self, text) -> list[tuple[int, int]]:
         """(match, matchend) of every hit of a query in the scope, in corpus order."""
         compiled = query.compile(query.parse(text, self.tagset))
-        if query.attrs(compiled):
-            raise ValueError("统计中的查询式不支持 {…} 属性约束")
+        if query.attrs(compiled) or query.spans(compiled):
+            raise ValueError("统计中的查询式不支持 {…} 属性约束与带词的 […] 片段标签")
         anchor, conds, _ = cwb._split(compiled)
         if not self.docs:
             return []
@@ -445,12 +445,24 @@ def _pct(x):
 
 
 def distribution(
-    scope: Scope, query_text=None, field="position", bins=10, numeric=False, top=1000
+    scope: Scope,
+    query_text=None,
+    field="position",
+    bins=10,
+    numeric=False,
+    top=1000,
+    positions=None,
 ) -> Table:
     """Hits, tokens and hits per million per bin; bins are relative document position or values of a
-    metadata field (documents without the field are left out). Without a query, hits are null."""
+    metadata field (documents without the field are left out). Without a query, hits are null.
+    positions: hits given by the caller instead of running query_text, as (document id, token offset in the
+    document) pairs (pure span queries, answered in PostgreSQL); documents outside the scope are ignored."""
     c = _Corpus(scope)
-    hits = c.hits(query_text) if query_text else []
+    if positions is not None:
+        first = {d: a for a, _, d in c.docs}
+        hits = sorted((first[d] + k, first[d] + k) for d, k in positions if d in first)
+    else:
+        hits = c.hits(query_text) if query_text else []
     starts = [a for a, _, _ in c.docs]
     tokens, counts, labels, bin_values = Counter(), Counter(), {}, {}
     if field == "position":

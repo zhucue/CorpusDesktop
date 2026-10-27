@@ -7,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Identity,
     Index,
@@ -16,7 +17,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 ROLES = ("owner", "editor", "annotator", "viewer")
@@ -32,7 +33,10 @@ JOB_KINDS = (
     "kb_extract",
 )
 LABEL_SET_KINDS = ("pos", "dep", "span", "relation")
-LAYER_KINDS = ("pos", "dep")
+LAYER_KINDS = ("pos", "dep", "span", "relation", "alignment")
+TOKEN_KINDS = ("pos", "dep")
+LAYER_MODES = ("single", "multi")
+TARGET_KINDS = ("token", "span", "relation", "alignment")
 LAYER_STATUSES = ("created", "preannotating", "ready", "failed")
 ANNOTATION_STATUSES = ("suggested", "confirmed", "modified", "rejected")
 EVIDENCE_KINDS = ("hit", "stat_row", "text")
@@ -367,6 +371,10 @@ class AnnotationLayer(Base):
     __table_args__ = (
         CheckConstraint(_in("kind", LAYER_KINDS), name="ck_layer_kind"),
         CheckConstraint(_in("status", LAYER_STATUSES), name="ck_layer_status"),
+        CheckConstraint(_in("mode", LAYER_MODES), name="ck_layer_mode"),
+        CheckConstraint(
+            "level IS NULL OR level IN ('sentence', 'word')", name="ck_layer_level"
+        ),
     )
     id: Mapped[uuid.UUID] = _id()
     project_id: Mapped[uuid.UUID] = mapped_column(
@@ -377,9 +385,9 @@ class AnnotationLayer(Base):
     )
     kind: Mapped[str] = mapped_column(Text)
     name: Mapped[str] = mapped_column(Text)
-    label_set_id: Mapped[uuid.UUID] = mapped_column(
+    label_set_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("label_sets.id", ondelete="RESTRICT"), index=True
-    )
+    )  # null for alignment layers
     source_model: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, server_default="created")
     progress: Mapped[dict] = mapped_column(JSONB)
@@ -391,6 +399,19 @@ class AnnotationLayer(Base):
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _created()
+    # P5: single = one shared set of annotations (annotator_id = created_by); multi = one set per annotator
+    mode: Mapped[str] = mapped_column(Text, server_default="single")
+    annotators: Mapped[list] = mapped_column(ARRAY(UUID(as_uuid=True)))
+    base_layer_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("annotation_layers.id", ondelete="CASCADE")
+    )  # relation layers: the span layer whose spans they connect
+    tgt_corpus_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("corpora.id", ondelete="CASCADE")
+    )  # alignment layers; corpus_id is the source corpus
+    level: Mapped[str | None] = mapped_column(Text)  # alignment: sentence | word
+    guideline_document_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("kb_documents.id", ondelete="SET NULL")
+    )
 
 
 class Annotation(Base):
@@ -406,6 +427,7 @@ class Annotation(Base):
             "document_id",
             "sentence_index",
             "token_index",
+            "annotator_id",
             name="uq_annotations_token",
         ),
         Index("ix_annotations_document", "document_id"),
@@ -419,6 +441,9 @@ class Annotation(Base):
     )
     sentence_index: Mapped[int] = mapped_column(Integer)
     token_index: Mapped[int] = mapped_column(Integer)
+    annotator_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE")
+    )
     label: Mapped[str | None] = mapped_column(Text)
     head: Mapped[int | None] = mapped_column(Integer)
     source: Mapped[str] = mapped_column(Text)
@@ -524,3 +549,142 @@ class NoteRef(Base):
     kind: Mapped[str] = mapped_column(Text)
     ref: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = _created()
+
+
+def _status_check(name):
+    return CheckConstraint(_in("status", ANNOTATION_STATUSES), name=name)
+
+
+def _layer_fk():
+    return mapped_column(ForeignKey("annotation_layers.id", ondelete="CASCADE"))
+
+
+def _user_fk():
+    return mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+
+
+class _Reviewed:
+    source: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, server_default="suggested")
+    revision: Mapped[int] = mapped_column(Integer, server_default="0")
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class SpanAnnotation(_Reviewed, Base):
+    """A labelled text span; start_cp / end_cp are document code points, sentence_index null when the span
+    crosses sentences."""
+
+    __tablename__ = "span_annotations"
+    __table_args__ = (
+        _status_check("ck_span_status"),
+        CheckConstraint("start_cp >= 0 AND end_cp > start_cp", name="ck_span_range"),
+        Index("ix_span_annotations_position", "layer_id", "document_id", "start_cp"),
+        Index("ix_span_annotations_document", "document_id"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    layer_id: Mapped[uuid.UUID] = _layer_fk()
+    annotator_id: Mapped[uuid.UUID] = _user_fk()
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE")
+    )
+    sentence_index: Mapped[int | None] = mapped_column(Integer)
+    start_cp: Mapped[int] = mapped_column(Integer)
+    end_cp: Mapped[int] = mapped_column(Integer)
+    label: Mapped[str] = mapped_column(Text)
+    attrs: Mapped[dict] = mapped_column(JSONB, server_default="{}")
+    model_label: Mapped[str | None] = mapped_column(Text)
+    model_attrs: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class RelationAnnotation(_Reviewed, Base):
+    __tablename__ = "relation_annotations"
+    __table_args__ = (
+        _status_check("ck_relation_status"),
+        Index("ix_relation_annotations_layer", "layer_id"),
+        Index("ix_relation_annotations_from", "from_span_id"),
+        Index("ix_relation_annotations_to", "to_span_id"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    layer_id: Mapped[uuid.UUID] = _layer_fk()
+    annotator_id: Mapped[uuid.UUID] = _user_fk()
+    from_span_id: Mapped[int] = mapped_column(
+        ForeignKey("span_annotations.id", ondelete="CASCADE")
+    )
+    to_span_id: Mapped[int] = mapped_column(
+        ForeignKey("span_annotations.id", ondelete="CASCADE")
+    )
+    label: Mapped[str] = mapped_column(Text)
+    model_label: Mapped[str | None] = mapped_column(Text)
+
+
+class AlignmentAnnotation(_Reviewed, Base):
+    """A sentence pair (src_tokens = tgt_tokens = []) or, in word layers, one link between 1-based tokens."""
+
+    __tablename__ = "alignment_annotations"
+    __table_args__ = (
+        _status_check("ck_alignment_status"),
+        Index(
+            "ix_alignment_annotations_src",
+            "layer_id",
+            "src_document_id",
+            "src_sentence_index",
+        ),
+        Index("ix_alignment_annotations_tgt", "tgt_document_id"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    layer_id: Mapped[uuid.UUID] = _layer_fk()
+    annotator_id: Mapped[uuid.UUID] = _user_fk()
+    src_document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE")
+    )
+    src_sentence_index: Mapped[int] = mapped_column(Integer)
+    tgt_document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE")
+    )
+    tgt_sentence_index: Mapped[int] = mapped_column(Integer)
+    src_tokens: Mapped[list] = mapped_column(ARRAY(Integer), server_default="{}")
+    tgt_tokens: Mapped[list] = mapped_column(ARRAY(Integer), server_default="{}")
+    score: Mapped[float | None] = mapped_column(Float)
+
+
+class Adjudication(Base):
+    """Final value of a disputed target in a multi-annotator layer; it is the effective annotation."""
+
+    __tablename__ = "adjudications"
+    __table_args__ = (
+        CheckConstraint(_in("target_kind", TARGET_KINDS), name="ck_adjudication_kind"),
+        UniqueConstraint(
+            "layer_id", "target_kind", "target_key", name="uq_adjudications_target"
+        ),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    layer_id: Mapped[uuid.UUID] = _layer_fk()
+    target_kind: Mapped[str] = mapped_column(Text)
+    target_key: Mapped[str] = mapped_column(Text)
+    final: Mapped[dict] = mapped_column(JSONB)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    decided_at: Mapped[datetime] = _created()
+
+
+class SentenceReview(Base):
+    """An annotator finished a sentence (span / relation layers) or a source sentence (alignment layers)."""
+
+    __tablename__ = "sentence_reviews"
+    layer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("annotation_layers.id", ondelete="CASCADE"), primary_key=True
+    )
+    annotator_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
+    )
+    sentence_index: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reviewed_at: Mapped[datetime] = _created()

@@ -30,6 +30,9 @@ EXPORT_TYPES = {
     "conllu": "text/plain; charset=utf-8",
     "tbx": "application/xml",
     "md": "text/markdown; charset=utf-8",
+    "brat": "application/zip",
+    "json": "application/json",
+    "tmx": "application/xml",
 }
 
 

@@ -145,3 +145,23 @@ def test_jieba_tagset(tmp_path):
         stats.frequency(scope, pos="DET")
     with pytest.raises(query.QueryError):
         stats.frequency(stats.Scope(tmp_path, "zh", tagset="upos"), pos="nr")
+
+
+@pytest.mark.cwb
+def test_distribution_from_positions_matches_query(ud):
+    """Span queries pass hit positions (document id, token offset) instead of a CQP query."""
+    from bisect import bisect_right
+
+    scope = stats.Scope(ud, "ud_en")
+    c = stats._Corpus(scope)
+    firsts = sorted((a, d) for a, _, d in c.docs)
+    positions = []
+    for m, _ in c.hits("the"):
+        a, d = firsts[bisect_right([x for x, _ in firsts], m) - 1]
+        positions.append((d, m - a))
+    assert positions
+    for field in ("position", "part"):
+        want = stats.distribution(scope, "the", field, 5)
+        got = stats.distribution(scope, "[x]", field, 5, positions=positions)
+        assert [r["values"] for r in got.rows] == [r["values"] for r in want.rows]
+        assert got.totals == want.totals

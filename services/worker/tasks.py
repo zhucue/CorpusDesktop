@@ -26,6 +26,7 @@ from services.api.annotations import (
     is_zh,
     refresh_progress,
 )
+from services.api.annotators import layer_annotators
 from services.api.db import session, transaction
 from services.api.jobs import enqueue
 from services.api.metadata import field_types
@@ -54,6 +55,7 @@ from services.api.search import (
     resolve_scope,
     scope_filter,
     search_page,
+    with_span_layer,
 )
 from services.api.storage import (
     corpus_key,
@@ -62,7 +64,7 @@ from services.api.storage import (
     stats_path,
     text_path,
 )
-from services.worker import kb_tasks
+from services.worker import annot_tasks, kb_tasks
 from services.worker.main import Cancelled, JobFailed
 
 EXPORT_PAGE = 1000
@@ -388,8 +390,9 @@ def run_export(run):
         corpus, restrict = resolve_scope(db, req.scope, user)
         ast, cqp = plan_query(req.query, corpus_tagset(corpus))
         layers = effective.check_layers(db, req.layers, corpus, user)
+        with_span_layer(db, cqp, layers, corpus, user)
         size = (
-            10**9 if pure_attr(ast) else EXPORT_PAGE
+            10**9 if pure_attr(ast) or query.pure_span(ast) else EXPORT_PAGE
         )  # PostgreSQL answers in one pass
         page = 1
         while True:
@@ -477,7 +480,11 @@ def run_export_evidence(run):
 
 def run_export_layer(run):
     """CoNLL-U of a layer's documents with effective values: this layer's confirmed / modified annotations,
-    otherwise the system values in `tokens` (for the other kind always the system values)."""
+    otherwise the system values in `tokens` (for the other kind always the system values). Other formats
+    (brat, json, tmx, xlsx): services.worker.annot_tasks."""
+    fmt = run.params.get("format", "conllu")
+    if fmt != "conllu":
+        return annot_tasks.EXPORTS[fmt](run, uuid.UUID(run.params["layer_id"]))
     with session() as db:
         layer = db.get(AnnotationLayer, uuid.UUID(run.params["layer_id"]))
         if not layer:
@@ -487,7 +494,7 @@ def run_export_layer(run):
         if ids:
             stmt = stmt.where(Document.id.in_(ids))
         docs = db.scalars(stmt.order_by(Document.created_at, Document.id)).all()
-        layers = {"pos": None, "dep": None, layer.kind: layer.id}
+        layers = {"pos": None, "dep": None, layer.kind: effective.eff_layer(layer)}
         name = layer.name
     parts, sentences, tokens = [], 0, 0
     for i in range(0, len(docs), LOAD_BATCH):
@@ -564,7 +571,7 @@ def _scope_info(db, scope: Scope, corpus):
     return info
 
 
-def _compute(p, target, reference, numeric):
+def _compute(p, target, reference, numeric, positions=None):
     method, top = p["method"], p["top"]
     if method == "frequency":
         return stats.frequency(target, p["unit"], p["pos"], top, p["min_freq"])
@@ -588,8 +595,74 @@ def _compute(p, target, reference, numeric):
             target, reference, p["unit"], p["measure"], p["min_freq"], top
         )
     return stats.distribution(
-        target, p["query"], p["field"], p["bins"], numeric=numeric, top=top
+        target,
+        p["query"],
+        p["field"],
+        p["bins"],
+        numeric=numeric,
+        top=top,
+        positions=positions,
     )
+
+
+def _label_frequency(db, p, corpus, scope, user):
+    """span_label / relation_label frequency of effective spans / relations in a scope."""
+    layers = effective.check_layers(
+        db, LayersInput.model_validate(p.get("layers") or {}), corpus, user
+    )
+    kind = p["unit"].split("_")[0]
+    layer = layers[kind]
+    if layer is None:
+        raise JobFailed("INVALID_LAYER", f"缺少 {kind} 标注层")
+    filt = scope_filter(db, scope)
+    fields = field_types(db, corpus.id) if filt else {}
+    counts, row_count, totals = effective.label_frequency(
+        db, corpus, filt, fields, layer, p["unit"], p["top"], p["min_freq"]
+    )
+    rows = []
+    for value, freq, docs in counts:
+        per_million = freq / totals["tokens"] * 1e6 if totals["tokens"] else 0.0
+        q = (
+            f"[{value}]"
+            if kind == "span" and _plain(value) and "[" not in value
+            else None
+        )
+        rows.append(
+            {
+                "key": value,
+                "values": {
+                    "item": value,
+                    "freq": freq,
+                    "per_million": per_million,
+                    "doc_freq": docs,
+                },
+                "search_query": q,
+            }
+        )
+    columns = [
+        {"key": "item", "label": "标签", "type": "string"},
+        {"key": "freq", "label": "频次", "type": "number"},
+        {"key": "per_million", "label": "每百万词", "type": "number"},
+        {"key": "doc_freq", "label": "文档频率", "type": "number"},
+    ]
+    return stats.Table(columns, rows, row_count, totals)
+
+
+def _span_positions(db, p, corpus, scope, user):
+    """Token positions of the spans of a pure `[标签]` distribution query (None for other queries)."""
+    if not p.get("query"):
+        return None
+    ast, cqp = plan_query(p["query"], corpus_tagset(corpus))
+    spans = query.spans(cqp)
+    if not spans or not query.pure_span(ast):
+        return None
+    layers = effective.check_layers(
+        db, LayersInput.model_validate(p.get("layers") or {}), corpus, user
+    )
+    with_span_layer(db, cqp, layers, corpus, user)
+    filt = scope_filter(db, scope)
+    fields = field_types(db, corpus.id) if filt else {}
+    return effective.span_positions(db, corpus, filt, fields, layers["span"], spans[0])
 
 
 def _pg_frequency(db, p, corpus, scope, user):
@@ -648,16 +721,21 @@ def run_stats(run):
     method = p["method"]
     scope = Scope.model_validate(p["target"] if method == "keywords" else p["scope"])
     params = {k: v for k, v in p.items() if k != "method"}
-    reference = numeric = table = None
+    reference = numeric = table = positions = None
     pg = method == "frequency" and (
         p["unit"] == "deprel"
         or (p["unit"] == "pos" and (p.get("layers") or {}).get("pos"))
     )
+    labels = method == "frequency" and p["unit"] in ("span_label", "relation_label")
     with session() as db:
         user = db.get(User, run.owner_id)
         corpus, restrict = resolve_scope(db, scope, user)
-        if pg:
+        if labels:
+            table = _label_frequency(db, p, corpus, scope, user)
+        elif pg:
             table = _pg_frequency(db, p, corpus, scope, user)
+        if method == "distribution":
+            positions = _span_positions(db, p, corpus, scope, user)
         target = stats.Scope(index_dir(corpus.id), corpus_key(corpus.id), restrict)
         info, base_filter = _scope_info(db, scope, corpus), scope_filter(db, scope)
         index_version = corpus.index_version
@@ -672,7 +750,7 @@ def run_stats(run):
             numeric = field_types(db, corpus.id).get(p["field"]) == "number"
     run.progress(0, None, "计算")
     try:
-        table = table or _compute(p, target, reference, numeric)
+        table = table or _compute(p, target, reference, numeric, positions)
     except ValueError as e:  # includes query.QueryError
         raise JobFailed("STATS_INVALID", str(e)) from e
     search_scope = scope.model_dump(mode="json", exclude_none=True)
@@ -786,7 +864,7 @@ def _preannotation(kind, doc_id, language):
     return values, parsed
 
 
-def _write_preannotation(db, layer_id, values, parsed):
+def _write_preannotation(db, layer_id, values, parsed, annotators):
     conn = db.connection()
     if parsed:  # fill the system layer where it has no dependencies yet
         conn.execute(
@@ -815,7 +893,11 @@ def _write_preannotation(db, layer_id, values, parsed):
             },
             where=Annotation.status == "suggested",
         ),
-        [{"layer_id": layer_id, **v} for v in values],
+        [
+            {"layer_id": layer_id, "annotator_id": a, **v}
+            for a in annotators
+            for v in values
+        ],
     )
 
 
@@ -825,10 +907,15 @@ def run_preannotate(run):
     `tokens`). Re-runs only overwrite tokens still `suggested`. One transaction per document; progress counts
     documents."""
     layer_id = uuid.UUID(run.params["layer_id"])
+    with session() as db:
+        token_kind = _layer(db, layer_id).kind in ("pos", "dep")
+    if not token_kind:
+        return annot_tasks.run_preannotate_p5(run)
     with transaction() as db:
         layer = _layer(db, layer_id, lock=True)
         layer.status, layer.error, layer.job_id = "preannotating", None, run.id
         kind = layer.kind
+        annotators = layer_annotators(layer)
         ids = run.params.get("document_ids") or layer.document_ids
         stmt = select(Document.id, Document.language).where(
             Document.corpus_id == layer.corpus_id
@@ -842,7 +929,7 @@ def run_preannotate(run):
             values, parsed = _preannotation(kind, doc_id, language)
             with transaction() as db:
                 layer = _layer(db, layer_id, lock=True)
-                _write_preannotation(db, layer_id, values, parsed)
+                _write_preannotation(db, layer_id, values, parsed, annotators)
                 refresh_progress(db, layer)
         with transaction() as db:
             run.lock(db)

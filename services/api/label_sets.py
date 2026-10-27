@@ -1,6 +1,8 @@
-"""Label sets (contracts/p3.md §二–§三): built-in `upos`, `jieba`, `ud-deprel` (project_id null, seeded at api
-startup) and project sets, usually copied from a built-in and edited. A label is {id, name, color?,
-description?, parent?}; annotations store the label id."""
+"""Label sets (contracts/p3.md §二–§三, p5.md §二): built-in `upos`, `jieba`, `ud-deprel`, `learner-errors`,
+`translation-strategies` (span) and `error-correction` (relation) (project_id null, seeded at api startup) and
+project sets, usually copied from a built-in and edited. A label is {id, name, color?, description?, parent?};
+annotations store the label id. learner-errors labels are children of the root label 偏误, so `[偏误]` finds
+every error and `[偏误:时态]` the tense errors."""
 
 import uuid
 from typing import Annotated, Literal
@@ -166,6 +168,41 @@ UD_SUBTYPES = [
 ]
 
 
+LEARNER_ERRORS = {
+    "时态": "动词时态用错，如该用过去时用了现在时",
+    "体": "体貌用错，如完成体、进行体、了 / 着 / 过",
+    "冠词": "冠词缺失、多余或误用",
+    "介词": "介词缺失、多余或误用",
+    "搭配": "词语搭配不当",
+    "词序": "语序错误",
+    "主谓一致": "主语与谓语的人称、数不一致",
+    "拼写": "拼写或错别字",
+    "漏词": "缺少必要的词",
+    "多词": "多出不该有的词",
+    "用词": "选词不当、词义误用",
+    "句式": "句式结构错误",
+    "标点": "标点符号误用",
+}
+TRANSLATION_STRATEGIES = {
+    "直译": "保留原文结构与字面意义",
+    "意译": "舍弃原文形式，传达意义",
+    "增译": "增加原文没有的词语或信息",
+    "减译": "删去原文的部分词语",
+    "词类转换": "改变词性，如名词译为动词",
+    "语态转换": "主动与被动互换",
+    "分句": "一句拆成多句",
+    "合句": "多句合为一句",
+    "归化": "向译入语文化靠拢",
+    "异化": "保留源语文化特征",
+    "音译": "按读音转写",
+    "省略": "省去原文的整段或成分",
+}
+ERROR_CORRECTION = {
+    "correction": "从偏误片段指向其更正片段",
+    "cause": "从偏误片段指向引起该偏误的片段",
+}
+
+
 def _label(tag, description=None, parent=None):
     label = {"id": tag, "name": tag}
     if description:
@@ -190,6 +227,22 @@ BUILTIN = {
         None,
         [_label(t, d) for t, d in UD_DEPREL.items()]
         + [_label(t, parent=t.split(":")[0]) for t in UD_SUBTYPES],
+    ),
+    "learner-errors": (
+        "span",
+        None,
+        [_label("偏误", "学习者语言偏误（未细分）")]
+        + [_label(t, d, "偏误") for t, d in LEARNER_ERRORS.items()],
+    ),
+    "translation-strategies": (
+        "span",
+        None,
+        [_label(t, d) for t, d in TRANSLATION_STRATEGIES.items()],
+    ),
+    "error-correction": (
+        "relation",
+        None,
+        [_label(t, d) for t, d in ERROR_CORRECTION.items()],
     ),
 }
 

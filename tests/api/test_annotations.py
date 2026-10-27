@@ -143,6 +143,9 @@ def test_label_sets(owner, project, member):
         "upos": ("pos", None),
         "jieba": ("pos", None),
         "ud-deprel": ("dep", None),
+        "learner-errors": ("span", None),
+        "translation-strategies": ("span", None),
+        "error-correction": ("relation", None),
     }
     upos = label_set(owner, "upos")
     assert len(upos["labels"]) == 17 and upos["labels"][7] == {

@@ -21,9 +21,10 @@ from services.api.models import StatResult, Subcorpus
 from services.api.search import (
     LayersInput,
     Scope,
-    compile_query,
     corpus_tagset,
+    plan_query,
     resolve_scope,
+    with_span_layer,
 )
 from services.api.views import job_view, stat_view
 
@@ -39,10 +40,14 @@ class StatsInput(BaseModel):
 
 
 class FrequencyInput(StatsInput):
-    """unit deprel, or unit pos with layers.pos, is counted in PostgreSQL over effective annotations."""
+    """unit deprel, or unit pos with layers.pos, is counted in PostgreSQL over effective annotations;
+    span_label / relation_label count effective spans of layers.span / relations of layers.relation (default:
+    the corpus's most recently updated layer of that kind)."""
 
     scope: Scope
-    unit: Literal["word", "lemma", "pos", "deprel"] = "word"
+    unit: Literal["word", "lemma", "pos", "deprel", "span_label", "relation_label"] = (
+        "word"
+    )
     pos: str | None = Field(default=None, max_length=20)
     min_freq: int = Field(default=1, ge=1)
     layers: LayersInput | None = None
@@ -87,6 +92,7 @@ class DistributionInput(StatsInput):
     query: str | None = Field(default=None, max_length=1000)
     field: str = Field(min_length=1, max_length=200)
     bins: int = Field(default=10, ge=1, le=100)
+    layers: LayersInput | None = None  # span layer of a `[标签]` query
 
 
 class ExportInput(BaseModel):
@@ -107,10 +113,15 @@ def _check_pos(tagset, *tags):
                 raise ApiError(422, "VALIDATION_ERROR", e.message)
 
 
-def _plain_query(text, tagset):
-    """Statistics run queries in CWB only; `{…}` attributes are rejected."""
-    if query.attrs(compile_query(text, tagset)):
+def _plain_query(text, tagset, allow_span=False):
+    """Statistics run queries in CWB; `{…}` attributes are rejected, `[标签]` only as a whole query
+    (distribution, answered from PostgreSQL)."""
+    ast, cqp = plan_query(text, tagset)
+    if query.attrs(cqp):
         raise ApiError(422, "QUERY_INVALID", "统计中的查询式不支持 {…} 属性约束")
+    if query.spans(cqp) and not (allow_span and query.pure_span(ast)):
+        raise ApiError(422, "QUERY_INVALID", "统计中的片段标签只能单独使用，如 [时态]")
+    return cqp
 
 
 def _submit(db, user, method, body, scope):
@@ -134,7 +145,19 @@ def _submit(db, user, method, body, scope):
 def frequency(body: FrequencyInput, user: CurrentUser, db: Db):
     _check_pos(_tagset(db, body.scope, user), body.pos)
     corpus, _ = resolve_scope(db, body.scope, user)
-    effective.check_layers(db, body.layers, corpus, user)
+    layers = effective.check_layers(db, body.layers, corpus, user)
+    if body.unit in ("span_label", "relation_label"):
+        kind = body.unit.split("_")[0]
+        layer = layers[kind] or effective.default_layer(db, corpus, user, kind)
+        if layer is None:
+            raise ApiError(422, "INVALID_LAYER", f"该语料库没有 {kind} 标注层")
+        body = body.model_copy(
+            update={
+                "layers": (body.layers or LayersInput()).model_copy(
+                    update={kind: layer.id}
+                )
+            }
+        )
     return _submit(db, user, "frequency", body, body.scope)
 
 
@@ -161,7 +184,18 @@ def keywords(body: KeywordsInput, user: CurrentUser, db: Db):
 @router.post("/stats/distribution")
 def distribution(body: DistributionInput, user: CurrentUser, db: Db):
     if body.query:
-        _plain_query(body.query, _tagset(db, body.scope, user))
+        cqp = _plain_query(body.query, _tagset(db, body.scope, user), allow_span=True)
+        corpus, _ = resolve_scope(db, body.scope, user)
+        layers = effective.check_layers(db, body.layers, corpus, user)
+        with_span_layer(db, cqp, layers, corpus, user)
+        if layers.get("span"):
+            body = body.model_copy(
+                update={
+                    "layers": (body.layers or LayersInput()).model_copy(
+                        update={"span": layers["span"].id}
+                    )
+                }
+            )
     if body.field != "position":
         corpus, _ = resolve_scope(db, body.scope, user)
         if body.field not in field_types(db, corpus.id):
