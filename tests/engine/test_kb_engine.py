@@ -91,6 +91,42 @@ def test_url_checks():
     assert parse.kind_of("A.PDF") == "pdf" and parse.kind_of("x.doc") is None
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1/",
+        "http://localhost:8000/x",
+        "http://10.1.2.3/",
+        "http://172.20.0.5/",
+        "http://192.168.1.1/",
+        "http://169.254.169.254/latest/meta-data",
+        "http://100.64.1.1/",
+        "http://224.0.0.1/",
+        "http://[::1]/",
+        "http://[fe80::1]/",
+        "http://[::ffff:127.0.0.1]/",
+    ],
+)
+def test_request_time_url_check_rejects_internal(url):
+    with pytest.raises(parse.ParseError):
+        parse.check_public_url(url)
+
+
+def test_request_time_url_check_allows_public_and_unresolved():
+    assert parse.check_public_url(" https://8.8.8.8/x ") == "https://8.8.8.8/x"
+    assert parse.check_public_url("http://198.18.0.7/") == "http://198.18.0.7/"
+    # a name that does not resolve here is left to the worker's check at fetch time
+    assert parse.check_public_url("https://no-such-host.invalid/a")
+
+
+def test_normalize_url():
+    n = parse.normalize_url
+    assert n("HTTPS://Example.ORG:443/a/b/#frag") == "https://example.org/a/b"
+    assert n("https://example.org/a/b?x=1") == "https://example.org/a/b?x=1"
+    assert n("http://example.org:8080/") == "http://example.org:8080"
+    assert n("https://example.org/a") != n("https://example.org/b")
+
+
 # ---- chunker ----
 
 
@@ -200,6 +236,29 @@ def test_terms_chinese_patterns():
     ]
     assert [c.term for c in terms.from_sentences(jieba, min_freq=1)] == ["统计方法"]
     assert terms.pos_class("nr") is None and terms.pos_class("PROPN") is None
+
+
+def test_terms_chinese_light_verbs_excluded():
+    sents = [
+        (
+            "zh",
+            [
+                ("是", "v", "是"),
+                ("语言", "n", "语言"),
+                ("进行", "v", "进行"),
+                ("研究", "vn", "研究"),
+                ("做", "v", "做"),
+                ("实验", "n", "实验"),
+                ("学", "v", "学"),
+                ("汉语", "nz", "汉语"),
+                ("分析", "v", "分析"),
+                ("语料", "n", "语料"),
+            ],
+        )
+    ]
+    found = {c.term: c.pattern for c in terms.from_sentences(sents, min_freq=1)}
+    assert found == {"分析语料": "v+n"}
+    assert "进行研究" not in terms.units("zh", sents[0][1])
 
 
 def test_translations_by_cooccurrence():

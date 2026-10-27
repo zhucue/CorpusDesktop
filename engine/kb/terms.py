@@ -1,6 +1,8 @@
 """Term candidates by POS patterns (contracts/p4.md §四 抽取方法).
 
 Patterns over two adjacent tokens of one sentence: Chinese n+n, a+n, v+n; other languages ADJ+NOUN, NOUN+NOUN.
+The verb of a Chinese v+n pair has at least two characters and is not a light / copula verb (LIGHT_VERBS: 是 有
+进行 …), so 是语言, 进行研究 or 做实验 are not candidates.
 Classes: UPOS NOUN → n, ADJ → a, VERB → v; jieba n* (not person / place / organisation names nr*, ns, nt) and vn
 → n, a / an / ag → a, other v* → v. Both forms must contain a letter (Latin words at least 2 characters).
 Term text: Chinese forms concatenated; otherwise "form₁ lemma₂" lower-cased (language models → language model).
@@ -26,6 +28,29 @@ ZH_PATTERNS = {("n", "n"), ("a", "n"), ("v", "n")}
 PATTERNS = {("a", "n"), ("n", "n")}
 _UPOS = {"NOUN": "n", "ADJ": "a", "VERB": "v"}
 _EXCLUDED = {"ns", "nt"}
+LIGHT_VERBS = frozenset(
+    [
+        "是",
+        "有",
+        "没有",
+        "去",
+        "来",
+        "让",
+        "使",
+        "做",
+        "进行",
+        "会",
+        "能",
+        "要",
+        "可以",
+        "给",
+        "到",
+        "在",
+        "说",
+        "看",
+        "想",
+    ]
+)
 # cwb-scan-corpus constraints that keep only possible pattern pairs
 _FIRST = "?pos=/(NOUN|ADJ|VERB|n[a-z]*|a|an|ag|v[a-z]*)/"
 _SECOND = "?pos+1=/(NOUN|n[a-z]*|vn)/"
@@ -63,13 +88,14 @@ def pos_class(tag) -> str | None:
     return None
 
 
-def _pattern(lang, p1, p2) -> str | None:
+def _pattern(lang, p1, p2, f1=None) -> str | None:
+    """Pattern name of a pair, or None; f1 (the first form) excludes Chinese light and one-character verbs."""
     pair = (pos_class(p1), pos_class(p2))
-    return (
-        f"{pair[0]}+{pair[1]}"
-        if pair in (ZH_PATTERNS if lang == "zh" else PATTERNS)
-        else None
-    )
+    if pair not in (ZH_PATTERNS if lang == "zh" else PATTERNS):
+        return None
+    if pair[0] == "v" and f1 is not None and (len(f1) < 2 or f1 in LIGHT_VERBS):
+        return None
+    return f"{pair[0]}+{pair[1]}"
 
 
 def _word(form, lang) -> bool:
@@ -131,7 +157,7 @@ def rank(
     found = {}
     for (language, f1, p1, l1, f2, p2, l2), n in pairs.items():
         lang = lang_code(language) or default
-        pattern = _pattern(lang, p1, p2)
+        pattern = _pattern(lang, p1, p2, f1)
         if not pattern or not (_word(f1, lang) and _word(f2, lang)):
             continue
         term, x, y = _key(lang, f1, l1, f2, l2)
@@ -162,7 +188,7 @@ def units(language, toks) -> set[str]:
         if pos_class(p) == "n" and _word(f, lang):
             out.add(f if lang == "zh" else _lemma(f, l).lower())
     for (f1, p1, l1), (f2, p2, l2) in pairwise(toks):
-        if _pattern(lang, p1, p2) and _word(f1, lang) and _word(f2, lang):
+        if _pattern(lang, p1, p2, f1) and _word(f1, lang) and _word(f2, lang):
             out.add(_key(lang, f1, l1, f2, l2)[0])
     return out
 

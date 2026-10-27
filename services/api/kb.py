@@ -128,6 +128,7 @@ class UrlInput(BaseModel):
     url: str = Field(min_length=1, max_length=2000)
     title: str | None = Field(default=None, min_length=1, max_length=500)
     meta: dict = {}
+    force: bool = False  # import again although the project already has this URL
 
 
 class TextInput(BaseModel):
@@ -234,6 +235,22 @@ def _upload(db, project_id, user, files, kind):
     return {"items": items, "total": len(items)}
 
 
+def _check_duplicate_url(db, project_id, url):
+    """409 DUPLICATE_URL when the project already has a URL document with the same normalized URL."""
+    key = kbparse.normalize_url(url)
+    for doc_id, title, source in db.execute(
+        select(KbDocument.id, KbDocument.title, KbDocument.source).where(
+            KbDocument.project_id == project_id, KbDocument.kind == "url"
+        )
+    ):
+        if kbparse.normalize_url(source) == key:
+            raise ApiError(
+                409,
+                "DUPLICATE_URL",
+                f"该网址已导入：{title}（{doc_id}），重新导入请加 force",
+            )
+
+
 def _create_json(db, project_id, user, data):
     try:
         body = (
@@ -254,9 +271,11 @@ def _create_json(db, project_id, user, data):
     if isinstance(body, UrlInput):
         cookie_only(user)
         try:
-            url = kbparse.check_url(body.url)
+            url = kbparse.check_public_url(body.url)
         except kbparse.ParseError as e:
             raise ApiError(422, "INVALID_URL", str(e))
+        if not body.force:
+            _check_duplicate_url(db, project_id, url)
         doc = KbDocument(
             project_id=project_id,
             kind="url",

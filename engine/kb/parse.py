@@ -195,17 +195,55 @@ def check_url(url: str) -> str:
     return url
 
 
+def _blocked(address: str) -> bool:
+    ip = ipaddress.ip_address(address.split("%")[0])
+    if getattr(ip, "ipv4_mapped", None):
+        ip = ip.ipv4_mapped
+    return ip.is_loopback or ip.is_link_local or any(ip in net for net in _BLOCKED)
+
+
 def _check_public(host: str):
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror as e:
         raise ParseError(f"无法解析域名：{host}") from e
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0].split("%")[0])
-        if getattr(ip, "ipv4_mapped", None):
-            ip = ip.ipv4_mapped
-        if ip.is_loopback or ip.is_link_local or any(ip in net for net in _BLOCKED):
+    if any(_blocked(info[4][0]) for info in infos):
+        raise ParseError("只能导入公网地址")
+
+
+def check_public_url(url: str) -> str:
+    """Request-time check: http(s) URL whose host is not a private, loopback, link-local, CGNAT or multicast
+    address (literal or resolved). A name that does not resolve here passes; the worker checks again on fetch."""
+    url = check_url(url)
+    host = urlsplit(url).hostname
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        if _blocked(host):
             raise ParseError("只能导入公网地址")
+        return url
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except (socket.gaierror, UnicodeError):
+        return url
+    if any(_blocked(info[4][0]) for info in infos):
+        raise ParseError("只能导入公网地址")
+    return url
+
+
+def normalize_url(url: str) -> str:
+    """Comparable form of a URL: lower-case scheme and host, no default port, no fragment, no trailing slash."""
+    parts = urlsplit(url.strip())
+    scheme = parts.scheme.lower()
+    host = (parts.hostname or "").lower()
+    port = parts.port
+    if port and (scheme, port) not in (("http", 80), ("https", 443)):
+        host = f"{host}:{port}"
+    path = parts.path.rstrip("/")
+    query = f"?{parts.query}" if parts.query else ""
+    return f"{scheme}://{host}{path}{query}"
 
 
 def fetch(url: str) -> bytes:

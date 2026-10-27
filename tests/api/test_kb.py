@@ -227,6 +227,56 @@ def test_url_import(owner, project, monkeypatch):
     assert chunks[-1]["locator"]["heading_path"][-1] == "翻译"
 
 
+def test_url_import_rejects_internal_targets(owner, project, monkeypatch):
+    from engine.kb import parse
+
+    monkeypatch.setattr(parse, "fetch", lambda url: b"<html></html>")
+    pid = project["id"]
+    for url in (
+        "http://127.0.0.1:8000/api/health",
+        "http://localhost/x",
+        "http://10.0.0.8/",
+        "http://169.254.169.254/latest/meta-data",
+        "http://100.64.0.1/",
+        "http://[::1]/",
+    ):
+        r = owner.post(f"/api/projects/{pid}/kb/documents", json={"url": url})
+        assert r.status_code == 422, url
+        assert r.json()["error"]["code"] == "INVALID_URL"
+    assert owner.get(f"/api/projects/{pid}/kb/documents").json()["total"] == 0
+
+
+def test_url_import_deduplicates(owner, project, monkeypatch):
+    from engine.kb import parse
+
+    page = "<html><body><article><p>Parallel corpora align texts.</p></article></body></html>"
+    monkeypatch.setattr(parse, "fetch", lambda url: page.encode())
+    pid = project["id"]
+    first = owner.post(
+        f"/api/projects/{pid}/kb/documents", json={"url": "https://example.org/pc"}
+    )
+    assert first.status_code == 200, first.text
+    for same in ("https://example.org/pc", "HTTPS://Example.org:443/pc/#top"):
+        r = owner.post(f"/api/projects/{pid}/kb/documents", json={"url": same})
+        assert r.status_code == 409 and r.json()["error"]["code"] == "DUPLICATE_URL"
+    other = owner.post(
+        f"/api/projects/{pid}/kb/documents",
+        json={"url": "https://example.org/pc?page=2"},
+    )
+    assert other.status_code == 200
+    again = owner.post(
+        f"/api/projects/{pid}/kb/documents",
+        json={"url": "https://example.org/pc", "force": True},
+    )
+    assert again.status_code == 200 and again.json()["id"] != first.json()["id"]
+    elsewhere = owner.post("/api/projects", json={"name": "另一个"}).json()
+    r = owner.post(
+        f"/api/projects/{elsewhere['id']}/kb/documents",
+        json={"url": "https://example.org/pc"},
+    )
+    assert r.status_code == 200  # per project
+
+
 def test_note_body_change_reindexes(owner, project):
     note = create_note(owner, project, "# 想法\n\n语料库很重要。")
     assert note["body"] == "# 想法\n\n语料库很重要。" and note["job_id"]
