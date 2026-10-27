@@ -6,7 +6,7 @@ import { api, errorText, type Doc, type Job, type MetadataField, type Page } fro
 import { ErrorAlert, Skeleton } from "../../components/common";
 import { Icon } from "../../components/Icon";
 import { canEdit, useCorpus, useJobCreated, useMe, useProject, useProjectId } from "../../lib/data";
-import { fmt, fmtTime, metadataText } from "../../lib/format";
+import { fmt, fmtTime, fmtVersion, metadataText } from "../../lib/format";
 import { StatusCell } from "./StatusCell";
 import { ACCEPT, languageOptions, metadataRule, parseMetadata, uploadFiles } from "./UploadDialog";
 
@@ -63,7 +63,7 @@ export default function CorpusDrawer({ corpusId, onClose }: { corpusId: string |
             </div>
             <div>
               <div className="stat-label">索引版本</div>
-              <div className="count">{c.index_version != null ? `v${c.index_version}` : "—"}</div>
+              <div className="count">{fmtVersion(c.index_version)}</div>
             </div>
           </div>
           <div className="row">

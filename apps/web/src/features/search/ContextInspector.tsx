@@ -1,10 +1,15 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { api, type ContextResult, type EvidenceInput, type Hit } from "../../api";
+import { Link } from "react-router";
+import { api, type ContextResult, type EvidenceInput, type Hit, type Layer } from "../../api";
+import { AlignGraph } from "../../components/annot/AlignGraph";
 import { ErrorAlert, Skeleton } from "../../components/common";
 import { PinButton } from "../../components/global/evidence";
+import { Icon } from "../../components/Icon";
 import { markTerms } from "../../components/results/Kwic";
-import { metadataText } from "../../lib/format";
+import { useAlignPair } from "../annotate/spanData";
+import { tokenForms } from "../annotate/spanModel";
+import { fmtVersion, metadataText } from "../../lib/format";
 
 function Sentence({ text, highlight, terms }: { text: string; highlight: [number, number] | null; terms: string[] }) {
   if (!highlight) return <>{markTerms(text, terms)}</>;
@@ -29,17 +34,62 @@ export function hitEvidence(hit: Hit, query: string, scope: EvidenceInput["ref"]
   };
 }
 
+/** 双语对照 with word links from a word alignment layer of the hit's corpus; plain aligned text without one. */
+function Bilingual({ hit, layer, projectId }: { hit: Hit; layer: Layer | null; projectId?: string }) {
+  const pairs = useAlignPair(layer?.id ?? "", hit.document_id, hit.sentence_index, !!layer);
+  const linked = (pairs.data ?? []).filter((p) => p.tgt && p.alignments.some((a) => a.level !== "sentence" && a.status !== "rejected"));
+  if (!hit.aligned.length && !linked.length) return null;
+  return (
+    <div className="insp-body">
+      <div className="row">
+        <h2 className="sec-title grow">双语对照</h2>
+        {layer && linked.length > 0 && projectId && (
+          <Link className="btn xs" to={`/p/${projectId}/annotate?${new URLSearchParams({ layer: layer.id, doc: hit.document_id, s: String(hit.sentence_index) }).toString()}`}>
+            <Icon name="external" size={14} />
+            在标注中校对
+          </Link>
+        )}
+      </div>
+      <ErrorAlert error={pairs.error} />
+      {linked.length > 0
+        ? linked.map((p) => (
+            <AlignGraph
+              key={`${p.tgt!.document_id}:${p.tgt!.sentence_index}`}
+              src={tokenForms(p.src.tokens)}
+              tgt={tokenForms(p.tgt!.tokens)}
+              links={p.alignments.filter((a) => a.level !== "sentence").map((a) => ({ key: String(a.id), src: a.src_tokens, tgt: a.tgt_tokens, status: a.status }))}
+            />
+          ))
+        : hit.aligned.map((a, i) => (
+            <p className="sm" key={i}>
+              <span className="tag t-gray mono" style={{ marginRight: 6 }}>
+                {a.language}
+              </span>
+              {a.text}
+            </p>
+          ))}
+    </div>
+  );
+}
+
 /** 360 px context inspector: neighbouring sentences, aligned text, document metadata, index version, pin. */
 export default function ContextInspector({
   hit,
   terms,
   indexVersion,
   evidence,
+  alignLayer = null,
+  projectId,
+  onClose,
 }: {
   hit: Hit | null;
   terms: string[];
   indexVersion: string | number | null | undefined;
   evidence: EvidenceInput | null;
+  /** Ready word alignment layer whose source is the hit's corpus. */
+  alignLayer?: Layer | null;
+  projectId?: string;
+  onClose?: () => void;
 }) {
   const [before, setBefore] = useState(1);
   const [after, setAfter] = useState(1);
@@ -63,13 +113,18 @@ export default function ContextInspector({
   });
 
   return (
-    <aside className="inspector ctx" aria-label="上下文">
+    <aside className={`inspector ctx ${hit ? "" : "no-hit"}`} aria-label="上下文">
       <div className="card-head">
         <h2 className="sec-title grow">上下文</h2>
         {hit && (
           <span className="mono small muted ellipsis" style={{ maxWidth: 200 }}>
             句 {hit.sentence_index + 1} · {hit.start_cp}:{hit.end_cp}
           </span>
+        )}
+        {hit && onClose && (
+          <button className="btn ghost icon xs" type="button" aria-label="关闭上下文" onClick={onClose}>
+            <Icon name="x" size={14} />
+          </button>
         )}
       </div>
       {!hit ? (
@@ -97,19 +152,7 @@ export default function ContextInspector({
               </p>
             ))}
           </div>
-          {hit.aligned.length > 0 && (
-            <div className="insp-body">
-              <h2 className="sec-title">双语对照</h2>
-              {hit.aligned.map((a, i) => (
-                <p className="sm" key={i}>
-                  <span className="tag t-gray mono" style={{ marginRight: 6 }}>
-                    {a.language}
-                  </span>
-                  {a.text}
-                </p>
-              ))}
-            </div>
-          )}
+          <Bilingual hit={hit} layer={alignLayer} projectId={projectId} />
           <div className="insp-body">
             <dl className="kv">
               <dt>文档</dt>
@@ -127,7 +170,7 @@ export default function ContextInspector({
                 </span>
               ))}
               <dt>索引版本</dt>
-              <dd className="mono">{indexVersion != null ? `v${indexVersion}` : "—"}</dd>
+              <dd className="mono">{fmtVersion(indexVersion)}</dd>
             </dl>
           </div>
           {evidence && (

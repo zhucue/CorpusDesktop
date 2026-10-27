@@ -49,3 +49,10 @@ export function metadataText(m: Record<string, unknown>): string {
     .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`)
     .join("；");
 }
+
+/** Index version: numbers as v14; hash versions show their first 8 characters (full value in the title). */
+export function fmtVersion(v: number | string | null | undefined): string {
+  if (v == null || v === "") return "—";
+  if (typeof v === "number" || /^\d+$/.test(v)) return `v${v}`;
+  return v.length > 8 ? v.slice(0, 8) : v;
+}

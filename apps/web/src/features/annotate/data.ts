@@ -28,6 +28,17 @@ export function useLayers(projectId: string | undefined) {
   });
 }
 
+/**
+ * Whether the user may annotate on this layer: owner / editor / annotator role, and on a single-mode layer only its
+ * creator or a listed annotator; on a multi-mode layer only the listed annotators (contracts/p5.md §七).
+ */
+export function canWriteLayer(layer: Pick<Layer, "mode" | "annotators" | "created_by">, userId: string | undefined, role: string | undefined): boolean {
+  if (!userId || !(role === "owner" || role === "editor" || role === "annotator")) return false;
+  const listed = layer.annotators ?? [];
+  if (layer.mode === "multi") return listed.includes(userId);
+  return layer.created_by === userId || listed.includes(userId);
+}
+
 /** Most recently updated ready layer of `kind` on the corpus. */
 export function defaultLayer(layers: Layer[], corpusId: string | undefined, kind: LayerKind): Layer | null {
   if (!corpusId) return null;

@@ -47,7 +47,7 @@ function resultText(j: Job): React.ReactNode {
   return null;
 }
 
-function Inspector({ id, projectId, onAct, pending }: { id: string; projectId: string; onAct: (job: Job, a: "cancel" | "retry") => void; pending: boolean }) {
+function Inspector({ id, projectId, onAct, onClose, pending }: { id: string; projectId: string; onAct: (job: Job, a: "cancel" | "retry") => void; onClose: () => void; pending: boolean }) {
   const job = useJob(id, 2000);
   const hist = useRef<number[]>([]);
   useEffect(() => {
@@ -61,6 +61,9 @@ function Inspector({ id, projectId, onAct, pending }: { id: string; projectId: s
       <div className="card-head">
         <h2 className="sec-title grow">任务详情</h2>
         <span className="mono small muted">#{id.slice(0, 8)}</span>
+        <button className="btn ghost icon xs" type="button" aria-label="关闭任务详情" onClick={onClose}>
+          <Icon name="x" size={14} />
+        </button>
       </div>
       <ErrorAlert error={job.error} style={{ margin: 16 }} />
       {j && (
@@ -266,7 +269,7 @@ export default function Jobs() {
               ]}
             />
           </section>
-          {selected && <Inspector id={selected} projectId={projectId} pending={act.isPending} onAct={(j, a) => act.mutate({ id: j.id, action: a })} />}
+          {selected && <Inspector id={selected} projectId={projectId} pending={act.isPending} onAct={(j, a) => act.mutate({ id: j.id, action: a })} onClose={() => setParams({})} />}
         </div>
       </div>
     </>

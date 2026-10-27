@@ -14,7 +14,7 @@ import { AgreementTab } from "./Agreement";
 import { useLabelSets, useLayerDocs } from "./data";
 import { LabelPanel } from "./LabelPanel";
 import { useAnnotatorView, useSpanActions, useSpanSentence, useSpanSentences, useSpanWindow } from "./spanData";
-import { flowRelations, flowSpans, isHumanSource, isSuggested, sortSpans, spanDiffTokens, spanKeyCommand, spanSentenceDone, type SpanCommand } from "./spanModel";
+import { flowRelations, flowSpans, isHumanSource, isSuggested, sortSpans, spanDiffBlocks, spanKeyCommand, spanSentenceDone, type SpanCommand } from "./spanModel";
 import { Stream, typingTarget } from "./Stream";
 import { StatsTab } from "./Tabs";
 import { sourceText, statusView } from "./Workspace";
@@ -28,6 +28,7 @@ export default function SpanWorkspace({
   layers,
   projectId,
   canAnnotate,
+  readOnlyNote = "查看者只读",
   canManage,
   leftTop,
 }: {
@@ -35,6 +36,7 @@ export default function SpanWorkspace({
   layers: Layer[];
   projectId: string;
   canAnnotate: boolean;
+  readOnlyNote?: string;
   canManage: boolean;
   leftTop?: React.ReactNode;
 }) {
@@ -43,7 +45,11 @@ export default function SpanWorkspace({
   const isRel = layer.kind === "relation";
   const spanLayer = isRel ? layers.find((l) => l.id === layer.base_layer_id) : layer;
   const spanLayerId = isRel ? (layer.base_layer_id ?? layer.id) : layer.id;
-  const relLayerId = isRel ? layer.id : null;
+  // On a span layer, relations come from a relation layer built on it (the first one unless another is chosen).
+  const relLayers = useMemo(() => (isRel ? [] : layers.filter((l) => l.kind === "relation" && l.base_layer_id === layer.id)), [isRel, layers, layer.id]);
+  const [relPick, setRelPick] = useState<string | null | undefined>(undefined);
+  const pickedRel = isRel ? null : relPick === undefined ? (relLayers[0] ?? null) : (relLayers.find((l) => l.id === relPick) ?? null);
+  const relLayerId = isRel ? layer.id : (pickedRel?.id ?? null);
 
   const docs = useLayerDocs(layer.id);
   const seenStatus = useRef(layer.status);
@@ -56,7 +62,7 @@ export default function SpanWorkspace({
 
   const labelSets = useLabelSets(projectId);
   const spanSet = labelSets.data?.find((s) => s.id === spanLayer?.label_set_id);
-  const relSet = isRel ? labelSets.data?.find((s) => s.id === layer.label_set_id) : undefined;
+  const relSet = labelSets.data?.find((s) => s.id === (isRel ? layer.label_set_id : pickedRel?.label_set_id));
   const spanOrder = useMemo(() => (spanSet?.labels ?? []).map((l) => l.name), [spanSet]);
   const docList = docs.data ?? [];
 
@@ -79,6 +85,8 @@ export default function SpanWorkspace({
   const [view, setView] = useState<"sent" | "para">("sent");
   const win = useSpanWindow(layer.id, docId, sIdx, view === "para");
   const annot = useAnnotatorView(layer, canManage, projectId);
+  const relOne = useSpanSentence(pickedRel?.id ?? "", docId, sIdx, !!pickedRel && view === "sent");
+  const relWin = useSpanWindow(pickedRel?.id ?? "", docId, sIdx, !!pickedRel && view === "para");
 
   const flowSents = useMemo(() => {
     if (!s) return [];
@@ -87,9 +95,19 @@ export default function SpanWorkspace({
     return [...around.filter((x) => x.sentence_index !== s.sentence_index), s].sort((a, b) => a.sentence_index - b.sentence_index);
   }, [s, view, win.data]);
   const spans = useMemo(() => flowSents.flatMap((x) => x.spans).filter(annot.keep), [flowSents, annot.keep]);
-  const relations = useMemo(() => flowSents.flatMap((x) => x.relations).filter(annot.keep), [flowSents, annot.keep]);
+  // Sentences whose relations are shown: the reviewed relation layer's own, or the chosen relation layer's.
+  const relSents = useMemo(() => {
+    if (isRel) return flowSents;
+    if (!pickedRel) return [];
+    if (view === "para") return (relWin.data?.items ?? []).filter((x) => flowSents.some((f) => f.document_id === x.document_id && f.sentence_index === x.sentence_index));
+    return relOne.data ? [relOne.data] : [];
+  }, [isRel, pickedRel, view, flowSents, relOne.data, relWin.data]);
+  const relations = useMemo(() => relSents.flatMap((x) => x.relations).filter(annot.keep), [relSents, annot.keep]);
   const ownSpans = useMemo(() => sortSpans((s?.spans ?? []).filter(annot.keep)), [s, annot.keep]);
-  const ownRels = useMemo(() => (s?.relations ?? []).filter(annot.keep), [s, annot.keep]);
+  const ownRels = useMemo(
+    () => relSents.filter((x) => x.document_id === s?.document_id && x.sentence_index === s?.sentence_index).flatMap((x) => x.relations).filter(annot.keep),
+    [relSents, s, annot.keep],
+  );
   const viewSpans = useMemo(() => flowSpans(spans, spanOrder), [spans, spanOrder]);
   const viewRels = useMemo(() => flowRelations(relations), [relations]);
   const pieces: FlowPiece[] = flowSents.map((x) => ({ key: `${x.sentence_index}`, cp: x.start_cp, text: x.text, dim: x.sentence_index !== s?.sentence_index }));
@@ -116,6 +134,9 @@ export default function SpanWorkspace({
   const [tab, setTab] = useState<Tab>(() => (["diff", "stats", "agreement"].includes(params.get("tab") ?? "") ? (params.get("tab") as Tab) : "edit"));
   const searchRef = useRef<HTMLInputElement>(null);
   const act = useSpanActions({ listLayerId: layer.id, spanLayerId, relationLayerId: relLayerId, projectId });
+  // Relations of a chosen relation layer live in that layer's sentence caches.
+  const pickedAct = useSpanActions({ listLayerId: pickedRel?.id ?? layer.id, spanLayerId, relationLayerId: relLayerId, projectId });
+  const relAct = isRel ? act : pickedAct;
 
   const pendingHere = ownSpans.filter(isSuggested).length + ownRels.filter(isSuggested).length;
   const remaining = docList.reduce((n, d) => n + d.pending, 0);
@@ -172,7 +193,7 @@ export default function SpanWorkspace({
       const from = draft.from;
       const to = draft.to;
       setDraftState(null);
-      void act.createRelation(ownerOf(from)!, from, to, name).then((r) => r && select({ kind: "rel", id: r.id }));
+      void relAct.createRelation(ownerOf(from)!, from, to, name).then((r) => r && select({ kind: "rel", id: r.id }));
       return;
     }
     if (pending) {
@@ -188,8 +209,8 @@ export default function SpanWorkspace({
       advance(selSpan.id);
     } else if (selRel) {
       if (selRel.label === name && selRel.status !== "rejected") {
-        if (selRel.status === "suggested") void act.patchRelation(s, selRel, { action: "confirm" });
-      } else void act.patchRelation(s, selRel, { action: "modify", label: name });
+        if (selRel.status === "suggested") void relAct.patchRelation(s, selRel, { action: "confirm" });
+      } else void relAct.patchRelation(s, selRel, { action: "modify", label: name });
       advance(selRel.id);
     }
   }
@@ -200,7 +221,7 @@ export default function SpanWorkspace({
       if (selSpan.status !== "confirmed") void act.patchSpan(ownerOf(selSpan.id)!, selSpan, { action: "confirm" });
       advance(selSpan.id);
     } else if (selRel) {
-      if (selRel.status !== "confirmed") void act.patchRelation(s, selRel, { action: "confirm" });
+      if (selRel.status !== "confirmed") void relAct.patchRelation(s, selRel, { action: "confirm" });
       advance(selRel.id);
     } else {
       const first = ownSpans.find(isSuggested) ?? ownSpans[0];
@@ -214,7 +235,7 @@ export default function SpanWorkspace({
       void act.patchSpan(ownerOf(selSpan.id)!, selSpan, { action: "reject" });
       advance(selSpan.id);
     } else if (selRel && selRel.status !== "rejected") {
-      void act.patchRelation(s, selRel, { action: "reject" });
+      void relAct.patchRelation(s, selRel, { action: "reject" });
       advance(selRel.id);
     }
   }
@@ -318,7 +339,7 @@ export default function SpanWorkspace({
   const editor = (
     <section className="card" aria-label="编辑器">
       <div className="card-head">
-        <h2>{isRel ? "片段与关系" : "片段"}</h2>
+        <h2>{relLayerId ? "片段与关系" : "片段"}</h2>
         {sIdx != null && (
           <span className="mono small muted ellipsis" style={{ maxWidth: 220 }}>
             {doc?.title ?? docId} · 句 {sIdx + 1}
@@ -331,6 +352,16 @@ export default function SpanWorkspace({
         </span>
         {annot.options.length > 0 && (
           <Select size="small" style={{ width: 150 }} aria-label="标注者" value={annot.value ?? ""} options={annot.options} onChange={(v: string) => annot.setValue(v || null)} />
+        )}
+        {relLayers.length > 0 && (
+          <Select
+            size="small"
+            style={{ width: 160 }}
+            aria-label="关系层"
+            value={pickedRel?.id ?? ""}
+            options={[{ value: "", label: "关系：不显示" }, ...relLayers.map((l) => ({ value: l.id, label: `关系：${l.name}` }))]}
+            onChange={(v: string) => setRelPick(v || null)}
+          />
         )}
         <div className="seg-mini" role="tablist" aria-label="文本范围">
           <button type="button" role="tab" aria-selected={view === "sent"} onClick={() => setView("sent")}>
@@ -448,7 +479,7 @@ export default function SpanWorkspace({
           <span className="num">{pendingHere}</span>
           <span className="small muted">处待确认</span>
         </div>
-        {!canAnnotate && <div className="small muted">查看者只读</div>}
+        {!canAnnotate && <div className="small muted">{readOnlyNote}</div>}
       </section>
       <LabelPanel
         ref={searchRef}
@@ -755,16 +786,7 @@ const KIND_VIEW: [DiffKind, string, string][] = [
 function SpanDiffTab({ layer, docId, keep, onOpen }: { layer: Layer; docId: string | null; keep: (x: { annotator_id: string | null }) => boolean; onOpen: (idx: number) => void }) {
   const q = useSpanSentences(layer.id, docId, "all");
   const [filter, setFilter] = useState<DiffKind | "all">("all");
-  const blocks = useMemo(
-    () =>
-      (q.data?.pages.flatMap((p) => p.items) ?? [])
-        .map((s) => {
-          const toks = spanDiffTokens({ ...s, spans: s.spans.filter(keep), relations: s.relations.filter(keep) });
-          return { s, toks, c: diffCounts(toks) };
-        })
-        .filter((b) => b.toks.length > 0),
-    [q.data, keep],
-  );
+  const blocks = useMemo(() => spanDiffBlocks(q.data?.pages.flatMap((p) => p.items) ?? [], keep).map((b) => ({ ...b, c: diffCounts(b.toks) })), [q.data, keep]);
   const total = blocks.reduce((acc, b) => ({ changed: acc.changed + b.c.changed, confirmed: acc.confirmed + b.c.confirmed, rejected: acc.rejected + b.c.rejected, pending: acc.pending + b.c.pending }), { changed: 0, confirmed: 0, rejected: 0, pending: 0 });
   const shown = filter === "all" ? blocks : blocks.filter((b) => b.c[filter] > 0);
   return (

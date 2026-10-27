@@ -18,7 +18,7 @@ import {
   type SpanPatch,
 } from "../../api";
 import { useMe } from "../../lib/data";
-import { patchedSpan } from "./spanModel";
+import { effectiveAlignPatch, effectiveSpanPatch, patchedSpan } from "./spanModel";
 
 export const SPAN_PAGE = 20;
 
@@ -168,7 +168,9 @@ export function useSpanActions(opts: { listLayerId: string; spanLayerId: string;
     }
   }
 
-  async function patchSpan(s: SentenceSpans, span: Span, body: SpanPatch): Promise<boolean> {
+  async function patchSpan(s: SentenceSpans, span: Span, request: SpanPatch): Promise<boolean> {
+    const body = effectiveSpanPatch(span, request);
+    if (!body) return true;
     putSpan(s, patchedSpan(span, body));
     try {
       putSpan(s, normSpan(await api.patch<Span>(`/layers/${opts.spanLayerId}/spans/${span.id}`, body)));
@@ -239,6 +241,26 @@ export function useAlignPairs(layerId: string, docId: string | null) {
   });
 }
 
+/** Pairs of one source sentence (cursor before it, page size 1); [] when the sentence is not in the layer. */
+export async function fetchSentencePairs(layerId: string, docId: string, idx: number): Promise<SentencePair[]> {
+  const page = await api.get<CursorPage<SentencePair>>(`/layers/${layerId}/alignments`, {
+    src_document_id: docId,
+    cursor: idx > 0 ? `${docId}:${idx - 1}` : undefined,
+    page_size: 1,
+  });
+  return page.items.filter((p) => p.src.document_id === docId && p.src.sentence_index === idx);
+}
+
+/** A source sentence opened by link (?s=) that the loaded pair list does not contain. */
+export function useAlignPair(layerId: string, docId: string | null, idx: number | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["align-one", layerId, docId, idx],
+    queryFn: () => fetchSentencePairs(layerId, docId!, idx!),
+    enabled: enabled && !!docId && idx != null,
+    staleTime: Infinity,
+  });
+}
+
 export function useAlignActions(layerId: string, projectId: string) {
   const qc = useQueryClient();
   const { message } = App.useApp();
@@ -254,6 +276,7 @@ export function useAlignActions(layerId: string, projectId: string) {
     qc.setQueriesData<InfiniteData<CursorPage<SentencePair>>>({ queryKey: ["align-pairs", layerId, p.src.document_id] }, (d) =>
       d ? { ...d, pages: d.pages.map((pg) => ({ ...pg, items: pg.items.map((x) => (same(x, p) ? fn(x) : x)) })) } : d,
     );
+    qc.setQueriesData<SentencePair[]>({ queryKey: ["align-one", layerId, p.src.document_id] }, (d) => (d ? d.map((x) => (same(x, p) ? fn(x) : x)) : d));
   }
   const setAlignments = (p: SentencePair, alignments: Alignment[]) => put(p, (x) => ({ ...x, alignments }));
   const replace = (p: SentencePair, id: Alignment["id"], a: Alignment) => put(p, (x) => ({ ...x, alignments: x.alignments.map((y) => (y.id === id ? a : y)) }));
@@ -261,9 +284,12 @@ export function useAlignActions(layerId: string, projectId: string) {
   function fail(e: unknown) {
     message.error(errorText(e));
     qc.invalidateQueries({ queryKey: ["align-pairs", layerId] });
+    qc.invalidateQueries({ queryKey: ["align-one", layerId] });
   }
 
-  async function patchOne(p: SentencePair, a: Alignment, body: AlignmentPatch): Promise<Alignment> {
+  async function patchOne(p: SentencePair, a: Alignment, request: AlignmentPatch): Promise<Alignment> {
+    const body = effectiveAlignPatch(a, request, p.tgt?.sentence_index);
+    if (!body) return a;
     const r = await api.patch<Alignment>(`/layers/${layerId}/alignments/${a.id}`, body);
     replace(p, a.id, r);
     return r;

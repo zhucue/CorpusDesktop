@@ -64,11 +64,22 @@ export function SpanViewCard(p: SpanViewProps) {
   );
 }
 
-/* ---------- AlignmentGraph (links: 1-based token numbers) ---------- */
+/* ---------- AlignmentGraph (links: 1-based token numbers; trailing ids locate the pair for 在标注中打开) ---------- */
 export interface AlignmentGraphProps {
   src_tokens: string[];
   tgt_tokens: string[];
   links: { src: number[]; tgt: number[]; status?: AnnotStatus }[];
+  layer_id?: string;
+  src_document_id?: string;
+  src_sentence_index?: number;
+}
+
+/** Annotation page link for an AlignmentGraph card: the exact layer and source sentence when the ids are given. */
+export function alignmentGraphHref(projectId: string, p: Pick<AlignmentGraphProps, "layer_id" | "src_document_id" | "src_sentence_index">): string {
+  if (typeof p.layer_id !== "string" || !p.layer_id) return annotateUrl(projectId, { kind: "alignment" });
+  const doc = typeof p.src_document_id === "string" && p.src_document_id ? p.src_document_id : undefined;
+  const s = doc && Number.isInteger(p.src_sentence_index) && p.src_sentence_index! >= 0 ? p.src_sentence_index : undefined;
+  return annotateUrl(projectId, { layer: p.layer_id, doc, s });
 }
 
 export function AlignmentGraphCard(p: AlignmentGraphProps) {
@@ -86,9 +97,9 @@ export function AlignmentGraphCard(p: AlignmentGraphProps) {
       title="词对齐"
       meta={`${links.length} 组`}
       right={sugg > 0 ? <span className="tag t-run">{sugg} 组建议</span> : undefined}
-      pin={{ kind: "text", ref: {}, text: `${src.join(" ")} ↔ ${tgt.join(" ")}`, source: "助手 · AlignmentGraph" }}
+      pin={{ kind: "text", ref: p.src_document_id ? { document_id: p.src_document_id } : {}, text: `${src.join(" ")} ↔ ${tgt.join(" ")}`, source: `助手 · AlignmentGraph${p.src_sentence_index != null ? ` · 句 ${p.src_sentence_index + 1}` : ""}` }}
       foot={
-        <Link className="btn xs" to={annotateUrl(projectId, { kind: "alignment" })}>
+        <Link className="btn xs" to={alignmentGraphHref(projectId, p)}>
           <Icon name="external" size={14} />
           在标注中打开
         </Link>

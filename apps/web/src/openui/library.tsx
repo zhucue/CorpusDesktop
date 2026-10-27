@@ -173,13 +173,16 @@ export const SpanView = defineComponent({
 
 export const AlignmentGraph = defineComponent({
   name: "AlignmentGraph",
-  description: "一个句对的词级对齐连线图；links 的 src、tgt 为 1 起 token 序号。",
+  description: "一个句对的词级对齐连线图；links 的 src、tgt 为 1 起 token 序号；layer_id、src_document_id、src_sentence_index 用于在标注页打开该句对。",
   props: z.object({
     src_tokens: z.array(z.string()),
     tgt_tokens: z.array(z.string()),
     links: z.array(
       z.object({ src: z.array(z.number()), tgt: z.array(z.number()), status: z.enum(["suggested", "confirmed", "modified", "rejected"]).optional() }),
     ),
+    layer_id: z.string().optional(),
+    src_document_id: z.string().optional(),
+    src_sentence_index: z.number().optional(),
   }),
   component: ({ props }) => <AlignmentGraphCard {...props} />,
 });

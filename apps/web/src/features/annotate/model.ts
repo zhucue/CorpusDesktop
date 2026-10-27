@@ -209,3 +209,17 @@ export function nextPending(views: TokView[], from: number): number | null {
 export function layerPct(p: { total: number; confirmed: number; modified: number; rejected: number }): number {
   return p.total ? Math.round(((p.confirmed + p.modified + p.rejected) / p.total) * 100) : 0;
 }
+
+/**
+ * Pre-annotation request that redoes the sentences listed in progress.failed_sentences: their documents and one
+ * sentence range covering them (sentence_range applies to each document; reviewed rows are kept by the API).
+ */
+export function failedRetryBody(failed: unknown[] | undefined): { document_ids: string[]; sentence_range: { start: number; end: number } } | null {
+  const items = (failed ?? []).filter(
+    (f): f is { document_id: string; sentence_index: number } =>
+      !!f && typeof (f as { document_id?: unknown }).document_id === "string" && Number.isInteger((f as { sentence_index?: unknown }).sentence_index),
+  );
+  if (!items.length) return null;
+  const idx = items.map((f) => f.sentence_index);
+  return { document_ids: [...new Set(items.map((f) => f.document_id))], sentence_range: { start: Math.min(...idx), end: Math.max(...idx) + 1 } };
+}

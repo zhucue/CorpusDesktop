@@ -542,14 +542,15 @@ export default function Search() {
     if (s === lastParams.current) return;
     lastParams.current = s;
     const q = params.get("q");
-    if (!q) return;
     const sc = parseScopeParam(params.get("scope"));
-    setQuery(q);
+    // ?scope= alone (corpus or subcorpus links) sets the range without searching.
     if (sc && "filter" in sc) setTempScope(sc);
     else {
       setTempScope(null);
       if (sc) shell.setScope(sc as Scope);
     }
+    if (!q) return;
+    setQuery(q);
     const effective = sc ?? shell.scope;
     // "回到例句" from a statistic counted on annotation layers carries them (?layers=)
     let urlLayers: SearchRequest["layers"] | undefined;
@@ -682,6 +683,12 @@ export default function Search() {
   // 依存树 expander: the dependency layer the search used, else the corpus default; hidden without one.
   const treeLayer = req ? (req.layers?.dep ?? defaultLayer(allLayers, describeScope(req.scope, allCorpora, allSubs).corpus?.id, "dep")?.id ?? null) : null;
   const selectedHit = rows.find((r) => r.id === selected)?.hit ?? null;
+  // 双语对照 word links: the most recent ready word alignment layer whose source is the searched corpus.
+  const hitCorpusId = req ? describeScope(req.scope, allCorpora, allSubs).corpus?.id : undefined;
+  const alignLayer =
+    allLayers
+      .filter((l) => l.kind === "alignment" && l.level === "word" && l.status === "ready" && (l.src_corpus_id ?? l.corpus_id) === hitCorpusId)
+      .sort((a, b) => (b.updated_at ?? b.created_at).localeCompare(a.updated_at ?? a.created_at))[0] ?? null;
   const total = counts?.complete ? counts.hits : null;
   const pages = result ? (total != null ? Math.max(1, Math.ceil(total / result.page_size)) : result.page + (result.items.length === result.page_size ? 1 : 0)) : 1;
   const from = result ? (result.page - 1) * result.page_size + 1 : 0;
@@ -785,7 +792,7 @@ export default function Search() {
               <ParseLine query={query.trim()} parse={parseShown} error={parse.error} />
             </div>
           </div>
-          {corpusLayers.length > 0 && (
+          {corpusLayers.some((l) => l.kind === "pos" || l.kind === "dep" || l.kind === "span") && (
             <div className="layer-pick">
               <span className="small muted">标注层</span>
               {(["pos", "dep", "span"] as const).map((kind) => {
@@ -934,7 +941,7 @@ export default function Search() {
                 <Empty icon="search" text="没有命中" />
               ) : (
                 result && (
-                  <div style={{ opacity: search.isFetching ? 0.55 : 1, transition: "opacity 200ms" }}>
+                  <div className="kwic-scroll" style={{ opacity: search.isFetching ? 0.55 : 1, transition: "opacity 200ms" }}>
                     <KwicTable
                       rows={rows}
                       terms={terms}
@@ -976,6 +983,9 @@ export default function Search() {
               terms={terms}
               indexVersion={info.corpus?.index_version}
               evidence={selectedHit && req ? hitEvidence(selectedHit, req.query, req.scope, corpusName) : null}
+              alignLayer={alignLayer}
+              projectId={projectId}
+              onClose={() => setSelected(null)}
             />
           </section>
         )}

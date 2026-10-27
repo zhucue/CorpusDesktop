@@ -10,7 +10,7 @@ import { download, type EChartHandle } from "../../components/results/EChart";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
 import { describeScope, useCorpora, useJobCreated, useProjectId, useSubcorpora } from "../../lib/data";
-import { fmt, fmtShortTime } from "../../lib/format";
+import { fmt, fmtShortTime, fmtVersion } from "../../lib/format";
 import { StatChart } from "./StatChart";
 import { methodLabels, StatTable } from "./StatTable";
 import "./stats.css";
@@ -279,7 +279,7 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
   const t = stat.totals;
   const meta = (
     <span className="res-meta">
-      <span>{stat.scope.name}</span>·<span className="num">{fmt(t.tokens)}</span> 词
+      <span>{stat.scope.name}</span> · <span className="num">{fmt(t.tokens)}</span> 词
       {stat.method === "keywords" && t.reference && (
         <>
           对 <span className="num">{fmt(t.reference.tokens)}</span> 词
@@ -295,7 +295,7 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
           · <span className="num">{fmt(t.hits)}</span> 命中
         </>
       )}
-      · 索引 v{stat.index_version ?? "—"} · {fmtShortTime(stat.created_at)} ·{" "}
+      · 索引 {fmtVersion(stat.index_version)} · {fmtShortTime(stat.created_at)} ·{" "}
       <span className="num">
         {fmt(stat.rows.length)}
         {stat.row_count > stat.rows.length ? ` / ${fmt(stat.row_count)}` : ""}
@@ -389,7 +389,7 @@ function SavedResults({ open, onClose, projectId, onOpen }: { open: boolean; onC
             <div className="grow col" style={{ gap: 2 }}>
               <span className="li-title ellipsis">{summary(s)}</span>
               <span className="small muted num">
-                {s.scope.name} · {fmt(s.row_count)} 项 · v{s.index_version ?? "—"} · {fmtShortTime(s.created_at)}
+                {s.scope.name} · {fmt(s.row_count)} 项 · {fmtVersion(s.index_version)} · {fmtShortTime(s.created_at)}
               </span>
             </div>
             <Popconfirm title="删除这条结果？" okText="删除" cancelText="取消" onConfirm={() => del.mutate(s.id)}>

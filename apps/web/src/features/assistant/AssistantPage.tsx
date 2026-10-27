@@ -9,7 +9,7 @@ import { Icon } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
 import { describeScope, useCorpora, useProjectId, useSubcorpora } from "../../lib/data";
-import { dayGroup, fmt, fmtShortTime } from "../../lib/format";
+import { dayGroup, fmt, fmtShortTime, fmtVersion } from "../../lib/format";
 import "./assistant.css";
 import AssistantPanel, { HealthNotice } from "./AssistantPanel";
 import { useSessions, type ChatItem } from "./useAgentChat";
@@ -129,7 +129,7 @@ function Rail({ projectId, scope, items }: { projectId: string; scope: Scope | n
               </>
             )}
             <dt>索引</dt>
-            <dd className="num">{info.corpus.index_version != null ? `v${info.corpus.index_version}` : "—"}</dd>
+            <dd className="num">{fmtVersion(info.corpus.index_version)}</dd>
           </dl>
         ) : (
           <div className="muted sm">未选择</div>

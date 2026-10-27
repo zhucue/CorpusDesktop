@@ -111,7 +111,7 @@ export function errorCode(e: unknown): string | null {
 export const MAX_PAGE_SIZE = 200;
 
 export const roleLabels: Record<Role, string> = {
-  owner: "所有者",
+  owner: "负责人",
   editor: "编辑者",
   annotator: "标注者",
   viewer: "查看者",

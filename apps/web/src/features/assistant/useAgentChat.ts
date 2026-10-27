@@ -20,6 +20,8 @@ export function useSessions(projectId: string) {
   return useQuery({
     queryKey: ["agent-sessions", projectId],
     queryFn: () => agentApi.get<Page<AgentSession>>("/sessions", { project_id: projectId }),
+    // The session turns idle just after the stream ends: keep polling while one is marked running.
+    refetchInterval: (q) => (q.state.data?.items.some((s) => s.state === "running") ? 3000 : false),
     meta: { background: true },
   });
 }

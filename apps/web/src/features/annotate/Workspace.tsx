@@ -39,11 +39,13 @@ export default function Workspace({
   layer,
   projectId,
   canAnnotate,
+  readOnlyNote = "查看者只读",
   leftTop,
 }: {
   layer: Layer;
   projectId: string;
   canAnnotate: boolean;
+  readOnlyNote?: string;
   leftTop?: React.ReactNode;
 }) {
   const [params, setParams] = useSearchParams();
@@ -147,6 +149,12 @@ export default function Workspace({
   function changeHead(dep: number, head: number) {
     if (!s || !canAnnotate) return;
     select(dep);
+    const v = views.find((x) => x.index === dep);
+    // The same head is no modification: confirm a suggestion, leave a reviewed token as it is.
+    if (v && v.head === head && v.status !== "rejected") {
+      if (v.status === "suggested") void act(s, { token_index: dep, action: "confirm" });
+      return;
+    }
     void act(s, { token_index: dep, action: "modify", head });
   }
 
@@ -328,6 +336,7 @@ export default function Workspace({
           <Tip title="词性着色（P）">
             <button className="switch" type="button" role="switch" aria-checked={posColor} aria-label="词性着色" onClick={() => setPosColor((v) => !v)} />
           </Tip>
+          <span className="small muted">词性着色</span>
         </span>
         {s && <PinButton input={{ kind: "text", ref: { document_id: s.document_id }, text: s.text, source: `${layer.name} · ${doc?.title ?? s.document_id} · 句 ${s.sentence_index + 1}` }} />}
       </div>
@@ -433,7 +442,7 @@ export default function Workspace({
                 </button>
               </Popconfirm>
             </div>
-            {!canAnnotate && <div className="small muted">查看者只读</div>}
+            {!canAnnotate && <div className="small muted">{readOnlyNote}</div>}
           </>
         ) : (
           <span className="small muted">选择一个词</span>

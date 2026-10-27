@@ -13,7 +13,7 @@ import { fmt } from "../../lib/format";
 import { AgreementTab } from "./Agreement";
 import { AlignmentStatsCard } from "./AlignStats";
 import { useLayerDocs } from "./data";
-import { useAlignActions, useAlignPairs, useAnnotatorView } from "./spanData";
+import { useAlignActions, useAlignPair, useAlignPairs, useAnnotatorView } from "./spanData";
 import { fmtScore, isSuggested, pairDone, tokenForms } from "./spanModel";
 import { Stream, typingTarget } from "./Stream";
 import { StatsTab } from "./Tabs";
@@ -30,6 +30,7 @@ export default function AlignWorkspace({
   layers,
   projectId,
   canAnnotate,
+  readOnlyNote = "查看者只读",
   canManage,
   leftTop,
 }: {
@@ -37,6 +38,7 @@ export default function AlignWorkspace({
   layers: Layer[];
   projectId: string;
   canAnnotate: boolean;
+  readOnlyNote?: string;
   canManage: boolean;
   leftTop?: React.ReactNode;
 }) {
@@ -67,7 +69,10 @@ export default function AlignWorkspace({
   const sIdx = sParam != null && sParam !== "" && docParam === docId ? Number(sParam) : (items[0]?.src.sentence_index ?? null);
   const annot = useAnnotatorView(layer, canManage, projectId);
   // A source sentence can have several targets (one pair each) or none (tgt null).
-  const pairs = useMemo(() => items.filter((p) => p.src.sentence_index === sIdx), [items, sIdx]);
+  const listPairs = useMemo(() => items.filter((p) => p.src.sentence_index === sIdx), [items, sIdx]);
+  // A pair opened by link (AlignmentGraph card, search inspector) may lie beyond the loaded pages.
+  const one = useAlignPair(layer.id, docId, sIdx, listPairs.length === 0 && !list.isPending && sIdx != null);
+  const pairs = listPairs.length ? listPairs : (one.data ?? []);
   const srcRows = useMemo(() => {
     const m = new Map<number, SentencePair[]>();
     for (const p of items) m.set(p.src.sentence_index, [...(m.get(p.src.sentence_index) ?? []), p]);
@@ -153,7 +158,9 @@ export default function AlignWorkspace({
     if (!canAnnotate) return;
     const sentAl = mine(p).find((a) => a.level === "sentence");
     const reload = (ok: boolean) => {
-      if (ok) void qc.invalidateQueries({ queryKey: ["align-pairs", layer.id, docId] });
+      if (!ok) return;
+      void qc.invalidateQueries({ queryKey: ["align-pairs", layer.id, docId] });
+      void qc.invalidateQueries({ queryKey: ["align-one", layer.id, docId] });
     };
     if (sentAl) void act.run([() => act.patchOne(p, sentAl, { action: "modify", tgt_sentence_index: tgtIdx })]).then(reload);
     else {
@@ -258,11 +265,11 @@ export default function AlignWorkspace({
           />
         )}
       </div>
-      <div className="col">
+      <div className="col card-pad">
         {!docId ? (
           <Empty icon="file" text={docs.isPending ? "加载中" : "该层没有文档"} />
         ) : pairs.length === 0 ? (
-          list.isPending ? <Skeleton rows={4} /> : <Empty icon="columns" text="选择句对" />
+          list.isPending || one.isFetching ? <Skeleton rows={4} /> : <Empty icon="columns" text="选择句对" />
         ) : (
           pairs.map((p) => (
             <div className="bi-pair" key={`${p.tgt?.document_id}:${p.tgt?.sentence_index}`}>
@@ -358,7 +365,7 @@ export default function AlignWorkspace({
         ) : (
           <span className="small muted">选择句对</span>
         )}
-        {!canAnnotate && <div className="small muted">查看者只读</div>}
+        {!canAnnotate && <div className="small muted">{readOnlyNote}</div>}
       </section>
       <section className="card card-pad" aria-label="快捷键">
         <div className="row" style={{ marginBottom: 10 }}>

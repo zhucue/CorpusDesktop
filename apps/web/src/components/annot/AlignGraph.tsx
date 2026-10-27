@@ -152,7 +152,7 @@ export function AlignGraph({
             key={l.id}
             className={`align-line draw ${l.status === "suggested" ? "sugg" : "strong"} ${lit.has(l.id) ? "hl" : ""}`}
             style={{ ["--i" as string]: i }}
-            pathLength={1}
+            pathLength={l.status === "suggested" ? undefined : 1}
             d={l.d}
             data-la={l.a}
             data-lb={l.b}

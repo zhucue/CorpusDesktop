@@ -7,7 +7,7 @@ import { Count, CorpusStatusTag, ErrorAlert, Monogram, Progress, QueryChip } fro
 import { Icon, type IconName } from "../../components/Icon";
 import { KwicTable } from "../../components/results/Kwic";
 import { isActiveJob, useCorpora, useCorpus, useJob, useProjectJobs, useProjects } from "../../lib/data";
-import { fmt } from "../../lib/format";
+import { fmt, fmtVersion } from "../../lib/format";
 import AssistantPanel from "../assistant/AssistantPanel";
 import { useAgentHealth } from "../assistant/useAgentChat";
 import { TOOL_COUNT } from "../../components/global/tools";
@@ -122,7 +122,7 @@ export default function Onboarding() {
     {
       icon: "db",
       title: corpus.data?.name ?? "未选择语料",
-      sub: corpus.data ? `${fmt(corpus.data.stats.sentences)} 句 · 索引 v${corpus.data.index_version ?? "—"}` : "",
+      sub: corpus.data ? `${fmt(corpus.data.stats.sentences)} 句 · 索引 ${fmtVersion(corpus.data.index_version)}` : "",
       tag: ready ? "可检索" : "未就绪",
       cls: ready ? "t-ok" : "t-gray",
     },
@@ -262,7 +262,7 @@ export default function Onboarding() {
                     </>
                   ) : (
                     <div className="small muted num">
-                      {fmt(corpus.data.stats.documents)} 篇 · {fmt(corpus.data.stats.sentences)} 句 · {fmt(corpus.data.stats.tokens)} 词 · 索引 v{corpus.data.index_version ?? "—"}
+                      {fmt(corpus.data.stats.documents)} 篇 · {fmt(corpus.data.stats.sentences)} 句 · {fmt(corpus.data.stats.tokens)} 词 · 索引 {fmtVersion(corpus.data.index_version)}
                     </div>
                   )}
                   {corpus.data.status === "failed" && corpus.data.error && <div className="alert err">{corpus.data.error}</div>}

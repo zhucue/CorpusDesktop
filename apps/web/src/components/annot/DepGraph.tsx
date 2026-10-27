@@ -103,7 +103,7 @@ export function DepGraph({
           const active = selected === a.dep;
           return (
             <g key={`a${a.dep}`} className={`darc ${a.suggested ? "sugg" : ""} ${active ? "on" : ""} ${drag?.dep === a.dep ? "dragging" : ""}`} data-dep={a.dep} data-head={a.head}>
-              <path className="arc draw" style={{ ["--i" as string]: o }} pathLength={1} d={a.path} />
+              <path className="arc draw" style={{ ["--i" as string]: o }} pathLength={a.suggested ? undefined : 1} d={a.path} />
               <polygon className="arrow" style={{ ["--i" as string]: o }} points={`${a.xd - 4},${y0 - 9} ${a.xd + 4},${y0 - 9} ${a.xd},${y0 - 1}`} />
               <g
                 className={`rel ${onSelectArc ? "click" : ""}`}
@@ -128,7 +128,7 @@ export function DepGraph({
         })}
       {layout.roots.map((r0) => (
         <g key={`r${r0.dep}`} className={`darc root ${r0.suggested ? "sugg" : ""} ${selected === r0.dep ? "on" : ""}`} data-dep={r0.dep} data-head={0}>
-          <path className="arc draw" style={{ ["--i" as string]: n }} pathLength={1} d={r0.path} />
+          <path className="arc draw" style={{ ["--i" as string]: n }} pathLength={r0.suggested ? undefined : 1} d={r0.path} />
           <polygon className="arrow" style={{ ["--i" as string]: n }} points={`${r0.x - 4},${y0 - 9} ${r0.x + 4},${y0 - 9} ${r0.x},${y0 - 1}`} />
           <g
             className={`rel ${onSelectArc ? "click" : ""}`}

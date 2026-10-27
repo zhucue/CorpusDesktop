@@ -198,9 +198,16 @@ export function SpanText({
     return () => ro.disconnect();
   }, [measure]);
 
+  /** Spans are not focusable: drop focus left on an outside button so Enter and label keys reach the editor, not that button. */
+  function releaseFocus() {
+    const a = box.current?.ownerDocument.activeElement;
+    if (a instanceof HTMLElement && a !== a.ownerDocument.body && !box.current?.contains(a)) a.blur();
+  }
+
   /* ---------- text selection ---------- */
   function onMouseUp() {
     if (!onSelectText || drag) return;
+    releaseFocus();
     const root = flow.current;
     const s = root?.ownerDocument.getSelection();
     if (!root || !s || !s.rangeCount || s.isCollapsed) return;
@@ -222,6 +229,7 @@ export function SpanText({
     if (s && !s.isCollapsed) return; // a drag-selection, not a click
     const t = (e.target as Element).closest("[data-sid]") as HTMLElement | null;
     const id = t?.dataset.sid;
+    releaseFocus();
     onSelectSpan(id && id !== "__pending" ? id : null, e);
   }
 
@@ -260,7 +268,7 @@ export function SpanText({
       data-tag={s.id}
       contentEditable={false}
       onMouseDown={(e) => onSelectSpan && e.preventDefault()}
-      onClick={onSelectSpan ? (e) => (e.stopPropagation(), onSelectSpan(s.id, e)) : undefined}
+      onClick={onSelectSpan ? (e) => (e.stopPropagation(), releaseFocus(), onSelectSpan(s.id, e)) : undefined}
       role={onSelectSpan ? "button" : undefined}
       aria-label={onSelectSpan ? `${s.label}，选择片段` : undefined}
     >
@@ -297,7 +305,7 @@ export function SpanText({
                     const lvl = levels.get(id) ?? 0;
                     node = (
                       <span
-                        className={`sm ${s.status} ${id === "__pending" ? "pend" : ""} ${id === selected ? "on" : ""} ${id === relFrom ? "from" : ""}`}
+                        className={`smk ${s.status} ${id === "__pending" ? "pend" : ""} ${id === selected ? "on" : ""} ${id === relFrom ? "from" : ""}`}
                         data-sid={id}
                         data-c={s.color || undefined}
                         style={{ ["--lv" as string]: lvl }}
@@ -323,7 +331,7 @@ export function SpanText({
         <svg className="rel-svg" aria-hidden={!onSelectRelation}>
           {arcs.list.map((a, i) => (
             <g key={a.id} className={`rarc ${a.status} ${a.id === selectedRelation ? "on" : ""}`} data-rel={a.id}>
-              <path className="draw" style={{ ["--i" as string]: i }} pathLength={1} d={a.path} />
+              <path className="draw" style={{ ["--i" as string]: i }} pathLength={a.status === "suggested" || a.status === "rejected" ? undefined : 1} d={a.path} />
               <polygon points={`${a.x2 - 4},${a.y2 - 7} ${a.x2 + 4},${a.y2 - 7} ${a.x2},${a.y2}`} />
               <g
                 className={`rlab ${onSelectRelation ? "click" : ""}`}

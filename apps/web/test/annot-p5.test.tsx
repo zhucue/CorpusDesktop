@@ -57,7 +57,7 @@ describe("code points", () => {
     // Ending inside the label tag snaps to the next holder start.
     const tag = container.querySelector("[data-tag='a']")!;
     expect(rangeToCp(root, select([holderText(root, 102), 0], [tag.firstChild!, 1]))).toEqual({ start: 102, end: 105 });
-    expect(container.querySelector(".sm.suggested")?.textContent).toBe("博物馆");
+    expect(container.querySelector(".smk.suggested")?.textContent).toBe("博物馆");
     expect(tag.textContent).toBe("地点");
   });
 
@@ -156,7 +156,7 @@ describe("P5 OpenUI components", () => {
     ].join("\n");
     wrap(<UiBlock lang={lang} />);
     expect(await screen.findByText("片段标注")).toBeTruthy();
-    const marks = [...document.querySelectorAll(".sm")].map((m) => m.textContent);
+    const marks = [...document.querySelectorAll(".smk")].map((m) => m.textContent);
     expect(marks).toEqual(["go", "library"]);
     expect([...document.querySelectorAll(".stag")].map((t) => t.textContent)).toEqual(["时态", "冠词"]);
     expect(document.querySelector(".rel-svg text")?.textContent).toBe("cause");
@@ -245,7 +245,7 @@ describe("span workspace", () => {
       return new Response(JSON.stringify({ error: { code: "NOT_FOUND", message: `unexpected ${method} ${p}` } }), { status: 404 });
     });
     wrap(<SpanWorkspace layer={LAYER} layers={[LAYER]} projectId="p1" canAnnotate canManage />, "/p/p1/annotate?layer=L5");
-    await waitFor(() => expect(document.querySelector(".sm")?.textContent).toBe("go"));
+    await waitFor(() => expect(document.querySelector(".smk")?.textContent).toBe("go"));
 
     // Select "library" (sentence cps 22–29 → document 62–69) with a trailing space-free range, then press 2.
     const root = document.querySelector(".span-flow")!;
@@ -255,7 +255,7 @@ describe("span workspace", () => {
     sel.removeAllRanges();
     sel.addRange(select([tail, from], [tail, from + 7]));
     fireEvent.mouseUp(root);
-    await waitFor(() => expect(document.querySelector(".sm.pend")?.textContent).toBe("library"));
+    await waitFor(() => expect(document.querySelector(".smk.pend")?.textContent).toBe("library"));
     fireEvent.keyDown(document.body, { key: "2" });
     await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
     expect(calls.find((c) => c.method === "POST")).toEqual({ method: "POST", path: "/api/layers/L5/spans", body: { document_id: "d1", start_cp: 62, end_cp: 69, label: "冠词" } });

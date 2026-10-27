@@ -7,10 +7,10 @@ import { Empty, ErrorAlert, Skeleton, Tip } from "../../components/common";
 import { Icon } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
-import { canEdit, useCorpora, useJob, useJobCreated, useProject, useProjectId } from "../../lib/data";
+import { canEdit, useCorpora, useJob, useJobCreated, useMe, useProject, useProjectId } from "../../lib/data";
 import { fmt } from "../../lib/format";
-import { listOf, useLayers } from "./data";
-import { layerPct } from "./model";
+import { canWriteLayer, listOf, useLayers } from "./data";
+import { failedRetryBody, layerPct } from "./model";
 import NewLayerDialog, { kindLabels } from "./NewLayerDialog";
 import { KappaGauge, meanKappa, useAgreement } from "./Agreement";
 import AlignWorkspace from "./AlignWorkspace";
@@ -46,7 +46,7 @@ function LayerItem({
   canManage: boolean;
   onSelect: () => void;
   onDelete: () => void;
-  onRetry: () => void;
+  onRetry: (body?: object) => void;
 }) {
   const busy = layer.status === "preannotating" || layer.status === "created";
   const job = useJob(busy ? layer.job_id : null, 2000);
@@ -80,7 +80,7 @@ function LayerItem({
                   {layer.source_model}
                 </span>
               )}
-              <span className="num">
+              <span className="num" style={{ whiteSpace: "nowrap", flexShrink: 0 }}>
                 {fmt(done)} / {fmt(layer.progress.total)}
               </span>
             </span>
@@ -96,6 +96,12 @@ function LayerItem({
       {!!layer.progress.failed_sentences?.length && layer.status !== "failed" && (
         <div className="layer-err">
           <span className="grow">{layer.progress.failed_sentences.length} 句预标失败</span>
+          {canManage && !busy && failedRetryBody(layer.progress.failed_sentences) && (
+            <button className="btn xs" type="button" onClick={() => onRetry(failedRetryBody(layer.progress.failed_sentences)!)}>
+              <Icon name="retry" size={14} />
+              重试这些句
+            </button>
+          )}
         </div>
       )}
       {layer.status === "failed" && (
@@ -134,7 +140,8 @@ export default function Annotate() {
 
   const role = project.data?.role;
   const canManage = canEdit(project.data);
-  const canAnnotate = role === "owner" || role === "editor" || role === "annotator";
+  const me = useMe();
+  const canAnnotateRole = role === "owner" || role === "editor" || role === "annotator";
   const list = layers.data ?? [];
   const layerParam = params.get("layer");
   const docParam = params.get("doc");
@@ -161,7 +168,7 @@ export default function Annotate() {
   }
 
   const preannotate = useMutation({
-    mutationFn: (id: string) => api.post<Job>(`/layers/${id}/preannotate`, {}),
+    mutationFn: ({ id, body }: { id: string; body?: object }) => api.post<Job>(`/layers/${id}/preannotate`, body ?? {}),
     onSuccess: (job) => {
       jobCreated(projectId);
       qc.invalidateQueries({ queryKey: ["layers", projectId] });
@@ -217,7 +224,7 @@ export default function Annotate() {
             canManage={canManage}
             onSelect={() => selectLayer(l.id)}
             onDelete={() => del.mutate(l.id)}
-            onRetry={() => preannotate.mutate(l.id)}
+            onRetry={(body) => preannotate.mutate({ id: l.id, body })}
           />
         ))}
       </div>
@@ -225,6 +232,8 @@ export default function Annotate() {
   );
 
   const busy = layer && (layer.status === "preannotating" || layer.status === "created");
+  const canAnnotate = !!layer && canWriteLayer(layer, me.data?.id, role);
+  const readOnlyNote = canAnnotateRole ? "只有创建者和名单内的标注者可以修改此层" : "查看者只读";
 
   return (
     <>
@@ -234,7 +243,7 @@ export default function Annotate() {
         actions={
           <>
             {canManage && (
-              <button className="btn s" type="button" disabled={!layer || !!busy || preannotate.isPending} onClick={() => layer && preannotate.mutate(layer.id)}>
+              <button className="btn s" type="button" disabled={!layer || !!busy || preannotate.isPending} onClick={() => layer && preannotate.mutate({ id: layer.id })}>
                 <Icon name="spark" size={14} />
                 <span className="lbl">预标注</span>
               </button>
@@ -296,11 +305,11 @@ export default function Annotate() {
           </section>
         ) : layer ? (
           layer.kind === "span" || layer.kind === "relation" ? (
-            <SpanWorkspace key={layer.id} layer={layer} layers={list} projectId={projectId} canAnnotate={canAnnotate} canManage={canManage} leftTop={layerList} />
+            <SpanWorkspace key={layer.id} layer={layer} layers={list} projectId={projectId} canAnnotate={canAnnotate} readOnlyNote={readOnlyNote} canManage={canManage} leftTop={layerList} />
           ) : layer.kind === "alignment" ? (
-            <AlignWorkspace key={layer.id} layer={layer} layers={list} projectId={projectId} canAnnotate={canAnnotate} canManage={canManage} leftTop={layerList} />
+            <AlignWorkspace key={layer.id} layer={layer} layers={list} projectId={projectId} canAnnotate={canAnnotate} readOnlyNote={readOnlyNote} canManage={canManage} leftTop={layerList} />
           ) : (
-            <Workspace key={layer.id} layer={layer} projectId={projectId} canAnnotate={canAnnotate} leftTop={layerList} />
+            <Workspace key={layer.id} layer={layer} projectId={projectId} canAnnotate={canAnnotate} readOnlyNote={readOnlyNote} leftTop={layerList} />
           )
         ) : (
           <Empty icon="pen" text="选择标注层" />

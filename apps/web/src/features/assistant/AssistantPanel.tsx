@@ -106,7 +106,7 @@ export default function AssistantPanel({
             {chat.items.length === 0 && !chat.loading && !compact && (
               <div className="empty" style={{ paddingTop: 80 }}>
                 <Icon name="spark" />
-                <span className="sm">针对{scopeLabel || "当前范围"}提问，可检索、统计并生成图表</span>
+                <span className="sm">针对「{scopeLabel || "当前范围"}」提问，可检索、统计并生成图表</span>
               </div>
             )}
             {chat.items.map((it, i) =>

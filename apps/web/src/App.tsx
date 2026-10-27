@@ -26,7 +26,20 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   if (me.isPending) return <Spin style={{ display: "block", marginTop: 120 }} />;
   if (me.error instanceof ApiError && me.error.status === 401)
     return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
-  if (me.error) return <Alert type="error" showIcon message={errorText(me.error)} style={{ margin: 24 }} />;
+  if (me.error)
+    return (
+      <Alert
+        type="error"
+        showIcon
+        message={errorText(me.error)}
+        style={{ margin: 24 }}
+        action={
+          <button className="btn s" type="button" disabled={me.isFetching} onClick={() => me.refetch()}>
+            重试
+          </button>
+        }
+      />
+    );
   return <>{children}</>;
 }
 

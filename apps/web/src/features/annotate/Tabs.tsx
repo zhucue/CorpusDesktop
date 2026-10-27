@@ -7,6 +7,9 @@ import { Icon } from "../../components/Icon";
 import { EChart, type ChartTokens } from "../../components/results/EChart";
 import { fmt } from "../../lib/format";
 import { hbarOption } from "../stats/StatChart";
+import { rowSearchHref } from "../stats/StatTable";
+import { Link } from "react-router";
+import { useProjectId } from "../../lib/data";
 import { diffTokens } from "./model";
 
 const KIND_VIEW: [DiffKind, string, string][] = [
@@ -90,8 +93,19 @@ export function DiffTab({ layer, docId, onOpen }: { layer: Layer; docId: string 
 
 const UNIT_NAMES: Record<Layer["kind"], string> = { pos: "token", dep: "token", span: "片段", relation: "关系", alignment: "对齐" };
 
+/** "回到例句" for a label row: the search counts the same layer ({pos=}, {dep=}, [标签] with layers=…); null for other kinds. */
+export function labelSearchHref(projectId: string, layer: Pick<Layer, "id" | "kind" | "corpus_id">, label: string): string | null {
+  if (!/^[\p{L}\p{N}_.-]+$/u.test(label)) return null;
+  const scope = { corpus_id: layer.corpus_id };
+  if (layer.kind === "span") return rowSearchHref(projectId, `[${label}]`, scope, { span: layer.id });
+  if (layer.kind === "pos") return rowSearchHref(projectId, `{pos=${label}}`, scope, { pos: layer.id });
+  if (layer.kind === "dep") return rowSearchHref(projectId, `{dep=${label}}`, scope, { dep: layer.id });
+  return null;
+}
+
 /** 统计: label frequencies (effective values) and per-document progress. */
 export function StatsTab({ layer }: { layer: Layer }) {
+  const projectId = useProjectId();
   const q = useQuery({ queryKey: ["layer-stats", layer.id], queryFn: () => api.get<LayerStats>(`/layers/${layer.id}/stats`) });
   const labels = useMemo(() => [...(q.data?.labels ?? [])].sort((a, b) => b.count - a.count), [q.data]);
   const top = useMemo(() => labels.slice(0, 20), [labels]);
@@ -144,6 +158,7 @@ export function StatsTab({ layer }: { layer: Layer }) {
                     <th className="r">频次</th>
                     <th className="r">已确认</th>
                     <th className="r">已修改</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -153,6 +168,14 @@ export function StatsTab({ layer }: { layer: Layer }) {
                       <td className="r num">{fmt(l.count)}</td>
                       <td className="r num">{fmt(l.confirmed)}</td>
                       <td className="r num">{fmt(l.modified)}</td>
+                      <td className="r">
+                        {labelSearchHref(projectId, layer, l.label) && (
+                          <Link className="back" to={labelSearchHref(projectId, layer, l.label)!}>
+                            回到例句
+                            <Icon name="right" size={14} />
+                          </Link>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

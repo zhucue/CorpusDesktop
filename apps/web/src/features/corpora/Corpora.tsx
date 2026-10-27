@@ -8,7 +8,7 @@ import { Icon } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
 import { canEdit, useCorpora, useJobCreated, useMe, useProject, useProjectId } from "../../lib/data";
-import { fmt, fmtTime } from "../../lib/format";
+import { fmt, fmtTime, fmtVersion } from "../../lib/format";
 import "./corpora.css";
 import CorpusDrawer from "./CorpusDrawer";
 import { StatusCell } from "./StatusCell";
@@ -176,15 +176,15 @@ export default function Corpora() {
                 ),
               },
               { title: "语言", dataIndex: "language", width: 70, render: (l: string) => <span className="mono">{l}</span> },
-              { title: "文档", width: 90, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.documents) },
-              { title: "句", width: 110, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.sentences) },
-              { title: "词", width: 120, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.tokens) },
-              { title: "状态", width: 220, render: (_, c) => <StatusCell c={c} /> },
-              { title: "索引", width: 70, className: "num-col", render: (_, c) => (c.index_version != null ? `v${c.index_version}` : "—") },
-              { title: "创建", width: 170, render: (_, c) => <span className="small muted">{fmtTime(c.created_at)}</span> },
+              { title: "文档", width: 80, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.documents) },
+              { title: "句", width: 90, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.sentences) },
+              { title: "词", width: 100, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.tokens) },
+              { title: "状态", width: 180, render: (_, c) => <StatusCell c={c} /> },
+              { title: "索引", width: 100, className: "num-col", render: (_, c) => <span title={c.index_version != null ? String(c.index_version) : undefined}>{fmtVersion(c.index_version)}</span> },
+              { title: "创建", width: 160, render: (_, c) => <span className="small muted">{fmtTime(c.created_at)}</span> },
               {
                 title: "",
-                width: 120,
+                width: 90,
                 align: "right",
                 render: (_, c) => {
                   const mine = c.project_id !== null ? editable : isAdmin;

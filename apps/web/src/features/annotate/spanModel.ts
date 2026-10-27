@@ -1,4 +1,4 @@
-import type { Alignment, AnnotStatus, LabelDef, PairToken, Relation, SentenceSpans, Span } from "../../api";
+import type { Alignment, AlignmentPatch, AnnotStatus, LabelDef, PairToken, Relation, SentenceSpans, Span, SpanPatch } from "../../api";
 import type { DiffToken } from "../../components/annot/DiffRows";
 import type { FlowRelation, FlowSpan } from "../../components/annot/SpanText";
 import { labelColor } from "../../components/annot/spans";
@@ -32,11 +32,14 @@ export function flowRelations(relations: Relation[]): FlowRelation[] {
   return relations.map((r) => ({ id: r.id, from: r.from_span_id, to: r.to_span_id, label: r.label, status: r.status }));
 }
 
-/** Span diff as P3 diff tokens: model label above, human value below; human-made spans have no model value. */
-export function spanDiffTokens(s: SentenceSpans): DiffToken[] {
+/**
+ * Span diff as P3 diff tokens: model label above, human value below; human-made spans have no model value.
+ * `show` limits the span rows (a span crossing sentences is listed once); relations still name every span.
+ */
+export function spanDiffTokens(s: SentenceSpans, show: (x: Span) => boolean = () => true): DiffToken[] {
   const text = new Map(s.spans.map((x) => [x.id, x.text]));
   return [
-    ...sortSpans(s.spans).map((x) => ({
+    ...sortSpans(s.spans.filter(show)).map((x) => ({
       form: x.text,
       // reviewing rewrites source to human:…; model_label keeps the pre-annotation (null for human-made spans)
       model: x.model_label ?? (isHumanSource(x.source) ? "" : x.label),
@@ -52,6 +55,18 @@ export function spanDiffTokens(s: SentenceSpans): DiffToken[] {
   ];
 }
 
+/** Diff rows per sentence in list order; a span that crosses sentences appears only in the first one. */
+export function spanDiffBlocks(sentences: SentenceSpans[], keep: (x: { annotator_id: string | null }) => boolean): { s: SentenceSpans; toks: DiffToken[] }[] {
+  const seen = new Set<string>();
+  return sentences
+    .map((s) => {
+      const mine = { ...s, spans: s.spans.filter(keep), relations: s.relations.filter(keep) };
+      const toks = spanDiffTokens(mine, (x) => (seen.has(x.id) ? false : (seen.add(x.id), true)));
+      return { s, toks };
+    })
+    .filter((b) => b.toks.length > 0);
+}
+
 /** Optimistic span state after an action. */
 export function patchedSpan(s: Span, body: { action: "confirm" | "modify" | "reject"; label?: string; start_cp?: number; end_cp?: number; attrs?: Record<string, string> }): Span {
   if (body.action === "confirm") return { ...s, status: "confirmed" };
@@ -64,6 +79,37 @@ export function patchedSpan(s: Span, body: { action: "confirm" | "modify" | "rej
     end_cp: body.end_cp ?? s.end_cp,
     attrs: body.attrs ?? s.attrs,
   };
+}
+
+const sameNums = (a: number[] | null | undefined, b: number[] | null | undefined) =>
+  JSON.stringify([...(a ?? [])].sort((x, y) => x - y)) === JSON.stringify([...(b ?? [])].sort((x, y) => x - y));
+const sameAttrs = (a: Record<string, string> | null | undefined, b: Record<string, string> | null | undefined) =>
+  JSON.stringify(Object.entries(a ?? {}).sort()) === JSON.stringify(Object.entries(b ?? {}).sort());
+
+/**
+ * The request to send for a span action: a "modify" that changes nothing confirms a suggestion and is skipped
+ * otherwise (null), so an unchanged span is not recorded as modified. Modifying a rejected span restores it.
+ */
+export function effectiveSpanPatch(s: Span, body: SpanPatch): SpanPatch | null {
+  if (body.action !== "modify" || s.status === "rejected") return body;
+  const changed =
+    (body.label !== undefined && body.label !== s.label) ||
+    (body.start_cp !== undefined && body.start_cp !== s.start_cp) ||
+    (body.end_cp !== undefined && body.end_cp !== s.end_cp) ||
+    (body.attrs !== undefined && !sameAttrs(body.attrs, s.attrs));
+  if (changed) return body;
+  return s.status === "suggested" ? { action: "confirm" } : null;
+}
+
+/** Same rule for alignments: unchanged tokens and target sentence confirm a suggestion. */
+export function effectiveAlignPatch(a: Alignment, body: AlignmentPatch, tgtSentence: number | null | undefined): AlignmentPatch | null {
+  if (body.action !== "modify" || a.status === "rejected") return body;
+  const changed =
+    (body.src_tokens !== undefined && !sameNums(body.src_tokens, a.src_tokens)) ||
+    (body.tgt_tokens !== undefined && !sameNums(body.tgt_tokens, a.tgt_tokens)) ||
+    (body.tgt_sentence_index !== undefined && body.tgt_sentence_index !== (a.tgt_sentence_index ?? tgtSentence));
+  if (changed) return body;
+  return a.status === "suggested" ? { action: "confirm" } : null;
 }
 
 /* ---------- keyboard ---------- */

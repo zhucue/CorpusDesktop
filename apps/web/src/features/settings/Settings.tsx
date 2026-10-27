@@ -10,11 +10,14 @@ import "./settings.css";
 
 const roleOptions = (Object.keys(roleLabels) as Role[]).map((r) => ({ value: r, label: roleLabels[r] }));
 
-// What each role may do, per the API permission rules (P1/P2 contracts).
+// What each role may do, per the API permission rules (contracts p1–p5: READ / ANNOTATE / WRITE / owner).
 const MATRIX: [string, boolean[]][] = [
   ["检索、统计、导出", [true, true, true, true]],
   ["钉住证据", [true, true, true, false]],
+  ["标注校对", [true, true, true, false]],
+  ["编辑知识库", [true, true, true, false]],
   ["上传语料、建子库", [true, true, false, false]],
+  ["建标注层、仲裁", [true, true, false, false]],
   ["管理成员", [true, false, false, false]],
 ];
 
