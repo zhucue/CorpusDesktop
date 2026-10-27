@@ -89,7 +89,7 @@ export interface SearchRequest {
   /** Adds Hit.tokens (part, form, pos) for POS colouring. */
   include_tokens?: boolean;
   /** P3: resolve {pos=} / {dep=} against these annotation layers' effective values. */
-  layers?: { pos?: string; dep?: string };
+  layers?: { pos?: string; dep?: string; span?: string };
 }
 
 export interface ParseResult {
@@ -284,7 +284,7 @@ export type AgentSessionDetail = AgentSession & { messages: AgentMessage[] };
 
 // ---------- P3: annotation (contracts/p3.md; token indices are 1-based, head 0 = root) ----------
 
-export type LayerKind = "pos" | "dep";
+export type LayerKind = "pos" | "dep" | "span" | "relation" | "alignment";
 export type AnnotStatus = "suggested" | "confirmed" | "modified" | "rejected";
 
 export interface LabelDef {
@@ -300,7 +300,7 @@ export interface LabelSet {
   id: string;
   project_id: string | null;
   name: string;
-  kind: LayerKind | "span" | "relation";
+  kind: "pos" | "dep" | "span" | "relation";
   language: string | null;
   labels: LabelDef[];
   created_at: string;
@@ -312,6 +312,8 @@ export interface LayerProgress {
   confirmed: number;
   modified: number;
   rejected: number;
+  /** P5 span / relation preannotation: sentences the model could not label. */
+  failed_sentences?: unknown[];
 }
 
 export interface Layer {
@@ -331,6 +333,14 @@ export interface Layer {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** P5 (contracts/p5.md §二). */
+  mode?: "single" | "multi";
+  annotators?: string[];
+  base_layer_id?: string | null;
+  src_corpus_id?: string | null;
+  tgt_corpus_id?: string | null;
+  level?: "sentence" | "word" | null;
+  guideline_document_id?: string | null;
 }
 
 export interface LayerDocument {
@@ -390,6 +400,126 @@ export interface DiffResult {
   items: SentenceAnnot[];
   counts: { changed: number; confirmed: number; rejected: number; pending: number };
 }
+
+// ---------- P5: spans, relations, alignment, agreement (contracts/p5.md; span cps are document code points) ----------
+
+export interface Span {
+  id: string;
+  start_cp: number;
+  end_cp: number;
+  text: string;
+  label: string;
+  attrs: Record<string, string> | null;
+  source: string;
+  status: AnnotStatus;
+  model_label: string | null;
+  revision: number;
+  annotator_id: string | null;
+  updated_at: string;
+}
+
+export interface Relation {
+  id: string;
+  from_span_id: string;
+  to_span_id: string;
+  label: string;
+  source: string;
+  status: AnnotStatus;
+  revision: number;
+  annotator_id: string | null;
+  model_label?: string | null;
+}
+
+export interface SentenceSpans {
+  document_id: string;
+  sentence_index: number;
+  text: string;
+  start_cp: number;
+  end_cp: number;
+  spans: Span[];
+  relations: Relation[];
+}
+
+export type SpanPatch = {
+  action: "confirm" | "modify" | "reject";
+  label?: string;
+  start_cp?: number;
+  end_cp?: number;
+  attrs?: Record<string, string>;
+};
+
+/** Tokens arrive as strings or `{index?, form}`; indices are 1-based. */
+export type PairToken = string | { index?: number; form: string };
+
+export interface PairSide {
+  document_id: string;
+  sentence_index: number;
+  text: string;
+  tokens: PairToken[];
+}
+
+export interface Alignment {
+  id: string;
+  level: "sentence" | "word";
+  src_tokens: number[];
+  tgt_tokens: number[];
+  score: number | null;
+  source: string;
+  status: AnnotStatus;
+  revision: number;
+  annotator_id: string | null;
+  tgt_document_id?: string;
+  tgt_sentence_index?: number;
+}
+
+/** One source sentence and one target sentence; a source sentence with several targets has several pairs, an unaligned one has tgt null. */
+export interface SentencePair {
+  src: PairSide;
+  tgt: PairSide | null;
+  alignments: Alignment[];
+}
+
+export interface AlignmentPatch {
+  action: "confirm" | "modify" | "reject";
+  src_tokens?: number[];
+  tgt_tokens?: number[];
+  tgt_sentence_index?: number;
+}
+
+export interface Agreement {
+  annotators: { user_id: string; email: string; done: number }[];
+  pairwise: { a: string; b: string; kappa: number | null; n: number }[];
+  alpha: number | null;
+  per_label: { label: string; kappa: number | null }[];
+  /** Span layers: overlap-tolerant version. */
+  lenient?: { pairwise: { a: string; b: string; kappa: number | null; n: number }[]; alpha: number | null; n?: number };
+}
+
+export type AdjudicationKind = "token" | "span" | "relation" | "alignment";
+
+export interface Adjudication {
+  layer_id?: string;
+  target_kind: AdjudicationKind;
+  target_key: string;
+  final: unknown;
+  decided_by: string;
+  decided_at: string;
+}
+
+/** GET /layers/{id}/disagreements item. `adjudicated` may be a flag or the adjudication itself. */
+export interface Disagreement {
+  target_kind: AdjudicationKind;
+  target_key: string;
+  document_id?: string;
+  sentence_index?: number;
+  text?: string;
+  values: { annotator_id: string; email?: string; value: unknown }[];
+  adjudicated?: boolean | Adjudication | null;
+  final?: unknown;
+}
+
+/** POST /stats/alignment; field names are assumed (contract: 句对数、一对一 / 一对多 / 未对齐计数、平均词对数). */
+export type AlignmentStats = Record<string, unknown>;
 
 export interface LayerStats {
   labels: { label: string; count: number; confirmed: number; modified: number }[];

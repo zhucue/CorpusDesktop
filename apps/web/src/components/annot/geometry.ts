@@ -83,16 +83,7 @@ export function layoutDeps(tokens: GraphToken[], arcs: GraphArc[], opts: { posRo
     return { ...a, lo: Math.min(a.dep, a.head), hi: Math.max(a.dep, a.head), xd, xh, mx: (xd + xh) / 2, lw: a.label.length * 6.8 + 8, lvl: 1 };
   });
 
-  // Outer arcs sit above the arcs they contain; labels on the same level that would overlap move up one level.
-  const placed: Work[] = [];
-  for (const a of [...work].sort((p, q) => p.hi - p.lo - (q.hi - q.lo) || p.lo - q.lo)) {
-    let lvl = 1;
-    for (const p of placed) if (p.lo >= a.lo && p.hi <= a.hi) lvl = Math.max(lvl, p.lvl + 1);
-    const clash = (l: number) => placed.some((p) => p.lvl === l && Math.abs(p.mx - a.mx) < (p.lw + a.lw) / 2 + 4);
-    while (clash(lvl)) lvl++;
-    a.lvl = lvl;
-    placed.push(a);
-  }
+  stackArcs(work);
   const maxLvl = Math.max(1, ...work.map((a) => a.lvl));
   const top = 8;
   const y0 = (rootArcs.length ? 52 : 30) + maxLvl * UNIT;
@@ -109,6 +100,31 @@ export function layoutDeps(tokens: GraphToken[], arcs: GraphArc[], opts: { posRo
     return { dep: a.dep, label: a.label || "root", suggested: a.suggested, x: rx, path: `M${r(rx)} ${top} L${r(rx)} ${y0 - 2}` };
   });
   return { width, height, y0, top, tokens: laid, arcs: laidArcs, roots };
+}
+
+export interface StackItem {
+  lo: number;
+  hi: number;
+  mx: number; // label centre
+  lw: number; // label width
+  lvl: number;
+}
+
+/**
+ * Arc levels (1 = lowest), set in place: outer arcs sit above the arcs they contain; labels on the same level
+ * that would overlap move up one level. Shared by dependency arcs and span relation arcs.
+ */
+export function stackArcs<T extends StackItem>(items: T[]): T[] {
+  const placed: T[] = [];
+  for (const a of [...items].sort((p, q) => p.hi - p.lo - (q.hi - q.lo) || p.lo - q.lo)) {
+    let lvl = 1;
+    for (const p of placed) if (p.lo >= a.lo && p.hi <= a.hi) lvl = Math.max(lvl, p.lvl + 1);
+    const clash = (l: number) => placed.some((p) => p.lvl === l && Math.abs(p.mx - a.mx) < (p.lw + a.lw) / 2 + 4);
+    while (clash(lvl)) lvl++;
+    a.lvl = lvl;
+    placed.push(a);
+  }
+  return items;
 }
 
 const r = (n: number) => Math.round(n * 10) / 10;

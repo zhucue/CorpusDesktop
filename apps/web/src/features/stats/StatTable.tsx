@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router";
-import type { EvidenceInput, SearchScope, StatColumn, StatResult, StatRow } from "../../api";
+import type { EvidenceInput, SearchRequest, SearchScope, StatColumn, StatResult, StatRow } from "../../api";
 import { PinButton } from "../../components/global/evidence";
 import { Icon } from "../../components/Icon";
 import { fmtValue } from "../../lib/format";
@@ -14,9 +14,20 @@ export const methodLabels: Record<StatResult["method"], string> = {
 };
 
 /** URL of the search page for a stat row ("回到例句"). */
-export function rowSearchHref(projectId: string, query: string, scope: SearchScope): string {
+export function rowSearchHref(projectId: string, query: string, scope: SearchScope, layers?: SearchRequest["layers"]): string {
   const p = new URLSearchParams({ q: query, scope: JSON.stringify(scope) });
+  // rows counted on annotation layers ({pos=}, {dep=}, [标签]) must search the same layers
+  if (layers && Object.keys(layers).length) p.set("layers", JSON.stringify(layers));
   return `/p/${projectId}/search?${p.toString()}`;
+}
+
+/** The stat's annotation layers (params.layers), without empty entries. */
+export function statLayers(stat: StatResult): SearchRequest["layers"] | undefined {
+  const l = (stat.params as { layers?: Record<string, string | null> } | null)?.layers;
+  if (!l) return undefined;
+  const out: Record<string, string> = {};
+  for (const k of ["pos", "dep", "span"] as const) if (l[k]) out[k] = l[k]!;
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** Column whose number links to the examples (frequency-like). */
@@ -63,7 +74,7 @@ export function StatTable({
   const navigate = useNavigate();
   const link = linkColumn(stat);
   const barMax = cellBar ? Math.max(...stat.rows.map((r) => num(r.values[cellBar]) ?? 0), 1) : 1;
-  const go = (q: string | null | undefined, row: StatRow) => q && navigate(rowSearchHref(projectId, q, row.search_scope));
+  const go = (q: string | null | undefined, row: StatRow) => q && navigate(rowSearchHref(projectId, q, row.search_scope, statLayers(stat)));
   const coll = stat.method === "collocations";
 
   return (

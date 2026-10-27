@@ -11,6 +11,7 @@ import {
   KwicTableCard,
 } from "../components/results/cards";
 import { AnnotationDiffCard, DependencyTreeCard } from "../components/results/annotCards";
+import { AlignmentGraphCard, SpanViewCard } from "../components/results/annot2Cards";
 import { KbCitationCard, TermCardView } from "../components/results/kbCards";
 
 // Names, prop order and schemas mirror services/agent/src/components.ts (positional OpenUI Lang args).
@@ -157,7 +158,48 @@ export const KbCitation = defineComponent({
   component: ({ props }) => <KbCitationCard {...props} />,
 });
 
-export const COMPONENTS = [KwicTable, FreqChart, CollocationTable, KeywordTable, DistributionChart, EvidenceCard, JobStatus, Callout, DependencyTree, AnnotationDiff, TermCard, KbCitation];
+export const SpanView = defineComponent({
+  name: "SpanView",
+  description: "一句中的片段标注与关系；start、end 为句内码点，relations 的 from、to 为 spans 的 0 起下标。",
+  props: z.object({
+    document_id: z.string(),
+    sentence_index: z.number(),
+    text: z.string(),
+    spans: z.array(z.object({ start: z.number(), end: z.number(), label: z.string() })),
+    relations: z.array(z.object({ from: z.number(), to: z.number(), label: z.string() })),
+  }),
+  component: ({ props }) => <SpanViewCard {...props} />,
+});
+
+export const AlignmentGraph = defineComponent({
+  name: "AlignmentGraph",
+  description: "一个句对的词级对齐连线图；links 的 src、tgt 为 1 起 token 序号。",
+  props: z.object({
+    src_tokens: z.array(z.string()),
+    tgt_tokens: z.array(z.string()),
+    links: z.array(
+      z.object({ src: z.array(z.number()), tgt: z.array(z.number()), status: z.enum(["suggested", "confirmed", "modified", "rejected"]).optional() }),
+    ),
+  }),
+  component: ({ props }) => <AlignmentGraphCard {...props} />,
+});
+
+export const COMPONENTS = [
+  KwicTable,
+  FreqChart,
+  CollocationTable,
+  KeywordTable,
+  DistributionChart,
+  EvidenceCard,
+  JobStatus,
+  Callout,
+  DependencyTree,
+  AnnotationDiff,
+  TermCard,
+  KbCitation,
+  SpanView,
+  AlignmentGraph,
+];
 
 /** No root component: each ui block is a program whose entry is `root = <Component>(...)`. */
 export const library = createLibrary({ components: COMPONENTS });
@@ -176,4 +218,6 @@ export const RENDERERS: Record<string, React.FC<never>> = {
   AnnotationDiff: AnnotationDiffCard,
   TermCard: TermCardView,
   KbCitation: KbCitationCard,
+  SpanView: SpanViewCard,
+  AlignmentGraph: AlignmentGraphCard,
 };

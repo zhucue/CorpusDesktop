@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Form, Input, Modal, Select } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -19,7 +19,9 @@ import {
 } from "../../api";
 import { Count, ErrorAlert, Empty, QueryChip, Sparkline, Tip } from "../../components/common";
 import { Icon } from "../../components/Icon";
-import { conditionTerms, hasPos, KwicTable, type KwicRow } from "../../components/results/Kwic";
+import { conditionTerms, hasPos, KwicTable, type KwicMark, type KwicRow } from "../../components/results/Kwic";
+import { cpLength, labelColor } from "../../components/annot/spans";
+import { fetchSentenceSpans } from "../annotate/spanData";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
 import { describeScope, useCorpora, useJobCreated, useProjectId, useSubcorpora } from "../../lib/data";
@@ -27,7 +29,7 @@ import { fmt, fmtShortTime } from "../../lib/format";
 import { posLegend } from "../../lib/pos";
 import { distRows, type DistRow } from "../stats/columns";
 import { useStatJob } from "../stats/useStatJob";
-import { defaultLayer, useLayers } from "../annotate/data";
+import { defaultLayer, useLabelSets, useLayers } from "../annotate/data";
 import ContextInspector, { hitEvidence } from "./ContextInspector";
 import SentenceTree from "./SentenceTree";
 import TermExampleButton from "../knowledge/TermExampleButton";
@@ -52,6 +54,7 @@ const CHIPS: [string, string, string][] = [
   ["{pos=}", "{pos=}", "词性属性，可接在词后"],
   ["{dep=}", "{dep=}", "依存关系，可接在词后"],
   ["{lemma=}", "{lemma=}", "词元"],
+  ["[标签]", "[]", "片段标签：[时态]、词[时态]、[时态:k=v]"],
 ];
 
 const isExpired = (e: unknown) => e instanceof ApiError && e.code === "SEARCH_EXPIRED";
@@ -60,10 +63,10 @@ function withoutSearchId(r: SearchRequest): SearchRequest {
   return rest;
 }
 
-/** Insert `snippet` at the caret; "" places the caret between the quotes, {k=} before the brace. */
+/** Insert `snippet` at the caret; "" and [] place the caret inside, {k=} before the brace. */
 export function insertAt(value: string, start: number, end: number, snippet: string): { value: string; caret: number } {
   const next = value.slice(0, start) + snippet + value.slice(end);
-  const caret = snippet === '""' ? start + 1 : snippet.endsWith("=}") ? start + snippet.length - 1 : start + snippet.length;
+  const caret = snippet === '""' || snippet === "[]" ? start + 1 : snippet.endsWith("=}") ? start + snippet.length - 1 : start + snippet.length;
   return { value: next, caret };
 }
 
@@ -370,7 +373,7 @@ export default function Search() {
   const [distPick, setDistPick] = useState<string | null>(null); // field chosen in the select
   const [distRuns, setDistRuns] = useState<Record<string, string>>({}); // search (query + scope) → computed field
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [layerPick, setLayerPick] = useState<{ corpus: string | null; pos?: string | null; dep?: string | null }>({ corpus: null });
+  const [layerPick, setLayerPick] = useState<{ corpus: string | null; pos?: string | null; dep?: string | null; span?: string | null }>({ corpus: null });
   const inputRef = useRef<HTMLInputElement>(null);
   const lastParams = useRef<string>("");
 
@@ -382,18 +385,22 @@ export default function Search() {
   /* ---------- annotation layers for {pos=} / {dep=} (default: latest ready layer of the corpus) ---------- */
   const layersQ = useLayers(projectId);
   const allLayers = layersQ.data ?? [];
+  const labelSetsQ = useLabelSets(projectId);
   const corpusLayers = allLayers.filter((l) => l.corpus_id === info.corpus?.id && l.status === "ready");
-  const pickLayer = (kind: "pos" | "dep"): string | null => {
+  const pickLayer = (kind: "pos" | "dep" | "span"): string | null => {
     const p = layerPick.corpus === info.corpus?.id ? layerPick[kind] : undefined;
     return p === undefined ? (defaultLayer(allLayers, info.corpus?.id, kind)?.id ?? null) : p;
   };
   const posLayer = pickLayer("pos");
   const depLayer = pickLayer("dep");
+  const spanLayer = pickLayer("span");
   function layersFor(sc: SearchScope): SearchRequest["layers"] | undefined {
     const cid = describeScope(sc, allCorpora, allSubs).corpus?.id;
-    const pos = cid === info.corpus?.id ? posLayer : (defaultLayer(allLayers, cid, "pos")?.id ?? null);
-    const dep = cid === info.corpus?.id ? depLayer : (defaultLayer(allLayers, cid, "dep")?.id ?? null);
-    return pos || dep ? { ...(pos ? { pos } : {}), ...(dep ? { dep } : {}) } : undefined;
+    const same = cid === info.corpus?.id;
+    const pos = same ? posLayer : (defaultLayer(allLayers, cid, "pos")?.id ?? null);
+    const dep = same ? depLayer : (defaultLayer(allLayers, cid, "dep")?.id ?? null);
+    const span = same ? spanLayer : (defaultLayer(allLayers, cid, "span")?.id ?? null);
+    return pos || dep || span ? { ...(pos ? { pos } : {}), ...(dep ? { dep } : {}), ...(span ? { span } : {}) } : undefined;
   }
 
   /* ---------- parse as you type ---------- */
@@ -497,7 +504,7 @@ export default function Search() {
   const dRows = useMemo(() => (dist.stat ? distRows(dist.stat) : undefined), [dist.stat]);
 
   /* ---------- actions ---------- */
-  function run(opts?: { query?: string; scope?: SearchScope | null; fromDist?: boolean }) {
+  function run(opts?: { query?: string; scope?: SearchScope | null; fromDist?: boolean; layers?: SearchRequest["layers"] }) {
     const q = (opts?.query ?? query).trim();
     const sc = opts && "scope" in opts ? opts.scope : scope;
     if (!sc || !q) return;
@@ -510,7 +517,7 @@ export default function Search() {
       page_size: PAGE_SIZE,
       include_tokens: true,
     };
-    const lay = layersFor(sc);
+    const lay = opts?.layers ? { ...layersFor(sc), ...opts.layers } : layersFor(sc);
     if (lay) next.layers = lay;
     if (sort === "random") next.seed = Math.floor(Math.random() * 1e9);
     setRunId((n) => n + 1);
@@ -544,7 +551,18 @@ export default function Search() {
       if (sc) shell.setScope(sc as Scope);
     }
     const effective = sc ?? shell.scope;
-    if (effective) run({ query: q, scope: effective });
+    // "回到例句" from a statistic counted on annotation layers carries them (?layers=)
+    let urlLayers: SearchRequest["layers"] | undefined;
+    try {
+      urlLayers = params.get("layers") ? (JSON.parse(params.get("layers")!) as SearchRequest["layers"]) : undefined;
+    } catch {
+      urlLayers = undefined;
+    }
+    if (urlLayers && effective) {
+      const cid = "corpus_id" in effective ? effective.corpus_id : describeScope(effective, allCorpora, allSubs).corpus?.id;
+      if (cid) setLayerPick({ corpus: cid, ...urlLayers });
+    }
+    if (effective) run({ query: q, scope: effective, layers: urlLayers });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
@@ -552,7 +570,7 @@ export default function Search() {
   useEffect(() => {
     if (req) run({ query: req.query, scope: req.scope, fromDist: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ctxMode, sort, posLayer, depLayer]);
+  }, [ctxMode, sort, posLayer, depLayer, spanLayer]);
 
   function pickDist(i: number | null) {
     setPicked(i);
@@ -631,6 +649,36 @@ export default function Search() {
       hit: h,
     }));
   const posAvailable = hasPos(rows);
+
+  /* ---------- span highlights: spans of the sentences of rows that scrolled into view (片段层) ---------- */
+  const markLayer = req?.layers?.span ?? null;
+  const [seen, setSeen] = useState<{ layer: string | null; keys: string[] }>({ layer: null, keys: [] });
+  const seenKeys = seen.layer === markLayer ? seen.keys : [];
+  const rowKey = (h: Hit) => `${h.document_id}:${h.sentence_index}`;
+  const spanQs = useQueries({
+    queries: (markLayer ? seenKeys : []).map((k) => {
+      const [doc, idx] = [k.slice(0, k.lastIndexOf(":")), Number(k.slice(k.lastIndexOf(":") + 1))];
+      return { queryKey: ["span-one", markLayer, doc, idx], queryFn: () => fetchSentenceSpans(markLayer!, doc, idx), staleTime: 60 * 1000, meta: { background: true } };
+    }),
+  });
+  const spanBy = new Map(seenKeys.map((k, i) => [k, spanQs[i]?.data]));
+  const markSet = labelSetsQ.data?.find((ls) => ls.id === allLayers.find((l) => l.id === markLayer)?.label_set_id);
+  const markOrder = (markSet?.labels ?? []).map((l) => l.name);
+  function rowMarks(r: KwicRow): KwicMark[] | undefined {
+    const hit = rows.find((x) => x.id === r.id)?.hit;
+    const ss = hit ? spanBy.get(rowKey(hit)) : undefined;
+    if (!hit || !ss) return undefined;
+    const rowStart = hit.start_cp - cpLength(hit.left);
+    return ss.spans
+      .filter((x) => x.status !== "rejected")
+      .map((x) => ({ start: x.start_cp - rowStart, end: x.end_cp - rowStart, label: x.label, color: labelColor(x.label, markOrder) }));
+  }
+  function rowVisible(id: string) {
+    const hit = rows.find((x) => x.id === id)?.hit;
+    if (!hit || !markLayer) return;
+    const k = rowKey(hit);
+    setSeen((p) => (p.layer === markLayer ? (p.keys.includes(k) ? p : { layer: markLayer, keys: [...p.keys, k] }) : { layer: markLayer, keys: [k] }));
+  }
   // 依存树 expander: the dependency layer the search used, else the corpus default; hidden without one.
   const treeLayer = req ? (req.layers?.dep ?? defaultLayer(allLayers, describeScope(req.scope, allCorpora, allSubs).corpus?.id, "dep")?.id ?? null) : null;
   const selectedHit = rows.find((r) => r.id === selected)?.hit ?? null;
@@ -740,19 +788,19 @@ export default function Search() {
           {corpusLayers.length > 0 && (
             <div className="layer-pick">
               <span className="small muted">标注层</span>
-              {(["pos", "dep"] as const).map((kind) => {
+              {(["pos", "dep", "span"] as const).map((kind) => {
                 const opts = corpusLayers.filter((l) => l.kind === kind);
                 if (!opts.length) return null;
-                const name = kind === "pos" ? "词性" : "依存";
+                const name = kind === "pos" ? "词性" : kind === "dep" ? "依存" : "片段";
                 return (
                   <Select
                     key={kind}
                     size="small"
                     style={{ width: 200 }}
                     aria-label={`${name}层`}
-                    value={(kind === "pos" ? posLayer : depLayer) ?? ""}
+                    value={(kind === "pos" ? posLayer : kind === "dep" ? depLayer : spanLayer) ?? ""}
                     onChange={(v: string) => setLayerPick((p) => ({ ...(p.corpus === info.corpus?.id ? p : { corpus: info.corpus?.id ?? null }), [kind]: v || null }))}
-                    options={[{ value: "", label: `${name}：系统层` }, ...opts.map((l) => ({ value: l.id, label: `${name}：${l.name}` }))]}
+                    options={[{ value: "", label: kind === "span" ? "片段：不选" : `${name}：系统层` }, ...opts.map((l) => ({ value: l.id, label: `${name}：${l.name}` }))]}
                   />
                 );
               })}
@@ -895,6 +943,8 @@ export default function Search() {
                       onSelect={setSelected}
                       expanded={expanded}
                       onExpand={setExpanded}
+                      marks={markLayer ? rowMarks : undefined}
+                      onRowVisible={markLayer ? rowVisible : undefined}
                       extraActions={(r) => {
                         const hit = rows.find((x) => x.id === r.id)?.hit;
                         return hit ? <TermExampleButton projectId={projectId} hit={hit} source={r.evidence?.source ?? hit.document_title} /> : null;

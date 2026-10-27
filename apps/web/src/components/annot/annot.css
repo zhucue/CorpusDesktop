@@ -47,3 +47,71 @@
 .dtok.rej b { color: var(--error); text-decoration: line-through; }
 .dtok.pend .pos-tagchip { background: none; color: var(--text-3); box-shadow: inset 0 0 0 1px var(--line); font-weight: 500; }
 .pos-tagchip { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 5px; font-family: var(--mono); font-size: 11px; font-weight: 600; background: var(--pbg); color: var(--pfg); white-space: nowrap; }
+
+/* Span text flow (SpanView, span editor): stacked underlines, label tag after each span, relation arcs above */
+.spanbox { position: relative; padding: 14px 4px 10px; }
+.span-flow { font-size: 17px; line-height: 2.7; letter-spacing: .01em; color: var(--text); word-break: break-word; }
+.spanbox.sm-size .span-flow { font-size: 15px; line-height: 2.5; }
+.spanbox.editable .span-flow { cursor: text; }
+.spiece.dim { color: var(--text-3); }
+.sm:not([data-c]), .stag:not([data-c]) { --pc: var(--accent); --pbg: var(--accent-tint); --pfg: var(--accent-text); }
+.sm { padding: 2px 0 calc(2px + var(--lv, 0) * 5px); border-bottom: 2px solid var(--pc); background: var(--pbg); animation: fade 500ms var(--ease-out) both; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.sm .sm { background: none; }
+.sm.suggested { background: none; border-bottom-style: dashed; }
+.sm.rejected { background: none; border-bottom: 2px dotted var(--line-strong); text-decoration: line-through; text-decoration-color: var(--err); color: var(--text-3); }
+.sm.pend { --pc: var(--accent); background: var(--accent-tint-2); border-bottom: 2px dashed var(--accent); }
+.spanbox.editable .sm { cursor: pointer; }
+.sm.on { background: var(--accent-tint-2); }
+.sm.from { outline: 1.5px dashed var(--accent); outline-offset: 1px; border-radius: 3px; }
+.stag { position: relative; display: inline-flex; align-items: center; height: 18px; margin: 0 3px 0 2px; padding: 0 5px; border-radius: 5px; font-family: var(--mono); font-size: 11px; font-weight: 600; line-height: 1; vertical-align: 2px; user-select: none; white-space: nowrap; background: var(--pc); color: #fff; animation: pop 320ms var(--ease-spring) both; }
+.stag.suggested { background: var(--surface); color: var(--pfg); outline: 1.2px dashed var(--pc); outline-offset: -1.2px; }
+.stag.rejected { background: var(--err-bg); color: var(--err); text-decoration: line-through; }
+.stag.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent); }
+.spanbox.editable .stag { cursor: pointer; }
+.stag-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; margin-left: 4px; opacity: .8; }
+.rel-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.rel-svg path { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+.rel-svg .draw { stroke-dasharray: 1; animation: draw 800ms var(--ease-in-out) both; animation-delay: calc(var(--i, 0) * 90ms); }
+.rel-svg polygon { fill: var(--accent); }
+.rel-svg .suggested path { stroke: #53B1FD; stroke-dasharray: 4 3; animation: fade 600ms ease both; }
+.rel-svg .suggested polygon { fill: #53B1FD; }
+.rel-svg .rejected path { stroke: var(--err); stroke-dasharray: 2 3; opacity: .6; }
+.rel-svg .on path { stroke-width: 2.5; }
+.rel-svg rect { fill: var(--surface); }
+.rel-svg text { font-family: var(--mono); font-size: 11px; fill: var(--text-2); }
+.rel-svg .rlab.click { pointer-events: auto; cursor: pointer; }
+.rel-svg .rlab.click:hover rect, .rel-svg .on rect { fill: var(--accent-tint); stroke: var(--accent-line); }
+.rel-svg .on text { fill: var(--accent-text); font-weight: 600; }
+.shandle { position: absolute; width: 6px; border-radius: 3px; background: var(--accent); cursor: ew-resize; touch-action: none; z-index: 2; }
+.shandle::after { content: ""; position: absolute; inset: -4px -6px; }
+
+/* Alignment graph (AlignmentGraph, alignment editor; doc/ui-design 双语对照) */
+.algraph { position: relative; display: flex; gap: 0; padding: 4px 0; }
+.algraph.v { flex-direction: row; justify-content: space-between; }
+.al-row { display: flex; flex-direction: column; gap: 6px; position: relative; z-index: 1; max-width: 42%; }
+.al-row:first-child { align-items: flex-end; }
+.al-row.en { align-items: flex-start; }
+.al-row > span, .al-row > button { padding: 3px 8px; border-radius: 6px; background: var(--fill); font: inherit; font-size: 13px; line-height: 1.5; color: var(--text); border: 0; text-align: left; transition: background var(--t-fast), color var(--t-fast), box-shadow var(--t-fast); }
+.al-row.en > span, .al-row.en > button { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.al-row > button { cursor: pointer; }
+.al-row > .hl { background: var(--accent-tint); color: var(--accent-text); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.al-row > .pick { background: var(--accent-solid); color: #fff; box-shadow: none; }
+.align-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.align-line { fill: none; stroke: #53B1FD; stroke-width: 1.5; }
+.align-line.strong { stroke: var(--accent); stroke-width: 2; }
+.align-line.sugg { stroke-dasharray: 4 3; }
+.align-line.draw:not(.sugg) { stroke-dasharray: 1; animation: draw 800ms var(--ease-in-out) both; animation-delay: calc(var(--i, 0) * 60ms); }
+.algraph.hovering .align-line { opacity: .15; transition: opacity var(--t-fast); }
+.algraph.hovering .align-line.hl { opacity: 1; stroke: var(--accent); stroke-width: 2.5; }
+
+/* κ gauge */
+.gauge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+.gauge svg { width: 38px; height: 22px; display: block; overflow: visible; }
+.gauge .bg { fill: none; stroke: var(--fill); stroke-width: 4; stroke-linecap: round; }
+.gauge .fg { fill: none; stroke: var(--success-solid); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: calc(100 - var(--v)); animation: gauge-in 900ms var(--ease-out) both; }
+.gauge.mid .fg { stroke: var(--warning-solid); }
+.gauge.low .fg { stroke: var(--error-solid); }
+@keyframes gauge-in { from { stroke-dashoffset: 100; } }
+@media (prefers-reduced-motion: reduce) {
+  .sm, .stag, .rel-svg .draw, .align-line.draw, .gauge .fg { animation: none !important; }
+}

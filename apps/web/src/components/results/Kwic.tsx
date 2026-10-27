@@ -1,6 +1,7 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, type ReactNode } from "react";
 import type { EvidenceInput, HitToken } from "../../api";
 import { isPunctPos, posCat } from "../../lib/pos";
+import { cpLength, cpSlice } from "../annot/spans";
 import { PinButton } from "../global/evidence";
 import { Icon } from "../Icon";
 
@@ -65,6 +66,40 @@ function spaceAfter(a: HitToken, b: HitToken | undefined): string {
   return cjk.test(a.form.slice(-1)) || cjk.test(b.form[0] ?? "") || /^([.,;:!?)]|n't$|'\w*$)/i.test(b.form) ? "" : " "; // English clitics: could n't → couldn't
 }
 
+/** A span to highlight in a KWIC row; code points within left + match + right. */
+export interface KwicMark {
+  start: number;
+  end: number;
+  label: string;
+  color?: number;
+}
+
+/** Text of one row part with span marks (offset = code point of the part's start in the row); other text keeps term marks. */
+export function markSpans(text: string, offset: number, marks: KwicMark[], terms: string[]): ReactNode {
+  const len = cpLength(text);
+  const local = marks
+    .map((m) => ({ ...m, start: Math.max(0, m.start - offset), end: Math.min(len, m.end - offset) }))
+    .filter((m) => m.end > m.start)
+    .sort((a, b) => a.start - b.start);
+  if (!local.length) return markTerms(text, terms);
+  const out: ReactNode[] = [];
+  let at = 0;
+  local.forEach((m, i) => {
+    const start = Math.max(m.start, at);
+    if (start > at) out.push(<Fragment key={`p${i}`}>{markTerms(cpSlice(text, at, start), terms)}</Fragment>);
+    if (m.end > start)
+      out.push(
+        <mark key={`m${i}`} className="kspan" data-c={m.color} title={m.label}>
+          {cpSlice(text, start, m.end)}
+          <span className="kspan-lab">{m.label}</span>
+        </mark>,
+      );
+    at = Math.max(at, m.end);
+  });
+  if (at < len) out.push(<Fragment key="rest">{markTerms(cpSlice(text, at), terms)}</Fragment>);
+  return out;
+}
+
 export function hasPos(rows: KwicRow[]): boolean {
   return rows.some((r) => r.tokens?.some((t) => t.pos));
 }
@@ -83,6 +118,8 @@ export function KwicTable({
   renderExpanded,
   expandLabel = "依存树",
   extraActions,
+  marks,
+  onRowVisible,
 }: {
   rows: KwicRow[];
   terms?: string[];
@@ -98,7 +135,33 @@ export function KwicTable({
   expandLabel?: string;
   /** More row buttons before the pin (e.g. 加入术语例句). */
   extraActions?: (row: KwicRow) => ReactNode;
+  /** Span highlights per row (P5 片段层); ignored while POS colouring is on. */
+  marks?: (row: KwicRow) => KwicMark[] | undefined;
+  /** Called once a row scrolls into view (lazy loading of row data). */
+  onRowVisible?: (id: string) => void;
 }) {
+  const body = useRef<HTMLTableSectionElement>(null);
+  const visibleRef = useRef(onRowVisible);
+  visibleRef.current = onRowVisible;
+  const ids = rows.map((r) => r.id).join("|");
+  useEffect(() => {
+    const el = body.current;
+    if (!el || !visibleRef.current) return;
+    const trs = [...el.querySelectorAll<HTMLElement>("tr[data-row]")];
+    if (typeof IntersectionObserver === "undefined") {
+      trs.forEach((tr) => visibleRef.current?.(tr.dataset.row!));
+      return;
+    }
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries)
+        if (e.isIntersecting) {
+          visibleRef.current?.((e.target as HTMLElement).dataset.row!);
+          io.unobserve(e.target);
+        }
+    });
+    trs.forEach((tr) => io.observe(tr));
+    return () => io.disconnect();
+  }, [ids, !!onRowVisible]); // eslint-disable-line react-hooks/exhaustive-deps
   const cols = (offset != null ? 1 : 0) + 5;
   const actionCount = 1 + (renderExpanded ? 1 : 0) + (extraActions ? 1 : 0);
   return (
@@ -123,14 +186,18 @@ export function KwicTable({
           </tr>
         </thead>
       )}
-      <tbody className="stagger">
+      <tbody className="stagger" ref={body}>
         {rows.map((r, i) => {
           const pos = posColor && r.tokens?.length;
           const open = !!renderExpanded && expanded === r.id;
+          const mk = !pos ? marks?.(r) : undefined;
+          const lLen = mk?.length ? cpLength(r.left) : 0;
+          const mLen = mk?.length ? cpLength(r.match) : 0;
           return (
             <Fragment key={r.id}>
             <tr
               key={r.id}
+              data-row={r.id}
               className={selected === r.id ? "sel" : undefined}
               style={{ ["--i" as string]: i }}
               onClick={onSelect ? () => onSelect(r.id) : undefined}
@@ -138,15 +205,15 @@ export function KwicTable({
             >
               {offset != null && <td className="mono muted small">{offset + i + 1}</td>}
               <td className="lc">
-                <span>{pos ? <PosText tokens={r.tokens!} part="left" /> : markTerms(r.left, terms)}</span>
+                <span>{pos ? <PosText tokens={r.tokens!} part="left" /> : mk?.length ? markSpans(r.left, 0, mk, terms) : markTerms(r.left, terms)}</span>
               </td>
               <td className="kw">
                 <span className="hit" data-testid="kwic-match">
-                  {pos ? <PosText tokens={r.tokens!} part="match" /> : r.match}
+                  {pos ? <PosText tokens={r.tokens!} part="match" /> : mk?.length ? markSpans(r.match, lLen, mk, []) : r.match}
                 </span>
               </td>
               <td className="rc">
-                <div className="rt">{pos ? <PosText tokens={r.tokens!} part="right" /> : markTerms(r.right, terms)}</div>
+                <div className="rt">{pos ? <PosText tokens={r.tokens!} part="right" /> : mk?.length ? markSpans(r.right, lLen + mLen, mk, terms) : markTerms(r.right, terms)}</div>
                 {r.aligned?.map((a, k) => (
                   <div className="al" key={k} title={a.text}>
                     <b>{a.language.toUpperCase()}</b> · {a.text}

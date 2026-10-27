@@ -15,6 +15,8 @@ import { StatChart } from "./StatChart";
 import { methodLabels, StatTable } from "./StatTable";
 import "./stats.css";
 import { useStatJob, useStatResult } from "./useStatJob";
+import { useLayers } from "../annotate/data";
+import { AlignmentStatsCard } from "../annotate/AlignStats";
 
 const METHODS: StatMethod[] = ["frequency", "ngrams", "collocations", "keywords", "distribution"];
 
@@ -68,6 +70,8 @@ function toScope(v: unknown): Scope | undefined {
 function formValues(stat: StatResult): Body {
   const p = stat.params as Body;
   const v: Body = { unit: p.unit, pos: p.pos ?? undefined, min_freq: p.min_freq, top: p.top };
+  const lay = p.layers as { span?: string; relation?: string } | undefined;
+  if (lay?.span || lay?.relation) v.layer_id = lay.span ?? lay.relation;
   if (stat.method === "keywords") Object.assign(v, { target: toScope(p.target) ?? toScope(stat.scope), reference: toScope(p.reference), measure: p.measure });
   else v.scope = toScope(p.scope) ?? toScope(stat.scope);
   if (stat.method === "ngrams") Object.assign(v, { n: p.n, pos_pattern: Array.isArray(p.pos_pattern) ? p.pos_pattern.join(" ") : undefined });
@@ -107,6 +111,10 @@ function MethodForm({
     enabled: method === "distribution" && !!corpusId,
   });
   const field = Form.useWatch("field", form);
+  const unit = Form.useWatch("unit", form) as string | undefined;
+  const layers = useLayers(projectId);
+  const labelUnit = method === "frequency" && (unit === "span_label" || unit === "relation_label");
+  const unitLayers = (layers.data ?? []).filter((l) => l.kind === (unit === "relation_label" ? "relation" : "span") && l.status === "ready" && (!corpusId || l.corpus_id === corpusId));
 
   useEffect(() => {
     if (initial?.method === method) return; // the opened result's own scope wins
@@ -120,7 +128,11 @@ function MethodForm({
   const submit = () => {
     const v = form.getFieldsValue(true) as Body;
     const body: Body = { project_id: projectId };
-    if (method === "frequency") Object.assign(body, { scope: v.scope, unit: v.unit, pos: v.pos || undefined, top: v.top, min_freq: v.min_freq });
+    if (method === "frequency") {
+      const spanUnit = v.unit === "span_label" || v.unit === "relation_label";
+      Object.assign(body, { scope: v.scope, unit: v.unit, pos: spanUnit ? undefined : v.pos || undefined, top: v.top, min_freq: v.min_freq });
+      if (spanUnit && v.layer_id) body.layers = { [v.unit === "span_label" ? "span" : "relation"]: v.layer_id };
+    }
     if (method === "ngrams")
       Object.assign(body, {
         scope: v.scope,
@@ -187,10 +199,18 @@ function MethodForm({
       )}
       {method !== "distribution" && (
         <Form.Item name="unit" label="单位" initialValue="word">
-          <Select options={method === "frequency" ? [...UNIT_OPTIONS, { value: "pos", label: "词性" }] : UNIT_OPTIONS} style={{ width: 96 }} />
+          <Select
+            options={method === "frequency" ? [...UNIT_OPTIONS, { value: "pos", label: "词性" }, { value: "span_label", label: "片段标签" }, { value: "relation_label", label: "关系标签" }] : UNIT_OPTIONS}
+            style={{ width: method === "frequency" ? 112 : 96 }}
+          />
         </Form.Item>
       )}
-      {(method === "frequency" || method === "collocations") && (
+      {labelUnit && (
+        <Form.Item name="layer_id" label={unit === "relation_label" ? "关系层" : "片段层"}>
+          <Select allowClear style={{ width: 180 }} placeholder="最近更新的层" options={unitLayers.map((l) => ({ value: l.id, label: l.name }))} />
+        </Form.Item>
+      )}
+      {(method === "collocations" || (method === "frequency" && !labelUnit)) && (
         <Form.Item name="pos" label={method === "collocations" ? "搭配词词性" : "词性"}>
           <Select allowClear placeholder="全部" options={POS_OPTIONS} style={{ width: 136 }} />
         </Form.Item>
@@ -396,6 +416,8 @@ function summary(s: StatResult): string {
 export default function Stats() {
   const projectId = useProjectId();
   const shell = useShell();
+  const allLayers = useLayers(projectId);
+  const alignLayers = (allLayers.data ?? []).filter((l) => l.kind === "alignment" && l.status === "ready");
   const [tab, setTab] = useState<StatMethod>("frequency");
   const [runs, setRuns] = useState<Partial<Record<StatMethod, { body: Body; n: number }>>>({});
   const [opened, setOpened] = useState<Partial<Record<StatMethod, string>>>({});
@@ -499,6 +521,7 @@ export default function Stats() {
           )}
           {!running && stat && <ResultView key={stat.id} stat={stat} projectId={projectId} chartRef={chartRef} />}
           {!running && !stat && !error && <Empty icon="chart" text="设置参数后点“计算”" />}
+          {tab === "frequency" && alignLayers.length > 0 && <AlignmentStatsCard projectId={projectId} layers={alignLayers} />}
         </div>
       </div>
       <SavedResults

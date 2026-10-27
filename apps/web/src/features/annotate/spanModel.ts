@@ -1,0 +1,134 @@
+import type { Alignment, AnnotStatus, LabelDef, PairToken, Relation, SentenceSpans, Span } from "../../api";
+import type { DiffToken } from "../../components/annot/DiffRows";
+import type { FlowRelation, FlowSpan } from "../../components/annot/SpanText";
+import { labelColor } from "../../components/annot/spans";
+import { labelForKey, type KeyLike } from "./model";
+
+export const isSuggested = (x: { status: AnnotStatus }) => x.status === "suggested";
+export const isHumanSource = (source: string) => source === "human" || source.startsWith("human");
+
+/** A sentence is done when nothing in it is still a suggestion. */
+export function spanSentenceDone(s: SentenceSpans): boolean {
+  return !s.spans.some(isSuggested) && !s.relations.some(isSuggested);
+}
+
+export function sortSpans(spans: Span[]): Span[] {
+  return [...spans].sort((a, b) => a.start_cp - b.start_cp || b.end_cp - a.end_cp);
+}
+
+export function flowSpans(spans: Span[], labelOrder: string[]): FlowSpan[] {
+  return spans.map((s) => ({
+    id: s.id,
+    start: s.start_cp,
+    end: s.end_cp,
+    label: s.label,
+    status: s.status,
+    color: labelColor(s.label, labelOrder),
+    hasAttrs: !!s.attrs && Object.keys(s.attrs).length > 0,
+  }));
+}
+
+export function flowRelations(relations: Relation[]): FlowRelation[] {
+  return relations.map((r) => ({ id: r.id, from: r.from_span_id, to: r.to_span_id, label: r.label, status: r.status }));
+}
+
+/** Span diff as P3 diff tokens: model label above, human value below; human-made spans have no model value. */
+export function spanDiffTokens(s: SentenceSpans): DiffToken[] {
+  const text = new Map(s.spans.map((x) => [x.id, x.text]));
+  return [
+    ...sortSpans(s.spans).map((x) => ({
+      form: x.text,
+      // reviewing rewrites source to human:…; model_label keeps the pre-annotation (null for human-made spans)
+      model: x.model_label ?? (isHumanSource(x.source) ? "" : x.label),
+      human: x.status === "suggested" ? "" : x.label,
+      status: x.status,
+    })),
+    ...s.relations.map((r) => ({
+      form: `${text.get(r.from_span_id) ?? "?"} → ${text.get(r.to_span_id) ?? "?"}`,
+      model: r.model_label ?? (isHumanSource(r.source) ? "" : r.label),
+      human: r.status === "suggested" ? "" : r.label,
+      status: r.status,
+    })),
+  ];
+}
+
+/** Optimistic span state after an action. */
+export function patchedSpan(s: Span, body: { action: "confirm" | "modify" | "reject"; label?: string; start_cp?: number; end_cp?: number; attrs?: Record<string, string> }): Span {
+  if (body.action === "confirm") return { ...s, status: "confirmed" };
+  if (body.action === "reject") return { ...s, status: "rejected" };
+  return {
+    ...s,
+    status: "modified",
+    label: body.label ?? s.label,
+    start_cp: body.start_cp ?? s.start_cp,
+    end_cp: body.end_cp ?? s.end_cp,
+    attrs: body.attrs ?? s.attrs,
+  };
+}
+
+/* ---------- keyboard ---------- */
+
+export type SpanCommand =
+  | { type: "confirm" }
+  | { type: "reject" }
+  | { type: "span"; delta: 1 | -1 }
+  | { type: "sentence"; delta: 1 | -1 }
+  | { type: "label"; label: string }
+  | { type: "edit" }
+  | { type: "relation" }
+  | { type: "cancel" };
+
+/** Span editor keys: digits / letters pick labels, Enter confirms, Del rejects, ←/→ spans, J/K sentences, R starts a relation. */
+export function spanKeyCommand(e: KeyLike, ctx: { labels: LabelDef[]; relations: boolean }): SpanCommand | null {
+  if (e.ctrlKey || e.metaKey || e.altKey) return null;
+  switch (e.key) {
+    case "Enter":
+      return { type: "confirm" };
+    case "Delete":
+    case "Backspace":
+      return { type: "reject" };
+    case "ArrowRight":
+      return { type: "span", delta: 1 };
+    case "ArrowLeft":
+      return { type: "span", delta: -1 };
+    case "Escape":
+      return { type: "cancel" };
+  }
+  const k = e.key.toLowerCase();
+  if (k === "j") return { type: "sentence", delta: 1 };
+  if (k === "k") return { type: "sentence", delta: -1 };
+  if (k === "e") return { type: "edit" };
+  if (k === "r" && ctx.relations) return { type: "relation" };
+  const l = labelForKey(e.key, ctx.labels);
+  return l ? { type: "label", label: l.name } : null;
+}
+
+/* ---------- alignment ---------- */
+
+/** Token forms in order (strings or `{index?, form}`; indices are 1-based). */
+export function tokenForms(tokens: PairToken[] | undefined): string[] {
+  const list = (tokens ?? []).map((t, i) => (typeof t === "string" ? { index: i + 1, form: t } : { index: t.index ?? i + 1, form: t.form }));
+  return list.sort((a, b) => a.index - b.index).map((t) => t.form);
+}
+
+export function pairDone(alignments: Alignment[]): boolean {
+  return !alignments.some(isSuggested);
+}
+
+export function fmtScore(v: number | null | undefined): string {
+  return v == null ? "—" : v.toFixed(2);
+}
+
+/** κ / α display. */
+export function fmtKappa(v: number | null | undefined): string {
+  return v == null || Number.isNaN(v) ? "—" : v.toFixed(2);
+}
+
+/** Landis & Koch bands. */
+export function kappaBand(v: number | null | undefined): { text: string; cls: "" | "mid" | "low" } {
+  if (v == null) return { text: "", cls: "" };
+  if (v >= 0.8) return { text: "一致性高", cls: "" };
+  if (v >= 0.6) return { text: "一致性较好", cls: "" };
+  if (v >= 0.4) return { text: "一致性中等", cls: "mid" };
+  return { text: "一致性低", cls: "low" };
+}

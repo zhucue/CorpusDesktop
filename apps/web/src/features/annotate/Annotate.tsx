@@ -1,5 +1,5 @@
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
-import { App, Popconfirm } from "antd";
+import { App, Dropdown, Popconfirm } from "antd";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, errorText, type Job, type Layer, type LayerDocument } from "../../api";
@@ -12,8 +12,14 @@ import { fmt } from "../../lib/format";
 import { listOf, useLayers } from "./data";
 import { layerPct } from "./model";
 import NewLayerDialog, { kindLabels } from "./NewLayerDialog";
+import { KappaGauge, meanKappa, useAgreement } from "./Agreement";
+import AlignWorkspace from "./AlignWorkspace";
+import SpanWorkspace from "./SpanWorkspace";
 import Workspace from "./Workspace";
 import "./annotate.css";
+
+const FORMAT_NAMES: Record<string, string> = { conllu: "CoNLL-U", brat: "brat standoff", json: "JSON", tmx: "TMX", xlsx: "XLSX 统计" };
+const EXPORTS: Record<"span" | "relation" | "alignment", string[]> = { span: ["brat", "json", "xlsx"], relation: ["brat", "json"], alignment: ["tmx", "json"] };
 
 export function ProgressRing({ pct, ok }: { pct: number; ok?: boolean }) {
   return (
@@ -47,6 +53,8 @@ function LayerItem({
   const pct = layerPct(layer.progress);
   const done = layer.progress.confirmed + layer.progress.modified + layer.progress.rejected;
   const jp = job.data?.progress;
+  const multi = layer.mode === "multi";
+  const agreement = useAgreement(layer.id, multi && layer.status === "ready");
   return (
     <div className={`layer-item ${on ? "on" : ""}`}>
       <button className={`layer ${on ? "on" : ""}`} type="button" aria-current={on ? "true" : undefined} onClick={onSelect} aria-label={`${layer.name}，${pct}%`}>
@@ -76,10 +84,20 @@ function LayerItem({
                 {fmt(done)} / {fmt(layer.progress.total)}
               </span>
             </span>
-            <span className="small muted ellipsis">{layer.corpus_name}</span>
+            <span className="small muted ellipsis">{multi ? `${layer.corpus_name} · ${layer.annotators?.length ?? 0} 名标注者` : layer.corpus_name}</span>
           </span>
         </span>
+        {multi && agreement.data && (
+          <span className="layer-gauge">
+            <KappaGauge value={meanKappa(agreement.data)} annotators={agreement.data.annotators.length} />
+          </span>
+        )}
       </button>
+      {!!layer.progress.failed_sentences?.length && layer.status !== "failed" && (
+        <div className="layer-err">
+          <span className="grow">{layer.progress.failed_sentences.length} 句预标失败</span>
+        </div>
+      )}
       {layer.status === "failed" && (
         <div className="layer-err">
           <span className="grow">{layer.error ?? "预标任务失败"}</span>
@@ -121,9 +139,12 @@ export default function Annotate() {
   const layerParam = params.get("layer");
   const docParam = params.get("doc");
 
-  // A link with only ?doc= (DependencyTree "在标注中打开") opens the first layer that has that document, dependency layers first.
+  // A link with only ?doc= (DependencyTree / SpanView "在标注中打开") opens the first layer that has that document,
+  // layers of ?kind= first (dependency layers by default); ?kind= alone opens the first layer of that kind.
   const probe = !layerParam && !!docParam && list.length > 0;
-  const ordered = useMemo(() => [...list].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "dep" ? -1 : 1)), [list]);
+  const kindParam = params.get("kind");
+  const prefer = (k: string) => (kindParam ? (k === kindParam || (kindParam === "span" && k === "relation") ? 0 : 1) : k === "dep" ? 0 : 1);
+  const ordered = useMemo(() => [...list].sort((a, b) => prefer(a.kind) - prefer(b.kind)), [list, kindParam]); // eslint-disable-line react-hooks/exhaustive-deps
   const docLists = useQueries({
     queries: (probe ? ordered : []).map((l) => ({
       queryKey: ["layer-docs", l.id],
@@ -133,7 +154,7 @@ export default function Annotate() {
   const probed = probe ? ordered.find((_, i) => docLists[i]?.data?.some((d) => d.document_id === docParam)) : undefined;
   const probing = probe && !probed && docLists.some((q) => q.isPending);
 
-  const layer = list.find((l) => l.id === layerParam) ?? probed ?? (probing ? undefined : list[0]);
+  const layer = list.find((l) => l.id === layerParam) ?? probed ?? (probing ? undefined : ((kindParam ? list.find((l) => l.kind === kindParam) : undefined) ?? list[0]));
 
   function selectLayer(id: string) {
     setParams({ layer: id }, { replace: false });
@@ -150,12 +171,12 @@ export default function Annotate() {
   });
 
   const exportJob = useMutation({
-    mutationFn: (id: string) => api.post<Job>(`/layers/${id}/export`, { format: "conllu" }),
-    onSuccess: () => {
+    mutationFn: ({ id, format }: { id: string; format: string }) => api.post<Job>(`/layers/${id}/export`, { format }),
+    onSuccess: (_, v) => {
       jobCreated(projectId);
       message.success(
         <span>
-          已提交导出任务：CoNLL-U，<Link to={`/p/${projectId}/jobs`}>查看任务</Link>
+          已提交导出任务：{FORMAT_NAMES[v.format] ?? v.format}，<Link to={`/p/${projectId}/jobs`}>查看任务</Link>
         </span>,
       );
     },
@@ -218,10 +239,24 @@ export default function Annotate() {
                 <span className="lbl">预标注</span>
               </button>
             )}
-            <button className="btn s" type="button" disabled={!layer || exportJob.isPending} onClick={() => layer && exportJob.mutate(layer.id)}>
-              <Icon name="download" size={14} />
-              <span className="lbl">导出 CoNLL-U</span>
-            </button>
+            {!layer || layer.kind === "pos" || layer.kind === "dep" ? (
+              <button className="btn s" type="button" disabled={!layer || exportJob.isPending} onClick={() => layer && exportJob.mutate({ id: layer.id, format: "conllu" })}>
+                <Icon name="download" size={14} />
+                <span className="lbl">导出 CoNLL-U</span>
+              </button>
+            ) : (
+              <Dropdown
+                trigger={["click"]}
+                disabled={exportJob.isPending}
+                menu={{ items: EXPORTS[layer.kind].map((f) => ({ key: f, label: FORMAT_NAMES[f] })), onClick: ({ key }) => exportJob.mutate({ id: layer.id, format: key }) }}
+              >
+                <button className="btn s" type="button">
+                  <Icon name="download" size={14} />
+                  <span className="lbl">导出</span>
+                  <Icon name="down" size={14} />
+                </button>
+              </Dropdown>
+            )}
             {canManage && (
               <button className="btn s p" type="button" onClick={() => setCreating(true)}>
                 <Icon name="plus" size={14} />
@@ -260,7 +295,13 @@ export default function Annotate() {
             </div>
           </section>
         ) : layer ? (
-          <Workspace key={layer.id} layer={layer} projectId={projectId} canAnnotate={canAnnotate} leftTop={layerList} />
+          layer.kind === "span" || layer.kind === "relation" ? (
+            <SpanWorkspace key={layer.id} layer={layer} layers={list} projectId={projectId} canAnnotate={canAnnotate} canManage={canManage} leftTop={layerList} />
+          ) : layer.kind === "alignment" ? (
+            <AlignWorkspace key={layer.id} layer={layer} layers={list} projectId={projectId} canAnnotate={canAnnotate} canManage={canManage} leftTop={layerList} />
+          ) : (
+            <Workspace key={layer.id} layer={layer} projectId={projectId} canAnnotate={canAnnotate} leftTop={layerList} />
+          )
         ) : (
           <Empty icon="pen" text="选择标注层" />
         )}

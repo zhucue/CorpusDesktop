@@ -88,6 +88,8 @@ export function DiffTab({ layer, docId, onOpen }: { layer: Layer; docId: string 
   );
 }
 
+const UNIT_NAMES: Record<Layer["kind"], string> = { pos: "token", dep: "token", span: "片段", relation: "关系", alignment: "对齐" };
+
 /** 统计: label frequencies (effective values) and per-document progress. */
 export function StatsTab({ layer }: { layer: Layer }) {
   const q = useQuery({ queryKey: ["layer-stats", layer.id], queryFn: () => api.get<LayerStats>(`/layers/${layer.id}/stats`) });
@@ -111,10 +113,10 @@ export function StatsTab({ layer }: { layer: Layer }) {
       <section className="grid-4" aria-label="进度">
         {(
           [
-            ["token", p.total],
+            [UNIT_NAMES[layer.kind], p.total],
             ["已确认", p.confirmed],
             ["已修改", p.modified],
-            [layer.kind === "pos" ? "已拒绝" : "待办", layer.kind === "pos" ? p.rejected : p.suggested],
+            [layer.kind === "dep" ? "待办" : "已拒绝", layer.kind === "dep" ? p.suggested : p.rejected],
           ] as [string, number][]
         ).map(([label, v]) => (
           <div className="card card-pad" key={label}>
