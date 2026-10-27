@@ -310,6 +310,21 @@ NLP 模型（Stanza 中英、HanLP 可选）随 worker 镜像固定版本。CWB 
 | P5 标注二 | 自定义片段与关系、双语对齐、导出 CoNLL-U / brat / TMX | 完成一篇文档的偏误标注并导出；对齐 200 句对并修改 |
 | P6 收尾 | 维基子集、权限回归、部署文档、README | 干净环境 Compose 启动，两条研究流程走通 |
 
+### 完整计划与进度（2026 年 10 月 27 日）
+
+| 阶段 | 任务 | 状态 |
+| --- | --- | --- |
+| P1 语料与检索 | 登录、项目、成员角色；语料导入（txt / docx / csv / tsv / conllu / tmx / Tatoeba）；Stanza 分词词性依存；CWB 索引；类 CCL 查询式；KWIC、上下文、对齐句；子库；保存查询；CSV / XLSX 导出；任务系统 | 已实现，联调通过（`ab8e90b`）；Tatoeba 全量导入与内置语料发布未跑 |
+| P2 统计与 Agent | 频次、n-gram、搭配、关键词、分布；证据篮；agent 服务（Pi、19 工具、OpenUI Lang）；前端按设计稿定稿（主题、外壳、命令面板、任务托盘、深色模式、统计页、助手页与抽屉、引导页、错误边界） | 已实现，联调通过（`18b0ab1`）；真实模型未验 |
+| P2 补 | 真实模型接入验收（30 个真实任务、引用准确性）；Tatoeba 全量导入与内置语料发布；管理员维护内置语料页面 | 待用户提供模型配置后进行 |
+| P3 标注一 | 标注层、标签集、annotations 表（source / status / revision）；词性与依存预标任务（Stanza，可选 HanLP 对比）；校对工作区（词性点选、依存弧线拖拽、键盘快捷键、进度环）；AI 与人工差异视图；确认后写入 CWB 位置属性并重建索引；`{dep=}` 与词性查询接入检索与统计；标注统计；Agent 工具 annot.*；OpenUI 组件 DependencyTree、AnnotationDiff；导出 CoNLL-U | 待开始 |
+| P4 知识库 | knowledge_bases、kb_documents、kb_chunks、kb_terms 表与 pgvector；PDF / DOCX / Markdown / TXT / URL 导入与分段向量化；术语表（手工、从双语语料与文献抽取）；标注规范；研究笔记（证据篮与助手草稿写入）；混合检索；kb.search / kb.save / kb.extract_terms / kb.summarize 工具；OpenUI 组件 TermCard、KbCitation；TBX / CSV 导出；知识库页面 | 待开始 |
+| P5 标注二 | 自定义片段与关系标注（标签集、文本高亮、连线、LLM 预标按规范）；双语句级与词级对齐（候选生成、连线图编辑、确认）；学习者偏误与翻译策略标签集模板；多人标注一致性（kappa、alpha）与仲裁；OpenUI 组件 AlignmentGraph；导出 brat standoff、JSON、TMX；按自定义标签检索 `[标签]` | 待开始 |
+| P6 收尾 | 维基中英子集内置语料；UD 中文树库内置；权限与撤销回归；备份恢复说明；性能基线（Tatoeba 全量检索与统计耗时）；部署文档；README；两条研究流程端到端验收 | 待开始 |
+| 二期 | 命名实体、句子与文档分类、语义检索、更多内置语料、实时多人协作 | 不在首版 |
+
+贯穿各阶段：每阶段先写 `contracts/pN.md`，三方并行实现，整栈联调后提交；设计文档、Word、change-log 同批更新；每个新业务能力同批注册 Agent 工具与 OpenUI 组件。
+
 两条验收用的研究流程：
 
 1. 翻译研究：在 Tatoeba 中英子库检索某词，查看对齐句，统计译法频次，抽取术语入知识库，Agent 生成笔记草稿。
@@ -324,6 +339,6 @@ NLP 模型（Stanza 中英、HanLP 可选）随 worker 镜像固定版本。CWB 
 
 ## 十四 待确认
 
-1. 初始提交存档与旧文档迁入 `doc/history/` 尚待确认。
-2. 对话与向量模型的具体服务地址和模型名由用户提供。
-3. HanLP 是否纳入首版，取决于中文分词词性质量对比。
+1. 对话与向量模型的服务地址、密钥和模型名由用户提供（P2 补与 P4 依赖）。
+2. HanLP 是否纳入 P3 做中文分词词性对比。
+3. P4 向量模型：与对话模型同一 OpenAI 兼容服务，或本地模型。
