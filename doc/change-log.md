@@ -94,3 +94,5 @@
 - 在[重构设计](platform-redesign.md)第十二节增加"完整计划与进度"表：P1、P2 已实现并联调通过，列出 P2 补、P3 至 P6 的具体任务和贯穿规则，更新待确认事项；同步 Word。原因：用户要求按项目计划列出完整计划，并以文档为准跟踪进度。
 
 - 接入用户提供的真实对话模型（DeepSeek 兼容接口，deepseek-flash），配置只写入忽略的 `deploy/.env`；整栈一次真实对话通过：14 次工具调用、KwicTable / CollocationTable / FreqChart 三个组件渲染、无错误。按用户决定中文分词与词性改用 jieba（ICTCLAS 标签，`/n` 等短标签按前缀匹配），中文依存改为 P3 预标步骤用 Stanza 预分词解析；不引入 HanLP。同步重构设计第七、十、十二、十四节与 Word。原因：jieba 更快更轻，词性标签与 CCL 用法一致；真实模型验收是 P2 补的前提。
+
+- 完成 P3 标注一：迁移 0003（label_sets / annotation_layers / annotations），内置标签集 upos / jieba / ud-deprel；标注层与预标任务（词性取系统层，中文依存用 Stanza 预分词解析并回填 tokens）；校对接口（确认 / 修改 / 拒绝、整句确认 / 重置、差异、统计）、Agent 建议接口、CoNLL-U 导出；查询式支持 `{pos=,dep=,lemma=}`，纯属性查询由 PostgreSQL 产生命中，带锚点的按目标 token 过滤 CWB 命中；频次统计增加 deprel；agent 服务 annot.* 七个工具与 DependencyTree / AnnotationDiff 组件；前端标注工作区（词性 chip、依存弧线拖拽、键盘流、差异与统计标签页）与检索页属性查询。API 的 token 序号与 head 统一为句内 1 起、0 为根。整栈验收通过：UD 样本预标 0 差异，属性查询命中与独立 SQL 一致，CoNLL-U 导出仅含人工修改；修复 7 处集成问题（新建层后列表不刷新、键盘流在文档末尾中断、依存树过宽被裁、流式输出时组件收到不完整参数、错误边界不随内容复位、差异页重复文字、done 事件早于会话置 idle）。原因：contracts/p3.md；Bearer 允许建层与导出按第五节工具表放宽。遗留：真实模型问"第 N 句"时需指明文档，计划让 annot.layers 返回文档列表；KWIC 依存树下的词性仍取系统层。
