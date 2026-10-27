@@ -1,5 +1,5 @@
 /**
- * Pi customTools (contracts/p2.md §五 工具). Each tool is a thin call to the api
+ * Pi customTools (contracts/p2.md §五 工具, p3.md §五 annot.*). Each tool is a thin call to the api
  * with the run's agent token; the api decides permissions. Results stay compact.
  */
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -42,6 +42,10 @@ const oneOf = (values: string[]) => Type.Optional(Type.Union(values.map(value =>
 const positiveInt = () => Type.Optional(Type.Integer({ minimum: 1 }));
 const MAX_STAT_ROWS = 50;
 const MAX_HITS = 20;
+const MAX_DIFF_SENTENCES = 10;
+const MAX_LABELS = 30;
+const EFFECTIVE = new Set(['confirmed', 'modified']);
+const seg = (value: string | number) => encodeURIComponent(String(value));
 
 /** Pi tool names must match [A-Za-z0-9_-]; the contract name keeps the dot. */
 export const piName = (name: string) => name.replace('.', '_');
@@ -79,6 +83,37 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     }
     return current;
   }
+
+  const layers = new Map<string, any>();
+  async function getLayer(layerId: string, signal?: AbortSignal): Promise<any> {
+    if (!layers.has(layerId)) layers.set(layerId, await api.get<any>(`/layers/${seg(layerId)}`, signal));
+    return layers.get(layerId);
+  }
+
+  /** Default built-in label set: dep → ud-deprel; pos → jieba for Chinese corpora, upos otherwise. */
+  async function defaultLabelSet(corpusId: string, kind: string, signal?: AbortSignal): Promise<string> {
+    const list = await api.get<any>(`/label-sets${query({ project_id: projectId, kind })}`, signal);
+    const items: any[] = Array.isArray(list) ? list : list?.items ?? [];
+    let wanted = 'ud-deprel';
+    if (kind === 'pos') {
+      const corpus = await api.get<any>(`/corpora/${seg(corpusId)}`, signal);
+      wanted = String(corpus.language ?? '').startsWith('zh') ? 'jieba' : 'upos';
+    }
+    const builtin = items.filter(set => set.project_id === null);
+    const found = builtin.find(set => set.name === wanted) ?? builtin[0];
+    if (!found) throw new Error(`LABEL_SET_REQUIRED: 没有可用的 ${kind} 标签集，请传入 label_set_id`);
+    return found.id;
+  }
+
+  const compactLayer = (layer: any) => ({
+    layer_id: layer.id, corpus_id: layer.corpus_id, corpus_name: layer.corpus_name, kind: layer.kind, name: layer.name,
+    label_set_id: layer.label_set_id, source_model: layer.source_model, status: layer.status, job_id: layer.job_id ?? null,
+    progress: layer.progress, documents: layer.documents, error: layer.error ?? null,
+  });
+
+  /** Diff-view value of one token: pos → label; dep → "label→head". */
+  const annotValue = (kind: string, label: unknown, head: unknown) =>
+    label === null || label === undefined ? '' : kind === 'dep' ? `${label}→${head ?? ''}` : String(label);
 
   async function runStat(path: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<ToolOutput> {
     const job = await waitJob(await api.post<Job>(path, body, signal), signal);
@@ -401,6 +436,183 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
       run: async (args, signal) => {
         const job = await api.post<Job>(`/jobs/${args.job_id}/cancel`, {}, signal);
         return { data: compactJob(job), summary: `任务 ${job.state}`, ref: { kind: 'job', id: job.id } };
+      },
+    }),
+    spec({
+      name: 'annot.layers',
+      description: '列出项目标注层（pos 或 dep）与校对进度。',
+      parameters: Type.Object({ corpus_id: Type.Optional(Type.String()) }),
+      run: async (args, signal) => {
+        const list = await api.get<any>(`/projects/${projectId}/layers${query({ corpus_id: args.corpus_id })}`, signal);
+        const items: any[] = Array.isArray(list) ? list : list?.items ?? [];
+        return { data: { total: items.length, items: items.map(compactLayer) }, summary: `${items.length} 个标注层` };
+      },
+    }),
+    spec({
+      name: 'annot.create_layer',
+      description: '为语料库建立标注层并自动预标（后台任务，最多等待 90 秒）。kind=pos 词性、dep 依存；label_set_id 省略时用内置标签集。删除层即可撤销。',
+      parameters: Type.Object({
+        corpus_id: Type.String(),
+        kind: Type.Union([Type.Literal('pos'), Type.Literal('dep')]),
+        name: Type.String({ minLength: 1 }),
+        label_set_id: Type.Optional(Type.String()),
+        document_ids: Type.Optional(Type.Array(Type.String())),
+      }),
+      run: async (args, signal) => {
+        const labelSetId = args.label_set_id ?? await defaultLabelSet(args.corpus_id, args.kind, signal);
+        let layer = await api.post<any>(`/projects/${projectId}/layers`, {
+          corpus_id: args.corpus_id, kind: args.kind, name: args.name, label_set_id: labelSetId,
+          ...(args.document_ids ? { document_ids: args.document_ids } : {}),
+        }, signal);
+        const ref = { kind: 'layer', id: layer.id };
+        if (!layer.job_id) return { data: compactLayer(layer), summary: `标注层 ${layer.name}：${layer.status}`, ref };
+        const job = await waitJob(await api.get<Job>(`/jobs/${seg(layer.job_id)}`, signal), signal);
+        if (job.state === 'failed' || job.state === 'cancelled') {
+          throw new Error(`${job.error?.code ?? 'JOB_' + job.state.toUpperCase()}: ${job.error?.message ?? '预标任务未成功'}（layer_id ${layer.id}）`);
+        }
+        layer = await api.get<any>(`/layers/${seg(layer.id)}`, signal);
+        layers.set(layer.id, layer);
+        if (job.state !== 'succeeded') {
+          return {
+            data: {
+              ...compactLayer(layer), job: compactJob(job),
+              note: `预标等待超过 ${Math.round(ctx.jobWaitMs / 1000)} 秒仍未完成，请用户到任务页查看；不要重复建层。`,
+            },
+            summary: `标注层 ${layer.name} 预标中（任务 ${job.id}）`,
+            ref: { kind: 'job', id: job.id },
+          };
+        }
+        return { data: compactLayer(layer), summary: `标注层 ${layer.name}：${layer.status}`, ref };
+      },
+    }),
+    spec({
+      name: 'annot.sentence',
+      description: '读取标注层中的一句：每个 token 的系统值 system（pos/head/deprel）、该层标注 annotation 和有效值 effective（confirmed/modified 的标注优先，否则系统值）。head 为句内 token 序号，0 为根。',
+      parameters: Type.Object({
+        layer_id: Type.String(),
+        document_id: Type.String(),
+        sentence_index: Type.Integer({ minimum: 0 }),
+      }),
+      run: async (args, signal) => {
+        const layer = await getLayer(args.layer_id, signal);
+        const sentence = await api.get<any>(
+          `/layers/${seg(args.layer_id)}/sentences/${seg(args.document_id)}/${seg(args.sentence_index)}`, signal);
+        const byToken = new Map<number, any>((sentence.annotations ?? []).map((a: any) => [a.token_index, a]));
+        const tokens = (sentence.tokens ?? []).map((token: any) => {
+          const system = { pos: token.system?.pos ?? null, head: token.system?.head ?? null, deprel: token.system?.deprel ?? null };
+          const annot = byToken.get(token.index);
+          const effective = { ...system };
+          if (annot && EFFECTIVE.has(annot.status)) {
+            if (layer.kind === 'dep') { effective.head = annot.head; effective.deprel = annot.label; } else effective.pos = annot.label;
+          } else if (annot?.status === 'rejected' && layer.kind === 'pos') effective.pos = null;
+          return {
+            index: token.index, form: token.form, system,
+            annotation: annot ? {
+              label: annot.label, head: annot.head, model_label: annot.model_label, model_head: annot.model_head,
+              status: annot.status, source: annot.source,
+            } : null,
+            effective,
+          };
+        });
+        return {
+          data: {
+            layer_id: args.layer_id, layer_kind: layer.kind, document_id: sentence.document_id ?? args.document_id,
+            sentence_index: sentence.sentence_index ?? args.sentence_index, text: sentence.text, status: sentence.status, tokens,
+          },
+          summary: `第 ${args.sentence_index} 句，${tokens.length} 个 token`,
+          ref: { kind: 'layer', id: args.layer_id },
+        };
+      },
+    }),
+    spec({
+      name: 'annot.diff',
+      description: `标注层预标与人工结果的差异：计数与前 ${MAX_DIFF_SENTENCES} 个有改动的句子（model 为预标值，human 为人工值，dep 层写作 "关系→head"）。`,
+      parameters: Type.Object({
+        layer_id: Type.String(),
+        document_id: Type.Optional(Type.String()),
+      }),
+      run: async (args, signal) => {
+        const layer = await getLayer(args.layer_id, signal);
+        const diff = await api.get<any>(
+          `/layers/${seg(args.layer_id)}/diff${query({ document_id: args.document_id, only_changed: 'true' })}`, signal);
+        const items: any[] = diff.items ?? [];
+        const sentences = items.slice(0, MAX_DIFF_SENTENCES).map(sentence => {
+          const forms = new Map<number, string>((sentence.tokens ?? []).map((t: any) => [t.index, t.form]));
+          return {
+            document_id: sentence.document_id, sentence_index: sentence.sentence_index, text: sentence.text,
+            changes: (sentence.annotations ?? [])
+              .filter((a: any) => a.status === 'modified' || a.status === 'rejected')
+              .map((a: any) => ({
+                token_index: a.token_index, form: forms.get(a.token_index) ?? '',
+                model: annotValue(layer.kind, a.model_label, a.model_head),
+                human: a.status === 'rejected' ? '' : annotValue(layer.kind, a.label, a.head),
+                status: a.status,
+              })),
+          };
+        });
+        const counts = diff.counts ?? {};
+        return {
+          data: { layer_id: args.layer_id, layer_kind: layer.kind, counts, changed_sentences: items.length, sentences },
+          summary: `改动 ${counts.changed ?? 0}，确认 ${counts.confirmed ?? 0}，拒绝 ${counts.rejected ?? 0}，待校 ${counts.pending ?? 0}`,
+          ref: { kind: 'layer', id: args.layer_id },
+        };
+      },
+    }),
+    spec({
+      name: 'annot.stats',
+      description: `标注层的标签频次（前 ${MAX_LABELS} 个，按有效标注计）与校对进度。`,
+      parameters: Type.Object({ layer_id: Type.String() }),
+      run: async (args, signal) => {
+        const stats = await api.get<any>(`/layers/${seg(args.layer_id)}/stats`, signal);
+        const labels: any[] = [...(stats.labels ?? [])].sort((a, b) => b.count - a.count);
+        return {
+          data: {
+            layer_id: args.layer_id, progress: stats.progress, label_count: labels.length,
+            labels: labels.slice(0, MAX_LABELS).map(l => ({ label: l.label, count: l.count, confirmed: l.confirmed, modified: l.modified })),
+          },
+          summary: `${labels.length} 个标签`,
+          ref: { kind: 'layer', id: args.layer_id },
+        };
+      },
+    }),
+    spec({
+      name: 'annot.suggest',
+      description: '对一个 token 提出标签或 head 建议，写入为 suggested 待人工确认，不改变已确认的值。只能建议，不能确认。',
+      parameters: Type.Object({
+        layer_id: Type.String(),
+        document_id: Type.String(),
+        sentence_index: Type.Integer({ minimum: 0 }),
+        token_index: Type.Integer({ minimum: 0 }),
+        label: Type.Optional(Type.String()),
+        head: Type.Optional(Type.Integer({ minimum: 0, description: 'dep 层：句内 token 序号，0 为根' })),
+        note: Type.Optional(Type.String({ description: '建议理由' })),
+      }),
+      run: async (args, signal) => {
+        if (args.label === undefined && args.head === undefined) throw new Error('LABEL_OR_HEAD_REQUIRED: 需要 label 或 head');
+        const { layer_id: layerId, ...body } = args;
+        const annot = await api.post<any>(`/layers/${seg(layerId)}/suggest`, body, signal);
+        return {
+          data: {
+            annotation_id: annot.id, document_id: args.document_id, sentence_index: args.sentence_index,
+            token_index: annot.token_index ?? args.token_index, label: annot.label, head: annot.head, status: annot.status, source: annot.source,
+          },
+          summary: `已建议 token ${annot.token_index ?? args.token_index}：${annot.status}`,
+          ref: { kind: 'layer', id: layerId },
+        };
+      },
+    }),
+    spec({
+      name: 'annot.export',
+      description: '提交 CoNLL-U 导出任务（有效标注：人工结果优先，否则系统值）。返回 job_id。',
+      parameters: Type.Object({
+        layer_id: Type.String(),
+        document_ids: Type.Optional(Type.Array(Type.String())),
+      }),
+      run: async (args, signal) => {
+        const job = await api.post<Job>(`/layers/${seg(args.layer_id)}/export`, {
+          format: 'conllu', ...(args.document_ids ? { document_ids: args.document_ids } : {}),
+        }, signal);
+        return { data: compactJob(job), summary: `导出任务 ${job.id}`, ref: { kind: 'job', id: job.id } };
       },
     }),
   ];

@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { rm } from 'node:fs/promises';
 import { after, test } from 'node:test';
 import { createParser } from '@openuidev/lang-core';
-import { library } from '../src/components.ts';
+import { COMPONENTS, componentCatalog, library } from '../src/components.ts';
 import type { Config } from '../src/config.ts';
 import { createModel } from '../src/model.ts';
 import { Runner } from '../src/runner.ts';
 import { createApp } from '../src/server.ts';
 import {
-  AGENT_TOKEN, CORPUS, COOKIE, MemoryStore, ORIGIN, PROJECT, fakeApi, fakeModel, parseSse, testConfig, type Reply,
+  AGENT_TOKEN, CORPUS, COOKIE, DEP_LAYER, MemoryStore, ORIGIN, PROJECT, USER, fakeApi, fakeModel, parseSse, testConfig, type Reply,
 } from './fixtures.ts';
 
 const closers: (() => Promise<void>)[] = [];
@@ -111,7 +111,7 @@ test('full run: search and collocation tools, prose and OpenUI streamed, message
   assert.match(system, /KwicTable\(search_id: string/);
   assert.match(system, /UD 中文/);
   const toolNames = model.requests[0].body.tools.map((t: any) => t.function.name);
-  assert.equal(toolNames.length, 19);
+  assert.equal(toolNames.length, 26);
   assert.ok(!toolNames.some((n: string) => ['read', 'bash', 'edit', 'write'].includes(n)));
   assert.ok(toolNames.includes('stats_collocations') && toolNames.includes('jobs_cancel'));
 
@@ -264,4 +264,94 @@ test('identity, ownership and origin checks', async () => {
   assert.equal(patched.scope, null);
   assert.equal((await call('DELETE', `/agent/sessions/${session.id}`)).status, 204);
   assert.equal((await call('GET', `/agent/sessions/${session.id}`)).status, 404);
+});
+
+// ---------------------------------------------------------------- P3 annotation
+
+const TREE = [
+  'root = DependencyTree("doc1", 3, tokens, arcs, [3])',
+  'tokens = [{index: 1, form: "他们", pos: "r"}, {index: 2, form: "翻译", pos: "v"}, {index: 3, form: "这本书", pos: "n"}, {index: 4, form: "。", pos: "x"}]',
+  'arcs = [{head: 2, dep: 1, label: "nsubj"}, {head: 0, dep: 2, label: "root"}, {head: 2, dep: 3, label: "obj"}, {head: 2, dep: 4, label: "punct"}]',
+].join('\n');
+
+test('annot.sentence then a DependencyTree block', async () => {
+  const { api, model, call, createSession } = await setup([
+    { tool: 'annot_sentence', args: { layer_id: DEP_LAYER, document_id: 'doc1', sentence_index: 3 } },
+    { text: `doc1 第 3 句的依存结构：\n\`\`\`openui-lang\n${TREE}\n\`\`\`\n` },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '看第 3 句的依存树' })).text());
+  assert.equal(events.at(-1)!.event, 'done');
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([result.name, result.state], ['annot.sentence', 'succeeded']);
+  assert.deepEqual(result.result_ref, { kind: 'layer', id: DEP_LAYER });
+  const sentence = api.requests.find(r => r.path === `/layers/${DEP_LAYER}/sentences/doc1/3`)!;
+  assert.equal(sentence.headers.authorization, `Bearer ${AGENT_TOKEN}`);
+
+  // compact tool result: system values, the layer's annotation, and effective values (modified wins, suggested does not)
+  const toolResult = JSON.parse(model.requests[1].body.messages.find((m: any) => m.role === 'tool').content);
+  assert.equal(toolResult.layer_kind, 'dep');
+  assert.deepEqual(toolResult.tokens[2], {
+    index: 3, form: '这本书', system: { pos: 'n', head: 2, deprel: 'nmod' },
+    annotation: { label: 'obj', head: 2, model_label: 'nmod', model_head: 2, status: 'modified', source: `human:${USER.id}` },
+    effective: { pos: 'n', head: 2, deprel: 'obj' },
+  });
+  assert.equal(toolResult.tokens[0].annotation, null);
+  assert.equal(toolResult.tokens[3].effective.deprel, 'punct');
+
+  const message = events.at(-1)!.data.message;
+  assert.deepEqual(message.parts.map((p: any) => p.type), ['text', 'ui']);
+  const tree = createParser(library.toJSONSchema()).parse(message.parts[1].lang).root as any;
+  assert.equal(tree?.typeName, 'DependencyTree');
+  assert.equal(tree.props.document_id, 'doc1');
+  assert.equal(tree.props.sentence_index, 3);
+  assert.deepEqual(tree.props.arcs, [
+    { head: 2, dep: 1, label: 'nsubj' }, { head: 0, dep: 2, label: 'root' }, { head: 2, dep: 3, label: 'obj' }, { head: 2, dep: 4, label: 'punct' },
+  ]);
+  assert.deepEqual(tree.props.tokens.map((t: any) => t.form), ['他们', '翻译', '这本书', '。']);
+  assert.deepEqual(tree.props.highlight, [3]);
+});
+
+test('annot.suggest forwards the body with the agent token', async () => {
+  const args = { layer_id: DEP_LAYER, document_id: 'doc1', sentence_index: 3, token_index: 3, label: 'obj', head: 2, note: '宾语' };
+  const { api, model, call, createSession } = await setup([{ tool: 'annot_suggest', args }, { text: '已提出建议，待你确认。' }]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '建议把这本书改成 obj' })).text());
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([result.name, result.state], ['annot.suggest', 'succeeded']);
+  const request = api.requests.find(r => r.path === `/layers/${DEP_LAYER}/suggest`)!;
+  assert.equal(request.method, 'POST');
+  assert.equal(request.headers.authorization, `Bearer ${AGENT_TOKEN}`);
+  assert.deepEqual(request.body, { document_id: 'doc1', sentence_index: 3, token_index: 3, label: 'obj', head: 2, note: '宾语' });
+  const toolResult = JSON.parse(model.requests[1].body.messages.find((m: any) => m.role === 'tool').content);
+  assert.equal(toolResult.status, 'suggested');
+  assert.equal(toolResult.annotation_id, 'annot-1');
+  // no confirm path exists for the agent
+  assert.ok(!api.requests.some(r => r.path.endsWith('/confirm') || r.path.endsWith('/annotations')));
+});
+
+test('annot.create_layer resolves the built-in label set and waits for preannotation', async () => {
+  const { api, model, call, createSession } = await setup([
+    { tool: 'annot_create_layer', args: { corpus_id: CORPUS, kind: 'pos', name: '词性' } },
+    { text: '标注层已就绪。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '建一个词性层' })).text());
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([result.name, result.state], ['annot.create_layer', 'succeeded']);
+  assert.deepEqual(result.result_ref, { kind: 'layer', id: 'layer-new' });
+  const create = api.requests.find(r => r.path === `/projects/${PROJECT}/layers` && r.method === 'POST')!;
+  assert.deepEqual(create.body, { corpus_id: CORPUS, kind: 'pos', name: '词性', label_set_id: 'ls-jieba' });
+  assert.ok(api.requests.filter(r => r.path === '/jobs/job-preannotate').length >= 2);
+  const toolResult = JSON.parse(model.requests[1].body.messages.find((m: any) => m.role === 'tool').content);
+  assert.equal(toolResult.status, 'ready');
+  assert.equal(toolResult.layer_id, 'layer-new');
+});
+
+test('catalog lists the 10 components with the P3 signatures', () => {
+  assert.equal(COMPONENTS.length, 10);
+  const catalog = componentCatalog();
+  for (const component of COMPONENTS) assert.ok(catalog.includes(component.name), component.name);
+  assert.match(catalog, /DependencyTree\(document_id: string, sentence_index: number, tokens: .*arcs: .*highlight\?/);
+  assert.match(catalog, /AnnotationDiff\(layer_id: string, document_id: string, sentence_index: number, tokens: /);
 });

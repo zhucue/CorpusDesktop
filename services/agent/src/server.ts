@@ -167,9 +167,8 @@ export function createApp(config: Config, store: Store, runner: Runner) {
     return streamSSE(c, async stream => {
       let open = true;
       stream.onAbort(() => { open = false; });
-      const emit = (event: string, data: unknown) => {
-        if (open) stream.writeSSE({ event, data: JSON.stringify(data) }).catch(() => { open = false; });
-      };
+      const emit = (event: string, data: unknown) =>
+        open ? stream.writeSSE({ event, data: JSON.stringify(data) }).catch(() => { open = false; }) : undefined;
       // Keep proxies from closing the stream while a tool waits on a background job.
       const ping = setInterval(() => { if (open) stream.write(': ping\n\n').catch(() => { open = false; }); }, 15000);
       try {

@@ -19,7 +19,8 @@ import { piName, piTools, toolSpecs, type ToolOutput } from './tools.ts';
 import type { Message, Part, ToolCall } from './types.ts';
 import { FenceSplitter } from './ui-stream.ts';
 
-export type Emit = (event: string, data: unknown) => void;
+/** Returns the write promise when the transport has one; the final event is awaited before the stream closes. */
+export type Emit = (event: string, data: unknown) => unknown;
 
 interface ActiveRun {
   cancelled: boolean;
@@ -107,6 +108,7 @@ export class Runner {
     const parts = assistant.parts;
     const calls = assistant.tool_calls;
     let piSession: AgentSession | undefined;
+    let final: [string, unknown] | null = null;
     let saving: Promise<void> = Promise.resolve();
     const save = () => {
       const snapshot = { content: textOf(parts), parts: structuredClone(parts), tool_calls: structuredClone(calls) };
@@ -210,9 +212,9 @@ export class Runner {
       if (failed) {
         const code = classify(last?.errorMessage);
         console.error(`run ${session.id} failed: ${code} ${last?.errorMessage ?? ''}`);
-        emit('error', { code, message: MODEL_ERROR_TEXT[code] });
+        final = ['error', { code, message: MODEL_ERROR_TEXT[code] }];
       } else {
-        emit('done', { message: assistant });
+        final = ['done', { message: assistant }];
       }
     } catch (error) {
       console.error(`run ${session.id} crashed`, error);
@@ -221,11 +223,13 @@ export class Runner {
       assistant.duration_ms = Date.now() - started;
       await saving;
       await this.store.updateMessage(assistant.id, assistant).catch(() => {});
-      emit('error', { code: 'INTERNAL', message: (error as Error).message });
+      final = ['error', { code: 'INTERNAL', message: (error as Error).message }];
     } finally {
       piSession?.dispose();
       await this.store.updateSession(session.id, { state: 'idle' }).catch(error => console.error('session idle', error));
       this.release(session.id);
+      // The final event goes out after the session is idle, so a client refreshing on `done` never sees it running.
+      if (final) await emit(...final);
     }
   }
 

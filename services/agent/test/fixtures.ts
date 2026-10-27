@@ -108,6 +108,33 @@ export const HITS = [
   { hit_id: 'doc2:4-6', document_id: 'doc2', document_title: '小说 07', sentence_index: 0, left: '请', match: '翻译', right: '成英文。', start_cp: 4, end_cp: 6, metadata: {}, aligned: [{ language: 'en', text: 'Please translate it.' }] },
 ];
 
+export const DEP_LAYER = 'layer-dep';
+export const LABEL_SETS = [
+  { id: 'ls-upos', project_id: null, name: 'upos', kind: 'pos', language: null, labels: [] },
+  { id: 'ls-jieba', project_id: null, name: 'jieba', kind: 'pos', language: 'zh', labels: [] },
+  { id: 'ls-deprel', project_id: null, name: 'ud-deprel', kind: 'dep', language: null, labels: [] },
+];
+const layer = (id: string, kind: string, name: string, status: string) => ({
+  id, project_id: PROJECT, corpus_id: CORPUS, corpus_name: 'UD 中文', kind, name, label_set_id: kind === 'dep' ? 'ls-deprel' : 'ls-jieba',
+  source_model: kind === 'dep' ? 'stanza 1.9 zh' : 'jieba 0.42', status, job_id: null,
+  progress: { total: 4, suggested: 3, confirmed: 0, modified: 1, rejected: 0 }, documents: { total: 1, done: status === 'ready' ? 1 : 0 },
+  error: null, created_by: USER.id, created_at: '2026-10-27T00:00:00Z', updated_at: '2026-10-27T00:00:00Z',
+});
+/** 他们 翻译 这本书 。 — token 2 (翻译) is root; the reviewer moved 这本书 from nmod to obj. */
+export const SENTENCE = {
+  document_id: 'doc1', sentence_index: 3, text: '他们翻译这本书。', status: 'pending',
+  tokens: [
+    { index: 1, form: '他们', start_cp: 0, end_cp: 2, system: { pos: 'r', head: 2, deprel: 'nsubj' } },
+    { index: 2, form: '翻译', start_cp: 2, end_cp: 4, system: { pos: 'v', head: 0, deprel: 'root' } },
+    { index: 3, form: '这本书', start_cp: 4, end_cp: 7, system: { pos: 'n', head: 2, deprel: 'nmod' } },
+    { index: 4, form: '。', start_cp: 7, end_cp: 8, system: { pos: 'x', head: 2, deprel: 'punct' } },
+  ],
+  annotations: [
+    { id: 'a3', token_index: 3, label: 'obj', head: 2, model_label: 'nmod', model_head: 2, source: `human:${USER.id}`, status: 'modified', revision: 2, updated_by: USER.id, updated_at: '2026-10-27T00:00:00Z' },
+    { id: 'a4', token_index: 4, label: 'punct', head: 2, model_label: 'punct', model_head: 2, source: 'model:stanza-zh', status: 'suggested', revision: 1, updated_by: null, updated_at: '2026-10-27T00:00:00Z' },
+  ],
+};
+
 export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' } = {}) {
   const requests: ApiRequest[] = [];
   const jobPolls = new Map<string, number>();
@@ -137,7 +164,7 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
     if (path.startsWith('/projects/') && cookieOk) return fail(response, 404, 'NOT_FOUND');
     if (!bearerOk) return fail(response, 401, 'AUTH_REQUIRED');
 
-    if (path === `/corpora/${CORPUS}`) return json(response, 200, { id: CORPUS, name: 'UD 中文', status: 'ready' });
+    if (path === `/corpora/${CORPUS}`) return json(response, 200, { id: CORPUS, name: 'UD 中文', language: 'zh', status: 'ready' });
     if (path === '/search' && request.method === 'POST') {
       return json(response, 200, {
         search_id: 'search-1', parse: { ok: true }, counts: { hits: 2, sentences: 2, documents: 2, complete: true },
@@ -166,6 +193,23 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
         columns: [{ key: 'collocate', label: '搭配词', type: 'string' }, { key: 'cooc', label: '共现频次', type: 'number' }, { key: 'logdice', label: 'logDice', type: 'number' }],
         rows: Array.from({ length: 60 }, (_, i) => ({ key: `w${i}`, values: { collocate: `w${i}`, cooc: 60 - i, logdice: 10 - i / 10 }, search_query: null, search_scope: { corpus_id: CORPUS } })),
         row_count: 60,
+      });
+    }
+    // ---- P3 annotation (contracts/p3.md §三)
+    if (path === '/label-sets' && request.method === 'GET') return json(response, 200, LABEL_SETS);
+    if (path === `/projects/${PROJECT}/layers` && request.method === 'POST') {
+      return json(response, 201, { ...layer('layer-new', body.kind, body.name, 'preannotating'), label_set_id: body.label_set_id, job_id: 'job-preannotate' });
+    }
+    if (path === '/layers/layer-new') {
+      const ready = (jobPolls.get('job-preannotate') ?? 0) >= 2;
+      return json(response, 200, { ...layer('layer-new', 'pos', '词性', ready ? 'ready' : 'preannotating'), job_id: 'job-preannotate' });
+    }
+    if (path === `/layers/${DEP_LAYER}`) return json(response, 200, layer(DEP_LAYER, 'dep', '依存', 'ready'));
+    if (path === `/layers/${DEP_LAYER}/sentences/doc1/3`) return json(response, 200, SENTENCE);
+    if (path === `/layers/${DEP_LAYER}/suggest` && request.method === 'POST') {
+      return json(response, 200, {
+        id: 'annot-1', token_index: body.token_index, label: body.label ?? null, head: body.head ?? null, model_label: 'obj', model_head: 2,
+        source: 'model:fake-model', status: 'suggested', revision: 1, updated_by: USER.id, updated_at: new Date().toISOString(),
       });
     }
     return fail(response, 404, 'NOT_FOUND');

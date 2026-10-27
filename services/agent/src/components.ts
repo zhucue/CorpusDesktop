@@ -1,5 +1,5 @@
 /**
- * P2 OpenUI component catalog (contracts/p2.md §五). Single source for the
+ * OpenUI component catalog (contracts/p2.md §五, p3.md §五). Single source for the
  * system-prompt catalog; the web app registers renderers under the same names
  * and prop order. No renderer here: `component` is null on the server.
  */
@@ -100,7 +100,38 @@ export const Callout = defineComponent({
   component: null,
 });
 
-export const COMPONENTS = [KwicTable, FreqChart, CollocationTable, KeywordTable, DistributionChart, EvidenceCard, JobStatus, Callout];
+export const DependencyTree = defineComponent({
+  name: 'DependencyTree',
+  description: '一句的依存结构弧线图。用户问某句的依存结构或句法分析时，在 annot_sentence 之后使用：tokens 取 index、form、effective.pos；arcs 每个 token 一条，dep 为该 token 的 index，head 与 label 取 effective.head、effective.deprel（head 0 为根）；highlight 为要突出的 token index。',
+  props: z.object({
+    document_id: z.string(),
+    sentence_index: z.number(),
+    tokens: z.array(z.object({ index: z.number(), form: z.string(), pos: z.string() })),
+    arcs: z.array(z.object({ head: z.number(), dep: z.number(), label: z.string() })),
+    highlight: z.array(z.number()).optional(),
+  }),
+  component: null,
+});
+
+export const AnnotationDiff = defineComponent({
+  name: 'AnnotationDiff',
+  description: '一句中校对者对预标的改动。annot_diff 之后使用：tokens 取该句的 changes，model 为预标值，human 为人工值，status 为 modified 或 rejected 等。',
+  props: z.object({
+    layer_id: z.string(),
+    document_id: z.string(),
+    sentence_index: z.number(),
+    tokens: z.array(z.object({
+      form: z.string(), model: z.string(), human: z.string(),
+      status: z.enum(['suggested', 'confirmed', 'modified', 'rejected']),
+    })),
+  }),
+  component: null,
+});
+
+export const COMPONENTS = [
+  KwicTable, FreqChart, CollocationTable, KeywordTable, DistributionChart, EvidenceCard, JobStatus, Callout,
+  DependencyTree, AnnotationDiff,
+];
 export const COMPONENT_NAMES = COMPONENTS.map(component => component.name);
 
 export const library = createLibrary({ components: COMPONENTS });
