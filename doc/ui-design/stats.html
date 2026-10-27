@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>统计 · 语料研究平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+  .params { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; padding: 16px 20px; }
+  .params .field { min-width: 120px; }
+  .res { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .res-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-3); }
+  .res table td, .res table th { padding: 9px 12px; }
+  .res td.num, .res th.num { text-align: right; }
+  .back { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
+  .back .ic { transition: transform var(--t-fast); }
+  .back:hover .ic { transform: translateX(2px); }
+  .cell-bar { position: relative; display: block; height: 4px; border-radius: 2px; background: var(--fill); margin-top: 5px; }
+  .cell-bar i { position: absolute; inset: 0 auto 0 0; width: var(--v); border-radius: 2px; background: var(--accent-line); transform-origin: left; animation: grow-x 600ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 40ms + 150ms); }
+  .scatter .pt { transform-box: fill-box; transform-origin: center; animation: pop 360ms var(--ease-spring) both; animation-delay: calc(200ms + var(--i, 0) * 45ms); cursor: pointer; transition: r var(--t-fast); }
+  .scatter .pt:hover { r: 7; }
+  .scatter .lbl { font-size: 11px; fill: var(--text-2); animation: fade 300ms ease both; animation-delay: calc(400ms + var(--i, 0) * 45ms); }
+  .scatter .axis { stroke: var(--line); }
+  .scatter .grid { stroke: var(--line-soft); }
+  .scatter .tick { font-family: var(--mono); font-size: 10px; fill: var(--text-3); }
+  .pos-tag { font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+  .up { color: var(--success); } .down { color: var(--error); }
+  .net { display: block; overflow: visible; }
+  .net .edge { stroke: var(--accent); stroke-opacity: .4; stroke-linecap: round; fill: none; }
+  .net .edge.on { stroke-opacity: 1; }
+  .net .node { cursor: pointer; outline: none; transform-box: fill-box; transform-origin: center; animation: pop 380ms var(--ease-spring) both; animation-delay: calc(450ms + var(--i, 0) * 60ms); }
+  .net .node circle { fill: var(--pbg); stroke: var(--pc); stroke-width: 1.5; transition: stroke-width var(--t-fast); }
+  .net .node text { fill: var(--pfg); font-size: 12px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+  .net .node .v { fill: var(--text-3); font-family: var(--mono); font-size: 10px; font-weight: 500; }
+  .net .node:hover circle, .net .node:focus-visible circle { stroke-width: 3; }
+  .net .node.on circle { stroke-width: 3.5; stroke: var(--accent); }
+  .net .center circle { fill: var(--accent-solid); stroke: none; }
+  .net .center text { fill: #fff; font-size: 14px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" data-active="stats"></aside>
+  <main class="main">
+    <header class="topbar">
+      <h1>统计</h1>
+      <nav class="crumbs" data-scope="翻译对等研究|Tatoeba 中英|2015 年后"></nav>
+      <div class="grow"></div>
+      <button class="btn s" type="button" data-toast="已保存统计结果，参数与索引版本 v14 一并记录"><span data-icon="plus" class="ic-14"></span>保存结果</button>
+      <button class="btn s" type="button" data-toast="已导出 SVG" data-toast-icon="download"><span data-icon="download" class="ic-14"></span>SVG</button>
+      <button class="btn s" type="button" data-toast="已导出 PNG" data-toast-icon="download"><span data-icon="download" class="ic-14"></span>PNG</button>
+      <div class="topbar-prog" aria-hidden="true"></div>
+    </header>
+
+    <div class="content">
+      <div class="tabs" role="tablist" aria-label="统计方法">
+        <button role="tab" type="button" aria-selected="true" aria-controls="p-freq" id="t-freq">频次</button>
+        <button role="tab" type="button" aria-selected="false" aria-controls="p-ngram" tabindex="-1">n-gram</button>
+        <button role="tab" type="button" aria-selected="false" aria-controls="p-coll" tabindex="-1">搭配</button>
+        <button role="tab" type="button" aria-selected="false" aria-controls="p-kw" tabindex="-1">关键词</button>
+        <button role="tab" type="button" aria-selected="false" aria-controls="p-dist" tabindex="-1">分布</button>
+      </div>
+
+      <!-- 频次 -->
+      <section role="tabpanel" id="p-freq" class="col gap-20" aria-labelledby="t-freq">
+        <form class="card params" data-run>
+          <div class="field"><label for="f-unit">单位</label><select id="f-unit" class="select"><option>词形</option><option>词元</option><option>词性</option></select></div>
+          <div class="field"><label for="f-pos">词性</label><select id="f-pos" class="select"><option>动词 VERB</option><option>名词 NOUN</option><option>全部</option></select></div>
+          <div class="field" style="width:110px"><label for="f-min">最低频次</label><input id="f-min" class="input mono" value="5"></div>
+          <div class="field" style="width:110px"><label for="f-top">显示</label><select id="f-top" class="select"><option>前 50</option><option>前 100</option><option>全部</option></select></div>
+          <div class="grow"></div>
+          <button class="btn p" type="submit"><span data-icon="play" class="ic-14"></span>计算</button>
+        </form>
+        <div class="res">
+          <div class="card">
+            <div class="card-head"><h2>结果</h2><span class="res-meta"><span class="num">412,006</span> 词 · 索引 v14 · 10-27 10:14</span><div class="grow"></div><button class="btn xs" type="button" data-toast="已导出 XLSX" data-toast-icon="download">XLSX</button></div>
+            <table class="td-mid" data-pin="频次 · 动词 · 每百万词"><thead><tr><th>#</th><th>词</th><th class="num">频次</th><th class="num">每百万词</th><th class="num">文档</th><th>2015–2021</th><th></th></tr></thead><tbody class="stagger" id="freq-body"></tbody></table>
+          </div>
+          <div class="card card-pad col gap-16">
+            <div class="row between"><h2>前 10 · 每百万词</h2><span class="tag t-gray">动词</span></div>
+            <div class="hbars" id="freq-bars"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- n-gram -->
+      <section role="tabpanel" id="p-ngram" class="col gap-20" hidden>
+        <form class="card params" data-run>
+          <div class="field"><label>n</label><div class="seg" role="tablist" aria-label="n"><button role="tab" type="button" aria-selected="false" tabindex="-1">2</button><button role="tab" type="button" aria-selected="true">3</button><button role="tab" type="button" aria-selected="false" tabindex="-1">4</button></div></div>
+          <div class="field" style="width:260px"><label for="n-pat">模式</label><input id="n-pat" class="input mono" value="翻译 * *"></div>
+          <div class="field" style="width:110px"><label for="n-min">最低频次</label><input id="n-min" class="input mono" value="10"></div>
+          <div class="grow"></div>
+          <button class="btn p" type="submit"><span data-icon="play" class="ic-14"></span>计算</button>
+        </form>
+        <div class="card">
+          <div class="card-head"><h2>3-gram</h2><span class="res-meta">含“翻译”· <span class="num">214</span> 种 · 索引 v14</span></div>
+          <table class="td-mid" data-pin="3-gram · 含“翻译”"><thead><tr><th>#</th><th>n-gram</th><th>词性</th><th class="num" style="width:220px">频次</th><th class="num">每百万词</th><th></th></tr></thead><tbody class="stagger" id="ngram-body"></tbody></table>
+        </div>
+      </section>
+
+      <!-- 搭配 -->
+      <section role="tabpanel" id="p-coll" class="col gap-20" hidden>
+        <form class="card params" data-run>
+          <div class="field" style="width:160px"><label for="c-node">节点词</label><input id="c-node" class="input mono" value="翻译/v"></div>
+          <div class="field" style="width:110px"><label for="c-win">窗口</label><select id="c-win" class="select"><option>±5</option><option>±3</option><option>左 5</option><option>右 5</option></select></div>
+          <div class="field"><label for="c-m">排序指标</label><select id="c-m" class="select"><option>logDice</option><option>MI</option><option>t 值</option><option>LL</option></select></div>
+          <div class="field"><label for="c-pos">搭配词词性</label><select id="c-pos" class="select"><option>全部</option><option>名词</option><option>动词</option></select></div>
+          <div class="field" style="width:110px"><label for="c-min">最低共现</label><input id="c-min" class="input mono" value="5"></div>
+          <div class="grow"></div>
+          <button class="btn p" type="submit"><span data-icon="play" class="ic-14"></span>计算</button>
+        </form>
+        <div class="res">
+          <div class="card">
+            <div class="card-head"><h2>搭配</h2><span class="res-meta">节点频次 <span class="num">2,931</span> · 索引 v14</span></div>
+            <table class="td-mid" data-pin="搭配 · 翻译/v ±5 · logDice" id="coll-table"><thead><tr><th>搭配词</th><th>词性</th><th class="num">共现</th><th class="num">MI</th><th class="num">logDice</th><th class="num">t</th><th class="num">LL</th><th></th></tr></thead><tbody class="stagger" id="coll-body"></tbody></table>
+          </div>
+          <div class="card card-pad col gap-16">
+            <div class="row between"><h2>搭配强度</h2><div class="seg" role="tablist" aria-label="图表"><button role="tab" type="button" aria-selected="true" aria-controls="coll-net-p">网络</button><button role="tab" type="button" aria-selected="false" tabindex="-1" aria-controls="coll-bar-p">条形</button></div></div>
+            <div role="tabpanel" id="coll-net-p">
+              <svg class="net" id="coll-net" viewBox="0 0 440 330" width="100%" role="group" aria-label="搭配网络：节点越近 logDice 越高，连线越粗 logDice 越高"></svg>
+              <div class="row small muted" style="justify-content:center;gap:14px"><span class="row gap-4" data-c="1"><span class="dot" style="color:var(--pc)"></span>名词</span><span class="row gap-4" data-c="2"><span class="dot" style="color:var(--pc)"></span>动词</span><span class="row gap-4" data-c="3"><span class="dot" style="color:var(--pc)"></span>形容词</span><span>距离 / 线宽 = logDice</span></div>
+            </div>
+            <div role="tabpanel" id="coll-bar-p" hidden><div class="hbars" id="coll-bars"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 关键词 -->
+      <section role="tabpanel" id="p-kw" class="col gap-20" hidden>
+        <form class="card params" data-run>
+          <div class="field" style="width:200px"><label for="k-t">目标</label><select id="k-t" class="select"><option>子库「2015 年后」</option></select></div>
+          <div class="field" style="width:200px"><label for="k-r">参照</label><select id="k-r" class="select"><option>子库「2015 年前」</option><option>Tatoeba 中英（全库）</option><option>内置：LCMC</option></select></div>
+          <div class="field"><label for="k-s">显著性</label><select id="k-s" class="select"><option>p &lt; 0.001</option><option>p &lt; 0.01</option></select></div>
+          <div class="grow"></div>
+          <button class="btn p" type="submit"><span data-icon="play" class="ic-14"></span>计算</button>
+        </form>
+        <div class="res">
+          <div class="card">
+            <div class="card-head"><h2>关键词</h2><span class="res-meta"><span class="num">412,006</span> 对 <span class="num">388,540</span> 词 · 索引 v14</span></div>
+            <table class="td-mid" data-pin="关键词 · 2015 年后 对 2015 年前 · LL"><thead><tr><th>词</th><th class="num">目标</th><th class="num">参照</th><th class="num">LL</th><th class="num">Log Ratio</th><th></th></tr></thead><tbody class="stagger" id="kw-body"></tbody></table>
+          </div>
+          <div class="card card-pad col gap-12">
+            <div class="row between"><h2>Log Ratio × LL</h2><span class="row small muted gap-12"><span class="row gap-4"><span class="dot" style="color:var(--accent)"></span>目标偏多</span><span class="row gap-4"><span class="dot" style="color:#F04438"></span>参照偏多</span></span></div>
+            <svg class="scatter" id="kw-scatter" viewBox="0 0 440 320" width="100%" role="img" aria-label="关键词散点图"></svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- 分布 -->
+      <section role="tabpanel" id="p-dist" class="col gap-20" hidden>
+        <form class="card params" data-run>
+          <div class="field" style="width:220px"><label for="d-q">查询式</label><input id="d-q" class="input mono" value="翻译/v +文化"></div>
+          <div class="field"><label>按</label><div class="seg" role="tablist" aria-label="分布维度"><button role="tab" type="button" aria-selected="true">年份</button><button role="tab" type="button" aria-selected="false" tabindex="-1">来源</button><button role="tab" type="button" aria-selected="false" tabindex="-1">文档位置</button></div></div>
+          <div class="grow"></div>
+          <button class="btn p" type="submit"><span data-icon="play" class="ic-14"></span>计算</button>
+        </form>
+        <div class="res" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)">
+          <div class="card card-pad col gap-16">
+            <div class="row between"><h2>每百万词 · 按年份</h2><span class="mono small muted">1,284 命中</span></div>
+            <div class="vbars" id="dist-bars"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>明细</h2><span class="res-meta">索引 v14</span></div>
+            <table class="td-mid" data-pin="分布 · 翻译/v +文化 · 每百万词"><thead><tr><th>年份</th><th class="num">命中</th><th class="num">词数</th><th class="num">每百万词</th><th></th></tr></thead><tbody class="stagger" id="dist-body"></tbody></table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var f = function (n, d) { return Number(n).toLocaleString('en-US', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }); };
+  var back = '<a class="back" href="search.html">回到例句' + UI.svg('right', 'ic ic-14') + '</a>';
+  var link = function (n, d) { return '<a class="numlink" href="search.html">' + f(n, d) + '</a>'; };
+
+  /* 频次（含按年份趋势） */
+  var trend = function (n, k) { var w = [0.92, 1.04, 1.1, 0.98, 0.95, 1.01, 1.0]; return w.map(function (x, j) { return Math.round(n / 7 * (x + ((k * 7 + j * 3) % 5 - 2) * 0.03)); }).join(','); };
+  var freq = [['是', 9874], ['有', 3987], ['去', 2812], ['说', 2604], ['要', 2377], ['想', 2190], ['知道', 1846], ['喜欢', 1522], ['看', 1498], ['做', 1311], ['来', 1287], ['买', 1102]];
+  var N = 412006;
+  document.getElementById('freq-body').innerHTML = freq.map(function (r, i) {
+    return '<tr style="--i:' + i + '"><td class="mono muted">' + (i + 1) + '</td><td>' + r[0] + ' <span class="pos-tag">VERB</span></td><td class="num">' + link(r[1]) + '</td><td class="num mono">' + f(r[1] / N * 1e6) + '</td><td class="num mono muted">7 / 7</td><td><span data-spark="' + trend(r[1], i) + '" data-w="72" data-h="20" aria-label="' + r[0] + ' 按年份"></span></td><td class="td-r">' + back + '</td></tr>';
+  }).join('');
+  document.getElementById('freq-bars').innerHTML = freq.slice(0, 10).map(function (r, i) {
+    return '<div class="hbar" style="--i:' + i + '"><span class="lab">' + r[0] + '</span><span class="track"><i style="--v:' + (r[1] / freq[0][1] * 100).toFixed(1) + '%"></i></span><span class="val">' + f(r[1] / N * 1e6) + '</span></div>';
+  }).join('');
+
+  /* n-gram */
+  var ng = [['翻译 成 英文', 'VERB VERB NOUN', 148], ['把 它 翻译', 'ADP PRON VERB', 92], ['翻译 成 中文', 'VERB VERB NOUN', 87], ['翻译 这 句', 'VERB DET NOUN', 64], ['翻译 一下 这', 'VERB NUM DET', 41], ['翻译 得 很', 'VERB PART ADV', 38], ['翻译 成 法语', 'VERB VERB NOUN', 27], ['翻译 成 日文', 'VERB VERB NOUN', 26], ['翻译 这 本', 'VERB DET NOUN', 19]];
+  document.getElementById('ngram-body').innerHTML = ng.map(function (r, i) {
+    return '<tr style="--i:' + i + '"><td class="mono muted">' + (i + 1) + '</td><td style="font-weight:500">' + r[0] + '</td><td class="pos-tag">' + r[1] + '</td><td class="num">' + link(r[2]) + '<span class="cell-bar" style="--i:' + i + '"><i style="--v:' + (r[2] / ng[0][2] * 100).toFixed(0) + '%"></i></span></td><td class="num mono">' + f(r[2] / N * 1e6, 1) + '</td><td class="td-r">' + back + '</td></tr>';
+  }).join('');
+
+  /* 搭配 */
+  var coll = [['成', 'VERB', 412, 5.21, 11.4, 19.8, 2134.6], ['作品', 'NOUN', 96, 6.71, 10.2, 9.7, 664.8], ['英文', 'NOUN', 148, 6.02, 9.9, 12.1, 902.3], ['概念', 'NOUN', 64, 6.42, 9.3, 7.9, 421.0], ['中文', 'NOUN', 87, 5.02, 8.9, 9.0, 437.5], ['俗语', 'NOUN', 41, 7.88, 8.8, 6.4, 340.2], ['文章', 'NOUN', 58, 5.36, 8.6, 7.4, 312.7], ['准确', 'ADJ', 37, 6.39, 8.5, 6.0, 241.9]];
+  document.getElementById('coll-body').innerHTML = coll.map(function (r, i) {
+    return '<tr style="--i:' + i + '"><td style="font-weight:500">' + r[0] + '</td><td class="pos-tag">' + r[1] + '</td><td class="num">' + link(r[2]) + '</td><td class="num mono">' + r[3].toFixed(2) + '</td><td class="num mono" style="color:var(--accent);font-weight:600">' + r[4].toFixed(1) + '</td><td class="num mono">' + r[5].toFixed(1) + '</td><td class="num mono">' + f(r[6], 1) + '</td><td class="td-r">' + back + '</td></tr>';
+  }).join('');
+  document.getElementById('coll-bars').innerHTML = coll.map(function (r, i) {
+    return '<div class="hbar" style="--i:' + i + '"><span class="lab">' + r[0] + '</span><span class="track"><i style="--v:' + (r[4] / 12 * 100).toFixed(1) + '%"></i></span><span class="val">' + r[4].toFixed(1) + '</span></div>';
+  }).join('');
+
+  /* 关键词 */
+  var kw = [['手机', 1204, 312, 812.4, 2.41], ['微信', 386, 4, 611.0, 6.10], ['疫情', 211, 0, 380.2, null], ['网上', 642, 210, 361.8, 2.06], ['视频', 498, 151, 302.5, 2.21], ['口罩', 178, 6, 252.3, 4.39], ['写信', 88, 301, -112.6, -1.31], ['电脑', 702, 588, 64.1, 0.70], ['磁带', 9, 74, -58.4, -2.58], ['电报', 3, 41, -39.7, -3.33]];
+  document.getElementById('kw-body').innerHTML = kw.map(function (r, i) {
+    var neg = r[3] < 0;
+    return '<tr style="--i:' + i + '"><td style="font-weight:500">' + r[0] + '</td><td class="num">' + link(r[1]) + '</td><td class="num mono">' + f(r[2]) + '</td><td class="num mono ' + (neg ? 'down' : 'up') + '">' + (neg ? '−' : '+') + f(Math.abs(r[3]), 1) + '</td><td class="num mono">' + (r[4] === null ? '仅目标' : (r[4] < 0 ? '−' : '') + Math.abs(r[4]).toFixed(2)) + '</td><td class="td-r">' + back + '</td></tr>';
+  }).join('');
+  (function scatter() {
+    var s = document.getElementById('kw-scatter');
+    var X = function (lr) { return 40 + (lr + 4) / 13 * 380; };
+    var Y = function (ll) { return 280 - Math.sqrt(Math.abs(ll)) / Math.sqrt(900) * 250; };
+    var out = '';
+    [-4, -2, 0, 2, 4, 6, 8].forEach(function (t) { out += '<line class="grid" x1="' + X(t) + '" x2="' + X(t) + '" y1="20" y2="280"/><text class="tick" x="' + X(t) + '" y="296" text-anchor="middle">' + t + '</text>'; });
+    [0, 100, 400, 900].forEach(function (t) { out += '<line class="grid" x1="40" x2="420" y1="' + Y(t) + '" y2="' + Y(t) + '"/><text class="tick" x="34" y="' + (Y(t) + 3) + '" text-anchor="end">' + t + '</text>'; });
+    out += '<line class="axis" x1="' + X(0) + '" x2="' + X(0) + '" y1="20" y2="280" stroke-dasharray="3 3"/>';
+    out += '<text class="tick" x="420" y="314" text-anchor="end">Log Ratio</text><text class="tick" x="40" y="14">|LL|</text>';
+    kw.forEach(function (r, i) {
+      var lr = r[4] === null ? 8.4 : r[4];
+      var x = X(lr), y = Y(r[3]), neg = r[3] < 0;
+      out += '<circle class="pt" style="--i:' + i + '" cx="' + x + '" cy="' + y + '" r="5" fill="' + (neg ? '#F04438' : '#1570EF') + '" fill-opacity=".85"><title>' + r[0] + ' · LL ' + r[3] + '</title></circle>';
+      out += '<text class="lbl" style="--i:' + i + '" x="' + (neg ? x - 8 : x + 8) + '" y="' + (y + 4) + '" text-anchor="' + (neg ? 'end' : 'start') + '">' + r[0] + '</text>';
+    });
+    // 背景小点：其余显著词
+    var seed = 7;
+    var rnd = function () { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    var bg = '';
+    for (var k = 0; k < 46; k++) {
+      var lr2 = -3 + rnd() * 9, ll2 = 12 + rnd() * rnd() * 220;
+      bg += '<circle class="pt" style="--i:' + (k % 12) + '" cx="' + X(lr2) + '" cy="' + Y(lr2 < 0 ? -ll2 : ll2) + '" r="2.6" fill="' + (lr2 < 0 ? '#FDA29B' : '#84CAFF') + '"/>';
+    }
+    s.innerHTML = bg + out;
+  })();
+
+  /* 分布 */
+  var dist = [[2015, 152, 58420], [2016, 168, 70212], [2017, 214, 72505], [2018, 221, 63288], [2019, 187, 58901], [2020, 163, 43860], [2021, 179, 44820]];
+  var pm = dist.map(function (r) { return r[1] / r[2] * 1e6; });
+  var mx = Math.max.apply(null, pm);
+  document.getElementById('dist-bars').innerHTML = dist.map(function (r, i) {
+    return '<div class="vbar" style="--i:' + i + '"><em>' + f(pm[i]) + '</em><i style="--v:' + (pm[i] / mx * 82).toFixed(1) + '%"></i><span>' + r[0] + '</span></div>';
+  }).join('');
+  document.getElementById('dist-body').innerHTML = dist.map(function (r, i) {
+    return '<tr style="--i:' + i + '"><td class="mono">' + r[0] + '</td><td class="num">' + link(r[1]) + '</td><td class="num mono">' + f(r[2]) + '</td><td class="num mono">' + f(pm[i], 1) + '</td><td class="td-r">' + back + '</td></tr>';
+  }).join('');
+
+  /* 搭配网络：越近、越粗 = logDice 越高；节点大小 = 共现频次 */
+  (function net() {
+    var svgEl = document.getElementById('coll-net'), cx = 220, cy = 165, out = '', nodes = '';
+    var cat = { NOUN: 1, VERB: 2, ADJ: 3 };
+    coll.forEach(function (r, i) {
+      var a = -Math.PI / 2 + i * (2 * Math.PI / coll.length) + 0.35;
+      var rad = 96 + (11.4 - r[4]) * 26;
+      var x = cx + Math.cos(a) * rad * 1.2, y = cy + Math.sin(a) * rad * 0.82;
+      var nr = 17 + Math.sqrt(r[2]) * 0.45, w = (r[4] - 8) * 1.6 + 1;
+      out += '<path class="edge draw" data-k="' + i + '" style="--i:' + i + '" pathLength="1" stroke-width="' + w.toFixed(1) + '" d="M' + cx + ' ' + cy + ' L' + x.toFixed(1) + ' ' + y.toFixed(1) + '"/>';
+      nodes += '<g class="node" data-k="' + i + '" data-c="' + cat[r[1]] + '" style="--i:' + i + '" tabindex="0" role="button" aria-label="' + r[0] + '，logDice ' + r[4] + '，共现 ' + r[2] + '" data-tip="' + r[0] + ' · logDice ' + r[4] + ' · 共现 ' + r[2] + '"><circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + nr.toFixed(1) + '"/><text x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '">' + r[0] + '</text><text class="v" x="' + x.toFixed(1) + '" y="' + (y + nr + 10).toFixed(1) + '">' + r[4].toFixed(1) + '</text></g>';
+    });
+    svgEl.innerHTML = out + '<g class="center"><circle cx="' + cx + '" cy="' + cy + '" r="30"/><text x="' + cx + '" y="' + cy + '">翻译</text></g>' + nodes;
+    function pick(k) {
+      svgEl.querySelectorAll('.node, .edge').forEach(function (n) { n.classList.toggle('on', +n.getAttribute('data-k') === k); });
+      var rows = document.querySelectorAll('#coll-body tr');
+      rows.forEach(function (tr, j) { tr.classList.toggle('sel', j === k); });
+      var c = coll[k];
+      UI.toast(c[0] + ' · logDice ' + c[4] + ' · 共现 ' + c[2] + ' 次', 'network');
+    }
+    svgEl.addEventListener('click', function (e) { var n = e.target.closest('.node'); if (n) pick(+n.getAttribute('data-k')); });
+    svgEl.addEventListener('keydown', function (e) { var n = e.target.closest('.node'); if (n && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(+n.getAttribute('data-k')); } });
+  })();
+
+  /* 1–5 切换统计方法 */
+  document.addEventListener('keydown', function (e) {
+    if (e.target.closest('input, textarea, select') || e.ctrlKey || e.metaKey || e.altKey) return;
+    var n = +e.key;
+    if (n >= 1 && n <= 5) UI.selectTab(document.querySelectorAll('.tabs [role="tab"]')[n - 1]);
+  });
+
+  /* 计算：进度线 + 骨架 + 重放 */
+  document.querySelectorAll('form[data-run]').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var panel = form.closest('[role="tabpanel"]');
+      var res = form.nextElementSibling;
+      var saved = res.innerHTML;
+      UI.busy(true);
+      res.style.opacity = '.45';
+      res.style.transition = 'opacity 200ms';
+      setTimeout(function () {
+        res.style.opacity = '';
+        res.innerHTML = saved;
+        UI.replay(res);
+        UI.busy(false);
+        UI.toast('已完成：参数与索引版本已记录');
+        void panel;
+      }, UI.reduced ? 0 : 1000);
+    });
+  });
+});
+</script>
+</body>
+</html>

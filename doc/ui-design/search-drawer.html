@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>检索 + 助手 · 语料研究平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+  .parse { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+  .parse .ok { color: var(--success); display: inline-flex; align-items: center; gap: 4px; }
+  .parse .bad { color: var(--error); display: inline-flex; align-items: center; gap: 4px; }
+  .parse > span { animation: fade 200ms ease both; }
+  .ctx p { margin: 0; }
+  .ctx .cur { font-size: 15px; line-height: 1.8; animation: rise 300ms var(--ease-out) both; }
+  .ctx .side-s { color: var(--text-3); font-size: 13px; line-height: 1.7; }
+  .pager { display: flex; gap: 4px; }
+  .pager button { min-width: 30px; height: 30px; border-radius: 6px; border: 1px solid transparent; background: none; cursor: pointer; font-family: var(--mono); font-size: 12px; color: var(--text-2); transition: background var(--t-fast), color var(--t-fast); }
+  .pager button:hover { background: var(--fill-hover); }
+  .pager button[aria-current="page"] { background: var(--accent-tint); color: var(--accent-text); font-weight: 600; border-color: var(--accent-line); }
+  .kwic tbody.loading tr { cursor: default; }
+  .count-card { display: flex; align-items: flex-end; gap: 12px; }
+  .count-card > div:first-child { flex: 1; }
+  .dist { padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .filter-chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 4px 0 10px; border-radius: 999px; background: var(--accent-tint); color: var(--accent-text); font-size: 12px; font-weight: 500; animation: pop 260ms var(--ease-spring) both; }
+  .filter-chip button { width: 18px; height: 18px; border: 0; border-radius: 50%; background: none; color: inherit; display: grid; place-items: center; cursor: pointer; }
+  .filter-chip button:hover { background: var(--accent-tint-2); }
+  .kwic-head { flex-wrap: wrap; }
+  .pos-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); position: relative; }
+  .ctx-align { padding: 4px 6px; }
+  .ctx-align .al-row span { font-size: 12.5px; padding: 2px 7px; }
+  /* 查询历史：左侧滑出 */
+  .hist { position: fixed; top: 56px; left: 232px; bottom: 0; z-index: 25; width: 340px; background: var(--surface); border-right: 1px solid var(--line); box-shadow: var(--shadow-dialog); display: flex; flex-direction: column; transform: translateX(-104%); visibility: hidden; transition: transform 340ms var(--ease-out), visibility 0s linear 340ms; }
+  .hist.open { transform: none; visibility: visible; transition: transform 340ms var(--ease-out); }
+  .hist-list { flex: 1; overflow: auto; padding: 8px; }
+  .hist-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; width: 100%; padding: 10px; border: 0; border-radius: var(--radius); background: none; text-align: left; cursor: pointer; transition: background var(--t-fast); }
+  .hist-item:hover { background: var(--fill-hover); }
+  .hist-item.on { background: var(--accent-tint); }
+  .hist.open .hist-item { animation: rise 320ms var(--ease-out) both; animation-delay: calc(80ms + var(--i, 0) * 40ms); }
+  .hist-item .meta { font-size: 12px; color: var(--text-3); }
+  .hist-item .num { font-size: 12px; color: var(--text-2); text-align: right; }
+  .has-asst .main { margin-right: 420px; }
+  .has-asst .ctx { display: none !important; }
+  .asst-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 420px; z-index: 30; background: var(--surface); border-left: 1px solid var(--line); box-shadow: -10px 0 30px rgba(16, 24, 40, .08); display: flex; flex-direction: column; animation: drawer-in 380ms var(--ease-out) both; }
+  .asst-drawer .drawer-head { height: 56px; padding: 0 12px 0 16px; }
+  @keyframes drawer-in { from { transform: translateX(100%); } }
+  .ad-scroll { flex: 1; overflow: auto; padding: 18px 18px 24px; }
+  .ad-composer { padding: 0 14px 14px; }
+  .composer-mini { border: 1px solid var(--line); border-radius: 14px; padding: 10px 10px 8px 12px; box-shadow: var(--shadow-2); }
+  .composer-mini textarea { width: 100%; border: 0; resize: none; font: inherit; outline: none; min-height: 40px; background: transparent; color: var(--text); }
+  .asst-drawer .msg-user { max-width: 88%; font-size: 13.5px; }
+  .asst-drawer .answer { font-size: 13.5px; }
+</style>
+</head>
+<body class="has-asst">
+<div class="app">
+  <aside class="side" data-active="search"></aside>
+  <main class="main">
+    <header class="topbar">
+      <h1>检索</h1>
+      <nav class="crumbs" data-scope="翻译对等研究|Tatoeba 中英|2015 年后"></nav>
+      <div class="grow"></div>
+      <button class="btn s" type="button" data-toast="已保存查询「翻译/v +文化」"><span data-icon="plus" class="ic-14"></span>保存查询</button>
+      <a class="btn s p" href="search.html" aria-pressed="true"><span data-icon="spark" class="ic-14"></span>助手</a>
+      <div class="topbar-prog" aria-hidden="true"></div>
+    </header>
+
+    <!-- 查询历史 -->
+    <aside class="hist" id="hist" aria-label="查询历史" aria-hidden="true">
+      <div class="card-head" style="border-radius:0"><h2 class="sec-title grow">查询历史</h2><span class="small muted">最近 7 条</span><button class="btn ghost icon" type="button" id="hist-close" aria-label="关闭查询历史"><span data-icon="x" class="ic-14"></span></button></div>
+      <div class="hist-list" id="hist-list"></div>
+    </aside>
+
+    <div class="content">
+      <section class="card card-pad col" aria-label="查询">
+        <form class="row" style="gap:10px" id="qform">
+          <button class="btn lg icon" type="button" id="hist-btn" aria-label="查询历史" aria-expanded="false" aria-controls="hist" data-tip="查询历史（H）"><span data-icon="history" class="ic-18"></span></button>
+          <label for="q" class="sr-only">查询式</label>
+          <input id="q" class="query-input" value="翻译/v +文化" autocomplete="off" spellcheck="false" data-slash>
+          <button class="btn p lg" type="submit"><span data-icon="search"></span>检索</button>
+        </form>
+        <div class="row wrap">
+          <span class="small muted" style="margin-right:2px">插入</span>
+          <button class="chip" type="button" data-insert="/n" data-tip="词 + 词性">词/n</button>
+          <button class="chip" type="button" data-insert=" $3 " data-tip="中间最多 3 个词">$3</button>
+          <button class="chip" type="button" data-insert=" $2-5 " data-tip="中间 2 到 5 个词">$2-5</button>
+          <button class="chip" type="button" data-insert="|" data-tip="或">|</button>
+          <button class="chip" type="button" data-insert=" +" data-tip="同句须出现">+条件</button>
+          <button class="chip" type="button" data-insert=" -" data-tip="同句不出现">-排除</button>
+          <button class="chip" type="button" data-insert='""' data-tip="精确词形">"精确"</button>
+          <button class="chip" type="button" data-insert="*" data-tip="任意词">*</button>
+          <button class="chip" type="button" data-insert="?" data-tip="任意单字">?</button>
+          <button class="chip" type="button" data-insert="{dep=nsubj}" data-tip="依存关系">{dep=}</button>
+          <div class="grow"></div>
+          <div class="parse" id="parse" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="grid-3" aria-label="计数">
+        <div class="card card-pad count-card"><div><div class="stat-label">命中</div><div class="count" data-count="1284" id="c-hits"><span class="n">0</span><span class="unit">次</span></div></div><span data-spark="152,168,214,221,187,163,179" data-w="88" data-h="28" aria-label="命中按年份 2015–2021"></span></div>
+        <div class="card card-pad count-card"><div><div class="stat-label">句</div><div class="count" data-count="1190" id="c-sents"><span class="n">0</span><span class="unit">句</span></div></div><span data-spark="141,155,199,206,173,150,166" data-w="88" data-h="28" aria-label="命中句按年份"></span></div>
+        <div class="card card-pad count-card"><div><div class="stat-label">文档</div><div class="count" data-count="7" id="c-docs"><span class="n">0</span><span class="unit">篇</span></div></div></div>
+      </section>
+
+      <section class="card dist" aria-label="分布">
+        <div class="row">
+          <h2 class="sec-title">分布</h2>
+          <div class="seg" role="tablist" aria-label="分布维度" id="dist-dim"><button role="tab" type="button" aria-selected="true" data-dim="year">年份</button><button role="tab" type="button" aria-selected="false" tabindex="-1" data-dim="type">句型</button></div>
+          <span id="dist-filter"></span>
+          <div class="grow"></div>
+          <div class="dist-legend" id="dist-legend"></div>
+        </div>
+        <div class="distbar" id="distbar" role="group" aria-label="按维度筛选"></div>
+      </section>
+
+      <section class="row" style="gap:20px;align-items:flex-start">
+        <div class="card grow" style="display:flex;flex-direction:column">
+          <div class="card-head kwic-head">
+            <div class="seg" role="tablist" aria-label="语境长度">
+              <button role="tab" aria-selected="true" type="button">40 字</button>
+              <button role="tab" aria-selected="false" type="button" tabindex="-1">整句</button>
+              <button role="tab" aria-selected="false" type="button" tabindex="-1">整段</button>
+            </div>
+            <label class="sr-only" for="sort">排序</label>
+            <select class="select s" id="sort" style="width:116px">
+              <option>按出处</option><option>按左语境</option><option>按右语境</option><option>随机</option>
+            </select>
+            <label class="sr-only" for="within">结果内筛选</label>
+            <input class="input s" id="within" placeholder="结果内筛选" style="width:128px">
+            <span class="pos-toggle">
+              <button class="switch" type="button" role="switch" aria-checked="false" id="pos-sw" aria-label="词性着色" data-tip="词性着色（P）"></button>
+              <span>词性</span>
+              <button class="btn ghost icon" type="button" id="legend-btn" aria-label="词性图例" aria-expanded="false" aria-controls="legend"><span data-icon="palette" class="ic-14"></span></button>
+              <div class="popover" id="legend" hidden style="top:36px;right:0;width:240px">
+                <div class="small muted" style="margin-bottom:8px">词性颜色</div>
+                <div class="legend-list">
+                  <span data-c="1"><i></i>名词 NOUN</span><span data-c="2"><i></i>动词 VERB</span><span data-c="3"><i></i>形容词 ADJ</span><span data-c="4"><i></i>副词 ADV</span>
+                  <span data-c="5"><i></i>代词 PRON</span><span data-c="6"><i></i>介词 ADP</span><span data-c="7"><i></i>助词 AUX/PART</span><span data-c="8"><i></i>限定·数词 DET/NUM</span>
+                </div>
+              </div>
+            </span>
+            <div class="grow"></div>
+            <button class="btn s" type="button" data-toast="已提交导出任务：CSV，1,284 行" data-toast-icon="download"><span data-icon="download" class="ic-14"></span>CSV</button>
+            <button class="btn s" type="button" data-toast="已提交导出任务：XLSX，1,284 行" data-toast-icon="download"><span data-icon="download" class="ic-14"></span>XLSX</button>
+          </div>
+          <table class="kwic" id="kwic">
+            <thead><tr><th class="td-r">左语境</th><th style="text-align:center">命中</th><th>右语境</th><th>出处</th></tr></thead>
+            <tbody class="stagger" id="kwic-body">
+              <tr style="--i:0" data-id="zh#1120394 · 6:8" data-prev="很多外国读者通过这本书认识了中国。" data-next="作者本人也没想到它会这么受欢迎。" data-en="The book has been translated into more than thirty languages, spreading Chinese culture.">
+                <td class="lc">这本书已经被</td><td class="kw"><span class="hit">翻译</span></td><td>成三十多种语言，传播了中国<span class="hit-2">文化</span>。<div class="al"><b>EN</b> · The book has been translated into more than thirty languages, spreading Chinese culture.</div></td><td class="src">zh#1120394</td></tr>
+              <tr class="sel" style="--i:1" data-id="zh#4851204 · 11:13" data-prev="这些词在英语里没有现成的对应。" data-next="否则读者会产生误解。" data-en="We need to translate these cultural concepts more accurately."
+                data-zh="我们 需要 把 这些 文化 概念 翻译 得 更 准确 一些" data-ent="We need to translate these cultural concepts more accurately" data-links="1:1 2:2 7:3:sugg 7:4 4:5 5:6 6:7 9:8 10:9">
+                <td class="lc">我们需要把这些<span class="hit-2">文化</span>概念</td><td class="kw"><span class="hit">翻译</span></td><td>得更准确一些。<div class="al"><b>EN</b> · We need to translate these cultural concepts more accurately.</div></td><td class="src">zh#4851204</td></tr>
+              <tr style="--i:2" data-id="zh#884120 · 5:7" data-prev="他从小就喜欢唐诗。" data-next="出版社很满意这个译本。" data-en="When he translated the poem into English, he kept its original cultural imagery."
+                data-zh="他 把 这首诗 翻译 成 英文 时 保留 了 原有 的 文化 意象" data-ent="When he translated the poem into English he kept its original cultural imagery" data-links="1:2 1:8:sugg 3:4 3:5 4:3 5:6 6:7 7:1 8:9 10:11 12:12 13:13">
+                <td class="lc">他把这首诗</td><td class="kw"><span class="hit">翻译</span></td><td>成英文时保留了原有的<span class="hit-2">文化</span>意象。<div class="al"><b>EN</b> · When he translated the poem into English, he kept its original cultural imagery.</div></td><td class="src">zh#884120</td></tr>
+              <tr style="--i:3" data-id="zh#2771005 · 5:7" data-prev="博物馆下个月举办一场新展览。" data-next="她花了整整两个星期。" data-en="She translated all the exhibition panels about traditional culture for the museum.">
+                <td class="lc">她为博物馆</td><td class="kw"><span class="hit">翻译</span></td><td>了所有关于传统<span class="hit-2">文化</span>的展板。<div class="al"><b>EN</b> · She translated all the exhibition panels about traditional culture for the museum.</div></td><td class="src">zh#2771005</td></tr>
+              <tr style="--i:4" data-id="zh#5730218 · 9:11" data-prev="这篇文章是我朋友写的。" data-next="我下午要交给老师。" data-en="Many culture-loaded words are hard to translate.">
+                <td class="lc">很多<span class="hit-2">文化</span>负载词很难</td><td class="kw"><span class="hit">翻译</span></td><td>。<div class="al"><b>EN</b> · Many culture-loaded words are hard to translate.</div></td><td class="src">zh#5730218</td></tr>
+              <tr style="--i:5" data-id="zh#3302117 · 5:7" data-prev="我对茶几乎一无所知。" data-next="明天之前就可以。" data-en="Can you help me translate this passage about tea culture?">
+                <td class="lc">你能帮我</td><td class="kw"><span class="hit">翻译</span></td><td>一下这段介绍茶<span class="hit-2">文化</span>的文字吗？<div class="al"><b>EN</b> · Can you help me translate this passage about tea culture?</div></td><td class="src">zh#3302117</td></tr>
+              <tr style="--i:6" data-id="zh#6014472 · 6:8" data-prev="这周的作业有点多。" data-next="字数不少于五百字。" data-en="The teacher asked us to translate a short essay on Japanese culture.">
+                <td class="lc">老师让我们</td><td class="kw"><span class="hit">翻译</span></td><td>一篇关于日本<span class="hit-2">文化</span>的短文。<div class="al"><b>EN</b> · The teacher asked us to translate a short essay on Japanese culture.</div></td><td class="src">zh#6014472</td></tr>
+              <tr style="--i:7" data-id="zh#7208831 · 12:14" data-prev="他在那边生活了十年。" data-next="这一点他深有体会。" data-en="Without knowing the local culture, it is hard to translate these sayings well.">
+                <td class="lc">不了解当地<span class="hit-2">文化</span>，就很难</td><td class="kw"><span class="hit">翻译</span></td><td>好这些俗语。<div class="al"><b>EN</b> · Without knowing the local culture, it is hard to translate these sayings well.</div></td><td class="src">zh#7208831</td></tr>
+            </tbody>
+          </table>
+          <div class="card-foot" style="margin-top:auto">
+            <span class="num" id="range">1–8 / 1,284</span>
+            <div class="grow"></div>
+            <div class="pager" role="navigation" aria-label="分页">
+              <button type="button" aria-label="上一页"><span data-icon="left" class="ic-14"></span></button>
+              <button type="button" aria-current="page">1</button><button type="button">2</button><button type="button">3</button>
+              <button type="button" disabled>…</button><button type="button">161</button>
+              <button type="button" aria-label="下一页"><span data-icon="right" class="ic-14"></span></button>
+            </div>
+          </div>
+        </div>
+
+        <aside class="inspector ctx" aria-label="上下文">
+          <div class="card-head"><h2 class="sec-title grow">上下文</h2><span class="mono small muted" id="ctx-id">zh#4851204 · 11:13</span></div>
+          <div class="insp-body">
+            <div class="row"><button class="btn s" type="button">前 1 句</button><button class="btn s" type="button">后 1 句</button><div class="grow"></div><button class="btn s ghost" type="button">整段</button></div>
+            <p class="side-s" id="ctx-prev">这些词在英语里没有现成的对应。</p>
+            <p class="cur" id="ctx-cur">我们需要把这些<span class="hit-2">文化</span>概念<span class="hit">翻译</span>得更准确一些。</p>
+            <p class="side-s" id="ctx-next">否则读者会产生误解。</p>
+          </div>
+          <div class="insp-body" style="border-top:1px solid var(--line-soft)">
+            <div class="row"><h2 class="sec-title grow">双语对照</h2><span class="small muted">悬停查看对齐</span></div>
+            <div id="ctx-align"></div>
+            <p class="sm" id="ctx-en" hidden></p>
+          </div>
+          <div class="insp-body" style="border-top:1px solid var(--line-soft)">
+            <dl class="kv" style="margin:0">
+              <dt>文档</dt><dd class="mono">tatoeba-cmn-2017</dd>
+              <dt>年份</dt><dd class="mono">2017</dd>
+              <dt>许可</dt><dd>CC BY 2.0 FR</dd>
+              <dt>索引版本</dt><dd class="mono">v14 · 2026-10-20</dd>
+            </dl>
+          </div>
+          <div class="insp-foot">
+            <button class="btn s" type="button" id="ctx-pin"><span data-icon="pin" class="ic-14"></span>钉住</button>
+            <button class="btn s" type="button" data-toast="已加入笔记「翻译与文化负载词」"><span data-icon="note" class="ic-14"></span>加入笔记</button>
+          </div>
+        </aside>
+      </section>
+    </div>
+  </main>
+</div>
+<aside class="asst-drawer" aria-label="助手">
+  <div class="drawer-head">
+    <span class="ou-ic" style="width:28px;height:28px;border-radius:8px;background:var(--accent-tint);color:var(--accent);display:grid;place-items:center"><span data-icon="spark" class="ic-14"></span></span>
+    <h2 class="grow">助手</h2>
+    <a class="btn ghost icon" href="assistant.html" aria-label="在助手页打开" title="在助手页打开"><span data-icon="external" class="ic-14"></span></a>
+    <a class="btn ghost icon" href="search.html" aria-label="关闭助手" title="关闭"><span data-icon="x" class="ic-14"></span></a>
+  </div>
+  <div class="ad-scroll">
+    <div class="col" id="dlog" style="gap:16px" aria-live="polite"></div>
+  </div>
+  <div class="ad-composer">
+    <div class="composer-mini">
+      <label for="dask" class="sr-only">向助手提问</label>
+      <textarea id="dask" rows="2" placeholder="针对当前结果提问"></textarea>
+      <div class="row">
+        <span class="pill"><span data-icon="search" class="ic-14"></span>当前检索 · 1,284 命中</span>
+        <div class="grow"></div>
+        <button class="send stop" type="button" aria-label="停止" data-toast="已停止本次运行" data-toast-icon="stop"><span data-icon="stop"></span></button>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<template id="tpl-align">
+  <div class="ou" data-component="AlignmentGraph">
+    <div class="ou-head"><span class="ou-ic" data-icon="align"></span><span class="ou-title">词对齐</span><span class="ou-meta">zh#884120 ↔ en#884121</span></div>
+    <div class="ou-body">
+      <div class="algraph v" data-orient="v" style="padding:4px 40px" data-links="1:2 1:8:sugg 3:4 3:5 4:3 5:6 6:7 7:1 8:9 9:11 10:12">
+        <div class="al-row"><span data-a="1">他</span><span data-a="2">把</span><span data-a="3">这首诗</span><span data-a="4">翻译</span><span data-a="5">成</span><span data-a="6">英文</span><span data-a="7">时</span><span data-a="8">保留</span><span data-a="9">文化</span><span data-a="10">意象</span></div>
+        <div class="al-row en"><span data-b="1">When</span><span data-b="2">he</span><span data-b="3">translated</span><span data-b="4">the</span><span data-b="5">poem</span><span data-b="6">into</span><span data-b="7">English</span><span data-b="8">he</span><span data-b="9">kept</span><span data-b="10">its</span><span data-b="11">cultural</span><span data-b="12">imagery</span></div>
+      </div>
+    </div>
+    <div class="ou-foot"><a class="btn xs" href="annotate.html"><span data-icon="external" class="ic-14"></span>在标注中校对</a></div>
+  </div>
+</template>
+
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var q = document.getElementById('q');
+  var parse = document.getElementById('parse');
+  var body = document.getElementById('kwic-body');
+  var esc = function (s) { return s.replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var fmt = function (n) { return n.toLocaleString('en-US'); };
+
+  /* 查询式即时解析：主查询 / 条件 */
+  function renderParse() {
+    var v = q.value.trim();
+    if (!v) { parse.innerHTML = '<span class="muted">输入查询式</span>'; return; }
+    var quotes = (v.match(/"/g) || []).length;
+    if (quotes % 2) {
+      parse.innerHTML = '<span class="bad">' + UI.svg('alert', 'ic ic-14') + '第 ' + (v.lastIndexOf('"') + 1) + ' 个字符：引号未闭合</span>';
+      return;
+    }
+    var parts = v.split(/\s+(?=[+-])/);
+    var html = '<span class="tag t-run">主查询</span><span class="q">' + UI.qhl(parts[0]) + '</span>';
+    parts.slice(1).forEach(function (p) {
+      var neg = p[0] === '-';
+      html += '<span class="tag ' + (neg ? 't-warn' : 't-gray') + '" style="margin-left:6px">' + (neg ? '同句不含' : '同句含') + '</span><span class="q">' + UI.qhl(p.slice(1)) + '</span>';
+    });
+    html += '<span class="ok" style="margin-left:8px">' + UI.svg('check', 'ic ic-14') + '可检索</span>';
+    parse.innerHTML = html;
+  }
+  q.addEventListener('input', renderParse);
+  renderParse();
+
+  /* 计数：保留单位 */
+  function setCounts(hits) {
+    var map = { 'c-hits': hits, 'c-sents': Math.round(hits * 0.927), 'c-docs': hits > 300 ? 7 : Math.max(1, Math.round(hits / 60)) };
+    Object.keys(map).forEach(function (id) {
+      var el = document.getElementById(id);
+      el.setAttribute('data-count', map[id]);
+      el.querySelector('.n').innerHTML = '0';
+    });
+    UI.countUp(document.querySelector('.grid-3'));
+    document.getElementById('range').textContent = '1–8 / ' + fmt(hits);
+  }
+
+  /* ---------- 词性着色：按词典切分（演示数据） ---------- */
+  var LEX = { '这本': 0, '这': 'DET', '本': 'NOUN', '书': 'NOUN', '已经': 'ADV', '被': 'AUX', '成': 'VERB', '三十': 'NUM', '多': 'NUM', '种': 'NOUN', '语言': 'NOUN', '传播': 'VERB', '了': 'AUX', '中国': 'PROPN', '文化': 'NOUN',
+    '我们': 'PRON', '需要': 'VERB', '把': 'ADP', '这些': 'DET', '概念': 'NOUN', '得': 'PART', '更': 'ADV', '准确': 'ADJ', '一些': 'NUM', '他': 'PRON', '首': 'NOUN', '诗': 'NOUN', '英文': 'PROPN', '时': 'NOUN',
+    '保留': 'VERB', '原有': 'ADJ', '的': 'PART', '意象': 'NOUN', '她': 'PRON', '为': 'ADP', '博物馆': 'NOUN', '所有': 'DET', '关于': 'ADP', '传统': 'ADJ', '展板': 'NOUN', '很多': 'ADJ', '负载': 'VERB', '词': 'NOUN',
+    '很': 'ADV', '难': 'ADJ', '你': 'PRON', '能': 'AUX', '帮': 'VERB', '我': 'PRON', '一下': 'NUM', '段': 'NOUN', '介绍': 'VERB', '茶': 'NOUN', '文字': 'NOUN', '吗': 'PART', '老师': 'NOUN', '让': 'VERB', '一': 'NUM',
+    '篇': 'NOUN', '日本': 'PROPN', '短文': 'NOUN', '不': 'ADV', '了解': 'VERB', '当地': 'NOUN', '就': 'ADV', '好': 'ADJ', '俗语': 'NOUN', '翻译': 'VERB' };
+  function segment(text) {
+    var out = [], i = 0;
+    while (i < text.length) {
+      var hit = null;
+      for (var L = 3; L >= 1; L--) { var w = text.substr(i, L); if (LEX[w]) { hit = w; break; } }
+      if (!hit) hit = text[i];
+      out.push([hit, LEX[hit] || (/[，。？、！]/.test(hit) ? 'PUNCT' : 'X')]);
+      i += hit.length;
+    }
+    return out;
+  }
+  function colorize(el) {
+    Array.prototype.slice.call(el.childNodes).forEach(function (n) {
+      if (n.nodeType === 3) {
+        var frag = document.createDocumentFragment();
+        segment(n.nodeValue).forEach(function (t) {
+          if (t[1] === 'PUNCT' || t[1] === 'X') { frag.appendChild(document.createTextNode(t[0])); return; }
+          var s = document.createElement('span');
+          s.className = 'pw'; s.setAttribute('data-c', UI.posCat(t[1])); s.setAttribute('data-tip', t[0] + ' · ' + t[1]); s.textContent = t[0];
+          frag.appendChild(s);
+        });
+        n.parentNode.replaceChild(frag, n);
+      } else if (n.nodeType === 1 && !n.matches('.al, .pin-btn, .src')) colorize(n);
+    });
+  }
+  var ORIG = body.innerHTML, posOn = false;
+  function renderRows(sel) {
+    body.innerHTML = ORIG;
+    if (sel) body.querySelectorAll('tr').forEach(function (r) { r.classList.toggle('sel', r.getAttribute('data-id') === sel); });
+    if (posOn) body.querySelectorAll('td.lc, td.kw, td:nth-child(3)').forEach(colorize);
+    body = UI.replay(body);
+  }
+  function setPos(on) {
+    posOn = on;
+    document.getElementById('pos-sw').setAttribute('aria-checked', on ? 'true' : 'false');
+    var sel = (body.querySelector('tr.sel') || {}).getAttribute ? body.querySelector('tr.sel').getAttribute('data-id') : null;
+    document.getElementById('kwic').classList.toggle('poscolor', on);
+    renderRows(sel);
+  }
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('#pos-sw')) setPos(e.target.closest('#pos-sw').getAttribute('aria-checked') === 'true');
+    var lb = e.target.closest('#legend-btn'), lg = document.getElementById('legend');
+    if (lb) { lg.hidden = !lg.hidden; lb.setAttribute('aria-expanded', lg.hidden ? 'false' : 'true'); }
+    else if (!e.target.closest('#legend')) { lg.hidden = true; document.getElementById('legend-btn').setAttribute('aria-expanded', 'false'); }
+  });
+
+  /* ---------- 上下文 + 双语对照 ---------- */
+  function showCtx(tr) {
+    document.getElementById('ctx-id').textContent = tr.dataset.id;
+    document.getElementById('ctx-prev').textContent = tr.dataset.prev;
+    document.getElementById('ctx-next').textContent = tr.dataset.next;
+    var cur = document.getElementById('ctx-cur');
+    var cells = tr.querySelectorAll('td');
+    var right = cells[2].cloneNode(true); right.querySelectorAll('.al, .pin-btn').forEach(function (x) { x.remove(); });
+    cur.innerHTML = cells[0].textContent.replace(/文化/g, '<span class="hit-2">文化</span>') + '<span class="hit">翻译</span>' + right.textContent.replace(/文化/g, '<span class="hit-2">文化</span>');
+    cur.style.animation = 'none'; void cur.offsetWidth; cur.style.animation = '';
+    var box = document.getElementById('ctx-align'), en = document.getElementById('ctx-en');
+    if (tr.dataset.zh) {
+      var zh = tr.dataset.zh.split(' '), et = tr.dataset.ent.split(' ');
+      box.innerHTML = '<div class="algraph v ctx-align" data-orient="v" data-links="' + tr.dataset.links + '"><div class="al-row">' +
+        zh.map(function (w, i) { return '<span data-a="' + (i + 1) + '">' + w + '</span>'; }).join('') + '</div><div class="al-row en">' +
+        et.map(function (w, i) { return '<span data-b="' + (i + 1) + '">' + w + '</span>'; }).join('') + '</div></div>';
+      box.hidden = false; en.hidden = true;
+      requestAnimationFrame(function () { UI.hydrateAligns(box); });
+    } else {
+      box.hidden = true; en.hidden = false; en.textContent = tr.dataset.en;
+    }
+  }
+  document.getElementById('kwic').addEventListener('click', function (e) {
+    var tr = e.target.closest('tbody tr[data-id]');
+    if (!tr) return;
+    body.querySelectorAll('tr').forEach(function (r) { r.classList.toggle('sel', r === tr); });
+    showCtx(tr);
+  });
+  showCtx(body.querySelector('tr.sel'));
+  document.getElementById('ctx-pin').addEventListener('click', function () {
+    var b = body.querySelector('tr.sel [data-pin-btn]');
+    if (b) b.click();
+  });
+
+  /* ---------- 分布条 ---------- */
+  var DIST = {
+    year: [['2015', 152], ['2016', 168], ['2017', 214], ['2018', 221], ['2019', 187], ['2020', 163], ['2021', 179]],
+    type: [['陈述句', 1021], ['疑问句', 148], ['祈使句', 115]]
+  };
+  var dim = 'year', picked = null;
+  function renderDist() {
+    var data = DIST[dim], total = data.reduce(function (s, d) { return s + d[1]; }, 0);
+    var bar = document.getElementById('distbar');
+    bar.classList.toggle('filtered', picked !== null);
+    bar.innerHTML = data.map(function (d, i) {
+      return '<button type="button" data-c="' + (i + 1) + '" style="--w:' + d[1] + ';--i:' + i + '" class="' + (picked === i ? 'on' : '') + '" aria-pressed="' + (picked === i) + '" data-k="' + i + '" data-tip="' + d[0] + ' · ' + fmt(d[1]) + ' 次 · ' + (d[1] / total * 100).toFixed(1) + '%" aria-label="' + d[0] + ' ' + d[1] + ' 次"></button>';
+    }).join('');
+    document.getElementById('dist-legend').innerHTML = data.map(function (d, i) { return '<span data-c="' + (i + 1) + '"><i></i>' + d[0] + ' <b class="num" style="font-weight:500">' + fmt(d[1]) + '</b></span>'; }).join('');
+    document.getElementById('dist-filter').innerHTML = picked === null ? '' : '<span class="filter-chip">' + (dim === 'year' ? '年份 = ' : '句型 = ') + data[picked][0] + '<button type="button" id="dist-clear" aria-label="清除筛选">' + UI.svg('x', 'ic ic-14') + '</button></span>';
+  }
+  document.getElementById('distbar').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var k = +b.getAttribute('data-k');
+    picked = picked === k ? null : k;
+    renderDist();
+    setCounts(picked === null ? 1284 : DIST[dim][k][1]);
+  });
+  document.getElementById('dist-filter').addEventListener('click', function (e) { if (e.target.closest('#dist-clear')) { picked = null; renderDist(); setCounts(1284); } });
+  document.getElementById('dist-dim').addEventListener('tabchange', function (e) { dim = e.detail.tab.getAttribute('data-dim'); picked = null; renderDist(); setCounts(1284); });
+  renderDist();
+
+  /* ---------- 检索：进度线 + 骨架屏 + 计数重滚 ---------- */
+  function runSearch(hits) {
+    UI.busy(true);
+    ['c-hits', 'c-sents', 'c-docs'].forEach(function (id) { document.getElementById(id).querySelector('.n').innerHTML = '<span class="skel h28" style="width:96px;display:inline-block;vertical-align:middle"></span>'; });
+    var sk = '';
+    for (var i = 0; i < 6; i++) {
+      sk += '<tr><td><span class="skel" style="width:' + (60 + i * 7 % 30) + '%;margin-left:auto"></span></td><td><span class="skel" style="width:36px;margin:auto"></span></td><td><span class="skel" style="width:' + (70 - i * 9 % 25) + '%"></span><span class="skel" style="width:85%;margin-top:8px;height:10px"></span></td><td><span class="skel" style="width:70px"></span></td></tr>';
+    }
+    body.classList.add('loading');
+    body.innerHTML = sk;
+    setTimeout(function () {
+      body.classList.remove('loading');
+      renderRows(body.querySelector('tr.sel') ? null : 'zh#4851204 · 11:13');
+      setCounts(hits || 1284);
+      UI.busy(false);
+    }, UI.reduced ? 0 : 1100);
+  }
+  document.getElementById('qform').addEventListener('submit', function (e) { e.preventDefault(); runSearch(); });
+
+  /* ---------- 查询历史 ---------- */
+  var HIST = [['翻译/v +文化', 1284, '10:14'], ['翻译/v -文化', 3902, '10:09'], ['把 $3 翻译/v 成', 312, '09:58'], ['"文化负载词"|俗语/n', 96, '昨天'], ['翻译/n {dep=nsubj}', 418, '昨天'], ['进行/v -了', 2041, '10-24'], ['文化 $2-5 差异', 57, '10-23']];
+  var hist = document.getElementById('hist'), hb = document.getElementById('hist-btn');
+  document.getElementById('hist-list').innerHTML = HIST.map(function (h, i) {
+    return '<button class="hist-item' + (i === 0 ? ' on' : '') + '" type="button" style="--i:' + i + '" data-i="' + i + '"><span data-q="' + esc(h[0]) + '"></span><span class="num">' + fmt(h[1]) + '</span><span class="meta">子库「2015 年后」</span><span class="meta" style="text-align:right">' + h[2] + '</span></button>';
+  }).join('');
+  function toggleHist(open) {
+    open = open === undefined ? !hist.classList.contains('open') : open;
+    hist.classList.toggle('open', open);
+    hist.setAttribute('aria-hidden', open ? 'false' : 'true');
+    hb.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) { hist.querySelectorAll('.hist-item').forEach(function (x) { x.style.animation = 'none'; void x.offsetWidth; x.style.animation = ''; }); }
+  }
+  hb.addEventListener('click', function () { toggleHist(); });
+  document.getElementById('hist-close').addEventListener('click', function () { toggleHist(false); });
+  document.getElementById('hist-list').addEventListener('click', function (e) {
+    var it = e.target.closest('.hist-item'); if (!it) return;
+    var h = HIST[+it.getAttribute('data-i')];
+    hist.querySelectorAll('.hist-item').forEach(function (x) { x.classList.toggle('on', x === it); });
+    q.value = h[0]; renderParse();
+    toggleHist(false);
+    runSearch(h[1]);
+  });
+  document.addEventListener('mousedown', function (e) { if (hist.classList.contains('open') && !e.target.closest('#hist, #hist-btn')) toggleHist(false); });
+
+  /* 页面快捷键：H 历史，P 词性 */
+  document.addEventListener('keydown', function (e) {
+    if (e.target.closest('input, textarea, select') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'h' || e.key === 'H') toggleHist();
+    else if (e.key === 'p' || e.key === 'P') setPos(!posOn);
+    else if (e.key === 'Escape') toggleHist(false);
+  });
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var log = document.getElementById('dlog');
+  var sc = log.parentNode;
+  new MutationObserver(function () { sc.scrollTop = sc.scrollHeight; }).observe(log, { childList: true, subtree: true, characterData: true });
+  UI.busy(true);
+  UI.agentDemo({
+    log: log,
+    script: [
+      { t: 'user', html: '这些命中里，“翻译”后面接哪种语言最多？给一个典型句子的词对齐。', after: 400 },
+      { t: 'think' },
+      { t: 'reason', text: '在当前结果内统计“翻译 成 + 语言名词”的频次，再取一个高频句子看词对齐。' },
+      { t: 'tool', tool: 'stats.frequency', title: '频次', label: '正在统计频次…', icon: 'chart', args: 'query=<b>"翻译/v 成 */n"</b> scope=当前检索', res: '12 种语言', dur: 1200 },
+      { t: 'tool', tool: 'corpus.context', title: '取句对', label: '正在读取上下文…', icon: 'search', args: 'id=<b>zh#884120</b> aligned=true', res: '1 句对', dur: 900 },
+      { t: 'card', tpl: 'tpl-align', i: 0, after: 300 },
+      { t: 'reason', text: '英文最多，其次是日文、法文。再查人工确认过的词对齐层，核对“这首诗”的一对多对齐。' },
+      { t: 'tool', tool: 'annot.search', title: '检索标注层', label: '正在检索标注层…', icon: 'layers', args: 'layer=<b>词对齐 · 人工</b> doc=tatoeba-cmn-2017', hold: true }
+    ]
+  });
+});
+</script>
+</body>
+</html>

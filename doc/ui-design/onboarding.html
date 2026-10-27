@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>引导 · 语料研究平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+  body { min-height: 100vh; }
+  .ob-top { height: 64px; display: flex; align-items: center; padding: 0 32px; gap: 12px; }
+  .ob-top .skip { margin-right: 52px; font-size: 13px; color: var(--text-2); }
+  .ob-top .skip:hover { color: var(--text); }
+  .ob { width: 760px; margin: 8px auto 48px; display: flex; flex-direction: column; gap: 22px; }
+  /* 步骤指示 */
+  .stepper { display: grid; grid-template-columns: repeat(5, 1fr); position: relative; }
+  .stepper::before { content: ""; position: absolute; left: 10%; right: 10%; top: 15px; height: 2px; background: var(--line); border-radius: 2px; }
+  .stepper .fill { position: absolute; left: 10%; top: 15px; height: 2px; width: calc(80% * var(--p, 0)); background: var(--accent); border-radius: 2px; transition: width 520ms var(--ease-out); }
+  .st { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; border: 0; background: none; cursor: pointer; padding: 0; color: var(--text-3); font-size: 13px; }
+  .st .dotn { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); border: 1.5px solid var(--line-strong); font-family: var(--mono); font-size: 13px; font-weight: 600; transition: background var(--t-base), border-color var(--t-base), color var(--t-base), transform 300ms var(--ease-spring); }
+  .st .dotn .ic { width: 14px; height: 14px; }
+  .st.cur { color: var(--text); font-weight: 600; }
+  .st.cur .dotn { border-color: var(--accent); color: var(--accent-text); background: var(--accent-tint); transform: scale(1.1); box-shadow: 0 0 0 5px var(--accent-tint); }
+  .st.done .dotn { background: var(--accent-solid); border-color: var(--accent-solid); color: #fff; }
+  .st.done { color: var(--text-2); }
+  /* 卡片与横向轨道 */
+  .ob-card { overflow: hidden; box-shadow: var(--shadow-pop); border-radius: var(--radius-xl); }
+  .track { display: flex; transition: transform 560ms cubic-bezier(.34, 1.28, .64, 1); }
+  .pane { flex: 0 0 100%; min-width: 0; padding: 28px 32px 24px; display: flex; flex-direction: column; gap: 18px; min-height: 440px; }
+  .pane[aria-hidden="true"] { visibility: hidden; transition: visibility 0s linear 560ms; }
+  .pane > h2, .pane > .row > h2 { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: 0; }
+  .pane .lead { color: var(--text-2); font-size: 14px; margin-top: -10px; }
+  .ob-foot { display: flex; align-items: center; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--line-soft); background: var(--surface-2); }
+  .opt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .opt { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1.5px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); cursor: pointer; text-align: left; transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast); }
+  .opt:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+  .opt[aria-checked="true"] { border-color: var(--accent); background: var(--accent-fill); }
+  .opt[aria-checked="true"]::after { content: ""; position: absolute; top: 12px; right: 12px; width: 16px; height: 16px; border-radius: 50%; background: var(--accent-solid); box-shadow: inset 0 0 0 4px var(--surface); }
+  .opt b { font-weight: 600; }
+  .stage-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) 150px; gap: 12px; align-items: center; font-size: 13px; }
+  .stage-row .num { text-align: right; color: var(--text-2); }
+  .hint { font-size: 13px; color: var(--text-2); display: flex; align-items: center; gap: 8px; }
+  .mini-kwic td { padding: 8px 10px; font-size: 13.5px; }
+  .sum { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line-soft); animation: rise 360ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 80ms); }
+  .sum:last-child { border-bottom: 0; }
+  .sum .si { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--success-soft); color: var(--success); }
+  .go-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .go { display: flex; align-items: center; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-lg); color: var(--text); background: var(--surface); }
+  .go:hover { color: var(--text); }
+  .go .gi { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--accent-tint); color: var(--accent-text); }
+  .pane .msg-user { max-width: 80%; font-size: 13.5px; }
+  .pane .answer { font-size: 14px; }
+  @media (prefers-reduced-motion: reduce) { .track { transition: none; } }
+</style>
+</head>
+<body class="dotgrid">
+<header class="ob-top">
+  <a class="brand" href="index.html" style="padding:0"><span class="brand-mark"><span data-icon="hash"></span></span>语料研究平台</a>
+  <div class="grow"></div>
+  <a class="skip" href="search.html">跳过</a>
+</header>
+
+<main class="ob">
+  <nav class="stepper" id="stepper" aria-label="引导步骤">
+    <span class="fill" aria-hidden="true"></span>
+    <button class="st" type="button" data-go="0"><span class="dotn">1</span>创建项目</button>
+    <button class="st" type="button" data-go="1"><span class="dotn">2</span>导入语料</button>
+    <button class="st" type="button" data-go="2"><span class="dotn">3</span>第一次检索</button>
+    <button class="st" type="button" data-go="3"><span class="dotn">4</span>试试助手</button>
+    <button class="st" type="button" data-go="4"><span class="dotn">5</span>完成</button>
+  </nav>
+
+  <section class="card ob-card" aria-live="polite">
+    <div class="track" id="track">
+      <!-- 1 创建项目 -->
+      <div class="pane" role="group" aria-label="第 1 步：创建项目">
+        <h2>创建项目</h2>
+        <p class="lead">项目包含语料库、标注层、知识库和助手会话，成员按角色共享。</p>
+        <div class="row" style="gap:14px;align-items:flex-end">
+          <span id="mono-prev"></span>
+          <div class="field grow"><label for="pname">项目名称</label><input class="input" id="pname" value="翻译对等研究" style="height:42px;font-size:15px"></div>
+        </div>
+        <div class="field"><span class="label">研究语言</span>
+          <div class="row wrap" id="langs">
+            <button class="chip ui on" type="button" aria-pressed="true">中文</button><button class="chip ui on" type="button" aria-pressed="true">英文</button><button class="chip ui" type="button" aria-pressed="false">日文</button><button class="chip ui" type="button" aria-pressed="false">法文</button><button class="chip ui" type="button" aria-pressed="false">德文</button>
+          </div>
+        </div>
+        <div class="field"><span class="label">可见范围</span>
+          <div class="seg" role="tablist" aria-label="可见范围" style="align-self:flex-start"><button role="tab" type="button" aria-selected="true">仅成员</button><button role="tab" type="button" aria-selected="false" tabindex="-1">个人</button></div>
+        </div>
+      </div>
+
+      <!-- 2 导入语料 -->
+      <div class="pane" role="group" aria-label="第 2 步：导入语料" aria-hidden="true">
+        <h2>导入语料</h2>
+        <p class="lead">选择内置语料或上传文件，导入后自动分句并建索引。</p>
+        <div class="opt-grid" role="radiogroup" aria-label="语料来源" id="srcs">
+          <button class="opt" type="button" role="radio" aria-checked="true" data-name="Tatoeba 中英" data-n="94182" data-u="句对"><b>Tatoeba 中英</b><span class="small muted">94,182 句对 · 中英对齐</span><span class="tag t-gray" style="align-self:flex-start">内置</span></button>
+          <button class="opt" type="button" role="radio" aria-checked="false" data-name="UD Chinese GSD" data-n="4997" data-u="句"><b>UD Chinese GSD</b><span class="small muted">4,997 句 · 含依存</span><span class="tag t-gray" style="align-self:flex-start">内置</span></button>
+          <button class="opt" type="button" role="radio" aria-checked="false" data-name="上传文件" data-n="1240" data-u="句"><b>上传文件</b><span class="small muted">TXT · DOCX · PDF · TMX</span><span class="tag t-gray" style="align-self:flex-start">本地</span></button>
+        </div>
+        <div class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+          <div class="row"><h2 class="sec-title grow" id="imp-title">Tatoeba 中英</h2><span id="imp-state" class="tag t-gray">等待</span></div>
+          <div class="stage-row"><span>导入</span><span class="prog striped"><i id="b1" style="--v:0%"></i></span><span class="num" id="n1">0 / 94,182</span></div>
+          <div class="stage-row"><span>建索引</span><span class="prog striped"><i id="b2" style="--v:0%"></i></span><span class="num" id="n2">0%</span></div>
+        </div>
+      </div>
+
+      <!-- 3 第一次检索 -->
+      <div class="pane" role="group" aria-label="第 3 步：第一次检索" aria-hidden="true">
+        <h2>第一次检索</h2>
+        <form class="row" style="gap:10px" id="ob-q">
+          <label for="oq" class="sr-only">查询式</label>
+          <input class="query-input" id="oq" value="翻译/v +文化" autocomplete="off" spellcheck="false">
+          <button class="btn p lg" type="submit"><span data-icon="search"></span>检索</button>
+        </form>
+        <p class="hint"><span data-q="翻译/v"></span>限定动词，<span data-q="+文化"></span>要求同句出现</p>
+        <div id="ob-res" hidden class="col" style="gap:12px">
+          <div class="row" style="gap:28px"><div><div class="stat-label">命中</div><div class="count" data-count="1284"><span class="n">0</span><span class="unit">次</span></div></div><div><div class="stat-label">句</div><div class="count" data-count="1190"><span class="n">0</span><span class="unit">句</span></div></div></div>
+          <div class="card" style="overflow:hidden">
+            <table class="kwic mini-kwic"><tbody class="stagger" id="ob-rows">
+              <tr style="--i:0"><td class="lc">这本书已经被</td><td class="kw"><span class="hit">翻译</span></td><td>成三十多种语言，传播了中国<span class="hit-2">文化</span>。</td><td class="src">zh#1120394</td></tr>
+              <tr style="--i:1"><td class="lc">他把这首诗</td><td class="kw"><span class="hit">翻译</span></td><td>成英文时保留了原有的<span class="hit-2">文化</span>意象。</td><td class="src">zh#884120</td></tr>
+              <tr style="--i:2"><td class="lc">很多<span class="hit-2">文化</span>负载词很难</td><td class="kw"><span class="hit">翻译</span></td><td>。</td><td class="src">zh#5730218</td></tr>
+            </tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 试试助手 -->
+      <div class="pane" role="group" aria-label="第 4 步：试试助手" aria-hidden="true">
+        <div class="row"><h2 class="grow">试试助手</h2><button class="btn s" type="button" id="ob-replay"><span data-icon="retry" class="ic-14"></span>重新播放</button></div>
+        <div class="col" id="ob-log" style="gap:14px"></div>
+      </div>
+
+      <!-- 5 完成 -->
+      <div class="pane" role="group" aria-label="第 5 步：完成" aria-hidden="true">
+        <h2>完成</h2>
+        <div id="ob-sum">
+          <div class="sum" style="--i:0"><span class="si"><span data-icon="folder"></span></span><div><b style="font-weight:600" id="s-name">翻译对等研究</b><div class="small muted" id="s-lang">中文、英文 · 仅成员</div></div><span class="tag t-ok">已创建</span></div>
+          <div class="sum" style="--i:1"><span class="si"><span data-icon="db"></span></span><div><b style="font-weight:600" id="s-corp">Tatoeba 中英</b><div class="small muted num" id="s-corp-n">94,182 句对 · 索引 v1</div></div><span class="tag t-ok">可检索</span></div>
+          <div class="sum" style="--i:2"><span class="si"><span data-icon="search"></span></span><div><span data-q="翻译/v +文化"></span><div class="small muted num">1,284 次命中 · 已保存查询</div></div><span class="tag t-ok">已保存</span></div>
+          <div class="sum" style="--i:3"><span class="si"><span data-icon="spark"></span></span><div><b style="font-weight:600">助手</b><div class="small muted">qwen3-32b · 21 个工具</div></div><span class="tag t-ok">可用</span></div>
+        </div>
+        <div class="go-grid">
+          <a class="go lift" href="search.html"><span class="gi"><span data-icon="search"></span></span><span class="grow"><b style="font-weight:600">检索</b></span><span data-icon="right" class="ic-14 muted"></span></a>
+          <a class="go lift" href="annotate.html"><span class="gi"><span data-icon="pen"></span></span><span class="grow"><b style="font-weight:600">标注</b></span><span data-icon="right" class="ic-14 muted"></span></a>
+          <a class="go lift" href="knowledge.html"><span class="gi"><span data-icon="book"></span></span><span class="grow"><b style="font-weight:600">知识库</b></span><span data-icon="right" class="ic-14 muted"></span></a>
+        </div>
+      </div>
+    </div>
+    <div class="ob-foot">
+      <span class="small muted num" id="step-n">1 / 5</span>
+      <div class="grow"></div>
+      <button class="btn" type="button" id="prev">上一步</button>
+      <button class="btn p" type="button" id="next">下一步<span data-icon="right" class="ic-14"></span></button>
+    </div>
+  </section>
+</main>
+
+<template id="tpl-freq">
+  <div class="ou" data-component="FreqChart">
+    <div class="ou-head"><span class="ou-ic" data-icon="chart"></span><span class="ou-title">搭配</span><span class="ou-meta">翻译/v · ±5 · logDice</span></div>
+    <div class="ou-body"><div class="hbars">
+      <div class="hbar" style="--i:0"><span class="lab">成</span><span class="track"><i style="--v:100%"></i></span><span class="val">11.4</span></div>
+      <div class="hbar" style="--i:1"><span class="lab">作品</span><span class="track"><i style="--v:89%"></i></span><span class="val">10.2</span></div>
+      <div class="hbar" style="--i:2"><span class="lab">英文</span><span class="track"><i style="--v:87%"></i></span><span class="val">9.9</span></div>
+    </div></div>
+  </div>
+</template>
+
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var step = 0, N = 5, seen = {};
+  var track = document.getElementById('track');
+  var panes = track.querySelectorAll('.pane');
+  var sts = document.querySelectorAll('.st');
+  var nextBtn = document.getElementById('next'), prevBtn = document.getElementById('prev');
+
+  function go(i) {
+    step = Math.max(0, Math.min(N - 1, i));
+    track.style.transform = 'translateX(' + (-100 * step) + '%)';
+    panes.forEach(function (p, k) { p.setAttribute('aria-hidden', k === step ? 'false' : 'true'); });
+    sts.forEach(function (s, k) {
+      s.classList.toggle('cur', k === step); s.classList.toggle('done', k < step);
+      s.querySelector('.dotn').innerHTML = k < step ? UI.svg('check', 'ic') : String(k + 1);
+      if (k === step) s.setAttribute('aria-current', 'step'); else s.removeAttribute('aria-current');
+    });
+    document.getElementById('stepper').style.setProperty('--p', step / (N - 1));
+    document.getElementById('step-n').textContent = (step + 1) + ' / ' + N;
+    prevBtn.disabled = step === 0;
+    nextBtn.innerHTML = step === N - 1 ? '进入检索' + UI.svg('right', 'ic ic-14') : '下一步' + UI.svg('right', 'ic ic-14');
+    if (!seen[step]) { seen[step] = true; enter(step); }
+  }
+  nextBtn.addEventListener('click', function () { if (step === N - 1) location.href = 'search.html'; else go(step + 1); });
+  prevBtn.addEventListener('click', function () { go(step - 1); });
+  document.getElementById('stepper').addEventListener('click', function (e) { var s = e.target.closest('.st'); if (s) go(+s.getAttribute('data-go')); });
+  document.addEventListener('keydown', function (e) {
+    if (e.target.closest('input, textarea') || document.querySelector('.overlay')) return;
+    if (e.key === 'ArrowRight') go(step + 1); else if (e.key === 'ArrowLeft') go(step - 1);
+  });
+
+  /* 1 项目名 → 字标预览；语言多选 */
+  var pname = document.getElementById('pname');
+  function mono() {
+    var v = pname.value.trim() || '项', box = document.getElementById('mono-prev');
+    box.innerHTML = UI.monogram(v, 'lg');
+    box.firstChild.style.cssText += ';width:42px;height:42px;border-radius:12px;font-size:18px';
+    document.getElementById('s-name').textContent = v;
+  }
+  pname.addEventListener('input', mono); mono();
+  document.getElementById('langs').addEventListener('click', function (e) {
+    var c = e.target.closest('.chip'); if (!c) return;
+    c.classList.toggle('on'); c.setAttribute('aria-pressed', c.classList.contains('on'));
+    document.getElementById('s-lang').textContent = Array.prototype.map.call(document.querySelectorAll('#langs .chip.on'), function (x) { return x.textContent; }).join('、') + ' · 仅成员';
+  });
+
+  /* 2 导入 → 建索引 */
+  var impTimer = null;
+  function runImport() {
+    var o = document.querySelector('#srcs .opt[aria-checked="true"]');
+    var total = +o.getAttribute('data-n'), unit = o.getAttribute('data-u');
+    document.getElementById('imp-title').textContent = o.getAttribute('data-name');
+    document.getElementById('s-corp').textContent = o.getAttribute('data-name');
+    document.getElementById('s-corp-n').textContent = total.toLocaleString('en-US') + ' ' + unit + ' · 索引 v1';
+    var st = document.getElementById('imp-state');
+    st.className = 'tag t-run'; st.innerHTML = '<span class="spin" style="width:10px;height:10px"></span>导入中';
+    var a = 0, b = 0;
+    clearInterval(impTimer);
+    var tick = function () {
+      if (a < total) a = Math.min(total, a + Math.ceil(total / 18));
+      else if (b < 100) { b = Math.min(100, b + 9); st.innerHTML = '<span class="spin" style="width:10px;height:10px"></span>建索引'; }
+      document.getElementById('b1').style.setProperty('--v', (a / total * 100) + '%');
+      document.getElementById('n1').textContent = a.toLocaleString('en-US') + ' / ' + total.toLocaleString('en-US');
+      document.getElementById('b2').style.setProperty('--v', b + '%');
+      document.getElementById('n2').textContent = b + '%';
+      if (b >= 100) {
+        clearInterval(impTimer);
+        st.className = 'tag t-ok pop'; st.innerHTML = UI.svg('check', 'ic ic-14') + '可检索';
+        document.getElementById('b1').parentNode.className = 'prog ok'; document.getElementById('b2').parentNode.className = 'prog ok';
+      }
+    };
+    document.getElementById('b1').parentNode.className = 'prog striped'; document.getElementById('b2').parentNode.className = 'prog striped';
+    if (UI.reduced) { a = total; b = 100; tick(); return; }
+    impTimer = setInterval(tick, 120);
+  }
+  document.getElementById('srcs').addEventListener('click', function (e) {
+    var o = e.target.closest('.opt'); if (!o) return;
+    document.querySelectorAll('#srcs .opt').forEach(function (x) { x.setAttribute('aria-checked', x === o ? 'true' : 'false'); });
+    runImport();
+  });
+
+  /* 3 检索 */
+  function runSearch() {
+    var res = document.getElementById('ob-res');
+    UI.busy(true);
+    res.hidden = true;
+    setTimeout(function () {
+      res.hidden = false;
+      res.querySelectorAll('.count .n').forEach(function (n) { n.textContent = '0'; });
+      UI.countUp(res);
+      UI.replay(document.getElementById('ob-rows'));
+    }, UI.reduced ? 0 : 500);
+  }
+  document.getElementById('ob-q').addEventListener('submit', function (e) { e.preventDefault(); runSearch(); });
+
+  /* 4 助手迷你演示 */
+  var demo;
+  function runDemo() {
+    if (demo) demo.stop();
+    var log = document.getElementById('ob-log');
+    log.innerHTML = '';
+    demo = UI.agentDemo({
+      log: log,
+      script: [
+        { t: 'user', html: '“翻译”作动词时常和哪些词搭配？', after: 400 },
+        { t: 'think' },
+        { t: 'reason', text: '在刚导入的语料中检索 翻译/v，再按 logDice 计算 ±5 窗口搭配。' },
+        { t: 'tool', tool: 'corpus.search', title: '检索语料', label: '正在检索语料…', icon: 'search', args: 'query=<b>"翻译/v"</b>', res: '2,931 条命中', dur: 1100 },
+        { t: 'tool', tool: 'stats.collocations', title: '计算搭配', label: '正在计算搭配…', icon: 'chart', args: 'node=<b>"翻译/v"</b> window=±5', res: '前 20 项', dur: 1100 },
+        { t: 'done' },
+        { t: 'say', html: '最强的搭配是结果补语“成”，其次是“作品”“英文”等对象名词<span class="cite">1</span>：' },
+        { t: 'card', tpl: 'tpl-freq', i: 0 }
+      ]
+    });
+  }
+  document.getElementById('ob-replay').addEventListener('click', runDemo);
+
+  function enter(i) {
+    if (i === 1) runImport();
+    if (i === 2) runSearch();
+    if (i === 3) runDemo();
+  }
+  var start = parseInt((location.hash || '').replace('#step', ''), 10);
+  go(start >= 1 && start <= 5 ? start - 1 : 0);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>项目设置 · 语料研究平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+  .set-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+  .mem td { padding: 12px 14px; vertical-align: middle; }
+  .mem th { padding: 10px 14px; }
+  .who { display: flex; align-items: center; gap: 10px; }
+  .perm td, .perm th { padding: 8px 10px; font-size: 13px; text-align: center; }
+  .perm td:first-child, .perm th:first-child { text-align: left; }
+  .perm .y { color: var(--ok); } .perm .n { color: var(--text-4); }
+  .model { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+  .model .full { grid-column: 1 / -1; }
+  .keyfield { position: relative; }
+  .keyfield .input { padding-right: 40px; font-family: var(--mono); }
+  .keyfield button { position: absolute; right: 4px; top: 3px; }
+  .conn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; animation: fade 200ms ease both; }
+  tr.new td { animation: hl 1.4s ease both; }
+  @keyframes hl { from { background: var(--accent-tint); } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" data-active="settings"></aside>
+  <main class="main">
+    <header class="topbar">
+      <h1>项目设置</h1>
+      <nav class="crumbs" data-scope="翻译对等研究" data-labels="项目"></nav>
+      <div class="grow"></div>
+      <div class="topbar-prog" aria-hidden="true"></div>
+    </header>
+
+    <div class="content">
+      <div class="tabs" role="tablist" aria-label="设置">
+        <button role="tab" type="button" aria-selected="true" aria-controls="s-mem">成员</button>
+        <button role="tab" type="button" aria-selected="false" aria-controls="s-model" tabindex="-1">模型</button>
+      </div>
+
+      <section role="tabpanel" id="s-mem" class="set-grid">
+        <div class="card">
+          <form class="card-head" id="add-form" style="gap:10px">
+            <label for="add-email" class="sr-only">邮箱</label>
+            <input class="input s" id="add-email" type="email" placeholder="输入邮箱添加成员" style="max-width:300px" required>
+            <label for="add-role" class="sr-only">角色</label>
+            <select class="select s" id="add-role" style="width:130px"><option>标注者</option><option>编辑者</option><option>查看者</option></select>
+            <button class="btn s p" type="submit"><span data-icon="plus" class="ic-14"></span>添加</button>
+            <div class="grow"></div><span class="small muted num">5 名成员</span>
+          </form>
+          <table class="mem">
+            <thead><tr><th>成员</th><th>角色</th><th>加入</th><th>最近活动</th><th></th></tr></thead>
+            <tbody class="stagger" id="mem-body">
+              <tr style="--i:0"><td><div class="who"><span class="avatar lg" data-avatar="林云">林</span><div><div style="font-weight:500">林云</div><div class="small muted mono">linyun@bfsu.edu.cn</div></div></div></td><td><span class="tag t-accent-line">负责人</span></td><td class="mono sm muted">2026-09-01</td><td class="sm muted">刚刚</td><td></td></tr>
+              <tr style="--i:1"><td><div class="who"><span class="avatar lg" data-avatar="陈默">陈</span><div><div style="font-weight:500">陈默</div><div class="small muted mono">chenmo@bfsu.edu.cn</div></div></div></td><td><label class="sr-only" for="r1">角色</label><select class="select s" id="r1" style="width:120px"><option selected>编辑者</option><option>标注者</option><option>查看者</option></select></td><td class="mono sm muted">2026-09-03</td><td class="sm muted">12 分钟前</td><td class="td-r"><button class="btn xs ghost danger" type="button">移除</button></td></tr>
+              <tr style="--i:2"><td><div class="who"><span class="avatar lg" data-avatar="周宁">周</span><div><div style="font-weight:500">周宁</div><div class="small muted mono">zhouning@bfsu.edu.cn</div></div></div></td><td><label class="sr-only" for="r2">角色</label><select class="select s" id="r2" style="width:120px"><option selected>编辑者</option><option>标注者</option><option>查看者</option></select></td><td class="mono sm muted">2026-09-03</td><td class="sm muted">昨天</td><td class="td-r"><button class="btn xs ghost danger" type="button">移除</button></td></tr>
+              <tr style="--i:3"><td><div class="who"><span class="avatar lg" data-avatar="王悦">王</span><div><div style="font-weight:500">王悦</div><div class="small muted mono">wangyue@bfsu.edu.cn</div></div></div></td><td><label class="sr-only" for="r3">角色</label><select class="select s" id="r3" style="width:120px"><option>编辑者</option><option selected>标注者</option><option>查看者</option></select></td><td class="mono sm muted">2026-09-15</td><td class="sm muted">3 天前</td><td class="td-r"><button class="btn xs ghost danger" type="button">移除</button></td></tr>
+              <tr style="--i:4"><td><div class="who"><span class="avatar lg" data-avatar="赵一">赵</span><div><div style="font-weight:500">赵一</div><div class="small muted mono">zhaoyi@bfsu.edu.cn</div></div></div></td><td><label class="sr-only" for="r4">角色</label><select class="select s" id="r4" style="width:120px"><option>编辑者</option><option>标注者</option><option selected>查看者</option></select></td><td class="mono sm muted">2026-10-08</td><td class="sm muted">10-20</td><td class="td-r"><button class="btn xs ghost danger" type="button">移除</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <aside class="card">
+          <div class="card-head"><h2>角色权限</h2></div>
+          <table class="perm">
+            <thead><tr><th></th><th>负责人</th><th>编辑</th><th>标注</th><th>查看</th></tr></thead>
+            <tbody>
+              <tr><td>检索与统计</td><td class="y">●</td><td class="y">●</td><td class="y">●</td><td class="y">●</td></tr>
+              <tr><td>标注校对</td><td class="y">●</td><td class="y">●</td><td class="y">●</td><td class="n">—</td></tr>
+              <tr><td>上传语料、建子库</td><td class="y">●</td><td class="y">●</td><td class="n">—</td><td class="n">—</td></tr>
+              <tr><td>建标注层</td><td class="y">●</td><td class="y">●</td><td class="n">—</td><td class="n">—</td></tr>
+              <tr><td>编辑知识库</td><td class="y">●</td><td class="y">●</td><td class="n">—</td><td class="n">—</td></tr>
+              <tr><td>管理成员</td><td class="y">●</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+            </tbody>
+          </table>
+        </aside>
+      </section>
+
+      <section role="tabpanel" id="s-model" class="set-grid" hidden>
+        <div class="col gap-16">
+          <form class="card" data-model="chat">
+            <div class="card-head"><span data-icon="chat" class="ic-18" style="color:var(--accent)"></span><h2>对话模型</h2><span class="tag t-gray">助手 · 预标注</span><div class="grow"></div><span class="conn" data-conn><span class="dot" style="color:var(--ok)"></span><span class="ok-text" style="color:var(--ok)">已连接 · 412 ms</span></span></div>
+            <div class="card-pad model">
+              <div class="field full"><label for="c-url">接口地址</label><input class="input mono" id="c-url" value="https://llm.bfsu.edu.cn/v1"></div>
+              <div class="field"><label for="c-model">模型</label><input class="input mono" id="c-model" value="qwen3-32b"></div>
+              <div class="field"><label for="c-ctx">上下文长度</label><input class="input mono" id="c-ctx" value="32768"></div>
+              <div class="field full"><label for="c-key">API Key</label><div class="keyfield"><input class="input" id="c-key" type="password" value="sk-7f3a9c21d84e4b0a9e"><button class="btn ghost icon" type="button" aria-label="显示密钥" data-eye><span data-icon="eye" class="ic-14"></span></button></div></div>
+            </div>
+            <div class="card-foot"><button class="btn s" type="button" data-test><span data-icon="retry" class="ic-14"></span>测试连接</button><div class="grow"></div><button class="btn s p" type="submit">保存</button></div>
+          </form>
+          <form class="card" data-model="embed">
+            <div class="card-head"><span data-icon="layers" class="ic-18" style="color:var(--accent)"></span><h2>向量模型</h2><span class="tag t-gray">知识库检索</span><div class="grow"></div><span class="conn" data-conn><span class="dot" style="color:var(--warn)"></span><span style="color:var(--warn)">未测试</span></span></div>
+            <div class="card-pad model">
+              <div class="field full"><label for="e-url">接口地址</label><input class="input mono" id="e-url" value="https://llm.bfsu.edu.cn/v1/embeddings"></div>
+              <div class="field"><label for="e-model">模型</label><input class="input mono" id="e-model" value="bge-m3"></div>
+              <div class="field"><label for="e-dim">维度</label><input class="input mono" id="e-dim" value="1024"></div>
+              <div class="field full"><label for="e-key">API Key</label><div class="keyfield"><input class="input" id="e-key" type="password" value="sk-7f3a9c21d84e4b0a9e"><button class="btn ghost icon" type="button" aria-label="显示密钥" data-eye><span data-icon="eye" class="ic-14"></span></button></div></div>
+              <div class="alert warn full"><span data-icon="alert" class="ic-14"></span><span>更换向量模型后，已导入的 24 篇文献需重新向量化。</span></div>
+            </div>
+            <div class="card-foot"><button class="btn s" type="button" data-test><span data-icon="retry" class="ic-14"></span>测试连接</button><div class="grow"></div><button class="btn s p" type="submit">保存</button></div>
+          </form>
+        </div>
+        <aside class="card card-pad col gap-12">
+          <div class="row"><span data-icon="shield" class="ic-18" style="color:var(--accent)"></span><h2>访问</h2><span class="tag t-accent-line" style="margin-left:auto">仅管理员</span></div>
+          <dl class="kv" style="margin:0"><dt>密钥存储</dt><dd>服务端加密</dd><dt>用量</dt><dd class="num">1.42M tokens / 10 月</dd><dt>并发</dt><dd class="num">4</dd></dl>
+          <div class="row between sm"><span>允许助手调用工具</span><button class="switch" type="button" role="switch" aria-checked="true" aria-label="允许助手调用工具"></button></div>
+          <div class="row between sm"><span>预标注使用标注规范</span><button class="switch" type="button" role="switch" aria-checked="true" aria-label="预标注使用标注规范"></button></div>
+        </aside>
+      </section>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('add-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var email = document.getElementById('add-email').value.trim();
+    var role = document.getElementById('add-role').value;
+    var tr = document.createElement('tr');
+    tr.className = 'new';
+    tr.innerHTML = '<td><div class="who"><span class="avatar lg" data-avatar="' + email + '">' + email[0].toUpperCase() + '</span><div><div style="font-weight:500">' + email.split('@')[0] + '</div><div class="small muted mono">' + email + '</div></div></div></td><td><span class="tag t-gray">' + role + '</span></td><td class="mono sm muted">待接受</td><td class="sm muted">—</td><td class="td-r"><button class="btn xs ghost" type="button">撤回</button></td>';
+    tr.style.animation = 'rise 360ms var(--ease-out) both';
+    document.getElementById('mem-body').appendChild(tr);
+    document.getElementById('add-email').value = '';
+    UI.toast('已向 ' + email + ' 发送邀请', 'mail');
+  });
+  document.addEventListener('click', function (e) {
+    var eye = e.target.closest('[data-eye]');
+    if (eye) { var inp = eye.parentNode.querySelector('input'); var show = inp.type === 'password'; inp.type = show ? 'text' : 'password'; eye.setAttribute('aria-label', show ? '隐藏密钥' : '显示密钥'); }
+    var test = e.target.closest('[data-test]');
+    if (test) {
+      var form = test.closest('form'), conn = form.querySelector('[data-conn]');
+      test.disabled = true; UI.busy(true);
+      conn.innerHTML = '<span class="spin" style="color:var(--accent)"></span><span class="muted">测试中</span>';
+      setTimeout(function () {
+        var ms = form.dataset.model === 'chat' ? 398 : 126;
+        conn.innerHTML = '<span class="dot" style="color:var(--ok)"></span><span style="color:var(--ok)">已连接 · ' + ms + ' ms</span>';
+        conn.style.animation = 'none'; void conn.offsetWidth; conn.style.animation = '';
+        test.disabled = false; UI.busy(false);
+      }, UI.reduced ? 0 : 1200);
+    }
+    var rm = e.target.closest('.danger');
+    if (rm && rm.closest('#mem-body')) {
+      var row = rm.closest('tr'); row.style.transition = 'opacity 220ms, transform 220ms'; row.style.opacity = '0'; row.style.transform = 'translateX(16px)';
+      setTimeout(function () { row.remove(); }, 230); UI.toast('已移除成员');
+    }
+  });
+  document.querySelectorAll('form[data-model]').forEach(function (f) { f.addEventListener('submit', function (e) { e.preventDefault(); UI.toast('已保存模型配置'); }); });
+});
+</script>
+</body>
+</html>

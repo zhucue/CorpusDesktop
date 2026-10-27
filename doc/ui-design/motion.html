@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>动效样本 · 语料研究平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+  .specs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+  .spec { display: flex; flex-direction: column; overflow: hidden; }
+  .spec.wide { grid-column: span 2; }
+  .stage { position: relative; height: 180px; padding: 20px; background: var(--surface-2); border-bottom: 1px solid var(--line); overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+  .stage.tall { height: 340px; justify-content: flex-start; overflow: auto; }
+  .spec-info { padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .spec-info h3 { font-size: 14px; }
+  .spec dl { display: grid; grid-template-columns: 44px 1fr; gap: 4px 10px; margin: 0; font-size: 12.5px; }
+  .spec dt { color: var(--text-3); }
+  .spec dd { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--text-2); word-break: break-all; }
+  .spec dd code { color: var(--accent); }
+  .mini-nav { position: relative; width: 180px; display: flex; flex-direction: column; gap: 2px; padding-left: 14px; }
+  .mini-bd { position: absolute; inset: 0; background: rgba(16, 24, 40, .36); opacity: 0; transition: opacity 300ms var(--ease-out); pointer-events: none; }
+  .mini-dr { position: absolute; top: 0; right: 0; bottom: 0; width: 55%; background: var(--surface); box-shadow: -8px 0 24px rgba(16, 24, 40, .14); transform: translateX(104%); transition: transform 380ms var(--ease-out); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .stage.open .mini-bd { opacity: 1; }
+  .stage.open .mini-dr { transform: none; }
+  .mini-top { position: relative; height: 44px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; display: flex; align-items: center; padding: 0 14px; gap: 10px; overflow: hidden; font-weight: 600; }
+  .mini-top .topbar-prog { opacity: 1; }
+  .stage .step { animation: none; }
+  .hover-hint { position: absolute; top: 10px; right: 12px; font-size: 11px; color: var(--text-3); }
+</style>
+</head>
+<body>
+<header class="doc-head">
+  <a class="brand" href="index.html" style="padding:0"><span class="brand-mark"><span data-icon="hash"></span></span>语料研究平台</a>
+  <nav aria-label="设计稿"><a href="index.html">总览</a><a href="components.html">组件</a><a href="motion.html" aria-current="page">动效</a><a href="onboarding.html">引导</a><a href="assistant.html">助手演示</a></nav>
+  <div class="grow"></div>
+  <button class="btn s" type="button" id="replay-all"><span data-icon="retry" class="ic-14"></span>全部重播</button>
+</header>
+
+<main class="doc">
+  <section>
+    <h2 class="sec">动效样本</h2>
+    <div class="specs">
+
+      <article class="card spec wide">
+        <div class="stage tall" id="s-think"><div id="think-log" class="col" style="gap:14px"></div></div>
+        <div class="spec-info">
+          <div class="row between"><h3>思考链：运行 → 工具 → 折叠 → 流式回答</h3><button class="btn xs" type="button" id="think-replay">重播</button></div>
+          <dl><dt>类</dt><dd><code>.think.running</code> <code>.step.active</code> <code>.step.done</code> <code>.caret</code> · <code>UI.agentDemo()</code></dd><dt>时长</dt><dd>标题切换 260ms · 完成勾 300ms + 360ms · 折叠 380ms · 逐字 16–32ms/2–3 字</dd><dt>缓动</dt><dd>cubic-bezier(.2,.8,.2,1)；勾选 cubic-bezier(.34,1.56,.64,1)</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" style="gap:10px">
+          <div><span class="think-label shimmer-text" style="font-weight:600;font-size:15px">正在检索语料…</span></div>
+          <ol class="steps">
+            <li class="step active"><span class="step-node"><span data-icon="search"></span></span><div class="step-card"><div class="step-top"><span class="step-tool">corpus.search</span><span class="step-res">运行中</span></div><div class="step-args">query=<b>"翻译/v +文化"</b></div></div></li>
+          </ol>
+        </div>
+        <div class="spec-info">
+          <h3>流光标题 · 进行中步骤</h3>
+          <dl><dt>类</dt><dd><code>.shimmer-text</code> <code>.step.active</code></dd><dt>时长</dt><dd>流光 1.8s · 脉冲环 1.4s · 扫光 1.5s，循环</dd><dt>缓动</dt><dd>linear / cubic-bezier(.65,0,.35,1)</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" id="s-count" style="flex-direction:row;gap:24px;align-items:center;justify-content:flex-start">
+          <div><div class="stat-label">命中</div><div class="count" data-count="1284">0</div></div>
+          <div><div class="stat-label">句</div><div class="count" data-count="1190">0</div></div>
+          <div><div class="stat-label">logDice</div><div class="count" data-count="11.4" data-dec="1">0</div></div>
+        </div>
+        <div class="spec-info">
+          <div class="row between"><h3>数字滚动</h3><button class="btn xs" type="button" data-replay="#s-count">重播</button></div>
+          <dl><dt>类</dt><dd><code>[data-count]</code> <code>[data-dec]</code> · <code>UI.countUp()</code></dd><dt>时长</dt><dd>900ms</dd><dt>缓动</dt><dd>easeOutCubic 1-(1-x)³</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" id="s-kwic" style="padding:10px 14px">
+          <table class="kwic"><tbody class="stagger">
+            <tr style="--i:0"><td class="lc">这本书已经被</td><td class="kw"><span class="hit">翻译</span></td><td>成三十多种语言</td></tr>
+            <tr style="--i:1"><td class="lc">他把这首诗</td><td class="kw"><span class="hit">翻译</span></td><td>成英文</td></tr>
+            <tr style="--i:2"><td class="lc">很多文化负载词很难</td><td class="kw"><span class="hit">翻译</span></td><td>。</td></tr>
+          </tbody></table>
+        </div>
+        <div class="spec-info">
+          <div class="row between"><h3>行依次进入</h3><button class="btn xs" type="button" data-replay="#s-kwic">重播</button></div>
+          <dl><dt>类</dt><dd><code>.stagger &gt; *</code> + <code>--i</code></dd><dt>时长</dt><dd>400ms，间隔 50ms</dd><dt>缓动</dt><dd>cubic-bezier(.2,.8,.2,1)</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" id="s-hbar">
+          <div class="hbars">
+            <div class="hbar" style="--i:0"><span class="lab">成</span><span class="track"><i style="--v:100%"></i></span><span class="val">11.4</span></div>
+            <div class="hbar" style="--i:1"><span class="lab">作品</span><span class="track"><i style="--v:89%"></i></span><span class="val">10.2</span></div>
+            <div class="hbar" style="--i:2"><span class="lab">英文</span><span class="track"><i style="--v:87%"></i></span><span class="val">9.9</span></div>
+            <div class="hbar" style="--i:3"><span class="lab">概念</span><span class="track"><i style="--v:82%"></i></span><span class="val">9.3</span></div>
+          </div>
+        </div>
+        <div class="spec-info">
+          <div class="row between"><h3>横向柱生长</h3><button class="btn xs" type="button" data-replay="#s-hbar">重播</button></div>
+          <dl><dt>类</dt><dd><code>.hbar .track i</code> · <code>@keyframes grow-x</code></dd><dt>时长</dt><dd>700ms，间隔 60ms</dd><dt>缓动</dt><dd>cubic-bezier(.2,.8,.2,1)</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" id="s-vbar" style="justify-content:flex-end">
+          <div class="vbars" style="height:130px">
+            <div class="vbar" style="--i:0"><em>2,602</em><i style="--v:55%"></i><span>2015</span></div>
+            <div class="vbar" style="--i:1"><em>2,393</em><i style="--v:50%"></i><span>2016</span></div>
+            <div class="vbar" style="--i:2"><em>2,951</em><i style="--v:62%"></i><span>2017</span></div>
+            <div class="vbar" style="--i:3"><em>3,492</em><i style="--v:73%"></i><span>2018</span></div>
+            <div class="vbar" style="--i:4"><em>3,175</em><i style="--v:66%"></i><span>2019</span></div>
+          </div>
+        </div>
+        <div class="spec-info">
+          <div class="row between"><h3>纵向柱生长</h3><button class="btn xs" type="button" data-replay="#s-vbar">重播</button></div>
+          <dl><dt>类</dt><dd><code>.vbar i</code> · <code>@keyframes grow-y</code></dd><dt>时长</dt><dd>700ms，间隔 50ms；数值 400ms 淡入</dd><dt>缓动</dt><dd>cubic-bezier(.2,.8,.2,1)</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" id="s-dep" style="align-items:center;padding:8px">
+          <div class="dep" data-dep="他/PRON 翻译/VERB 了/AUX 诗/NOUN" data-arcs="1>2:nsubj 3>2:aux 4>2:obj" data-root="2" data-sugg="3"></div>
+        </div>
+        <div class="spec-info">
+          <div class="row between"><h3>依存弧绘制</h3><button class="btn xs" type="button" data-replay="#s-dep">重播</button></div>
+          <dl><dt>类</dt><dd><code>.draw</code>（<code>pathLength="1"</code>，stroke-dashoffset 1→0）</dd><dt>时长</dt><dd>800ms，间隔 90ms；关系名 300ms 淡入</dd><dt>缓动</dt><dd>cubic-bezier(.65,0,.35,1)</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" id="s-align" style="padding:14px 30px">
+          <div class="algraph v" data-orient="v" data-links="1:1 2:3 3:2 4:4:sugg">
+            <div class="al-row"><span data-a="1">他</span><span data-a="2">翻译</span><span data-a="3">诗</span><span data-a="4">英文</span></div>
+            <div class="al-row en"><span data-b="1">he</span><span data-b="2">poem</span><span data-b="3">translated</span><span data-b="4">English</span></div>
+          </div>
+        </div>
+        <div class="spec-info">
+          <div class="row between"><h3>对齐连线绘制</h3><button class="btn xs" type="button" data-replay="#s-align">重播</button></div>
+          <dl><dt>类</dt><dd><code>.align-line.draw</code> · <code>UI.drawAlign()</code></dd><dt>时长</dt><dd>800ms，间隔 90ms</dd><dt>缓动</dt><dd>cubic-bezier(.65,0,.35,1)</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" id="s-drawer" style="padding:16px">
+          <div class="col gap-12"><span class="skel" style="width:70%"></span><span class="skel" style="width:90%"></span><span class="skel" style="width:60%"></span><button class="btn s p" type="button" id="dr-open" style="align-self:flex-start">打开抽屉</button></div>
+          <div class="mini-bd" id="dr-bd"></div>
+          <div class="mini-dr"><div class="row between"><b>语料库详情</b><button class="btn ghost icon" type="button" id="dr-close" aria-label="关闭"><span data-icon="x" class="ic-14"></span></button></div><span class="skel"></span><span class="skel" style="width:70%"></span></div>
+        </div>
+        <div class="spec-info">
+          <h3>抽屉 + 遮罩</h3>
+          <dl><dt>类</dt><dd><code>.drawer.open</code> <code>.backdrop.open</code> · <code>UI.openDrawer(id)</code></dd><dt>时长</dt><dd>抽屉 380ms · 遮罩 300ms · 内容 400ms 间隔 60ms</dd><dt>缓动</dt><dd>cubic-bezier(.2,.8,.2,1)</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" style="gap:12px">
+          <div class="row" style="gap:12px"><span class="skel circle" style="width:36px;height:36px"></span><div class="col grow" style="gap:8px"><span class="skel" style="width:60%"></span><span class="skel" style="width:90%;height:10px"></span></div></div>
+          <span class="skel h20"></span><span class="skel" style="width:75%"></span>
+        </div>
+        <div class="spec-info">
+          <h3>骨架屏</h3>
+          <dl><dt>类</dt><dd><code>.skel</code> <code>.skel.h20</code> <code>.skel.circle</code></dd><dt>时长</dt><dd>1.4s 循环</dd><dt>缓动</dt><dd>ease-in-out</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" style="gap:16px">
+          <div class="mini-top">检索<span class="topbar-prog"></span></div>
+          <div class="col gap-4"><span class="prog striped"><i style="--v:64%" id="stripe-bar"></i></span><span class="row between small muted"><span class="num" id="stripe-n">5,512 / 8,610 句</span><span class="num" id="stripe-p">64%</span></span></div>
+        </div>
+        <div class="spec-info">
+          <h3>顶部进度线 · 条纹进度条</h3>
+          <dl><dt>类</dt><dd><code>.topbar.busy</code> · <code>UI.busy(true)</code> · <code>.prog.striped</code></dd><dt>时长</dt><dd>进度线 1.4s 循环 · 条纹 0.7s 循环 · 宽度 500ms</dd><dt>缓动</dt><dd>cubic-bezier(.65,0,.35,1) / linear</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" style="align-items:flex-start">
+          <nav class="mini-nav nav" id="mini-nav" aria-label="导航示例"><span class="nav-ink" aria-hidden="true"></span>
+            <a href="#" aria-current="page"><span data-icon="db" class="ic-18"></span>语料库</a><a href="#"><span data-icon="search" class="ic-18"></span>检索</a><a href="#"><span data-icon="chart" class="ic-18"></span>统计</a></nav>
+        </div>
+        <div class="spec-info">
+          <h3>导航指示滑动</h3>
+          <dl><dt>类</dt><dd><code>.nav-ink</code>（translateY + height）</dd><dt>时长</dt><dd>320ms</dd><dt>缓动</dt><dd>cubic-bezier(.2,.8,.2,1)</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" style="gap:18px">
+          <div class="tabs" role="tablist" aria-label="标签页示例"><button role="tab" type="button" aria-selected="true">频次</button><button role="tab" type="button" aria-selected="false" tabindex="-1">n-gram</button><button role="tab" type="button" aria-selected="false" tabindex="-1">搭配</button><button role="tab" type="button" aria-selected="false" tabindex="-1">关键词</button></div>
+          <div class="seg" role="tablist" aria-label="分段示例" style="align-self:flex-start"><button role="tab" type="button" aria-selected="true">40 字</button><button role="tab" type="button" aria-selected="false" tabindex="-1">整句</button><button role="tab" type="button" aria-selected="false" tabindex="-1">整段</button></div>
+        </div>
+        <div class="spec-info">
+          <h3>标签页下划线 · 分段滑块</h3>
+          <dl><dt>类</dt><dd><code>[role=tablist] .tab-ink</code></dd><dt>时长</dt><dd>300ms；面板 400ms 上浮</dd><dt>缓动</dt><dd>cubic-bezier(.2,.8,.2,1)</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" style="align-items:center;gap:14px">
+          <span class="hover-hint">悬停</span>
+          <div class="row" style="gap:10px"><button class="btn" type="button">导出 CSV</button><button class="btn p" type="button">检索</button><button class="chip" type="button">$2-5</button></div>
+          <div class="card lift" style="padding:12px 16px;width:220px"><b>卡片悬停</b></div>
+        </div>
+        <div class="spec-info">
+          <h3>按钮 / 卡片悬停上浮</h3>
+          <dl><dt>类</dt><dd><code>.btn:hover</code> <code>.chip:hover</code> <code>.lift:hover</code></dd><dt>时长</dt><dd>按钮 150ms · 卡片 220ms</dd><dt>缓动</dt><dd>cubic-bezier(.2,.8,.2,1)</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" style="align-items:center;gap:12px">
+          <button class="btn p" type="button" id="toast-btn">显示提示</button>
+          <button class="switch" type="button" role="switch" aria-checked="true" aria-label="开关示例"></button>
+        </div>
+        <div class="spec-info">
+          <h3>提示滑入 · 开关</h3>
+          <dl><dt>类</dt><dd><code>.toast</code> · <code>UI.toast(msg)</code> · <code>.switch</code></dd><dt>时长</dt><dd>进入 320ms · 退出 220ms · 停留 2.6s · 开关 220ms</dd><dt>缓动</dt><dd>cubic-bezier(.34,1.56,.64,1)</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" id="s-ou" style="gap:10px">
+          <div class="msg-user" style="font-size:13px">“翻译”常见搭配有哪些？</div>
+          <div class="ou" style="--i:1"><div class="ou-head"><span class="ou-ic" data-icon="chart"></span><span class="ou-title">搭配</span><span class="ou-meta">翻译/v · logDice</span></div></div>
+          <div class="ou" style="--i:2"><div class="ou-head"><span class="ou-ic" data-icon="term"></span><span class="ou-title">文化负载词</span><span class="ou-meta">culture-loaded words</span></div></div>
+        </div>
+        <div class="spec-info">
+          <div class="row between"><h3>消息与结果组件进入</h3><button class="btn xs" type="button" data-replay="#s-ou">重播</button></div>
+          <dl><dt>类</dt><dd><code>.msg-user</code> <code>.ou</code> + <code>--i</code></dd><dt>时长</dt><dd>消息 320ms · 组件 460ms，间隔 110ms</dd><dt>缓动</dt><dd>cubic-bezier(.34,1.56,.64,1) / cubic-bezier(.2,.8,.2,1) + blur 2px</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" id="s-done" style="gap:6px;justify-content:flex-start;padding-top:14px">
+          <ol class="steps">
+            <li class="step done"><span class="step-node"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="chk" pathLength="1" d="M20 6 9 17l-5-5"/></svg></span><div class="step-card"><div class="step-top"><span class="step-tool">kb.search</span><span class="step-res">3 个片段</span></div><div class="step-args">q=<b>"文化负载词 定义"</b></div></div></li>
+          </ol>
+          <div class="dep" style="align-self:center" data-dep="博物馆/NOUN 翻译/VERB" data-arcs="1>2:obl" data-chips data-conf="2" id="chip-dep"></div>
+        </div>
+        <div class="spec-info">
+          <div class="row between"><h3>完成勾 · 标签确认</h3><span class="row gap-4"><button class="btn xs" type="button" data-replay="#s-done">重播</button><button class="btn xs" type="button" id="chip-ok">确认词性</button></span></div>
+          <dl><dt>类</dt><dd><code>.step.done</code> <code>.chk</code> · <code>.pchip.conf.just</code></dd><dt>时长</dt><dd>节点 300ms · 勾 360ms（延迟 80ms）· 标签 320ms</dd><dt>缓动</dt><dd>cubic-bezier(.34,1.56,.64,1)</dd></dl>
+        </div>
+      </article>
+
+      <article class="card spec">
+        <div class="stage" style="flex-direction:row;align-items:center;gap:14px;flex-wrap:wrap;align-content:center">
+          <span class="tag t-run"><span class="dot pulse"></span>导入中</span>
+          <span class="tag t-run"><span class="spin" style="width:10px;height:10px"></span>建索引</span>
+          <span class="tag t-warn"><span data-icon="alert" class="ic-14"></span>索引过期</span>
+          <span class="tag t-err"><span data-icon="x" class="ic-14"></span>失败</span>
+          <span class="tag t-ok"><span data-icon="check" class="ic-14"></span>可用</span>
+          <span class="tag t-gray">空</span>
+          <span class="sm">逐字输出<span class="caret"></span></span>
+        </div>
+        <div class="spec-info">
+          <h3>状态：脉冲点 · 旋转 · 光标</h3>
+          <dl><dt>类</dt><dd><code>.dot.pulse</code> <code>.spin</code> <code>.caret</code></dd><dt>时长</dt><dd>脉冲 1.4s · 旋转 0.8s · 光标 1s，循环</dd><dt>缓动</dt><dd>ease-out / linear / steps(1)</dd></dl>
+        </div>
+      </article>
+
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  /* 思考链完整样本 */
+  var demo;
+  function runThink() {
+    if (demo) demo.stop();
+    var log = document.getElementById('think-log');
+    log.innerHTML = '';
+    demo = UI.agentDemo({
+      log: log,
+      script: [
+        { t: 'think' },
+        { t: 'reason', text: '先用 翻译/v +文化 检索，确认命中规模，再计算搭配。' },
+        { t: 'tool', tool: 'corpus.search', title: '检索语料', label: '正在检索语料…', icon: 'search', args: 'query=<b>"翻译/v +文化"</b>', res: '1,284 条命中', dur: 1400 },
+        { t: 'tool', tool: 'stats.collocations', title: '计算搭配', label: '正在计算搭配…', icon: 'chart', args: 'node=<b>"翻译/v"</b> window=±5', res: '前 20 项', dur: 1200 },
+        { t: 'done' },
+        { t: 'say', html: '“翻译”的右侧高频搭配集中在结果补语“成”和对象类名词上<span class="cite">1</span>。' }
+      ]
+    });
+  }
+  runThink();
+  document.getElementById('think-replay').addEventListener('click', runThink);
+
+  /* 抽屉 */
+  var st = document.getElementById('s-drawer');
+  document.getElementById('dr-open').addEventListener('click', function () { st.classList.add('open'); });
+  document.getElementById('dr-close').addEventListener('click', function () { st.classList.remove('open'); });
+  document.getElementById('dr-bd').addEventListener('click', function () { st.classList.remove('open'); });
+
+  /* 导航指示 */
+  var nav = document.getElementById('mini-nav'), ink = nav.querySelector('.nav-ink');
+  function place(a) { ink.style.transform = 'translateY(' + a.offsetTop + 'px)'; ink.style.height = a.offsetHeight + 'px'; }
+  place(nav.querySelector('[aria-current]'));
+  nav.addEventListener('click', function (e) {
+    var a = e.target.closest('a'); if (!a) return; e.preventDefault();
+    nav.querySelectorAll('a').forEach(function (x) { x.removeAttribute('aria-current'); });
+    a.setAttribute('aria-current', 'page'); place(a);
+  });
+
+  /* 条纹进度循环 */
+  var v = 5512;
+  setInterval(function () {
+    v = v >= 8610 ? 3000 : Math.min(8610, v + 260);
+    var p = Math.round(v / 8610 * 100);
+    document.getElementById('stripe-bar').style.setProperty('--v', p + '%');
+    document.getElementById('stripe-n').textContent = v.toLocaleString('en-US') + ' / 8,610 句';
+    document.getElementById('stripe-p').textContent = p + '%';
+  }, 700);
+
+  document.getElementById('toast-btn').addEventListener('click', function () { UI.toast('已提交导出任务：XLSX，1,284 行', 'download'); });
+  document.getElementById('chip-ok').addEventListener('click', function () {
+    var c = document.querySelector('#s-done .tokg[data-k="1"] .pchip') || document.querySelector('#chip-dep .tokg[data-k="1"] .pchip');
+    c.classList.remove('just'); void c.getBBox(); c.classList.toggle('conf'); c.classList.add('just');
+  });
+  document.getElementById('replay-all').addEventListener('click', function () {
+    document.querySelectorAll('[data-replay]').forEach(function (b) { b.click(); });
+    runThink();
+  });
+  /* 重播后新克隆的对齐图需要重新定位连线 */
+  document.addEventListener('click', function (e) { if (e.target.closest('[data-replay="#s-align"]')) requestAnimationFrame(function () { UI.hydrateAligns(document.getElementById('s-align')); }); });
+});
+</script>
+</body>
+</html>

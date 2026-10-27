@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>登录 · 语料研究平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+  body { min-height: 100vh; display: grid; place-items: center; overflow: hidden; position: relative; }
+  .glow { position: fixed; border-radius: 50%; filter: blur(70px); opacity: .55; pointer-events: none; z-index: 0; }
+  .glow.a { width: 520px; height: 520px; left: 12%; top: -120px; background: var(--accent-tint-2); animation: drift 14s ease-in-out infinite alternate; }
+  .glow.b { width: 440px; height: 440px; right: 10%; bottom: -140px; background: var(--accent-tint); animation: drift 18s ease-in-out infinite alternate-reverse; }
+  @keyframes drift { to { transform: translate(60px, 40px) scale(1.08); } }
+  .login { position: relative; z-index: 1; width: 400px; padding: 36px 36px 30px; border-radius: var(--radius-xl); box-shadow: var(--shadow-3); animation: card-in 520ms var(--ease-out) both; }
+  @keyframes card-in { from { opacity: 0; transform: translateY(18px) scale(.98); } }
+  .login > * { animation: rise 420ms var(--ease-out) both; animation-delay: calc(140ms + var(--i, 0) * 60ms); }
+  .login .brand-mark { width: 40px; height: 40px; border-radius: 12px; }
+  .login h1 { font-size: 22px; font-weight: 700; margin-top: 18px; }
+  .pw { position: relative; }
+  .pw .input { padding-right: 40px; }
+  .pw button { position: absolute; right: 4px; top: 3px; }
+  .login .input { height: 42px; }
+  .login .btn.p { width: 100%; height: 44px; font-size: 15px; }
+  .err { display: none; }
+  .login.bad .err { display: flex; }
+  .login.shake { animation: shake 360ms var(--ease-out); }
+  @keyframes shake { 20% { transform: translateX(-8px); } 40% { transform: translateX(7px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(2px); } }
+</style>
+</head>
+<body class="dotgrid">
+<span class="glow a" aria-hidden="true"></span><span class="glow b" aria-hidden="true"></span>
+<main class="card login" id="card">
+  <span class="brand-mark" style="--i:0"><span data-icon="hash" class="ic-20"></span></span>
+  <h1 style="--i:1">登录语料研究平台</h1>
+  <form class="col gap-16" id="form" style="--i:2;margin-top:24px" novalidate>
+    <div class="field"><label for="email">邮箱</label><input class="input" id="email" type="email" autocomplete="username" value="linyun@bfsu.edu.cn"></div>
+    <div class="field"><div class="row between"><label for="pw" style="font-size:12px;color:var(--text-2);font-weight:500">密码</label><a class="small" href="#" data-toast="已发送重置邮件">忘记密码</a></div>
+      <div class="pw"><input class="input" id="pw" type="password" autocomplete="current-password" placeholder="输入密码"><button class="btn ghost icon" type="button" id="eye" aria-label="显示密码"><span data-icon="eye" class="ic-14"></span></button></div></div>
+    <div class="alert err" role="alert"><span data-icon="alert" class="ic-14"></span><span>邮箱或密码错误</span></div>
+    <label class="check"><input type="checkbox" checked>保持登录 7 天</label>
+    <button class="btn p" type="submit" id="go">登录</button>
+  </form>
+</main>
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var card = document.getElementById('card'), pw = document.getElementById('pw'), go = document.getElementById('go');
+  document.getElementById('eye').addEventListener('click', function () { var s = pw.type === 'password'; pw.type = s ? 'text' : 'password'; this.setAttribute('aria-label', s ? '隐藏密码' : '显示密码'); });
+  document.getElementById('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!pw.value) {
+      card.classList.add('bad'); card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake');
+      pw.focus(); return;
+    }
+    card.classList.remove('bad');
+    go.disabled = true; go.innerHTML = '<span class="spin"></span>登录中';
+    setTimeout(function () { location.href = 'onboarding.html'; }, UI.reduced ? 0 : 900);
+  });
+});
+</script>
+</body>
+</html>

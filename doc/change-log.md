@@ -78,3 +78,8 @@
 - 在 [AGENTS.md](../AGENTS.md) 提交规范中增加"提交人必须纯净"：作者与提交者只能是仓库配置的用户，提交信息不得出现 AI 署名或 agent 标识；subagent 不执行提交。已按此重写前两次提交，提交身份改为用户的 GitHub 账号 zhucue（现为 `7fdb112`、`019144e`）。原因：用户要求提交记录只体现本人。
 
 - 按 [contracts/p1.md](../contracts/p1.md) 完成 P1 三方实现：`engine/`（解析 txt/docx/csv/tsv/conllu/tmx/Tatoeba、Stanza 标注、CWB 建索引与检索、查询语法编译、子库筛选，20 条 UD 英文金标）、`services/api` 与 `services/worker`（FastAPI、Cookie 会话与项目角色、Alembic 基线 12 张表、单进程 PostgreSQL 队列 worker、导入/索引/导出）、`deploy/`（Compose：postgres+pgvector、api、worker、web、test）、`apps/web`（Vite + React 19 + Ant Design 5：登录、项目、语料库与文档、子库、检索、任务、成员）。原因：重构设计 P1 先贯通"导入 → 索引 → 检索 → 导出"。依赖去掉 celery/boto3/jsonschema，torch 取 CPU 源；契约在实现中补充 search_id 复用、上传字段名、按邮箱添加成员、句 external_id、文档码点、管理员内置语料等，已写入契约第六节。CWB 与 Stanza 只在容器内可用，本机运行纯 Python 测试。
+
+- 在[重构设计](platform-redesign.md)补充用户确认的全局交互功能（证据篮、命令面板、查询历史、任务托盘、快捷键提示、深色模式、引导页、空态动作）、检索分布条与双语对照、搭配网络图、标注进度环／一致性仪表与 AI 人工差异视图，并新增"视觉与组件规范"小节（现代产品型、蓝色 `#1570EF` 主色、18 项设计元素、动效清单），同步 Word。原因：用户在设计稿评审中采纳上述元素并要求功能文档始终与设计保持一致；设计稿在 `tmp/ui-design/`，定稿后移入 `doc/ui-design/`。
+
+- 设计稿定稿后从 `tmp/ui-design/` 移入 `doc/ui-design/`（14 页静态 HTML：登录、引导、语料库、检索、检索＋助手抽屉、统计、标注校对、助手、知识库、任务、项目设置、组件规范、动效规范、总览），并新增《前端整体设计方案》（`doc/frontend-design.md` 及 Word）；重构设计与 README 更新入口。原因：用户确认蓝色现代产品型方案、13 项功能元素、18 项设计元素与引导页，需要一份可直接指导前端实现的整体设计文档，设计稿作为视觉基准入库。
+- 《前端整体设计方案》内嵌 11 页设计稿截图（`doc/ui-design/shots/`），列出设计稿与 P1 契约的差异（语料上传不含 PDF、分布条依赖 P2 统计接口、检查器宽度范围、助手抽屉打开时顶栏需折叠次要按钮）。Word 生成脚本增加图片支持（`tmp/docxgen/build-img.js`）。

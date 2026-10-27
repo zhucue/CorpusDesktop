@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>知识库 · 语料研究平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+  .hits { display: flex; flex-direction: column; }
+  .kb-hit { display: grid; grid-template-columns: 26px minmax(0, 1fr) 150px; gap: 12px; padding: 14px 4px; border-top: 1px solid var(--line-soft); animation: rise 360ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 70ms); }
+  .kb-hit:first-child { border-top: 0; }
+  .kb-hit .cite { margin: 2px 0 0; }
+  .kb-hit .src { font-size: 12px; color: var(--text-3); display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+  .snippet { font-size: 13.5px; line-height: 1.75; color: var(--text-2); margin-top: 6px; }
+  .snippet mark { background: var(--mark-bg); color: inherit; border-radius: 3px; padding: 0 2px; }
+  .score { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+  .score .sbar { display: grid; grid-template-columns: 40px 1fr 36px; gap: 6px; align-items: center; color: var(--text-3); }
+  .score .sbar .prog { height: 4px; }
+  .score .num { text-align: right; color: var(--text-2); }
+  .kb-grid { display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 20px; align-items: start; }
+  .pipe { padding: 12px 0; border-bottom: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 8px; }
+  .pipe:last-child { border-bottom: 0; }
+  .stages { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stage { position: relative; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: 7px; background: var(--fill); color: var(--text-3); font-size: 12px; overflow: hidden; transition: background var(--t-base), color var(--t-base); }
+  .stage .ic { width: 13px; height: 13px; }
+  .stage.done { background: var(--ok-bg); color: var(--ok); }
+  .stage.run { background: var(--accent-tint); color: var(--accent-text); font-weight: 500; }
+  .stage.run::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 60%; background: linear-gradient(90deg, transparent, rgba(46, 144, 250, .18), transparent); animation: sweep 1.4s var(--ease-in-out) infinite; }
+  .stage.fail { background: var(--err-bg); color: var(--err); }
+  .stage .num { margin-left: auto; font-size: 11px; }
+  .terms { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 20px; align-items: start; }
+  .term-big h2 { font-size: 22px; font-weight: 700; }
+  .ex { padding: 10px 12px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--line-soft); font-size: 13.5px; line-height: 1.7; }
+  .ex .al { margin-top: 2px; }
+  .cand { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 13px; animation: rise 300ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 60ms); }
+  .cand:last-child { border-bottom: 0; }
+  .md { font-size: 13.5px; line-height: 1.8; color: var(--text-2); }
+  .md h3 { color: var(--text); margin: 14px 0 4px; }
+  .md h3:first-child { margin-top: 0; }
+  .md code { font-family: var(--mono); font-size: 12px; background: var(--fill); padding: 1px 5px; border-radius: 4px; color: var(--accent); }
+  .note-card { padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" data-active="knowledge"></aside>
+  <main class="main">
+    <header class="topbar">
+      <h1>知识库</h1>
+      <nav class="crumbs" data-scope="翻译对等研究|项目知识库 + 内置参考" data-labels="项目|知识库"></nav>
+      <div class="grow"></div>
+      <button class="btn s" type="button" data-toast="已导出术语表 TBX" data-toast-icon="download"><span data-icon="download" class="ic-14"></span>导出术语表</button>
+      <button class="btn s p" type="button" id="go-import"><span data-icon="upload" class="ic-14"></span>导入</button>
+      <div class="topbar-prog" aria-hidden="true"></div>
+    </header>
+
+    <div class="content">
+      <section class="card card-pad col gap-12" aria-label="检索知识库">
+        <form class="row" style="gap:10px" id="kb-form">
+          <label for="kq" class="sr-only">检索知识库</label>
+          <input id="kq" data-slash class="input" style="height:42px;font-size:15px" value="归化与异化的区别">
+          <div class="seg" role="tablist" aria-label="检索方式"><button role="tab" type="button" aria-selected="true">混合</button><button role="tab" type="button" aria-selected="false" tabindex="-1">向量</button><button role="tab" type="button" aria-selected="false" tabindex="-1">关键词</button></div>
+          <button class="btn p" type="submit" style="height:42px"><span data-icon="search" class="ic-14"></span>检索</button>
+        </form>
+        <div class="hits" id="hits">
+          <div class="kb-hit" style="--i:0"><span class="cite">1</span><div><div class="row"><b style="font-weight:600">Venuti 归化异化笔记.md</b><span class="tag t-gray">文献</span></div><div class="src mono">2 核心概念 › 2.1 定义</div><p class="snippet"><mark>归化</mark>（domestication）以目标语读者为中心，采用目标语的表达习惯；<mark>异化</mark>（foreignization）保留原文的语言与文化差异，让读者接近作者……</p></div>
+            <div class="score"><div class="sbar">向量<span class="prog"><i style="--v:91%"></i></span><span class="num">0.91</span></div><div class="sbar">关键词<span class="prog"><i style="--v:78%"></i></span><span class="num">14.2</span></div></div></div>
+          <div class="kb-hit" style="--i:1"><span class="cite">2</span><div><div class="row"><b style="font-weight:600">归化 / domestication</b><span class="tag t-accent-line">术语</span></div><div class="src mono">术语表 · 翻译学 · 已确认</div><p class="snippet">译者尽量向读者靠拢，以目标语文化的规范替换原文中的异质成分。对立项：<mark>异化</mark>。</p></div>
+            <div class="score"><div class="sbar">向量<span class="prog"><i style="--v:86%"></i></span><span class="num">0.86</span></div><div class="sbar">关键词<span class="prog"><i style="--v:64%"></i></span><span class="num">11.7</span></div></div></div>
+          <div class="kb-hit" style="--i:2"><span class="cite">3</span><div><div class="row"><b style="font-weight:600">文化负载词研究综述.pdf</b><span class="tag t-gray">文献</span></div><div class="src mono">第 7 页 · 3.2 翻译策略</div><p class="snippet">……对于文化负载词，研究者多主张以<mark>异化</mark>为主、<mark>归化</mark>为辅，并辅以文内或文外解释……</p></div>
+            <div class="score"><div class="sbar">向量<span class="prog"><i style="--v:79%"></i></span><span class="num">0.79</span></div><div class="sbar">关键词<span class="prog"><i style="--v:70%"></i></span><span class="num">12.9</span></div></div></div>
+        </div>
+      </section>
+
+      <div class="tabs" role="tablist" aria-label="分区" id="kb-tabs">
+        <button role="tab" type="button" aria-selected="true" aria-controls="p-lit">文献 <span class="num muted small">24</span></button>
+        <button role="tab" type="button" aria-selected="false" aria-controls="p-term" tabindex="-1">术语 <span class="num muted small">318</span></button>
+        <button role="tab" type="button" aria-selected="false" aria-controls="p-spec" tabindex="-1">规范 <span class="num muted small">3</span></button>
+        <button role="tab" type="button" aria-selected="false" aria-controls="p-note" tabindex="-1">笔记 <span class="num muted small">12</span></button>
+      </div>
+
+      <!-- 文献 -->
+      <section role="tabpanel" id="p-lit" class="kb-grid">
+        <div class="card" id="import">
+          <div class="card-head"><h2>导入</h2></div>
+          <div class="card-pad col gap-12">
+            <label class="dropzone" for="kb-file" style="padding:18px"><span data-icon="upload"></span><b style="font-weight:600;color:var(--text)">拖入文件或点击选择</b><span class="small muted">PDF · DOCX · Markdown · TXT</span><input id="kb-file" type="file" class="sr-only" multiple></label>
+            <div class="row"><label for="kb-url" class="sr-only">网页链接</label><input class="input s" id="kb-url" placeholder="或粘贴网页链接"><button class="btn s" type="button" data-toast="已提交网页导入">添加</button></div>
+            <div>
+              <div class="pipe"><div class="row between sm"><b style="font-weight:500">翻译研究方法论讲义.pdf</b><span class="mono small muted">2.4 MB</span></div>
+                <div class="stages"><span class="stage done"><span data-icon="check"></span>解析<span class="num">36 页</span></span><span class="stage done"><span data-icon="check"></span>分段<span class="num">212</span></span><span class="stage done"><span data-icon="check"></span>向量化<span class="num">212</span></span></div></div>
+              <div class="pipe" id="pipe-run"><div class="row between sm"><b style="font-weight:500">Baker 对等层次读书笔记.docx</b><span class="mono small muted">186 KB</span></div>
+                <div class="stages"><span class="stage done" data-st="0"><span data-icon="check"></span>解析<span class="num">18 页</span></span><span class="stage run" data-st="1"><span class="spin" style="width:10px;height:10px"></span>分段<span class="num" id="chunk-n">41</span></span><span class="stage" data-st="2"><span data-icon="clock"></span>向量化<span class="num" id="emb-n">0</span></span></div></div>
+              <div class="pipe"><div class="row between sm"><b style="font-weight:500">扫描版-翻译教程.pdf</b><span class="mono small muted">18.1 MB</span></div>
+                <div class="stages"><span class="stage fail"><span data-icon="x"></span>解析失败</span><span class="stage">分段</span><span class="stage">向量化</span></div>
+                <div class="row small" style="color:var(--err)"><span data-icon="alert" class="ic-14"></span>未识别到文本层，需 OCR 后重新导入<div class="grow"></div><button class="btn xs" type="button" data-toast="已重试"><span data-icon="retry" class="ic-14"></span>重试</button></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>文献</h2><div class="grow"></div><span class="small muted">向量模型 <span class="mono">bge-m3</span></span></div>
+          <table class="td-mid">
+            <thead><tr><th>标题</th><th>类型</th><th class="td-r">片段</th><th>导入</th><th>状态</th></tr></thead>
+            <tbody class="stagger">
+              <tr style="--i:0"><td>文化负载词研究综述.pdf</td><td class="mono small">PDF</td><td class="td-r num">164</td><td class="mono small muted">10-21</td><td><span class="tag t-ok">可检索</span></td></tr>
+              <tr style="--i:1"><td>Venuti 归化异化笔记.md</td><td class="mono small">MD</td><td class="td-r num">38</td><td class="mono small muted">10-19</td><td><span class="tag t-ok">可检索</span></td></tr>
+              <tr style="--i:2"><td>CSI 处理策略笔记.md</td><td class="mono small">MD</td><td class="td-r num">22</td><td class="mono small muted">10-19</td><td><span class="tag t-ok">可检索</span></td></tr>
+              <tr style="--i:3"><td>翻译研究方法论讲义.pdf</td><td class="mono small">PDF</td><td class="td-r num">212</td><td class="mono small muted">今天</td><td><span class="tag t-ok">可检索</span></td></tr>
+              <tr style="--i:4"><td>Baker 对等层次读书笔记.docx</td><td class="mono small">DOCX</td><td class="td-r num muted">—</td><td class="mono small muted">今天</td><td><span class="tag t-run"><span class="spin" style="width:9px;height:9px"></span>处理中</span></td></tr>
+              <tr style="--i:5"><td>语料库翻译学导论（摘要）<span class="tag t-gray" style="margin-left:6px">内置</span></td><td class="mono small">URL</td><td class="td-r num">57</td><td class="mono small muted">09-30</td><td><span class="tag t-ok">可检索</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 术语 -->
+      <section role="tabpanel" id="p-term" class="terms" hidden>
+        <div class="col gap-16">
+          <div class="card" style="padding:10px">
+            <label for="t-q" class="sr-only">筛选术语</label><input class="input s" id="t-q" placeholder="筛选术语" style="margin-bottom:6px">
+            <button class="list-item on" type="button"><span class="grow"><span class="li-title">文化负载词</span><div class="small muted">culture-loaded words</div></span><span class="tag t-ok">已确认</span></button>
+            <button class="list-item" type="button"><span class="grow"><span class="li-title">归化</span><div class="small muted">domestication</div></span><span class="tag t-ok">已确认</span></button>
+            <button class="list-item" type="button"><span class="grow"><span class="li-title">异化</span><div class="small muted">foreignization</div></span><span class="tag t-ok">已确认</span></button>
+            <button class="list-item" type="button"><span class="grow"><span class="li-title">动态对等</span><div class="small muted">dynamic equivalence</div></span><span class="tag t-ok">已确认</span></button>
+            <button class="list-item" type="button"><span class="grow"><span class="li-title">显化</span><div class="small muted">explicitation</div></span><span class="tag t-gray">草稿</span></button>
+          </div>
+          <div class="card card-pad">
+            <div class="row between" style="margin-bottom:6px"><h2>候选术语</h2><span class="tag t-gray mono">kb.extract_terms</span></div>
+            <div class="cand" style="--i:0"><span class="grow">语义翻译 <span class="mono small muted">semantic translation</span></span><button class="btn xs ok" type="button" data-toast="已加入术语表">确认</button><button class="btn xs ghost" type="button">忽略</button></div>
+            <div class="cand" style="--i:1"><span class="grow">零翻译 <span class="mono small muted">zero translation</span></span><button class="btn xs ok" type="button" data-toast="已加入术语表">确认</button><button class="btn xs ghost" type="button">忽略</button></div>
+            <div class="cand" style="--i:2"><span class="grow">译者主体性 <span class="mono small muted">translator's subjectivity</span></span><button class="btn xs ok" type="button" data-toast="已加入术语表">确认</button><button class="btn xs ghost" type="button">忽略</button></div>
+          </div>
+        </div>
+        <article class="card card-pad col gap-16 term-big">
+          <div class="row" style="align-items:flex-start">
+            <div class="grow"><h2>文化负载词</h2><div class="mono sub" style="margin-top:2px">culture-loaded words</div></div>
+            <span class="tag t-gray">翻译学</span><span class="tag t-ok">已确认 · 林云 10-21</span>
+          </div>
+          <div class="col gap-4"><span class="label">译名</span><div class="row wrap"><span class="tag t-accent-line">culture-loaded words</span><span class="tag t-line">culture-specific items</span><span class="tag t-line">culturemes</span></div></div>
+          <div class="col gap-4"><span class="label">定义</span><p style="line-height:1.8">标志某种文化中特有事物的词、词组和习语，反映特定民族在长期历史进程中积累的、有别于其他民族的独特活动方式。</p><span class="small muted">出处：文化负载词研究综述.pdf · 第 3 页</span></div>
+          <div class="col gap-8" style="gap:8px">
+            <div class="row between"><span class="label">语料例句</span><a class="small" href="search.html">在检索中打开</a></div>
+            <div class="ex">很多<span class="hit-2">文化</span>负载词很难<span class="hit">翻译</span>。<span class="mono small muted"> zh#5730218</span><div class="al">Many culture-loaded words are hard to translate.</div></div>
+            <div class="ex">不了解当地<span class="hit-2">文化</span>，就很难<span class="hit">翻译</span>好这些俗语。<span class="mono small muted"> zh#7208831</span><div class="al">Without knowing the local culture, it is hard to translate these sayings well.</div></div>
+          </div>
+          <div class="col gap-4"><span class="label">相关术语</span><div class="row wrap"><a class="chip ui" href="#">归化</a><a class="chip ui" href="#">异化</a><a class="chip ui" href="#">文化缺省</a></div></div>
+        </article>
+      </section>
+
+      <!-- 规范 -->
+      <section role="tabpanel" id="p-spec" class="terms" hidden>
+        <div class="card" style="padding:10px">
+          <button class="list-item on" type="button"><span class="grow"><span class="li-title">学习者偏误标注规范</span><div class="small muted">标签集「偏误」· 12 个标签 · v2</div></span></button>
+          <button class="list-item" type="button"><span class="grow"><span class="li-title">翻译策略标注规范</span><div class="small muted">标签集「翻译策略」· 9 个标签 · v1</div></span></button>
+          <button class="list-item" type="button"><span class="grow"><span class="li-title">句对齐校对规则</span><div class="small muted">句对齐层 · v1</div></span></button>
+        </div>
+        <article class="card">
+          <div class="card-head"><h2>学习者偏误标注规范</h2><span class="tag t-gray mono">v2</span><div class="grow"></div><button class="btn xs" type="button"><span data-icon="edit" class="ic-14"></span>编辑</button></div>
+          <div class="card-pad md">
+            <h3>偏误:时态</h3>
+            <p>动词形式与句中时间状语或上下文时间不一致。例：<code>Yesterday I go to the library.</code> 标注 <code>go</code>。</p>
+            <h3>偏误:单复数</h3>
+            <p>名词数与数词、限定词不一致。例：<code>two book</code> 标注 <code>book</code>。</p>
+            <h3>关系：同类</h3>
+            <p>同一句中同一成因的多处偏误，从首处指向后续各处。</p>
+          </div>
+        </article>
+      </section>
+
+      <!-- 笔记 -->
+      <section role="tabpanel" id="p-note" class="grid-3" hidden>
+        <article class="card note-card lift"><div class="row"><b style="font-weight:600" class="grow">翻译 + 文化：搭配与译法</b><span class="tag t-warn">草稿</span></div><p class="sm sub" style="line-height:1.7">“翻译”的右侧高频搭配集中在结果补语“成”和对象名词；英文对齐句中 idioms、concepts 显著偏多。</p><div class="row small muted"><span data-icon="quote" class="ic-14"></span>3 条引用<div class="grow"></div><span class="mono">助手 · 今天</span></div></article>
+        <article class="card note-card lift"><div class="row"><b style="font-weight:600" class="grow">把字句英译策略对比</b><span class="tag t-ok">已保存</span></div><p class="sm sub" style="line-height:1.7">把字句英译以主动 SVO 为主（71.4%），被动化仅占 6.2%，其余为拆句或意译。</p><div class="row small muted"><span data-icon="quote" class="ic-14"></span>5 条引用<div class="grow"></div><span class="mono">林云 · 10-24</span></div></article>
+        <article class="card note-card lift"><div class="row"><b style="font-weight:600" class="grow">学习者时态偏误分布</b><span class="tag t-ok">已保存</span></div><p class="sm sub" style="line-height:1.7">B1 组时态偏误每千词 4.8 处，主要为过去时缺失；与 A2 组差异显著（LL = 21.6）。</p><div class="row small muted"><span data-icon="quote" class="ic-14"></span>2 条引用<div class="grow"></div><span class="mono">陈默 · 10-22</span></div></article>
+      </section>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  /* 检索结果可钉住：文本 + 出处 */
+  function pinHits() {
+    document.querySelectorAll('.kb-hit').forEach(function (h) {
+      if (h.hasAttribute('data-pinnable')) return;
+      h.setAttribute('data-pinnable', '');
+      h.setAttribute('data-pin-text', h.querySelector('.snippet').textContent.replace(/……/g, '').slice(0, 60));
+      h.setAttribute('data-pin-src', h.querySelector('b').textContent + ' · ' + h.querySelector('.src').textContent);
+      var sc = h.querySelector('.score'); if (sc && !sc.querySelector('.pin-slot')) sc.insertAdjacentHTML('beforeend', '<span class="pin-slot" style="align-self:flex-end"></span>');
+    });
+    UI.hydrate(document);
+  }
+  pinHits();
+  new MutationObserver(pinHits).observe(document.getElementById('hits'), { childList: true });
+  /* 导入流水线：分段 → 向量化 */
+  var chunk = 41, emb = 0, total = 96;
+  var stages = document.querySelectorAll('#pipe-run .stage');
+  var t = setInterval(function () {
+    if (chunk < total) {
+      chunk = Math.min(total, chunk + 5);
+      document.getElementById('chunk-n').textContent = chunk;
+      if (chunk === total) {
+        stages[1].className = 'stage done'; stages[1].querySelector('.spin').outerHTML = UI.svg('check', 'ic');
+        stages[2].className = 'stage run'; stages[2].querySelector('.ic').outerHTML = '<span class="spin" style="width:10px;height:10px"></span>';
+      }
+    } else if (emb < total) {
+      emb = Math.min(total, emb + 8);
+      document.getElementById('emb-n').textContent = emb;
+      if (emb === total) {
+        stages[2].className = 'stage done'; stages[2].querySelector('.spin').outerHTML = UI.svg('check', 'ic');
+        UI.toast('Baker 对等层次读书笔记.docx：96 个片段可检索');
+        clearInterval(t);
+      }
+    }
+  }, 420);
+
+  document.getElementById('go-import').addEventListener('click', function () {
+    UI.selectTab(document.querySelector('[aria-controls="p-lit"]'));
+    var imp = document.getElementById('import');
+    imp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    imp.animate([{ boxShadow: '0 0 0 0 rgba(21, 112, 239,.4)' }, { boxShadow: '0 0 0 8px rgba(21, 112, 239,0)' }], { duration: 700 });
+  });
+
+  document.getElementById('kb-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var hits = document.getElementById('hits');
+    var saved = hits.innerHTML;
+    UI.busy(true);
+    hits.innerHTML = [0, 1, 2].map(function () { return '<div class="kb-hit"><span class="skel circle" style="width:18px;height:18px"></span><div class="col" style="gap:8px"><span class="skel" style="width:40%"></span><span class="skel" style="width:95%;height:10px"></span><span class="skel" style="width:80%;height:10px"></span></div><div class="col" style="gap:8px"><span class="skel" style="height:8px"></span><span class="skel" style="height:8px"></span></div></div>'; }).join('');
+    setTimeout(function () { hits.innerHTML = saved; UI.busy(false); }, UI.reduced ? 0 : 900);
+  });
+});
+</script>
+</body>
+</html>

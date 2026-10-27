@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>语料库 · 语料研究平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+  .corp td { padding: 13px 14px; }
+  .corp th { padding: 10px 14px; }
+  .corp tbody tr { cursor: pointer; }
+  .cname { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .state { display: flex; flex-direction: column; gap: 6px; min-width: 170px; }
+  .state .prog { width: 150px; }
+  .state .tag, .cond .tag { align-self: flex-start; justify-self: start; }
+  .state-msg { font-size: 12px; color: var(--text-3); }
+  .builder { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+  .cond { display: grid; grid-template-columns: 120px 90px minmax(0, 1fr) 30px; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--line); animation: rise 300ms var(--ease-out) both; }
+  .cond:last-of-type { border-bottom: 0; }
+  .ms { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ms .chip { font-family: var(--font); }
+  .ms .chip.on { box-shadow: 0 2px 6px rgba(21, 112, 239, .25); }
+  .range { position: relative; height: 32px; }
+  .range .rt { position: absolute; left: 0; right: 0; top: 14px; height: 4px; border-radius: 2px; background: var(--fill); }
+  .range .rf { position: absolute; top: 14px; height: 4px; border-radius: 2px; background: var(--accent); transition: left var(--t-base), right var(--t-base); }
+  .range .hd { position: absolute; top: 7px; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); box-shadow: var(--shadow-2); cursor: grab; transition: transform var(--t-fast) var(--ease-spring), left var(--t-base); }
+  .range .hd:hover { transform: scale(1.15); }
+  .range .rv { position: absolute; top: -8px; font-family: var(--mono); font-size: 11px; color: var(--accent); transform: translateX(-50%); }
+  .preview { background: var(--accent-tint); border-radius: var(--radius-md); padding: 14px 16px; display: flex; gap: 28px; align-items: flex-end; }
+  .preview .count { font-size: 24px; color: var(--accent); }
+  .sub-item { padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 4px; transition: border-color var(--t-fast), background var(--t-fast); }
+  .sub-item:hover { border-color: var(--accent-line); background: var(--surface-2); }
+  .sub-item code { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+  .file { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  .file:last-child { border-bottom: 0; }
+  .file .fi { width: 28px; height: 28px; border-radius: 7px; background: var(--fill); display: grid; place-items: center; color: var(--text-2); }
+  .file .fi .ic { width: 14px; height: 14px; }
+  .file .fname { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file .fmeta { font-size: 12px; color: var(--text-3); display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+  .file .prog { flex: 1; }
+  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .docs td, .docs th { padding: 9px 10px; font-size: 13px; }
+  .new-project .has-data, .new-project .topbar .seg { display: none !important; }
+  .new-only { display: none; }
+  .new-project .new-only { display: flex; }
+  .samples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; width: 100%; max-width: 860px; margin-top: 8px; text-align: left; }
+  .sample { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .sample .row b { font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" data-active="corpora"></aside>
+  <main class="main">
+    <header class="topbar">
+      <h1>语料库</h1>
+      <nav class="crumbs" data-scope="翻译对等研究" data-labels="项目"></nav>
+      <div class="seg" role="tablist" aria-label="来源">
+        <button role="tab" type="button" aria-selected="true">全部 8</button>
+        <button role="tab" type="button" aria-selected="false" tabindex="-1">内置 3</button>
+        <button role="tab" type="button" aria-selected="false" tabindex="-1">项目 5</button>
+      </div>
+      <div class="grow"></div>
+      <a class="btn s" href="#builder"><span data-icon="filter" class="ic-14"></span>新建子库</a>
+      <button class="btn s p" type="button" data-drawer-open="detail"><span data-icon="upload" class="ic-14"></span>上传语料</button>
+      <div class="topbar-prog" aria-hidden="true"></div>
+    </header>
+
+    <div class="content">
+      <!-- 新项目：还没有语料库 -->
+      <section class="card new-only dotgrid empty-hero" aria-label="新项目" style="padding:56px 24px">
+        <span class="eh-ic"><span data-icon="db"></span></span>
+        <h3>个人空间还没有语料库</h3>
+        <p class="sub sm">导入示例语料即可开始检索，也可以上传自己的文本。</p>
+        <div class="row" style="gap:10px"><button class="btn p" type="button" data-import-sample="Tatoeba 中英"><span data-icon="box" class="ic-14"></span>导入示例语料</button><button class="btn" type="button" data-drawer-open="detail"><span data-icon="upload" class="ic-14"></span>上传文件</button><a class="btn ghost" href="onboarding.html"><span data-icon="compass" class="ic-14"></span>打开引导</a></div>
+        <div class="samples">
+          <div class="card sample"><div class="row"><b>Tatoeba 中英</b><span class="tag t-gray">内置</span></div><span class="small muted">94,182 句对 · CC BY 2.0 FR</span><button class="btn xs" type="button" data-import-sample="Tatoeba 中英" style="align-self:flex-start">导入</button></div>
+          <div class="card sample"><div class="row"><b>UD Chinese GSD</b><span class="tag t-gray">内置</span></div><span class="small muted">4,997 句 · 含词性与依存</span><button class="btn xs" type="button" data-import-sample="UD Chinese GSD" style="align-self:flex-start">导入</button></div>
+          <div class="card sample"><div class="row"><b>LCMC</b><span class="tag t-gray">内置</span></div><span class="small muted">1,001,826 词 · 15 种体裁</span><button class="btn xs" type="button" data-import-sample="LCMC" style="align-self:flex-start">导入</button></div>
+        </div>
+      </section>
+
+      <section class="card has-data" aria-label="语料库列表">
+        <table class="corp td-mid">
+          <thead><tr><th>名称</th><th>语言</th><th class="td-r">文档</th><th class="td-r">词数</th><th>状态</th><th>索引</th><th>更新</th><th></th></tr></thead>
+          <tbody class="stagger" id="corp-body">
+            <tr style="--i:0"><td><div class="cname">Tatoeba 中英<span class="tag t-gray">内置</span></div><div class="small muted">CC BY 2.0 FR</div></td><td class="mono">zh · en</td><td class="td-r num">7</td><td class="td-r num">800,546</td><td><span class="tag t-ok"><span data-icon="check" class="ic-14"></span>可用</span></td><td class="mono sm">v14</td><td class="mono sm muted">10-20</td><td class="td-r"><button class="btn xs" type="button" data-drawer-open="detail">详情</button></td></tr>
+            <tr style="--i:1"><td><div class="cname">LCMC 兰卡斯特汉语语料库<span class="tag t-gray">内置</span></div><div class="small muted">学术使用许可</div></td><td class="mono">zh</td><td class="td-r num">500</td><td class="td-r num">1,001,826</td><td><span class="tag t-ok"><span data-icon="check" class="ic-14"></span>可用</span></td><td class="mono sm">v3</td><td class="mono sm muted">09-02</td><td class="td-r"><button class="btn xs" type="button" data-drawer-open="detail">详情</button></td></tr>
+            <tr style="--i:2"><td><div class="cname">UD Chinese GSD<span class="tag t-gray">内置</span></div><div class="small muted">CC BY-SA 4.0</div></td><td class="mono">zh</td><td class="td-r num">1</td><td class="td-r num">123,291</td><td><span class="tag t-ok"><span data-icon="check" class="ic-14"></span>可用</span></td><td class="mono sm">v2</td><td class="mono sm muted">08-11</td><td class="td-r"><button class="btn xs" type="button" data-drawer-open="detail">详情</button></td></tr>
+            <tr style="--i:3" class="sel"><td><div class="cname">翻译课程作业 2026<span class="tag t-accent-line">项目</span></div><div class="small muted">林云 · 编辑者 3 人</div></td><td class="mono">zh · en</td><td class="td-r num">86</td><td class="td-r num">214,302</td>
+              <td><div class="state"><span class="tag t-run"><span class="spin" style="width:10px;height:10px"></span>建索引</span><span class="prog thin striped"><i id="idx-bar" style="--v:64%"></i></span><span class="state-msg num" id="idx-msg">5,512 / 8,610 句</span></div></td><td class="mono sm">v5 → v6</td><td class="mono sm muted">刚刚</td><td class="td-r"><button class="btn xs" type="button" data-drawer-open="detail">详情</button></td></tr>
+            <tr style="--i:4"><td><div class="cname">访谈转写<span class="tag t-accent-line">项目</span></div><div class="small muted">林云</div></td><td class="mono">zh</td><td class="td-r num">12</td><td class="td-r num muted">—</td>
+              <td><div class="state"><span class="tag t-run"><span class="dot pulse"></span>导入中</span><span class="prog thin"><i style="--v:42%"></i></span><span class="state-msg num">5 / 12 文件</span></div></td><td class="mono sm muted">—</td><td class="mono sm muted">2 分钟前</td><td class="td-r"><button class="btn xs" type="button" data-drawer-open="detail">详情</button></td></tr>
+            <tr style="--i:5"><td><div class="cname">学习者英语作文<span class="tag t-accent-line">项目</span></div><div class="small muted">陈默</div></td><td class="mono">en</td><td class="td-r num">1,240</td><td class="td-r num">302,118</td>
+              <td><div class="state"><span class="tag t-warn"><span data-icon="alert" class="ic-14"></span>索引过期</span><span class="state-msg">元数据已修改 · 3 个文档</span></div></td><td class="mono sm">v8</td><td class="mono sm muted">昨天</td><td class="td-r"><button class="btn xs soft" type="button" data-toast="已提交重建索引任务 #2240"><span data-icon="retry" class="ic-14"></span>重建</button></td></tr>
+            <tr style="--i:6"><td><div class="cname">政府工作报告 1954–2024<span class="tag t-accent-line">项目</span></div><div class="small muted">周宁</div></td><td class="mono">zh</td><td class="td-r num">71</td><td class="td-r num muted">—</td>
+              <td><div class="state"><span class="tag t-err"><span data-icon="x" class="ic-14"></span>失败</span><span class="state-msg">1987.txt：编码无法识别（GB18030?）</span></div></td><td class="mono sm muted">—</td><td class="mono sm muted">10-25</td><td class="td-r"><button class="btn xs" type="button" data-toast="已重新提交导入任务 #2238"><span data-icon="retry" class="ic-14"></span>重试</button></td></tr>
+            <tr style="--i:7"><td><div class="cname">课堂口译录音<span class="tag t-accent-line">项目</span></div><div class="small muted">林云</div></td><td class="mono">zh · en</td><td class="td-r num">0</td><td class="td-r num muted">—</td>
+              <td><span class="tag t-gray">空</span></td><td class="mono sm muted">—</td><td class="mono sm muted">10-26</td><td class="td-r"><button class="btn xs" type="button" data-drawer-open="detail"><span data-icon="upload" class="ic-14"></span>上传</button></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- 空语料库：引导而不是空白 -->
+      <section class="card has-data" aria-label="课堂口译录音">
+        <div class="card-head"><h2>课堂口译录音</h2><span class="tag t-gray">空</span><div class="grow"></div><span class="small muted">林云 · 10-26 创建</span></div>
+        <div class="empty-hero dotgrid" style="border-radius:0 0 var(--radius-lg) var(--radius-lg);padding:36px 24px">
+          <span class="eh-ic"><span data-icon="upload"></span></span>
+          <h3>还没有文档</h3>
+          <p class="sub sm">支持 TXT、DOCX、PDF、TMX、CoNLL-U，上传后自动分句、建索引。</p>
+          <div class="row" style="gap:10px"><button class="btn p" type="button" data-drawer-open="detail"><span data-icon="upload" class="ic-14"></span>上传文件</button><button class="btn" type="button" data-import-sample="Tatoeba 中英"><span data-icon="box" class="ic-14"></span>导入示例语料</button><a class="btn ghost" href="onboarding.html"><span data-icon="compass" class="ic-14"></span>打开引导</a></div>
+        </div>
+      </section>
+
+      <section class="builder has-data" id="builder">
+        <form class="card" aria-label="子库" id="sub-form">
+          <div class="card-head"><h2>新建子库</h2><div class="grow"></div><label class="sr-only" for="sb-base">语料库</label><select class="select s" id="sb-base" style="width:200px"><option>翻译课程作业 2026</option><option>Tatoeba 中英</option></select></div>
+          <div class="card-pad col gap-12">
+            <div class="field" style="max-width:360px"><label for="sb-name">名称</label><input class="input" id="sb-name" value="文学 · 研二 · 汉译英"></div>
+            <div id="conds">
+              <div class="cond"><span class="sm" style="font-weight:500">体裁</span><span class="tag t-gray">任一</span>
+                <div class="ms" data-ms><button class="chip on" type="button">文学</button><button class="chip" type="button">新闻</button><button class="chip" type="button">法律</button><button class="chip" type="button">科技</button><button class="chip" type="button">旅游</button></div>
+                <button class="btn ghost icon" type="button" aria-label="删除条件"><span data-icon="x" class="ic-14"></span></button></div>
+              <div class="cond"><span class="sm" style="font-weight:500">年级</span><span class="tag t-gray">任一</span>
+                <div class="ms" data-ms><button class="chip" type="button">研一</button><button class="chip on" type="button">研二</button><button class="chip" type="button">研三</button></div>
+                <button class="btn ghost icon" type="button" aria-label="删除条件"><span data-icon="x" class="ic-14"></span></button></div>
+              <div class="cond"><span class="sm" style="font-weight:500">译入方向</span><span class="tag t-gray">等于</span>
+                <div class="ms" data-ms data-single><button class="chip on" type="button">汉译英</button><button class="chip" type="button">英译汉</button></div>
+                <button class="btn ghost icon" type="button" aria-label="删除条件"><span data-icon="x" class="ic-14"></span></button></div>
+              <div class="cond"><span class="sm" style="font-weight:500">提交年份</span><span class="tag t-gray">范围</span>
+                <div class="range" aria-label="提交年份 2023 至 2026"><span class="rt"></span><span class="rf" style="left:25%;right:0"></span><span class="hd" style="left:25%" tabindex="0" role="slider" aria-valuemin="2022" aria-valuemax="2026" aria-valuenow="2023" aria-label="起始年份"><span class="rv">2023</span></span><span class="hd" style="left:100%" tabindex="0" role="slider" aria-valuemin="2022" aria-valuemax="2026" aria-valuenow="2026" aria-label="结束年份"><span class="rv">2026</span></span></div>
+                <button class="btn ghost icon" type="button" aria-label="删除条件"><span data-icon="x" class="ic-14"></span></button></div>
+            </div>
+            <div class="row"><button class="btn s ghost" type="button" id="add-cond" style="color:var(--accent)"><span data-icon="plus" class="ic-14"></span>添加条件</button></div>
+            <div class="preview" aria-live="polite">
+              <div><div class="stat-label">文档</div><div class="count" data-count="21" id="pv-docs">0</div></div>
+              <div><div class="stat-label">词</div><div class="count" data-count="52318" id="pv-words">0</div></div>
+              <div><div class="stat-label">句对</div><div class="count" data-count="2406" id="pv-sents">0</div></div>
+              <div class="grow"></div>
+              <button class="btn p" type="submit"><span data-icon="check" class="ic-14"></span>保存子库</button>
+            </div>
+          </div>
+        </form>
+
+        <section class="card card-pad col gap-12" aria-label="已保存子库">
+          <h2>子库</h2>
+          <div class="sub-item"><div class="row between"><b style="font-weight:600">2015 年后</b><span class="num small muted">48,302 句对</span></div><span class="small muted">Tatoeba 中英</span><code>年份 ≥ 2015</code></div>
+          <div class="sub-item"><div class="row between"><b style="font-weight:600">2015 年前</b><span class="num small muted">45,880 句对</span></div><span class="small muted">Tatoeba 中英</span><code>年份 &lt; 2015</code></div>
+          <div class="sub-item"><div class="row between"><b style="font-weight:600">法律 · 全部年级</b><span class="num small muted">14 文档</span></div><span class="small muted">翻译课程作业 2026</span><code>体裁 = 法律</code></div>
+          <div class="sub-item"><div class="row between"><b style="font-weight:600">议论文 · B1</b><span class="num small muted">388 文档</span></div><span class="small muted">学习者英语作文</span><code>文体 = 议论文 且 等级 = B1</code></div>
+        </section>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- 语料库详情抽屉 -->
+<aside class="drawer" id="detail" data-modal role="dialog" aria-modal="true" aria-labelledby="detail-title">
+  <div class="drawer-head">
+    <span class="ou-ic" style="width:32px;height:32px;border-radius:9px;background:var(--accent-tint);color:var(--accent-text);display:grid;place-items:center"><span data-icon="db"></span></span>
+    <div class="grow"><h2 id="detail-title">翻译课程作业 2026</h2><div class="row small muted" style="margin-top:2px"><span class="tag t-accent-line">项目</span><span class="mono">zh · en</span><span class="tag t-run"><span class="spin" style="width:10px;height:10px"></span>建索引 64%</span></div></div>
+    <button class="btn ghost icon" type="button" data-drawer-close aria-label="关闭"><span data-icon="x" class="ic-14"></span></button>
+  </div>
+  <div class="drawer-body">
+    <div class="grid-3" style="--i:0">
+      <div class="card card-pad" style="padding:12px 14px"><div class="stat-label">文档</div><div class="count" style="font-size:22px" data-count="86">0</div></div>
+      <div class="card card-pad" style="padding:12px 14px"><div class="stat-label">词</div><div class="count" style="font-size:22px" data-count="214302">0</div></div>
+      <div class="card card-pad" style="padding:12px 14px"><div class="stat-label">句对</div><div class="count" style="font-size:22px" data-count="8610">0</div></div>
+    </div>
+
+    <div class="tabs" role="tablist" aria-label="详情" style="--i:1">
+      <button role="tab" type="button" aria-selected="true" aria-controls="d-docs">文档</button>
+      <button role="tab" type="button" aria-selected="false" aria-controls="d-up" tabindex="-1">上传</button>
+      <button role="tab" type="button" aria-selected="false" aria-controls="d-meta" tabindex="-1">元数据</button>
+    </div>
+
+    <div style="--i:2">
+      <section role="tabpanel" id="d-docs">
+        <div class="row" style="margin-bottom:10px"><label class="sr-only" for="doc-q">筛选文档</label><input class="input s" id="doc-q" placeholder="筛选文档" style="width:220px"><div class="grow"></div><span class="small muted num">86 个文档</span></div>
+        <table class="docs td-mid">
+          <thead><tr><th>标题</th><th>体裁</th><th>年级</th><th class="td-r">词数</th><th>状态</th><th></th></tr></thead>
+          <tbody class="stagger">
+            <tr style="--i:0"><td>张晓 · 《边城》节选英译</td><td>文学</td><td>研二</td><td class="td-r num">3,412</td><td><span class="tag t-ok">已索引</span></td><td class="td-r"><button class="btn xs ghost" type="button" data-select-meta>编辑</button></td></tr>
+            <tr style="--i:1"><td>李然 · 合同条款汉译英</td><td>法律</td><td>研一</td><td class="td-r num">2,108</td><td><span class="tag t-ok">已索引</span></td><td class="td-r"><button class="btn xs ghost" type="button" data-select-meta>编辑</button></td></tr>
+            <tr style="--i:2"><td>周宁 · 新闻发布会实录</td><td>新闻</td><td>研二</td><td class="td-r num">4,877</td><td><span class="tag t-run"><span class="spin" style="width:9px;height:9px"></span>索引中</span></td><td class="td-r"><button class="btn xs ghost" type="button" data-select-meta>编辑</button></td></tr>
+            <tr style="--i:3"><td>王悦 · 茶文化旅游手册</td><td>旅游</td><td>研一</td><td class="td-r num">2,960</td><td><span class="tag t-run"><span class="spin" style="width:9px;height:9px"></span>索引中</span></td><td class="td-r"><button class="btn xs ghost" type="button" data-select-meta>编辑</button></td></tr>
+            <tr style="--i:4"><td>陈默 · 药品说明书</td><td>科技</td><td>研三</td><td class="td-r num">1,744</td><td><span class="tag t-gray">排队</span></td><td class="td-r"><button class="btn xs ghost" type="button" data-select-meta>编辑</button></td></tr>
+            <tr style="--i:5"><td>赵一 · 《红楼梦》判词</td><td>文学</td><td>研二</td><td class="td-r num">1,206</td><td><span class="tag t-gray">排队</span></td><td class="td-r"><button class="btn xs ghost" type="button" data-select-meta>编辑</button></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section role="tabpanel" id="d-up" hidden class="col gap-16">
+        <label class="dropzone" for="file-in" id="drop">
+          <span data-icon="upload"></span>
+          <b style="font-weight:600;color:var(--text)">拖入文件或点击选择</b>
+          <span class="small muted">TXT · DOCX · PDF · TMX · CoNLL-U · 单个文件 ≤ 50 MB</span>
+          <input type="file" id="file-in" multiple class="sr-only">
+        </label>
+        <div id="files">
+          <div class="file"><span class="fi"><span data-icon="filetext"></span></span><div style="min-width:0"><div class="fname">作业-张晓-边城节选.docx</div><div class="fmeta"><span class="prog thin ok" style="width:180px"><i style="--v:100%"></i></span><span class="num">412 KB</span></div></div><span class="tag t-ok">完成</span></div>
+          <div class="file"><span class="fi"><span data-icon="filetext"></span></span><div style="min-width:0"><div class="fname">作业-李然-合同条款.docx</div><div class="fmeta"><span class="prog thin striped" style="width:180px"><i id="up-bar" style="--v:62%"></i></span><span class="num" id="up-pct">62%</span></div></div><span class="tag t-run" id="up-tag">上传中</span></div>
+          <div class="file"><span class="fi"><span data-icon="filetext"></span></span><div style="min-width:0"><div class="fname">作业-周宁-新闻实录.txt</div><div class="fmeta" style="color:var(--err)">编码无法识别，请另存为 UTF-8</div></div><button class="btn xs" type="button" data-toast="已重新上传"><span data-icon="retry" class="ic-14"></span>重试</button></div>
+        </div>
+      </section>
+
+      <section role="tabpanel" id="d-meta" hidden class="col gap-16">
+        <div class="alert info"><span data-icon="info" class="ic-14"></span><span>修改元数据后需重建索引，子库按新值重新计算。</span></div>
+        <div class="meta-grid">
+          <div class="field" style="grid-column:1/-1"><label for="m-title">标题</label><input class="input" id="m-title" value="张晓 · 《边城》节选英译"></div>
+          <div class="field"><label for="m-genre">体裁</label><select class="select" id="m-genre"><option>文学</option><option>新闻</option><option>法律</option><option>科技</option><option>旅游</option></select></div>
+          <div class="field"><label for="m-grade">年级</label><select class="select" id="m-grade"><option>研一</option><option selected>研二</option><option>研三</option></select></div>
+          <div class="field"><label for="m-dir">译入方向</label><select class="select" id="m-dir"><option>汉译英</option><option>英译汉</option></select></div>
+          <div class="field"><label for="m-year">提交年份</label><input class="input mono" id="m-year" value="2026"></div>
+          <div class="field" style="grid-column:1/-1"><label for="m-src">原文出处</label><input class="input" id="m-src" value="沈从文《边城》第一章"></div>
+        </div>
+        <div class="row"><button class="btn s ghost" type="button" style="color:var(--accent)"><span data-icon="plus" class="ic-14"></span>新增字段</button></div>
+      </section>
+    </div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn" type="button" data-drawer-close>取消</button>
+    <button class="btn p" type="button" data-toast="已保存，重建索引任务 #2241 已提交" data-drawer-close>保存</button>
+  </div>
+</aside>
+
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  /* 多选 / 单选筛选值，实时更新预估 */
+  var seed = 3;
+  function recount() {
+    var on = document.querySelectorAll('#conds .chip.on').length;
+    seed = (seed * 7 + on * 13) % 17;
+    var docs = Math.max(4, 8 + on * 3 + seed);
+    var set = function (id, v) { var el = document.getElementById(id); el.setAttribute('data-count', v); };
+    set('pv-docs', docs); set('pv-words', docs * 2491 + seed * 37); set('pv-sents', docs * 114 + seed);
+    UI.countUp(document.querySelector('.preview'));
+  }
+  document.getElementById('conds').addEventListener('click', function (e) {
+    var c = e.target.closest('.chip');
+    if (c) {
+      var ms = c.closest('[data-ms]');
+      if (ms.hasAttribute('data-single')) ms.querySelectorAll('.chip').forEach(function (x) { x.classList.toggle('on', x === c); });
+      else c.classList.toggle('on');
+      recount();
+    }
+    var del = e.target.closest('[aria-label="删除条件"]');
+    if (del) { var row = del.closest('.cond'); row.style.transition = 'opacity 200ms, transform 200ms'; row.style.opacity = '0'; row.style.transform = 'translateX(12px)'; setTimeout(function () { row.remove(); recount(); }, 200); }
+  });
+  document.getElementById('add-cond').addEventListener('click', function () {
+    var row = document.createElement('div');
+    row.className = 'cond';
+    row.innerHTML = '<span class="sm" style="font-weight:500">原文作者</span><span class="tag t-gray">任一</span><div class="ms" data-ms><button class="chip" type="button">沈从文</button><button class="chip" type="button">曹雪芹</button><button class="chip" type="button">老舍</button><button class="chip" type="button">鲁迅</button></div><button class="btn ghost icon" type="button" aria-label="删除条件">' + UI.svg('x', 'ic ic-14') + '</button>';
+    document.getElementById('conds').appendChild(row);
+  });
+  document.getElementById('sub-form').addEventListener('submit', function (e) { e.preventDefault(); UI.toast('已保存子库「' + document.getElementById('sb-name').value + '」'); });
+
+  /* 抽屉内：元数据编辑入口 */
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-select-meta]')) UI.selectTab(document.querySelector('[aria-controls="d-meta"]'));
+    var tr = e.target.closest('#corp-body tr');
+    if (tr && !e.target.closest('button')) UI.openDrawer('detail');
+  });
+
+  /* 拖放高亮 */
+  var drop = document.getElementById('drop');
+  ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('drag'); }); });
+  ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('drag'); if (t === 'drop') UI.toast('已加入上传队列'); }); });
+
+  /* 实时进度：上传与建索引 */
+  var up = 62, idx = 5512;
+  var timer = setInterval(function () {
+    if (up < 100) {
+      up = Math.min(100, up + 3);
+      document.getElementById('up-bar').style.setProperty('--v', up + '%');
+      document.getElementById('up-pct').textContent = up + '%';
+      if (up === 100) {
+        var tag = document.getElementById('up-tag'); tag.className = 'tag t-ok'; tag.textContent = '完成';
+        document.getElementById('up-bar').parentNode.className = 'prog thin ok';
+      }
+    }
+    idx = Math.min(8610, idx + 37);
+    document.getElementById('idx-bar').style.setProperty('--v', (idx / 8610 * 100).toFixed(1) + '%');
+    document.getElementById('idx-msg').textContent = idx.toLocaleString('en-US') + ' / 8,610 句';
+    if (idx >= 8610) clearInterval(timer);
+  }, 600);
+
+  if (location.hash === '#detail') UI.openDrawer('detail');
+  if (location.hash === '#new') {
+    document.body.classList.add('new-project');
+    var cr = document.querySelector('.topbar .crumbs'); cr.innerHTML = ''; cr.setAttribute('data-scope', '个人空间'); UI.hydrate(document);
+  }
+
+  /* 导入示例语料：按钮内进度 → 完成 */
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-import-sample]');
+    if (!b || b.disabled) return;
+    var name = b.getAttribute('data-import-sample');
+    b.disabled = true; var html = b.innerHTML;
+    b.innerHTML = '<span class="spin"></span>导入中';
+    UI.busy(true);
+    setTimeout(function () {
+      b.innerHTML = UI.svg('check', 'ic ic-14') + '已提交'; UI.busy(false);
+      UI.toast('已提交导入任务：' + name + '（示例），完成后自动建索引', 'box');
+      setTimeout(function () { b.disabled = false; b.innerHTML = html; }, 2400);
+    }, UI.reduced ? 0 : 900);
+  });
+});
+</script>
+</body>
+</html>

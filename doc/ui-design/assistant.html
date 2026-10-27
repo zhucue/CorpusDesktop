@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>助手 · 语料研究平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+  .main { height: 100vh; }
+  .asst { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr) 300px; }
+  .convs { border-right: 1px solid var(--line); background: var(--surface); padding: 14px 10px; display: flex; flex-direction: column; gap: 4px; overflow: auto; }
+  .convs .list-item { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .convs .li-meta { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
+  .conv-group { font-size: 12px; color: var(--text-3); padding: 12px 12px 4px; }
+  .chat { display: flex; flex-direction: column; min-height: 0; }
+  .chat-scroll { flex: 1; overflow: auto; scroll-behavior: smooth; }
+  .chat-log { max-width: 820px; margin: 0 auto; padding: 28px 32px 40px; display: flex; flex-direction: column; gap: 22px; }
+  .composer { padding: 0 32px 22px; }
+  .composer-box { max-width: 820px; margin: 0 auto; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-2); padding: 12px 12px 10px 16px; transition: border-color var(--t-fast), box-shadow var(--t-fast); }
+  .composer-box:focus-within { border-color: var(--accent-line); box-shadow: 0 0 0 4px rgba(21, 112, 239, .08), var(--shadow-2); }
+  .composer textarea { width: 100%; border: 0; resize: none; font: inherit; font-size: 14.5px; line-height: 1.6; outline: none; min-height: 44px; color: var(--text); background: transparent; }
+  .rail { border-left: 1px solid var(--line); background: var(--surface); padding: 18px 18px; display: flex; flex-direction: column; gap: 22px; overflow: auto; }
+  .rail h2 { font-size: 13px; color: var(--text-2); font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .ev { display: flex; gap: 10px; padding: 10px; border-radius: var(--radius); border: 1px solid var(--line-soft); background: var(--surface-2); font-size: 13px; animation: rise 360ms var(--ease-out) both; }
+  .ev + .ev { margin-top: 8px; }
+  .ev .cite { flex-shrink: 0; margin: 1px 0 0; }
+  .tool-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tool-chips .chip { cursor: default; height: 24px; font-size: 11.5px; }
+  .tool-chips .chip.used { background: var(--accent-tint); color: var(--accent-text); }
+  .tool-group { font-size: 12px; color: var(--text-3); margin: 10px 0 6px; }
+  .tool-group:first-of-type { margin-top: 0; }
+  .ans-actions { display: flex; gap: 6px; animation: rise 300ms var(--ease-out) both; }
+  .term-tr { display: flex; flex-wrap: wrap; gap: 6px; }
+  .snippet { font-size: 13px; line-height: 1.7; color: var(--text-2); }
+  .snippet mark { background: var(--mark-bg); color: inherit; border-radius: 3px; padding: 0 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" data-active="assistant"></aside>
+  <main class="main">
+    <header class="topbar">
+      <h1>助手</h1>
+      <nav class="crumbs" data-scope="翻译对等研究|Tatoeba 中英|2015 年后"></nav>
+      <div class="grow"></div>
+      <button class="btn s" type="button" id="replay"><span data-icon="retry" class="ic-14"></span>重新播放</button>
+      <button class="btn s" type="button" data-toast="已保存为笔记草稿，待人工确认"><span data-icon="note" class="ic-14"></span>保存为笔记</button>
+      <div class="topbar-prog" aria-hidden="true"></div>
+    </header>
+
+    <div class="asst">
+      <nav class="convs" aria-label="会话">
+        <button class="btn p" type="button" style="margin:0 2px 8px"><span data-icon="plus" class="ic-14"></span>新对话</button>
+        <div class="conv-group">今天</div>
+        <button class="list-item on" type="button"><span class="li-title">翻译 + 文化：搭配与译法</span><span class="li-meta" id="conv-state"><span class="dot pulse" style="color:var(--accent)"></span>运行中</span></button>
+        <button class="list-item" type="button"><span class="li-title">把字句英译策略对比</span><span class="li-meta">10:42 · 6 次工具调用</span></button>
+        <div class="conv-group">本周</div>
+        <button class="list-item" type="button"><span class="li-title">学习者时态偏误统计</span><span class="li-meta">周二 · 4 次工具调用</span></button>
+        <button class="list-item" type="button"><span class="li-title">从法律文本抽取术语</span><span class="li-meta">周一 · 任务 #2187</span></button>
+        <button class="list-item" type="button"><span class="li-title">关键词对比：新闻 vs 口语</span><span class="li-meta">周一 · 3 次工具调用</span></button>
+        <div class="conv-group">更早</div>
+        <button class="list-item" type="button"><span class="li-title">"进行"的虚化用法</span><span class="li-meta">10-19</span></button>
+        <button class="list-item" type="button"><span class="li-title">标注规范：偏误标签集</span><span class="li-meta">10-16</span></button>
+      </nav>
+
+      <section class="chat" aria-label="对话">
+        <div class="chat-scroll" id="scroll">
+          <div class="chat-log" id="log" aria-live="polite"></div>
+        </div>
+        <div class="composer">
+          <form class="composer-box" id="composer">
+            <label for="ask" class="sr-only">向助手提问</label>
+            <textarea id="ask" data-slash rows="2" placeholder="向助手提问，Enter 发送，Shift+Enter 换行"></textarea>
+            <div class="row">
+              <button class="pill" type="button" data-toast="范围：Tatoeba 中英 › 子库「2015 年后」"><span data-icon="db" class="ic-14"></span>子库「2015 年后」</button>
+              <button class="pill" type="button" data-toast="已启用 21 个工具"><span data-icon="tool" class="ic-14"></span>工具 21</button>
+              <div class="grow"></div>
+              <span class="small muted mono" id="model">qwen3-32b</span>
+              <button class="send stop" type="button" id="send" aria-label="停止"><span data-icon="stop"></span></button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <aside class="rail" aria-label="上下文">
+        <section>
+          <h2><span data-icon="db" class="ic-14"></span>当前范围</h2>
+          <dl class="kv" style="grid-template-columns:64px 1fr">
+            <dt>语料库</dt><dd>Tatoeba 中英</dd>
+            <dt>子库</dt><dd>2015 年后</dd>
+            <dt>句对</dt><dd class="num">48,302</dd>
+            <dt>索引</dt><dd class="num">v14 · 10-20</dd>
+            <dt>知识库</dt><dd>翻译对等研究</dd>
+          </dl>
+        </section>
+        <section>
+          <h2><span data-icon="quote" class="ic-14"></span>引用证据</h2>
+          <div id="evidence"><div class="muted sm" id="ev-empty">暂无</div></div>
+        </section>
+        <section>
+          <h2><span data-icon="tool" class="ic-14"></span>可用工具</h2>
+          <div class="tool-group">语料</div>
+          <div class="tool-chips"><span class="chip" data-tool="corpora.list">corpora.list</span><span class="chip" data-tool="corpus.search">corpus.search</span><span class="chip">corpus.context</span><span class="chip">subcorpora.create</span></div>
+          <div class="tool-group">统计</div>
+          <div class="tool-chips"><span class="chip">stats.frequency</span><span class="chip">stats.ngrams</span><span class="chip" data-tool="stats.collocations">stats.collocations</span><span class="chip" data-tool="stats.keywords">stats.keywords</span><span class="chip">stats.distribution</span></div>
+          <div class="tool-group">标注</div>
+          <div class="tool-chips"><span class="chip">annot.layers</span><span class="chip">annot.search</span><span class="chip">annot.stats</span><span class="chip">annot.preannotate</span></div>
+          <div class="tool-group">知识库与成果</div>
+          <div class="tool-chips"><span class="chip" data-tool="kb.search">kb.search</span><span class="chip">kb.save</span><span class="chip">kb.extract_terms</span><span class="chip">notes.save</span><span class="chip">export.create</span><span class="chip">jobs.get</span></div>
+        </section>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<!-- OpenUI 组件模板 -->
+<template id="tpl-kwic">
+  <div class="ou" data-component="KwicTable">
+    <div class="ou-head"><span class="ou-ic" data-icon="table"></span><span class="ou-title">KWIC</span><span class="ou-meta">翻译/v +文化</span><div class="grow"></div><span class="ou-meta">1,284 命中</span></div>
+    <table class="kwic">
+      <tbody class="stagger">
+        <tr style="--i:0"><td class="lc">这本书已经被</td><td class="kw"><span class="hit">翻译</span></td><td>成三十多种语言，传播了中国<span class="hit-2">文化</span>。<div class="al">The book has been translated into more than thirty languages, spreading Chinese culture.</div></td><td class="src">zh#1120394</td></tr>
+        <tr style="--i:1"><td class="lc">他把这首诗</td><td class="kw"><span class="hit">翻译</span></td><td>成英文时保留了原有的<span class="hit-2">文化</span>意象。<div class="al">When he translated the poem into English, he kept its original cultural imagery.</div></td><td class="src">zh#884120</td></tr>
+        <tr style="--i:2"><td class="lc">很多<span class="hit-2">文化</span>负载词很难</td><td class="kw"><span class="hit">翻译</span></td><td>。<div class="al">Many culture-loaded words are hard to translate.</div></td><td class="src">zh#5730218</td></tr>
+      </tbody>
+    </table>
+    <div class="ou-foot"><a class="btn xs" href="search.html"><span data-icon="external" class="ic-14"></span>打开完整结果</a><button class="btn xs" type="button" data-toast="已保存为证据">保存为证据</button></div>
+  </div>
+</template>
+
+<template id="tpl-freq">
+  <div class="ou" data-component="FreqChart">
+    <div class="ou-head"><span class="ou-ic" data-icon="chart"></span><span class="ou-title">搭配</span><span class="ou-meta">翻译/v · ±5 · logDice</span><div class="grow"></div><span class="ou-meta">前 7 / 20</span></div>
+    <div class="ou-body">
+      <div class="hbars">
+        <div class="hbar" style="--i:0"><span class="lab">成</span><span class="track"><i style="--v:100%"></i></span><span class="val">11.4 · 412</span></div>
+        <div class="hbar" style="--i:1"><span class="lab">作品</span><span class="track"><i style="--v:89%"></i></span><span class="val">10.2 · 96</span></div>
+        <div class="hbar" style="--i:2"><span class="lab">英文</span><span class="track"><i style="--v:87%"></i></span><span class="val">9.9 · 148</span></div>
+        <div class="hbar" style="--i:3"><span class="lab">概念</span><span class="track"><i style="--v:82%"></i></span><span class="val">9.3 · 64</span></div>
+        <div class="hbar" style="--i:4"><span class="lab">俗语</span><span class="track"><i style="--v:77%"></i></span><span class="val">8.8 · 41</span></div>
+        <div class="hbar" style="--i:5"><span class="lab">准确</span><span class="track"><i style="--v:75%"></i></span><span class="val">8.5 · 37</span></div>
+        <div class="hbar" style="--i:6"><span class="lab">展板</span><span class="track"><i style="--v:69%"></i></span><span class="val">7.9 · 18</span></div>
+      </div>
+    </div>
+    <div class="ou-foot"><a class="btn xs" href="stats.html"><span data-icon="external" class="ic-14"></span>在统计中打开</a><button class="btn xs" type="button" data-toast="已导出 SVG">导出 SVG</button></div>
+  </div>
+</template>
+
+<template id="tpl-dep">
+  <div class="ou" data-component="DependencyTree">
+    <div class="ou-head"><span class="ou-ic" data-icon="tree"></span><span class="ou-title">依存结构</span><span class="ou-meta">zh#884120 · Stanza 1.9</span></div>
+    <div class="ou-body dep" style="overflow-x:auto" data-dep="他/PRON 把/ADP 这/DET 首/NOUN 诗/NOUN 翻译/VERB 成/VERB 英文/NOUN" data-arcs="1>6:nsubj 2>5:case 3>5:det 4>5:clf 5>6:obl:patient 7>6:compound:vv 8>6:obj" data-root="6"></div>
+  </div>
+</template>
+
+<template id="tpl-kw">
+  <div class="ou" data-component="KeywordTable">
+    <div class="ou-head"><span class="ou-ic" data-icon="scatter"></span><span class="ou-title">关键词</span><span class="ou-meta">命中句 EN 对 Tatoeba EN 全库</span><div class="grow"></div><span class="ou-meta">p &lt; 0.001</span></div>
+    <div class="ou-body" style="padding-top:4px;padding-bottom:4px">
+      <table class="td-mid">
+        <thead><tr><th>词</th><th class="td-r">目标</th><th class="td-r">参照</th><th class="td-r">LL</th><th class="td-r">Log Ratio</th></tr></thead>
+        <tbody class="stagger">
+          <tr style="--i:0"><td class="mono">culture</td><td class="td-r num">1,214</td><td class="td-r num">2,206</td><td class="td-r num">7,903.1</td><td class="td-r num">5.86</td></tr>
+          <tr style="--i:1"><td class="mono">translate</td><td class="td-r num">1,102</td><td class="td-r num">3,914</td><td class="td-r num">6,842.7</td><td class="td-r num">5.12</td></tr>
+          <tr style="--i:2"><td class="mono">cultural</td><td class="td-r num">268</td><td class="td-r num">611</td><td class="td-r num">1,571.4</td><td class="td-r num">5.42</td></tr>
+          <tr style="--i:3"><td class="mono">idioms</td><td class="td-r num">41</td><td class="td-r num">58</td><td class="td-r num">262.9</td><td class="td-r num">5.88</td></tr>
+          <tr style="--i:4"><td class="mono">concepts</td><td class="td-r num">37</td><td class="td-r num">122</td><td class="td-r num">198.6</td><td class="td-r num">4.83</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-term">
+  <div class="ou" data-component="TermCard">
+    <div class="ou-head"><span class="ou-ic" data-icon="term"></span><span class="ou-title">文化负载词</span><span class="ou-meta">culture-loaded words</span><div class="grow"></div><span class="tag t-ok">已确认</span></div>
+    <div class="ou-body col" style="gap:10px">
+      <div class="term-tr"><span class="tag t-accent-line">culture-loaded words</span><span class="tag t-line">culture-specific items</span><span class="tag t-line">culturemes</span></div>
+      <p class="sm" style="line-height:1.7">标志某种文化中特有事物的词、词组和习语，反映特定民族在长期历史进程中积累的、有别于其他民族的独特活动方式。</p>
+      <div class="col" style="gap:6px">
+        <div class="small muted">语料例句</div>
+        <div class="sm">很多<span class="hit-2">文化</span>负载词很难<span class="hit">翻译</span>。<span class="mono small muted"> zh#5730218</span></div>
+        <div class="sm">不了解当地<span class="hit-2">文化</span>，就很难<span class="hit">翻译</span>好这些俗语。<span class="mono small muted"> zh#7208831</span></div>
+      </div>
+    </div>
+    <div class="ou-foot"><a class="btn xs" href="knowledge.html"><span data-icon="external" class="ic-14"></span>打开术语表</a></div>
+  </div>
+</template>
+
+<template id="tpl-cite">
+  <div class="ou" data-component="KbCitation">
+    <div class="ou-head"><span class="ou-ic" data-icon="book"></span><span class="ou-title">知识库出处</span><div class="grow"></div><span class="ou-meta">kb.search · 3 个片段</span></div>
+    <div class="ou-body col" style="gap:12px">
+      <div class="row" style="align-items:flex-start;gap:10px"><span class="cite">3</span><div class="grow"><div class="row sm"><b style="font-weight:600">文化负载词研究综述.pdf</b><span class="muted mono small">§2.1 定义 · 第 3 页</span><div class="grow"></div><span class="tag t-gray mono">向量 0.86 · 关键词</span></div><p class="snippet" style="margin-top:4px">……<mark>文化负载词</mark>是指标志某种文化中特有事物的词、词组和习语，这些词汇反映了特定民族在漫长的历史进程中逐渐积累的……</p></div></div>
+      <div class="row" style="align-items:flex-start;gap:10px"><span class="cite">4</span><div class="grow"><div class="row sm"><b style="font-weight:600">CSI 处理策略笔记.md</b><span class="muted mono small">保留与替换</span><div class="grow"></div><span class="tag t-gray mono">向量 0.79</span></div><p class="snippet" style="margin-top:4px">处理策略分为保留（重复、转换拼写、语言翻译、文外解释、文内解释）与替换（同义、有限泛化、绝对泛化、归化、删除、自创）两类……</p></div></div>
+    </div>
+  </div>
+</template>
+
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var log = document.getElementById('log');
+  var scroller = document.getElementById('scroll');
+  var send = document.getElementById('send');
+  var convState = document.getElementById('conv-state');
+  var evBox = document.getElementById('evidence');
+  var demo = null;
+
+  /* 跟随滚动到底部 */
+  new MutationObserver(function () { scroller.scrollTop = scroller.scrollHeight; })
+    .observe(log, { childList: true, subtree: true, characterData: true });
+
+  function evidence(n, html) {
+    var e = document.getElementById('ev-empty'); if (e) e.remove();
+    var d = document.createElement('div');
+    d.className = 'ev';
+    d.innerHTML = '<span class="cite">' + n + '</span><div>' + html + '</div>';
+    evBox.appendChild(d);
+  }
+  function useTool(name) {
+    var c = document.querySelector('.tool-chips [data-tool="' + name + '"]');
+    if (c) c.classList.add('used');
+  }
+  function setRunning(on) {
+    UI.busy(on);
+    send.classList.toggle('stop', on);
+    send.setAttribute('aria-label', on ? '停止' : '发送');
+    send.innerHTML = UI.svg(on ? 'stop' : 'send', 'ic');
+    convState.innerHTML = on ? '<span class="dot pulse" style="color:var(--accent)"></span>运行中' : '刚刚 · 4 次工具调用';
+  }
+
+  var script = [
+    { t: 'user', html: '在 Tatoeba 中英「2015 年后」子库里，“翻译”作动词并与“文化”同句出现时，常见搭配有哪些？英文对齐句有什么倾向？顺便查一下知识库里“文化负载词”的定义。', after: 600 },
+    { t: 'think' },
+    { t: 'reason', text: '需要在子库「2015 年后」中查“翻译”作动词、同句含“文化”的用法。先用 翻译/v +文化 检索，确认命中规模，再计算搭配。' },
+    { t: 'tool', tool: 'corpus.search', title: '检索语料', label: '正在检索语料…', icon: 'search', args: 'query=<b>"翻译/v +文化"</b> scope=子库「2015 年后」 context=40', res: '1,284 条命中', dur: 1500,
+      onDone: function () { useTool('corpus.search'); evidence(1, '<div class="mono small">corpus.search</div><div>翻译/v +文化 · <span class="num">1,284</span> 命中 · <span class="num">1,190</span> 句</div>'); } },
+    { t: 'label', text: '正在思考…' },
+    { t: 'reason', text: '样本足够。用 logDice 计算 ±5 窗口搭配，最低频次 5。' },
+    { t: 'tool', tool: 'stats.collocations', title: '计算搭配', label: '正在计算搭配…', icon: 'chart', args: 'node=<b>"翻译/v"</b> window=±5 measure=logDice min_freq=5', res: '前 20 项', dur: 1600,
+      onDone: function () { useTool('stats.collocations'); } },
+    { t: 'reason', text: '“成”和对象名词排在前面。再比较英文对齐句与 EN 全库的关键词，判断译法倾向。' },
+    { t: 'tool', tool: 'stats.keywords', title: '关键词比较', label: '正在比较关键词…', icon: 'scatter', args: 'target=命中句 EN reference=<b>Tatoeba EN 全库</b> measure=LL', res: '显著 37 项', dur: 1300,
+      onDone: function () { useTool('stats.keywords'); evidence(2, '<div class="mono small">stats.keywords</div><div>命中句 EN 对 EN 全库 · LL · <span class="num">37</span> 项</div>'); } },
+    { t: 'tool', tool: 'kb.search', title: '查阅知识库', label: '正在查阅知识库…', icon: 'book', args: 'q=<b>"文化负载词 定义"</b> mode=hybrid top_k=3', res: '3 个片段', dur: 1100,
+      onDone: function () { useTool('kb.search'); evidence(3, '<div class="mono small">kb.search</div><div>文化负载词研究综述.pdf · §2.1 · 第 3 页</div>'); } },
+    { t: 'done' },
+    { t: 'say', html: '在该子库中，<span data-q="翻译/v +文化"></span> 共 1,284 条命中，分布在 1,190 个句子中<span class="cite">1</span>。“翻译”的右侧高频搭配集中在结果补语“成”和对象类名词（作品、概念、俗语）上：' },
+    { t: 'card', tpl: 'tpl-kwic', i: 0, after: 250 },
+    { t: 'card', tpl: 'tpl-freq', i: 1, after: 700 },
+    { t: 'say', html: '典型结构是“把 + 对象 + 翻译 + 成 + 语言”，对象由“把”提前，“成”与“翻译”构成动结式：' },
+    { t: 'card', tpl: 'tpl-dep', i: 0, after: 900 },
+    { t: 'say', html: '英文对齐句中，除 translate 外，<code>idioms</code>、<code>concepts</code>、<code>cultural</code> 显著高于 EN 全库，这类句子多在讨论译法难点<span class="cite">2</span>：' },
+    { t: 'card', tpl: 'tpl-kw', i: 0, after: 600 },
+    { t: 'say', html: '知识库中的定义可以作为分析框架<span class="cite">3</span>：' },
+    { t: 'card', tpl: 'tpl-term', i: 0, after: 200 },
+    { t: 'card', tpl: 'tpl-cite', i: 1, after: 500 },
+    { t: 'say', html: '如需继续，可以按体裁拆分分布，或把以上结论保存为笔记草稿。' },
+    { t: 'call', fn: function () {
+      var a = document.createElement('div');
+      a.className = 'ans-actions';
+      a.innerHTML = '<button class="btn xs" type="button" data-toast="已复制">' + UI.svg('copy', 'ic ic-14') + '复制</button>' +
+        '<button class="btn xs" type="button" data-toast="已保存为笔记草稿，待人工确认">' + UI.svg('note', 'ic ic-14') + '保存为笔记</button>' +
+        '<button class="btn xs" type="button" id="again">' + UI.svg('retry', 'ic ic-14') + '重新生成</button>';
+      log.lastElementChild.appendChild(a);
+    } }
+  ];
+
+  function start() {
+    if (demo) demo.stop();
+    log.innerHTML = '';
+    evBox.innerHTML = '<div class="muted sm" id="ev-empty">暂无</div>';
+    document.querySelectorAll('.tool-chips .used').forEach(function (c) { c.classList.remove('used'); });
+    demo = UI.agentDemo({
+      log: log, script: script, onBusy: setRunning,
+      onEnd: function (stopped) { if (stopped) { convState.textContent = '已停止'; } }
+    });
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && send.classList.contains('stop') && !document.querySelector('.overlay')) { demo.stop(); UI.toast('已停止本次运行', 'stop'); }
+  });
+  send.addEventListener('click', function () {
+    if (send.classList.contains('stop')) { demo.stop(); UI.toast('已停止本次运行', 'stop'); }
+    else start();
+  });
+  document.getElementById('composer').addEventListener('submit', function (e) { e.preventDefault(); start(); });
+  document.getElementById('ask').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!send.classList.contains('stop')) start(); }
+  });
+  document.getElementById('replay').addEventListener('click', start);
+  log.addEventListener('click', function (e) { if (e.target.closest('#again')) start(); });
+  start();
+});
+</script>
+</body>
+</html>

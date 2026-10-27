@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>任务 · 语料研究平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+  .jobs td { padding: 13px 14px; vertical-align: middle; }
+  .jobs th { padding: 10px 14px; }
+  .jprog { display: flex; flex-direction: column; gap: 5px; width: 220px; }
+  .jprog .row { font-size: 12px; color: var(--text-3); justify-content: space-between; }
+  .jtype { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+  .jtype .ji { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: var(--fill); color: var(--text-2); }
+  .jtype .ji .ic { width: 14px; height: 14px; }
+  tr.err-row td { background: var(--err-bg); padding: 8px 14px 10px 54px; font-size: 13px; color: var(--err); border-bottom: 1px solid var(--err-line); }
+  tr.err-row:hover td { background: var(--err-bg); }
+  tr.cancelling td { opacity: .55; transition: opacity 300ms; }
+  .sumcard { padding: 14px 18px; display: flex; align-items: center; gap: 14px; }
+  .sumcard .si { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
+  .sumcard .count { font-size: 24px; }
+  .jobs tbody tr[data-job] { cursor: pointer; }
+  .jprog { width: 170px; }
+  .jtype { white-space: nowrap; }
+  .jobs tr > :nth-child(3) { display: none; }
+  .log { font-family: var(--mono); font-size: 11.5px; line-height: 1.7; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 8px 10px; max-height: 150px; overflow: auto; white-space: pre-wrap; }
+  .speed { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" data-active="jobs"></aside>
+  <main class="main">
+    <header class="topbar busy">
+      <h1>任务</h1>
+      <nav class="crumbs" data-scope="翻译对等研究" data-labels="项目"></nav>
+      <div class="seg" role="tablist" aria-label="筛选">
+        <button role="tab" type="button" aria-selected="true">全部</button>
+        <button role="tab" type="button" aria-selected="false" tabindex="-1">运行中 3</button>
+        <button role="tab" type="button" aria-selected="false" tabindex="-1">失败 1</button>
+        <button role="tab" type="button" aria-selected="false" tabindex="-1">我发起的</button>
+      </div>
+      <div class="grow"></div>
+      <span class="small muted row gap-4"><span class="dot pulse" style="color:var(--ok)"></span>实时更新</span>
+      <div class="topbar-prog" aria-hidden="true"></div>
+    </header>
+
+    <div class="content">
+      <section class="grid-4" aria-label="概况">
+        <div class="card sumcard"><span class="si" style="background:var(--accent-tint);color:var(--accent-text)"><span class="spin lg"></span></span><div><div class="stat-label">运行中</div><div class="count" data-count="3">0</div></div></div>
+        <div class="card sumcard"><span class="si" style="background:var(--fill);color:var(--text-2)"><span data-icon="clock" class="ic-18"></span></span><div><div class="stat-label">排队</div><div class="count" data-count="2">0</div></div></div>
+        <div class="card sumcard"><span class="si" style="background:var(--err-bg);color:var(--err)"><span data-icon="alert" class="ic-18"></span></span><div><div class="stat-label">失败</div><div class="count" data-count="1">0</div></div></div>
+        <div class="card sumcard"><span class="si" style="background:var(--ok-bg);color:var(--ok)"><span data-icon="check" class="ic-18"></span></span><div><div class="stat-label">今日完成</div><div class="count" data-count="14">0</div></div></div>
+      </section>
+
+      <div class="row" style="gap:20px;align-items:flex-start">
+      <section class="card grow" aria-label="任务列表" style="min-width:0">
+        <table class="jobs">
+          <thead><tr><th>任务</th><th>对象</th><th>发起人</th><th>状态</th><th>进度</th><th>开始</th><th></th></tr></thead>
+          <tbody class="stagger" id="jobs-body">
+            <tr style="--i:0" data-job="2241" class="sel"><td><span class="jtype"><span class="ji"><span data-icon="db"></span></span>建索引</span><div class="mono small muted" style="margin:2px 0 0 32px">#2241</div></td><td>翻译课程作业 2026 <span class="mono small muted">v5 → v6</span></td><td>林云</td>
+              <td><span class="tag t-run"><span class="spin" style="width:10px;height:10px"></span>运行中</span></td>
+              <td><div class="jprog"><span class="prog striped"><i style="--v:64%"></i></span><span class="row"><span class="num" data-cur="5512" data-tot="8610" data-unit="句">5,512 / 8,610 句</span><span class="num pct">64%</span></span></div></td>
+              <td class="mono sm muted">10:12</td><td class="td-r"><button class="btn xs" type="button" data-cancel>取消</button></td></tr>
+            <tr style="--i:1" data-job="2231"><td><span class="jtype"><span class="ji"><span data-icon="spark"></span></span>预标注</span><div class="mono small muted" style="margin:2px 0 0 32px">#2231</div></td><td>翻译策略 · tatoeba-cmn-2017 <span class="mono small muted">qwen3-32b</span></td><td>林云</td>
+              <td><span class="tag t-run"><span class="spin" style="width:10px;height:10px"></span>运行中</span></td>
+              <td><div class="jprog"><span class="prog striped"><i style="--v:18%"></i></span><span class="row"><span class="num" data-cur="864" data-tot="4800" data-unit="句">864 / 4,800 句</span><span class="num pct">18%</span></span></div></td>
+              <td class="mono sm muted">09:47</td><td class="td-r"><button class="btn xs" type="button" data-cancel>取消</button></td></tr>
+            <tr style="--i:2" data-job="2236"><td><span class="jtype"><span class="ji"><span data-icon="book"></span></span>向量化</span><div class="mono small muted" style="margin:2px 0 0 32px">#2236</div></td><td>Baker 对等层次读书笔记.docx</td><td>林云</td>
+              <td><span class="tag t-run"><span class="spin" style="width:10px;height:10px"></span>运行中</span></td>
+              <td><div class="jprog"><span class="prog striped"><i style="--v:43%"></i></span><span class="row"><span class="num" data-cur="41" data-tot="96" data-unit="片段">41 / 96 片段</span><span class="num pct">43%</span></span></div></td>
+              <td class="mono sm muted">10:20</td><td class="td-r"><button class="btn xs" type="button" data-cancel>取消</button></td></tr>
+            <tr style="--i:3"><td><span class="jtype"><span class="ji"><span data-icon="download"></span></span>导出</span><div class="mono small muted" style="margin:2px 0 0 32px">#2243</div></td><td>KWIC <span class="mono small">翻译/v +文化</span> · XLSX</td><td>林云</td>
+              <td><span class="tag t-gray"><span data-icon="clock" class="ic-14"></span>排队</span></td>
+              <td><div class="jprog"><span class="prog indet gray"><i></i></span><span class="row"><span>前面 1 个任务</span></span></div></td>
+              <td class="mono sm muted">—</td><td class="td-r"><button class="btn xs" type="button" data-cancel>取消</button></td></tr>
+            <tr style="--i:4"><td><span class="jtype"><span class="ji"><span data-icon="chart"></span></span>统计</span><div class="mono small muted" style="margin:2px 0 0 32px">#2244</div></td><td>关键词 · 2015 年后 对 2015 年前</td><td>陈默</td>
+              <td><span class="tag t-gray"><span data-icon="clock" class="ic-14"></span>排队</span></td>
+              <td><div class="jprog"><span class="prog indet gray"><i></i></span><span class="row"><span>前面 2 个任务</span></span></div></td>
+              <td class="mono sm muted">—</td><td class="td-r"><button class="btn xs" type="button" data-cancel>取消</button></td></tr>
+            <tr style="--i:5" data-job="2238"><td><span class="jtype"><span class="ji" style="background:var(--err-bg);color:var(--err)"><span data-icon="upload"></span></span>导入</span><div class="mono small muted" style="margin:2px 0 0 32px">#2238</div></td><td>政府工作报告 1954–2024</td><td>周宁</td>
+              <td><span class="tag t-err"><span data-icon="x" class="ic-14"></span>失败</span></td>
+              <td><div class="jprog"><span class="prog err"><i style="--v:52%"></i></span><span class="row"><span class="num">37 / 71 文件</span><span class="num">52%</span></span></div></td>
+              <td class="mono sm muted">10-25 16:03</td><td class="td-r"><button class="btn xs soft" type="button" data-retry><span data-icon="retry" class="ic-14"></span>重试</button></td></tr>
+            <tr class="err-row" style="--i:5"><td colspan="7"><span class="row"><span data-icon="alert" class="ic-14"></span><span><span class="mono">1987.txt</span>：编码无法识别（检测为 GB18030 的置信度 0.41）。另存为 UTF-8 后重试，已导入的 37 个文件保留。</span></span></td></tr>
+            <tr style="--i:6" data-job="2229"><td><span class="jtype"><span class="ji" style="background:var(--ok-bg);color:var(--ok)"><span data-icon="download"></span></span>导出</span><div class="mono small muted" style="margin:2px 0 0 32px">#2229</div></td><td>词性与依存 · CoNLL-U</td><td>林云</td>
+              <td><span class="tag t-ok"><span data-icon="check" class="ic-14"></span>完成</span></td>
+              <td><div class="jprog"><span class="prog ok"><i style="--v:100%"></i></span><span class="row"><span class="num">4,800 句 · 1.8 MB</span><span class="num">2 分 14 秒</span></span></div></td>
+              <td class="mono sm muted">09:31</td><td class="td-r"><button class="btn xs" type="button" data-toast="开始下载 annot-2229.conllu" data-toast-icon="download"><span data-icon="download" class="ic-14"></span>下载</button></td></tr>
+            <tr style="--i:7"><td><span class="jtype"><span class="ji" style="background:var(--ok-bg);color:var(--ok)"><span data-icon="db"></span></span>建索引</span><div class="mono small muted" style="margin:2px 0 0 32px">#2225</div></td><td>Tatoeba 中英 <span class="mono small muted">v14</span></td><td>管理员</td>
+              <td><span class="tag t-ok"><span data-icon="check" class="ic-14"></span>完成</span></td>
+              <td><div class="jprog"><span class="prog ok"><i style="--v:100%"></i></span><span class="row"><span class="num">94,182 句对</span><span class="num">6 分 02 秒</span></span></div></td>
+              <td class="mono sm muted">10-20</td><td class="td-r"><a class="btn xs" href="search.html"><span data-icon="external" class="ic-14"></span>打开</a></td></tr>
+            <tr style="--i:8"><td><span class="jtype"><span class="ji"><span data-icon="spark"></span></span>预标注</span><div class="mono small muted" style="margin:2px 0 0 32px">#2219</div></td><td>学习者偏误 · 议论文 B1</td><td>陈默</td>
+              <td><span class="tag t-gray">已取消</span></td>
+              <td><div class="jprog"><span class="prog gray"><i style="--v:26%"></i></span><span class="row"><span class="num">312 / 1,200 句</span><span class="num">26%</span></span></div></td>
+              <td class="mono sm muted">10-24</td><td class="td-r"><button class="btn xs" type="button" data-retry><span data-icon="retry" class="ic-14"></span>重试</button></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <aside class="inspector" aria-label="任务详情" id="insp">
+        <div class="card-head"><h2 class="sec-title grow">任务详情</h2><span class="mono small muted" id="i-id"></span></div>
+        <div class="insp-body">
+          <div class="row"><b id="i-type" style="font-size:15px"></b><span id="i-state"></span></div>
+          <dl class="kv" style="grid-template-columns:64px 1fr;margin:0">
+            <dt>对象</dt><dd id="i-obj"></dd><dt>参数</dt><dd class="mono small" id="i-param"></dd><dt>发起人</dt><dd id="i-who"></dd><dt>开始</dt><dd class="mono" id="i-start"></dd><dt>预计剩余</dt><dd id="i-eta"></dd>
+          </dl>
+        </div>
+        <div class="insp-body" style="border-top:1px solid var(--line-soft)">
+          <div class="speed"><div><h2 class="sec-title">处理速度</h2><div class="count" style="font-size:22px"><span id="i-speed"></span><span class="unit" id="i-unit"></span></div></div><span id="i-spark"></span></div>
+        </div>
+        <div class="insp-body" style="border-top:1px solid var(--line-soft)">
+          <h2 class="sec-title">日志</h2>
+          <div class="log" id="i-log"></div>
+        </div>
+        <div class="insp-foot" id="i-act"></div>
+      </aside>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var f = function (n) { return n.toLocaleString('en-US'); };
+  var timer = setInterval(function () {
+    var running = 0;
+    document.querySelectorAll('#jobs-body tr[data-job]').forEach(function (tr) {
+      var n = tr.querySelector('[data-cur]');
+      if (!n || tr.dataset.state) return;
+      var cur = +n.dataset.cur, tot = +n.dataset.tot;
+      if (cur >= tot) return;
+      running++;
+      cur = Math.min(tot, cur + Math.ceil(tot / 140));
+      n.dataset.cur = cur;
+      n.textContent = f(cur) + ' / ' + f(tot) + ' ' + n.dataset.unit;
+      var pct = Math.round(cur / tot * 100);
+      tr.querySelector('.pct').textContent = pct + '%';
+      tr.querySelector('.prog i').style.setProperty('--v', pct + '%');
+      if (cur >= tot) {
+        tr.dataset.state = 'done';
+        tr.querySelector('td:nth-child(4)').innerHTML = '<span class="tag t-ok pop">' + UI.svg('check', 'ic ic-14') + '完成</span>';
+        tr.querySelector('.prog').className = 'prog ok';
+        tr.querySelector('td:last-child').innerHTML = '<button class="btn xs" type="button">' + UI.svg('external', 'ic ic-14') + '查看</button>';
+        UI.toast('#' + tr.dataset.job + ' 已完成');
+      }
+    });
+    if (!running) { clearInterval(timer); document.querySelector('.topbar').classList.remove('busy'); }
+  }, 700);
+
+  var JOB = {
+    2241: ['建索引', '翻译课程作业 2026', 'CWB · v5 → v6 · 8,610 句', '林云', '10-27 10:12', '约 4 分钟', '120,118,131,126,140,137,144', '句/分', '10:12:03 读取 86 个文档\n10:12:41 分词与词性：Stanza 1.9\n10:14:10 写入位置属性 word / pos / lemma\n10:16:52 已处理 5,512 / 8,610 句', 'run'],
+    2231: ['预标注', '翻译策略 · tatoeba-cmn-2017', 'qwen3-32b · 标签集「翻译策略」· 规范 v1', '林云', '10-27 09:47', '约 1 小时 20 分', '36,41,38,44,40,46,43', '句/分', '09:47:10 载入标注规范 v1（9 个标签）\n09:47:12 并发 4 · 批大小 20\n10:16:30 已处理 864 / 4,800 句\n10:16:30 结果状态 suggested，等待人工校对', 'run'],
+    2236: ['向量化', 'Baker 对等层次读书笔记.docx', 'bge-m3 · 1024 维 · 96 片段', '林云', '10-27 10:20', '约 1 分钟', '6,7,7,8,7,8,8', '片段/秒', '10:20:02 解析 18 页\n10:20:09 分段 96 个片段\n10:20:15 已向量化 41 / 96', 'run'],
+    2238: ['导入', '政府工作报告 1954–2024', '71 个 TXT · 自动检测编码', '周宁', '10-25 16:03', '—', '4,5,5,4,6,0,0', '文件/分', '16:03:01 开始导入 71 个文件\n16:11:44 已导入 37 个文件\n16:11:45 1987.txt 编码无法识别（GB18030 置信度 0.41）\n16:11:45 任务失败，已导入文件保留', 'fail'],
+    2229: ['导出', '词性与依存 · CoNLL-U', '4,800 句 · 人工层 rev 3', '林云', '10-27 09:31', '已完成 · 2 分 14 秒', '1800,2100,2240,2150,2300,2210,2260', '句/分', '09:31:02 读取人工层 rev 3\n09:33:16 写出 annot-2229.conllu（1.8 MB）', 'done']
+  };
+  function showJob(id) {
+    var j = JOB[id]; if (!j) return;
+    document.querySelectorAll('#jobs-body tr[data-job]').forEach(function (tr) { tr.classList.toggle('sel', tr.getAttribute('data-job') === String(id)); });
+    document.getElementById('i-id').textContent = '#' + id;
+    document.getElementById('i-type').textContent = j[0];
+    document.getElementById('i-state').innerHTML = j[9] === 'run' ? '<span class="tag t-run"><span class="spin" style="width:10px;height:10px"></span>运行中</span>' : j[9] === 'fail' ? '<span class="tag t-err">失败</span>' : '<span class="tag t-ok">完成</span>';
+    document.getElementById('i-obj').textContent = j[1];
+    document.getElementById('i-param').textContent = j[2];
+    document.getElementById('i-who').innerHTML = '<span class="row" style="gap:6px"><span class="avatar" data-avatar="' + j[3] + '" style="width:20px;height:20px;font-size:10px"></span>' + j[3] + '</span>';
+    document.getElementById('i-start').textContent = j[4];
+    document.getElementById('i-eta').textContent = j[5];
+    var sp = j[6].split(',');
+    document.getElementById('i-speed').textContent = Number(sp[sp.length - 1]).toLocaleString('en-US');
+    document.getElementById('i-unit').textContent = j[7];
+    document.getElementById('i-spark').innerHTML = '<span data-spark="' + j[6] + '" data-w="120" data-h="36" aria-label="近 7 分钟处理速度"></span>';
+    document.getElementById('i-log').textContent = j[8];
+    document.getElementById('i-act').innerHTML = j[9] === 'run' ? '<button class="btn s" type="button" data-toast="已打开完整日志">完整日志</button><div class="grow"></div><button class="btn s danger" type="button" data-toast="已取消任务 #' + id + '">取消任务</button>'
+      : j[9] === 'fail' ? '<button class="btn s" type="button" data-toast="已打开完整日志">完整日志</button><div class="grow"></div><button class="btn s p" type="button" data-toast="已重新提交 #' + id + '">' + UI.svg('retry', 'ic ic-14') + '重试</button>'
+      : '<button class="btn s" type="button" data-toast="已打开完整日志">完整日志</button><div class="grow"></div><button class="btn s p" type="button" data-toast="开始下载 annot-2229.conllu">' + UI.svg('download', 'ic ic-14') + '下载</button>';
+    UI.hydrate(document.getElementById('insp'));
+  }
+  showJob(2241);
+  document.getElementById('jobs-body').addEventListener('click', function (e) {
+    var row = e.target.closest('tr[data-job]');
+    if (row && !e.target.closest('button')) showJob(+row.getAttribute('data-job'));
+  });
+  document.getElementById('jobs-body').addEventListener('click', function (e) {
+    var c = e.target.closest('[data-cancel]');
+    if (c) {
+      var tr = c.closest('tr');
+      tr.dataset.state = 'cancelled';
+      tr.classList.add('cancelling');
+      tr.querySelector('td:nth-child(4)').innerHTML = '<span class="tag t-gray pop">已取消</span>';
+      var p = tr.querySelector('.prog'); p.className = 'prog gray'; if (!p.querySelector('i').style.getPropertyValue('--v')) p.querySelector('i').style.setProperty('--v', '0%');
+      c.outerHTML = '<button class="btn xs" type="button" data-retry>' + UI.svg('retry', 'ic ic-14') + '重试</button>';
+      setTimeout(function () { tr.classList.remove('cancelling'); }, 300);
+      UI.toast('已取消任务');
+    }
+    var r = e.target.closest('[data-retry]');
+    if (r) {
+      var row = r.closest('tr');
+      row.querySelector('td:nth-child(4)').innerHTML = '<span class="tag t-gray pop">' + UI.svg('clock', 'ic ic-14') + '排队</span>';
+      var pr = row.querySelector('.prog'); pr.className = 'prog indet gray';
+      var next = row.nextElementSibling;
+      if (next && next.classList.contains('err-row')) { next.style.transition = 'opacity 250ms'; next.style.opacity = '0'; setTimeout(function () { next.remove(); }, 250); }
+      r.outerHTML = '<button class="btn xs" type="button" data-cancel>取消</button>';
+      UI.toast('已重新提交');
+    }
+  });
+});
+</script>
+</body>
+</html>

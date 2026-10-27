@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>组件规范 · 语料研究平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+  .toc { display: flex; flex-wrap: wrap; gap: 6px; }
+  .specs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+  .spec { display: flex; flex-direction: column; overflow: hidden; }
+  .spec.wide { grid-column: span 2; }
+  .spec.full { grid-column: 1 / -1; }
+  .stage { position: relative; padding: 22px; background: var(--bg); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center; gap: 12px; min-height: 160px; border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0; }
+  .spec-info { padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .spec-info h3 { font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .spec-info h3 .n { font-family: var(--mono); font-size: 11px; color: var(--text-3); font-weight: 500; }
+  .spec-info code { font-size: 12px; color: var(--accent-text); }
+  .spec-info p { font-size: 13px; color: var(--text-2); line-height: 1.6; }
+  .tok-table td, .tok-table th { padding: 8px 12px; font-size: 13px; vertical-align: middle; }
+  .tok-table code { font-size: 12px; color: var(--accent-text); }
+  .sw { display: inline-block; width: 18px; height: 18px; border-radius: 5px; border: 1px solid var(--line); vertical-align: middle; }
+  .boxes { display: flex; gap: 18px; align-items: flex-end; }
+  .boxes > div { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; color: var(--text-3); font-family: var(--mono); }
+  .boxes i { display: block; width: 84px; height: 60px; background: var(--surface); border: 1px solid var(--line); }
+  .cat-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; }
+  .cat { display: flex; flex-direction: column; gap: 6px; font-size: 11.5px; }
+  .cat .bar { height: 10px; border-radius: 3px; background: var(--pc); }
+  .cat .lab { height: 26px; border-radius: 6px; display: grid; place-items: center; background: var(--pbg); color: var(--pfg); font-weight: 600; font-size: 12px; }
+  .cat span { font-family: var(--mono); color: var(--text-3); }
+  .divider-demo { width: 100%; }
+  .theme-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--line); }
+  .theme-cols > div { padding: 14px; display: flex; flex-direction: column; gap: 8px; background: var(--bg); }
+  .mini-dock { display: flex; gap: 10px; justify-content: flex-end; }
+  .mini-dock .capsule { animation: none; }
+  .static-panel { position: relative; width: 300px; opacity: 1; transform: none; visibility: visible; pointer-events: auto; bottom: auto; right: auto; max-height: none; }
+</style>
+</head>
+<body>
+<header class="doc-head">
+  <a class="brand" href="index.html" style="padding:0"><span class="brand-mark"><span data-icon="hash"></span></span>语料研究平台</a>
+  <nav aria-label="设计稿"><a href="index.html">总览</a><a href="components.html" aria-current="page">组件</a><a href="motion.html">动效</a><a href="onboarding.html">引导</a><a href="assistant.html">助手演示</a></nav>
+  <div class="grow"></div>
+</header>
+
+<main class="doc">
+  <section>
+    <h2 class="sec">组件规范</h2>
+    <div class="toc"><a class="chip ui" href="#tokens">令牌</a><a class="chip ui" href="#base">基础样式</a><a class="chip ui" href="#data">数据展示</a><a class="chip ui" href="#features">跨页组件</a></div>
+  </section>
+
+  <!-- ===== 令牌表 ===== -->
+  <section id="tokens">
+    <h2 class="sec">令牌</h2>
+    <div class="grid-2" style="gap:20px;align-items:start">
+      <div class="card">
+        <div class="card-head"><h2>颜色</h2><span class="small muted">浅色 / 深色同名变量</span></div>
+        <table class="tok-table">
+          <thead><tr><th>变量</th><th>浅色</th><th>深色</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td><code>--bg</code></td><td><span class="sw" style="background:#F6F7FA"></span> <span class="mono small">#F6F7FA</span></td><td><span class="sw" style="background:#0F1218"></span> <span class="mono small">#0F1218</span></td><td>页面底色</td></tr>
+            <tr><td><code>--surface</code></td><td><span class="sw" style="background:#FFFFFF"></span> <span class="mono small">#FFFFFF</span></td><td><span class="sw" style="background:#161A22"></span> <span class="mono small">#161A22</span></td><td>卡片、面板</td></tr>
+            <tr><td><code>--surface-2</code></td><td><span class="sw" style="background:#FAFAFC"></span> <span class="mono small">#FAFAFC</span></td><td><span class="sw" style="background:#1B2029"></span> <span class="mono small">#1B2029</span></td><td>卡片头条、表单底</td></tr>
+            <tr><td><code>--line</code></td><td><span class="sw" style="background:#E6E8EE"></span> <span class="mono small">#E6E8EE</span></td><td><span class="sw" style="background:#2A303B"></span> <span class="mono small">#2A303B</span></td><td>卡片描边</td></tr>
+            <tr><td><code>--text</code></td><td><span class="sw" style="background:#1A1D24"></span> <span class="mono small">#1A1D24</span></td><td><span class="sw" style="background:#E6E9EF"></span> <span class="mono small">#E6E9EF</span></td><td>正文</td></tr>
+            <tr><td><code>--text-3</code></td><td><span class="sw" style="background:#6B7280"></span> <span class="mono small">#6B7280</span></td><td><span class="sw" style="background:#8C95A3"></span> <span class="mono small">#8C95A3</span></td><td>标签、辅助（≥ 4.8:1）</td></tr>
+            <tr><td><code>--accent</code></td><td><span class="sw" style="background:#1570EF"></span> <span class="mono small">#1570EF</span></td><td><span class="sw" style="background:#2E90FA"></span> <span class="mono small">#2E90FA</span></td><td>链接、焦点、线条</td></tr>
+            <tr><td><code>--accent-solid</code></td><td><span class="sw" style="background:#1570EF"></span> <span class="mono small">#1570EF</span></td><td><span class="sw" style="background:#1570EF"></span> <span class="mono small">#1570EF</span></td><td>白字底色（主按钮）</td></tr>
+            <tr><td><code>--accent-text</code></td><td><span class="sw" style="background:#175CD3"></span> <span class="mono small">#175CD3</span></td><td><span class="sw" style="background:#84CAFF"></span> <span class="mono small">#84CAFF</span></td><td>浅蓝底上的文字</td></tr>
+            <tr><td><code>--accent-tint</code></td><td><span class="sw" style="background:#EFF8FF"></span> <span class="mono small">#EFF8FF</span></td><td><span class="sw" style="background:#12233A"></span> <span class="mono small">#12233A</span></td><td>选中、命中底</td></tr>
+            <tr><td><code>--success</code> / <code>-soft</code></td><td><span class="sw" style="background:#067647"></span> <span class="sw" style="background:#ECFDF3"></span></td><td><span class="sw" style="background:#47CD89"></span> <span class="sw" style="background:#0E2A1C"></span></td><td>完成、可用</td></tr>
+            <tr><td><code>--warning</code> / <code>-soft</code></td><td><span class="sw" style="background:#B54708"></span> <span class="sw" style="background:#FFFAEB"></span></td><td><span class="sw" style="background:#FDB022"></span> <span class="sw" style="background:#2E2210"></span></td><td>过期、改动</td></tr>
+            <tr><td><code>--error</code> / <code>-soft</code></td><td><span class="sw" style="background:#B42318"></span> <span class="sw" style="background:#FEF3F2"></span></td><td><span class="sw" style="background:#F97066"></span> <span class="sw" style="background:#33171A"></span></td><td>失败、拒绝</td></tr>
+            <tr><td><code>--info</code> / <code>-soft</code></td><td><span class="sw" style="background:#175CD3"></span> <span class="sw" style="background:#EFF8FF"></span></td><td><span class="sw" style="background:#84CAFF"></span> <span class="sw" style="background:#12233A"></span></td><td>运行中、提示</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="col gap-20">
+        <div class="card">
+          <div class="card-head"><h2>字体</h2></div>
+          <table class="tok-table">
+            <thead><tr><th>角色</th><th>示例</th><th>规格</th></tr></thead>
+            <tbody>
+              <tr><td>页面标题</td><td style="font-size:16px;font-weight:600">检索</td><td class="mono small">Inter / PingFang SC 16 · 600</td></tr>
+              <tr><td>区块小标题</td><td><span class="sec-title">上下文</span></td><td class="mono small">12 · 600 · 字距 .06em</td></tr>
+              <tr><td>正文</td><td>翻译不仅是语言转换</td><td class="mono small">14 · 400 · 行高 1.5</td></tr>
+              <tr><td>计数</td><td><span class="count" style="font-size:22px">1,284<span class="unit">次</span></span></td><td class="mono small">JetBrains Mono 28 · 700</td></tr>
+              <tr><td>查询式 / ID</td><td><span data-q="翻译/v +文化"></span></td><td class="mono small">JetBrains Mono 12.5</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>圆角 · 阴影 · 动效</h2></div>
+          <table class="tok-table">
+            <tbody>
+              <tr><td><code>--radius</code> / <code>-lg</code> / <code>-xl</code></td><td class="mono small">8 / 12 / 16</td><td>控件 / 卡片 / 浮层与对话框</td></tr>
+              <tr><td><code>--shadow-card</code></td><td class="mono small">0 1 2 / .04</td><td>卡片</td></tr>
+              <tr><td><code>--shadow-pop</code></td><td class="mono small">0 4 12 / .10</td><td>浮层、胶囊、悬停</td></tr>
+              <tr><td><code>--shadow-dialog</code></td><td class="mono small">0 20 48 / .18</td><td>对话框、抽屉、面板</td></tr>
+              <tr><td><code>--t-fast</code> / <code>-base</code> / <code>-slow</code></td><td class="mono small">150 / 220 / 400 ms</td><td>悬停 / 状态切换 / 进入</td></tr>
+              <tr><td><code>--ease-out</code></td><td class="mono small">(.2,.8,.2,1)</td><td>进入、位移</td></tr>
+              <tr><td><code>--ease-spring</code></td><td class="mono small">(.34,1.56,.64,1)</td><td>弹出、确认、计数跳动</td></tr>
+              <tr><td><code>--ease-in-out</code></td><td class="mono small">(.65,0,.35,1)</td><td>绘制、循环</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 基础样式 ===== -->
+  <section id="base">
+    <h2 class="sec">基础样式</h2>
+    <div class="specs">
+      <article class="card spec">
+        <div class="stage"><div class="card" style="width:100%"><div class="card-head"><h2 class="grow">上下文</h2><button class="btn xs">整段</button></div><div class="card-pad sm">这些词在英语里没有现成的对应。</div></div></div>
+        <div class="spec-info"><h3><span class="n">B1</span>区块小标题</h3><code>.card h2 · .sec-title</code><p>12px、600、加字距、灰色；右侧放一个操作。所有卡片头统一使用。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage"><div class="card" style="width:100%"><div class="card-head"><h2>导出</h2></div><div class="card-pad sm">1,284 行 · 含出处与码点</div><div class="card-foot"><div class="grow"></div><button class="btn xs">取消</button><button class="btn xs p">导出</button></div></div></div>
+        <div class="spec-info"><h3><span class="n">B2</span>卡片三段</h3><code>.card-head · .card-pad · .card-foot</code><p>浅灰头条 / 主体 / 底部操作，段间 1px 线，只在卡片内部使用。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage"><nav class="crumbs" data-scope="翻译对等研究|Tatoeba 中英|2015 年后"></nav></div>
+        <div class="spec-info"><h3><span class="n">B3</span>范围面包屑</h3><code>nav.crumbs[data-scope="项目|语料库|子库"]</code><p>放在顶栏标题后；每段可点，打开命令面板切换对应层级。首段带项目字标。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage" style="align-items:center">
+          <aside class="inspector" style="width:300px"><div class="card-head"><h2 class="grow">任务详情</h2><span class="mono small muted">#2241</span></div><div class="insp-body"><dl class="kv" style="grid-template-columns:56px 1fr;margin:0"><dt>对象</dt><dd>翻译课程作业 2026</dd><dt>进度</dt><dd class="num">5,512 / 8,610 句</dd></dl></div><div class="insp-foot"><button class="btn xs">完整日志</button></div></aside>
+        </div>
+        <div class="spec-info"><h3><span class="n">B4</span>右侧检查面板</h3><code>.inspector（360px）· .insp-body · .insp-foot</code><p>检索上下文、文档、任务详情统一 360px 宽，头条 + 分段主体 + 底部操作。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage"><div class="boxes"><div><i style="border-radius:12px;box-shadow:var(--shadow-card)"></i>card</div><div><i style="border-radius:12px;box-shadow:var(--shadow-pop)"></i>pop</div><div><i style="border-radius:16px;box-shadow:var(--shadow-dialog)"></i>dialog</div></div></div>
+        <div class="spec-info"><h3><span class="n">B5</span>阴影三级</h3><code>--shadow-card · --shadow-pop · --shadow-dialog</code><p>卡片只用最浅一级；悬停与浮层用 pop；对话框、抽屉、面板用 dialog。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage"><div class="boxes"><div><i style="border-radius:8px"></i>8</div><div><i style="border-radius:12px"></i>12</div><div><i style="border-radius:16px"></i>16</div></div></div>
+        <div class="spec-info"><h3><span class="n">B6</span>圆角</h3><code>--radius 8 · --radius-lg 12 · --radius-xl 16</code><p>控件 8、卡片 12、浮层与对话框 16；胶囊与标签外的元素不用全圆。</p></div>
+      </article>
+      <article class="card spec wide">
+        <div class="stage">
+          <div class="row wrap"><span class="tag t-ok">可用</span><span class="tag t-warn">索引过期</span><span class="tag t-err">失败</span><span class="tag t-info">运行中</span><span class="tag t-gray">空</span></div>
+          <div class="grid-2" style="gap:8px"><div class="alert ok"><span data-icon="check" class="ic-14"></span>已导入 37 个文件</div><div class="alert warn"><span data-icon="alert" class="ic-14"></span>元数据已修改，需重建索引</div><div class="alert err"><span data-icon="x" class="ic-14"></span>1987.txt：编码无法识别</div><div class="alert info"><span data-icon="info" class="ic-14"></span>修改元数据后子库按新值计算</div></div>
+        </div>
+        <div class="spec-info"><h3><span class="n">B7</span>语义色</h3><code>--success / --warning / --error / --info 及 -soft、-line、-solid</code><p>所有状态标签（<code>.t-ok .t-warn .t-err .t-info</code>）、提示（<code>.alert.*</code>）和进度条使用同一组变量；文字与浅底对比 ≥ 4.5:1。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage"><div class="row" style="gap:10px"><span class="avatar lg" data-avatar="林云"></span><span class="avatar lg" data-avatar="陈默"></span><span class="avatar lg" data-avatar="周宁"></span><span class="avatar lg" data-avatar="王悦"></span><span class="avatar lg" data-avatar="赵一"></span></div><div class="row" style="gap:10px" id="monos"></div></div>
+        <div class="spec-info"><h3><span class="n">B8</span>头像与项目字标</h3><code>[data-avatar="姓名"] · UI.monogram(name)</code><p>按名字哈希取 8 个低饱和色相之一，浅色 92% 明度底 + 28% 明度字。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage"><div class="row" style="gap:28px"><div><div class="stat-label">命中</div><div class="count" data-count="1284"><span class="n">0</span><span class="unit">次</span></div></div><div><div class="stat-label">词</div><div class="count" data-count="412006"><span class="n">0</span><span class="unit">词</span></div></div></div></div>
+        <div class="spec-info"><h3><span class="n">B9</span>计数</h3><code>.count[data-count] > .n + .unit</code><p>等宽粗体数字、千分位、小号单位；滚动只改 <code>.n</code>，单位不动。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage"><div class="row wrap" style="gap:6px"><kbd>Ctrl</kbd><kbd>K</kbd><span class="small muted">命令面板</span><kbd>?</kbd><span class="small muted">快捷键</span><kbd>Enter</kbd><kbd>Del</kbd><kbd>←</kbd><kbd>→</kbd></div></div>
+        <div class="spec-info"><h3><span class="n">B11</span>键帽</h3><code>kbd · .kbd</code><p>等宽 11px、底边 2px，最小宽 20px；按钮内的键帽随按钮配色。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage dotgrid" style="align-items:center"><span class="small muted">空态 · 登录 · 引导</span></div>
+        <div class="spec-info"><h3><span class="n">B14</span>点阵底纹</h3><code>.dotgrid（--dot）</code><p>18px 间距 1px 点，只用于空态、登录和引导，不放在数据区域下。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage"><div class="row"><button class="btn" type="button">按钮</button><button class="btn p" type="button">主按钮</button><button class="chip" type="button">$2-5</button><input class="input s" style="width:120px" placeholder="输入"></div><span class="small muted">Tab 查看焦点环，按住查看按下态</span></div>
+        <div class="spec-info"><h3><span class="n">B15</span>焦点环与按下</h3><code>:focus-visible · :active { scale(.98) }</code><p>所有控件 2px 蓝色外环、偏移 2px；按下缩放 .98。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage"><div class="row"><button class="btn icon" type="button" data-tip="钉住到证据篮" aria-label="钉住"><span data-icon="pin" class="ic-14"></span></button><button class="btn s" type="button" data-tip="Cohen's κ，3 名标注者两两平均">悬停查看</button></div></div>
+        <div class="spec-info"><h3><span class="n">B16</span>深色提示</h3><code>[data-tip]</code><p>悬停或聚焦 300ms 后出现，深底浅字，自动避开视口边缘；图标按钮必须提供。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage"><div class="card divider-demo"><div class="card-pad sm">卡片内：1px 线分段</div><div class="card-pad sm" style="border-top:1px solid var(--line-soft)">第二段</div></div><div class="card divider-demo"><div class="card-pad sm">卡片之间：留白 16–20px，不加线</div></div></div>
+        <div class="spec-info"><h3><span class="n">B17</span>分隔规则</h3><code>--line-soft（卡片内） · gap 16–20（卡片间）</code><p>线只出现在卡片内部；区块之间用留白分开，不画分隔线。</p></div>
+      </article>
+      <article class="card spec wide">
+        <div class="stage" style="padding:0;min-height:0">
+          <div class="theme-cols">
+            <div data-theme-demo="light"><span class="sec-title">浅色</span><div class="row wrap"><span class="tag t-ok">可用</span><span class="tag t-run">运行中</span><span class="hit">翻译</span><button class="btn s p" type="button">检索</button></div></div>
+            <div data-theme-demo="dark"><span class="sec-title">深色</span><div class="row wrap"><span class="tag t-ok">可用</span><span class="tag t-run">运行中</span><span class="hit">翻译</span><button class="btn s p" type="button">检索</button></div></div>
+          </div>
+        </div>
+        <div class="spec-info"><h3><span class="n">B18</span>深色模式</h3><code>:root[data-theme="dark"] · localStorage "theme" · UI.setTheme()</code><p>同名变量覆盖，强调蓝提亮到 #2E90FA，白字按钮仍用 #1570EF 保证对比；顶栏右侧按钮切换并记住选择，未选择时跟随系统。</p></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===== 数据展示 ===== -->
+  <section id="data">
+    <h2 class="sec">数据展示</h2>
+    <div class="specs">
+      <article class="card spec full">
+        <div class="stage">
+          <div class="cat-grid" id="cats"></div>
+        </div>
+        <div class="spec-info"><h3><span class="n">B10</span>8 色分类色板</h3><code>--c1…--c8（图形）· --cN-bg / --cN-fg（标签底 / 字）· [data-c="N"]</code><p>低饱和，用于词性、标签和图表系列。标签字与底对比均 ≥ 6:1（浅色 6.1–7.6，深色 8.0–9.4）；系列色只用于图形和下划线，必须配图例或文字标签，不用作文字颜色。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage"><div class="col" style="gap:8px"><span data-q="翻译/v +文化"></span><span data-q="把 $3 翻译/v 成"></span><span data-q='"文化负载词"|俗语/n -了'></span><span data-q="翻译/n {dep=nsubj}"></span></div></div>
+        <div class="spec-info"><h3><span class="n">B12</span>查询式块</h3><code>[data-q] · .q · UI.qhl()</code><p>词 / <span class="q"><span class="qp">词性</span></span> / <span class="q"><span class="qg">$N</span></span> / <span class="q"><span class="qc">+</span><span class="qn">-</span></span> / <span class="q"><span class="qs">"引号"</span></span> / <span class="q"><span class="qa">{属性}</span></span> 分色。用于助手回答、查询历史、保存的查询。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage"><div class="row" style="gap:18px"><span data-spark="152,168,214,221,187,163,179" data-w="96" data-h="28"></span><span data-spark="120,118,131,126,140,137,144" data-w="96" data-h="28"></span><span data-spark="9,7,12,4,6,3,2" data-w="96" data-h="28"></span></div></div>
+        <div class="spec-info"><h3><span class="n">B13</span>行内趋势线</h3><code>[data-spark="v1,v2,…"] · data-w · data-h</code><p>频次按年份、任务处理速度；只画线和末点，不画坐标，数值写在旁边。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage">
+          <div class="distbar"><button type="button" data-c="1" style="--w:152" data-tip="2015 · 152 次"></button><button type="button" data-c="2" style="--w:168" data-tip="2016 · 168 次"></button><button type="button" data-c="3" style="--w:214" data-tip="2017 · 214 次"></button><button type="button" data-c="4" style="--w:221" data-tip="2018 · 221 次"></button><button type="button" data-c="5" style="--w:187" data-tip="2019 · 187 次"></button></div>
+          <div class="row" style="gap:16px"><span class="pring" style="--v:63"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="bg" cx="20" cy="20" r="16"/><circle class="fg" cx="20" cy="20" r="16" pathLength="100"/></svg><b>63%</b></span><span class="gauge"><svg viewBox="0 0 40 22" aria-hidden="true"><path class="bg" d="M4 20 A16 16 0 0 1 36 20" pathLength="100"/><path class="fg" d="M4 20 A16 16 0 0 1 36 20" pathLength="100" style="--v:82"/></svg><span><b class="num">κ = 0.82</b></span></span></div>
+        </div>
+        <div class="spec-info"><h3>分布条 · 进度环 · 一致性仪表</h3><code>.distbar · .pring[--v] · .gauge</code><p>分布条点击筛选、悬停看数值；进度环用于标注层；仪表显示多标注者 κ。</p></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===== 跨页组件 ===== -->
+  <section id="features">
+    <h2 class="sec">跨页组件</h2>
+    <div class="specs">
+      <article class="card spec">
+        <div class="stage" style="align-items:flex-end">
+          <div class="dock-panel open static-panel"><div class="dp-head"><span data-icon="basket" class="ic-14"></span><b class="grow" style="font-weight:600;font-size:13px">证据篮</b><span class="small muted num">2 条</span></div>
+            <div class="dp-body"><div class="ev-item"><span class="ev-k"><span data-icon="quote"></span></span><span class="ev-t">很多文化负载词很难翻译。</span><span></span><span class="ev-s">zh#5730218</span></div><div class="ev-item"><span class="ev-k"><span data-icon="chart"></span></span><span class="ev-t">成 · logDice 11.4</span><span></span><span class="ev-s">搭配 · 翻译/v ±5</span></div></div>
+            <div class="dp-foot"><button class="btn xs p" type="button">拖入笔记</button><button class="btn xs" type="button">导出</button><div class="grow"></div><button class="btn xs ghost danger" type="button">清空</button></div></div>
+          <div class="mini-dock"><button class="capsule" type="button"><svg class="ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" cx="12" cy="12" r="9" pathLength="100" stroke-dasharray="100" stroke-dashoffset="59"/></svg>2 个任务运行中</button><button class="capsule" type="button"><span data-icon="basket"></span>证据篮<span class="cnt">2</span></button></div>
+        </div>
+        <div class="spec-info"><h3>证据篮 · 任务托盘</h3><code>.dock · .capsule · .dock-panel · [data-pin-btn]</code><p>检索、统计、助手、标注、知识库页右下角；行尾“钉住”后条目飞入胶囊、计数跳动。任务托盘在所有带导航的页面显示。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage" style="align-items:center"><button class="btn p" type="button" data-cmdk><span data-icon="search" class="ic-14"></span>打开命令面板<kbd>Ctrl K</kbd></button><button class="btn" type="button" data-keys><span data-icon="keyboard" class="ic-14"></span>快捷键浮层<kbd>?</kbd></button></div>
+        <div class="spec-info"><h3>命令面板 · 快捷键浮层</h3><code>UI.openCmdk(q) · UI.openKeys()</code><p>分组：页面、项目、语料库、保存的查询、助手工具、最近；↑↓ 选择、Enter 打开、Esc 关闭。快捷键浮层按当前页列出。</p></div>
+      </article>
+      <article class="card spec">
+        <div class="stage"><div class="legend-list"><span data-c="1"><i></i>名词 NOUN</span><span data-c="2"><i></i>动词 VERB</span><span data-c="3"><i></i>形容词 ADJ</span><span data-c="4"><i></i>副词 ADV</span><span data-c="5"><i></i>代词 PRON</span><span data-c="6"><i></i>介词 ADP</span><span data-c="7"><i></i>助词 AUX/PART</span><span data-c="8"><i></i>限定·数词</span></div>
+          <div class="sm"><span class="pw" data-c="5">我们</span><span class="pw" data-c="2">需要</span><span class="pw" data-c="6">把</span><span class="pw" data-c="8">这些</span><span class="pw" data-c="1">概念</span><span class="hit"><span class="pw" data-c="2">翻译</span></span><span class="pw" data-c="7">得</span><span class="pw" data-c="4">更</span><span class="pw" data-c="3">准确</span></div></div>
+        <div class="spec-info"><h3>词性着色</h3><code>.pw[data-c] · .poscolor · UI.posCat(UPOS)</code><p>KWIC 用下划线，标注编辑器用标签底色；开关在工具栏，快捷键 P，图例点调色板图标查看。</p></div>
+      </article>
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('monos').innerHTML = ['翻译对等研究', '学习者语料偏误', '个人空间', '法律翻译'].map(function (n) { return '<span class="row" style="gap:6px;font-size:13px">' + UI.monogram(n, 'lg') + n + '</span>'; }).join('');
+  var C = [['名词', '#5B8DEF', '#EAF1FD', '#1E4F9A', '7.0'], ['动词', '#4AA79A', '#E4F4F1', '#1D6458', '6.1'], ['形容词', '#D9A441', '#FBF1DD', '#7A5210', '6.2'], ['副词', '#D9788A', '#FBE9EC', '#922C40', '6.8'],
+    ['代词', '#8E82C8', '#EFECF8', '#4B3F87', '7.6'], ['介词', '#7DAA63', '#EAF3E4', '#3A6324', '6.2'], ['助词', '#C98762', '#F8EBE3', '#86411D', '6.5'], ['限定·数词', '#6E97AE', '#E6EFF4', '#2F5568', '6.9']];
+  document.getElementById('cats').innerHTML = C.map(function (c, i) {
+    return '<div class="cat" data-c="' + (i + 1) + '"><div class="bar"></div><div class="lab">' + c[0] + '</div><span>--c' + (i + 1) + ' ' + c[1] + '</span><span>bg ' + c[2] + '</span><span>fg ' + c[3] + '</span><span>对比 ' + c[4] + ':1</span></div>';
+  }).join('');
+  /* 深色对照列：局部套用深色变量 */
+  var dark = document.querySelector('[data-theme-demo="dark"]');
+  ['--bg:#0F1218', '--surface:#161A22', '--text:#E6E9EF', '--text-3:#8C95A3', '--line:#2A303B', '--accent-text:#84CAFF', '--accent-tint:#12233A', '--success:#47CD89', '--success-soft:#0E2A1C', '--info:#84CAFF', '--info-soft:#12233A'].forEach(function (d) { var p = d.split(':'); dark.style.setProperty(p[0], p[1]); });
+  dark.style.color = 'var(--text)';
+  var light = document.querySelector('[data-theme-demo="light"]');
+  ['--bg:#F6F7FA', '--surface:#FFFFFF', '--text:#1A1D24', '--text-3:#6B7280', '--line:#E6E8EE', '--accent-text:#175CD3', '--accent-tint:#EFF8FF', '--success:#067647', '--success-soft:#ECFDF3', '--info:#175CD3', '--info-soft:#EFF8FF'].forEach(function (d) { var p = d.split(':'); light.style.setProperty(p[0], p[1]); });
+  light.style.color = 'var(--text)';
+});
+</script>
+</body>
+</html>

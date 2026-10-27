@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>标注 · 语料研究平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+  .ws { display: grid; grid-template-columns: 260px minmax(0, 1fr) 280px; gap: 20px; align-items: start; }
+  .layer { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--radius); cursor: pointer; border: 1px solid transparent; transition: background var(--t-fast), border-color var(--t-fast); background: none; text-align: left; width: 100%; }
+  .layer:hover { background: var(--fill-hover); }
+  .layer.on { background: var(--accent-tint); border-color: var(--accent-line); }
+  .layer .li-title { display: flex; align-items: center; gap: 6px; }
+  .sent { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: var(--radius); font-size: 13px; line-height: 1.6; cursor: pointer; transition: background var(--t-fast); border: 0; background: none; width: 100%; text-align: left; }
+  .sent:hover { background: var(--fill-hover); }
+  .sent.on { background: var(--accent-tint); }
+  .sent .n { font-family: var(--mono); font-size: 11px; color: var(--text-3); width: 20px; flex-shrink: 0; padding-top: 2px; }
+  .sent .st { width: 14px; height: 14px; flex-shrink: 0; margin-top: 3px; }
+  .sent.done { color: var(--text-3); }
+  .editor-dep { display: flex; justify-content: center; padding: 8px 0 4px; overflow-x: auto; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-3); align-items: center; }
+  .lg-s { display: inline-block; width: 26px; height: 14px; border-radius: 4px; border: 1.2px dashed #53B1FD; vertical-align: -3px; margin-right: 4px; }
+  .lg-c { display: inline-block; width: 26px; height: 14px; border-radius: 4px; background: var(--accent-solid); vertical-align: -3px; margin-right: 4px; }
+  .spanbox { position: relative; font-size: 17px; line-height: 1; padding: 64px 8px 34px; letter-spacing: .01em; }
+  .smark { position: relative; padding: 3px 2px; border-radius: 4px; background: var(--accent-tint-2); box-shadow: inset 0 -2px 0 var(--accent); cursor: pointer; animation: mark-in 500ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 200ms + 200ms); background-size: 200% 100%; }
+  .smark.sugg { background: var(--accent-fill); box-shadow: inset 0 -2px 0 #84CAFF; outline: 1.2px dashed #84CAFF; outline-offset: 1px; }
+  .smark .slab { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); font-size: 11px; font-family: var(--mono); white-space: nowrap; padding: 2px 6px; border-radius: 5px; background: var(--accent-solid); color: #fff; line-height: 1.3; }
+  .smark.sugg .slab { background: var(--surface); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-line); }
+  @keyframes mark-in { from { background-color: transparent; box-shadow: inset 0 0 0 transparent; } }
+  .rel-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .rel-svg path { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+  .rel-svg.static * { animation: none !important; }
+  .rel-svg text { font-family: var(--mono); font-size: 11px; fill: var(--text-2); }
+  .algraph.sent-al { gap: 0; padding: 6px 0; }
+  .algraph.sent-al .al-row { width: 42%; gap: 10px; }
+  .algraph.sent-al .al-row span { display: block; width: 100%; padding: 8px 10px; font-size: 13px; line-height: 1.55; border-radius: 8px; }
+  .algraph.sent-al .al-row:first-child span { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+  .keys { display: grid; grid-template-columns: 1fr auto; gap: 7px 10px; font-size: 13px; align-items: center; }
+  .lab-opt { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; border-radius: var(--radius); border: 1px solid transparent; background: none; cursor: pointer; font-size: 13px; transition: background var(--t-fast), border-color var(--t-fast); text-align: left; }
+  .lab-opt:hover { background: var(--fill-hover); }
+  .lab-opt.on { background: var(--accent-tint); border-color: var(--accent-line); color: var(--accent-text); font-weight: 600; }
+  .lab-opt .mono { font-size: 12px; }
+  .lab-opt .kbd { margin-left: auto; }
+  .act { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .act .btn { flex-direction: column; height: 58px; gap: 2px; font-size: 13px; }
+  .act .btn .kbd { font-size: 10px; }
+  .remain { display: flex; align-items: baseline; gap: 6px; }
+  .remain .count { font-size: 24px; }
+  .layer-row { display: flex; align-items: center; gap: 10px; width: 100%; }
+  .lab-opt i { width: 10px; height: 10px; border-radius: 3px; background: var(--pc); flex-shrink: 0; }
+  .view-tabs { margin-bottom: -4px; }
+  .bi-pair { padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .bi-pair + .bi-pair { border-top: 1px solid var(--line-soft); }
+  .bi-pair .algraph { padding: 4px 70px; }
+  .poscolor .al-row span[data-c] { box-shadow: inset 0 -2px 0 var(--pc); }
+  .diff-sum { display: flex; gap: 10px; flex-wrap: wrap; }
+  .diff-sum button { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 13px; color: var(--text-2); transition: background var(--t-fast), border-color var(--t-fast); }
+  .diff-sum button b { font-family: var(--mono); font-size: 15px; color: var(--text); }
+  .diff-sum button[aria-pressed="true"] { background: var(--accent-tint); border-color: var(--accent-line); color: var(--accent-text); }
+  .diff-blk { padding: 14px 20px; display: flex; flex-direction: column; gap: 8px; animation: rise 360ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 70ms); }
+  .diff-blk + .diff-blk { border-top: 1px solid var(--line-soft); }
+  .diff-line { display: grid; grid-template-columns: 44px 120px minmax(0, 1fr); gap: 10px; align-items: center; }
+  .diff-line .dl-lab { font-size: 12px; font-weight: 600; color: var(--text-3); }
+  .diff-line .dl-src { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .toks { display: flex; flex-wrap: wrap; gap: 4px; }
+  .dtok { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 6px; border-radius: 6px; border: 1px solid transparent; }
+  .dtok b { font-weight: 500; font-size: 14px; }
+  .dtok.chg { background: var(--warning-soft); border-color: var(--warning-line); }
+  .dtok.chg b { color: var(--warning); }
+  .dtok.rej { background: var(--error-soft); border-color: var(--error-line); }
+  .dtok.rej b { color: var(--error); text-decoration: line-through; }
+  .dtok.new { background: var(--success-soft); border-color: var(--success-line); }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" data-active="annotate"></aside>
+  <main class="main">
+    <header class="topbar">
+      <h1>标注</h1>
+      <nav class="crumbs" data-scope="翻译对等研究|Tatoeba 中英|tatoeba-cmn-2017" data-labels="项目|语料库|文档"></nav>
+      <div class="grow"></div>
+      <button class="btn s" type="button" data-toast="已提交预标注任务 #2231：翻译策略片段，范围 tatoeba-cmn-2017"><span data-icon="spark" class="ic-14"></span>预标注</button>
+      <button class="btn s" type="button" data-toast="已提交导出任务：CoNLL-U" data-toast-icon="download"><span data-icon="download" class="ic-14"></span>导出 CoNLL-U</button>
+      <button class="btn s p" type="button" data-toast="已新建标注层"><span data-icon="plus" class="ic-14"></span>新建标注层</button>
+      <div class="topbar-prog" aria-hidden="true"></div>
+    </header>
+
+    <div class="content">
+      <div class="ws">
+        <!-- 左：标注层 + 句子流 -->
+        <div class="col gap-16">
+          <section class="card" style="padding:12px 10px" aria-label="标注层">
+            <h2 style="padding:2px 4px 8px">标注层</h2>
+            <button class="layer on" type="button" aria-label="词性与依存，41%">
+              <span class="layer-row"><span class="pring " style="--v:41"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="bg" cx="20" cy="20" r="16"/><circle class="fg" cx="20" cy="20" r="16" pathLength="100"/></svg><b>41%</b></span><span class="grow col" style="gap:3px"><span class="li-title">词性与依存<span class="tag t-gray" style="margin-left:auto">token</span></span><span class="row between small muted"><span>Stanza 1.9</span><span class="num">1,968 / 4,800</span></span></span></span>
+            </button>
+            <button class="layer" type="button" aria-label="翻译策略，18%">
+              <span class="layer-row"><span class="pring " style="--v:18"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="bg" cx="20" cy="20" r="16"/><circle class="fg" cx="20" cy="20" r="16" pathLength="100"/></svg><b>18%</b></span><span class="grow col" style="gap:3px"><span class="li-title">翻译策略<span class="tag t-gray" style="margin-left:auto">span</span></span><span class="row between small muted"><span class="row gap-4"><span class="spin" style="width:10px;height:10px;color:var(--accent)"></span>预标中</span><span class="num">864 / 4,800</span></span></span></span>
+            </button>
+            <button class="layer" type="button" aria-label="学习者偏误，63%，一致性 κ 0.82">
+              <span class="layer-row"><span class="pring " style="--v:63"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="bg" cx="20" cy="20" r="16"/><circle class="fg" cx="20" cy="20" r="16" pathLength="100"/></svg><b>63%</b></span><span class="grow col" style="gap:3px"><span class="li-title">学习者偏误<span class="tag t-gray" style="margin-left:auto">relation</span></span><span class="row between small muted"><span>3 名标注者</span><span class="num">756 / 1,200</span></span></span></span>
+              <span class="row between" style="padding-left:50px"><span class="gauge" data-tip="Cohen's κ，3 名标注者两两平均"><svg viewBox="0 0 40 22" aria-hidden="true"><path class="bg" d="M4 20 A16 16 0 0 1 36 20" pathLength="100"/><path class="fg" d="M4 20 A16 16 0 0 1 36 20" pathLength="100" style="--v:82"/></svg><span><b class="num" style="font-weight:600;color:var(--text)">κ = 0.82</b> 一致性高</span></span></span>
+            </button>
+            <button class="layer" type="button" aria-label="句对齐，88%">
+              <span class="layer-row"><span class="pring ok" style="--v:88"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="bg" cx="20" cy="20" r="16"/><circle class="fg" cx="20" cy="20" r="16" pathLength="100"/></svg><b>88%</b></span><span class="grow col" style="gap:3px"><span class="li-title">句对齐<span class="tag t-gray" style="margin-left:auto">alignment</span></span><span class="row between small muted"><span>自动对齐</span><span class="num">4,224 / 4,800</span></span></span></span>
+            </button>
+          </section>
+
+          <section class="card" style="padding:12px 8px" aria-label="句子流">
+            <div class="row between" style="padding:2px 6px 8px"><h2>句子</h2><span class="mono small muted">14 / 120</span></div>
+            <div class="col gap-4" id="stream">
+              <button class="sent done" type="button"><span class="n">11</span><span class="grow">他把这首诗翻译成英文。</span><span class="st" data-icon="check" style="color:var(--ok)"></span></button>
+              <button class="sent done" type="button"><span class="n">12</span><span class="grow">这本书已经被翻译成三十多种语言。</span><span class="st" data-icon="check" style="color:var(--ok)"></span></button>
+              <button class="sent done" type="button"><span class="n">13</span><span class="grow">博物馆下个月举办一场新展览。</span><span class="st" data-icon="check" style="color:var(--ok)"></span></button>
+              <button class="sent on" type="button" aria-current="true"><span class="n">14</span><span class="grow">她为博物馆翻译了展板。</span><span class="dot pulse" style="color:var(--accent);margin-top:7px"></span></button>
+              <button class="sent" type="button"><span class="n">15</span><span class="grow">她花了整整两个星期。</span></button>
+              <button class="sent" type="button"><span class="n">16</span><span class="grow">很多文化负载词很难翻译。</span></button>
+              <button class="sent" type="button"><span class="n">17</span><span class="grow">你能帮我翻译一下这段文字吗？</span></button>
+              <button class="sent" type="button"><span class="n">18</span><span class="grow">老师让我们翻译一篇短文。</span></button>
+            </div>
+          </section>
+        </div>
+
+        <!-- 中：可视化编辑器 -->
+        <div class="col gap-16" style="min-width:0" id="center">
+          <div class="row view-tabs">
+            <div class="tabs grow" role="tablist" aria-label="视图">
+              <button role="tab" type="button" aria-selected="true" aria-controls="p-edit"><span data-icon="pen" class="ic-14"></span> 编辑</button>
+              <button role="tab" type="button" aria-selected="false" aria-controls="p-bi" tabindex="-1"><span data-icon="columns" class="ic-14"></span> 双语对照</button>
+              <button role="tab" type="button" aria-selected="false" aria-controls="p-diff" tabindex="-1"><span data-icon="diff" class="ic-14"></span> 预标差异</button>
+            </div>
+            <span class="pos-toggle row" style="gap:8px;font-size:13px;color:var(--text-2)"><button class="switch" type="button" role="switch" aria-checked="false" id="pos-sw" aria-label="词性着色" data-tip="词性着色（P）"></button>词性着色</span>
+          </div>
+          <div role="tabpanel" id="p-edit" class="col gap-16">
+          <section class="card" aria-label="词性与依存" data-pinnable data-pin-text="她为博物馆翻译了展板。" data-pin-src="zh#2771005 · 词性与依存 · 人工层 rev 3" data-pin-kind="hit">
+            <div class="card-head">
+              <h2>词性与依存</h2><span class="mono small muted">zh#2771005 · 第 14 句</span>
+              <div class="grow"></div>
+              <div class="legend"><span><span class="lg-s"></span>建议</span><span><span class="lg-c"></span>已确认</span></div><span class="pin-slot"></span>
+            </div>
+            <div class="card-pad">
+              <div class="editor-dep dep" id="dep" data-chips
+                data-dep="她/PRON 为/ADP 博物馆/NOUN 翻译/VERB 了/AUX 展板/NOUN 。/PUNCT"
+                data-arcs="1>4:nsubj 2>3:case 3>4:obl 5>4:aux 6>4:obj 7>4:punct" data-root="4"
+                data-sugg="3,6" data-conf="1,2,4" data-sel="3"></div>
+            </div>
+            <div class="card-foot"><span class="mono">stanza-1.9 · 人工层 rev 3</span></div>
+          </section>
+
+          <section class="card" aria-label="片段与关系" data-pinnable data-pin-text="Yesterday I go to the library and borrow two book." data-pin-src="learner-en#3092 · 偏误:时态 ×2" data-pin-kind="hit">
+            <div class="card-head"><h2>片段与关系</h2><span class="mono small muted">learner-en#3092 · 学习者偏误</span><div class="grow"></div><div class="legend"><span><span class="lg-s"></span>LLM 建议</span><span><span class="lg-c"></span>已确认</span></div><span class="pin-slot"></span></div>
+            <div class="spanbox" id="spanbox">Yesterday I <span class="smark" style="--i:0" id="m1">go<span class="slab">偏误:时态</span></span> to the library and <span class="smark sugg" style="--i:1" id="m2">borrow<span class="slab">偏误:时态</span></span> two <span class="smark sugg" style="--i:2" id="m3">book<span class="slab">偏误:单复数</span></span>.</div>          </section>
+
+          <section class="card" aria-label="句对齐">
+            <div class="card-head"><h2>句对齐</h2><span class="mono small muted">tatoeba-cmn-2017 · 段 6</span><div class="grow"></div><span class="tag t-run">1 : 2 待确认</span></div>
+            <div class="card-pad">
+              <div class="algraph v sent-al" data-orient="v" data-links="1:1:strong 2:2:strong 2:3:sugg 3:4:strong">
+                <div class="al-row"><span data-a="1">全球化带来了频繁的人员往来。</span><span data-a="2">在跨文化交流中，翻译不仅是语言转换，更是文化协商。</span><span data-a="3">译者因此需要双重的文化敏感。</span></div>
+                <div class="al-row en"><span data-b="1">Globalization has brought frequent exchanges of people.</span><span data-b="2">In intercultural exchange, translation is not only a linguistic conversion.</span><span data-b="3">It is also a cultural negotiation.</span><span data-b="4">Translators therefore need a double cultural sensitivity.</span></div>
+              </div>
+            </div>
+          </section>
+          </div>
+
+          <!-- 双语对照 -->
+          <section role="tabpanel" id="p-bi" class="card" hidden aria-label="双语对照">
+            <div class="card-head"><h2>双语对照</h2><span class="small muted">词对齐 · 模型预对齐 + 人工</span><div class="grow"></div><div class="legend"><span><span class="lg-s"></span>建议</span><span><span class="lg-c"></span>已确认</span></div></div>
+            <div class="bi-pair" data-pinnable data-pin-text="她为博物馆翻译了展板。 ↔ She translated the exhibition panels for the museum." data-pin-src="zh#2771005 ↔ en#2771006 · 词对齐">
+              <div class="row"><span class="mono small muted grow">14 · zh#2771005 ↔ en#2771006</span><span class="tag t-run">2 条建议</span><span class="pin-slot"></span></div>
+              <div class="algraph v" data-orient="v" data-links="1:1:strong 2:6:strong 3:8:strong 4:2:strong 5:2:sugg 6:4:strong 6:5:sugg 7:9:strong">
+                <div class="al-row"><span data-a="1" data-c="5">她</span><span data-a="2" data-c="6">为</span><span data-a="3" data-c="1">博物馆</span><span data-a="4" data-c="2">翻译</span><span data-a="5" data-c="7">了</span><span data-a="6" data-c="1">展板</span><span data-a="7" data-c="8">。</span></div>
+                <div class="al-row en"><span data-b="1" data-c="5">She</span><span data-b="2" data-c="2">translated</span><span data-b="3" data-c="8">the</span><span data-b="4" data-c="1">exhibition</span><span data-b="5" data-c="1">panels</span><span data-b="6" data-c="6">for</span><span data-b="7" data-c="8">the</span><span data-b="8" data-c="1">museum</span><span data-b="9" data-c="8">.</span></div>
+              </div>
+            </div>
+            <div class="bi-pair">
+              <div class="row"><span class="mono small muted grow">15 · zh#2771011 ↔ en#2771012</span><span class="tag t-ok">已确认</span></div>
+              <div class="algraph v" data-orient="v" data-links="1:3:strong 2:2:strong 3:2:strong 4:5:strong 5:4:strong 7:6:strong 8:7:strong">
+                <div class="al-row"><span data-a="1" data-c="5">她</span><span data-a="2" data-c="2">花</span><span data-a="3" data-c="7">了</span><span data-a="4" data-c="4">整整</span><span data-a="5" data-c="8">两</span><span data-a="6" data-c="1">个</span><span data-a="7" data-c="1">星期</span><span data-a="8" data-c="8">。</span></div>
+                <div class="al-row en"><span data-b="1" data-c="5">It</span><span data-b="2" data-c="2">took</span><span data-b="3" data-c="5">her</span><span data-b="4" data-c="8">two</span><span data-b="5" data-c="3">whole</span><span data-b="6" data-c="1">weeks</span><span data-b="7" data-c="8">.</span></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 预标与人工差异 -->
+          <section role="tabpanel" id="p-diff" class="card" hidden aria-label="预标差异">
+            <div class="card-head"><h2>预标 / 人工</h2><span class="small muted">stanza-1.9 对 人工层 rev 3</span></div>
+            <div class="card-pad" style="padding-bottom:6px"><div class="diff-sum" id="diff-sum"></div></div>
+            <div id="diff-list"></div>
+          </section>
+        </div>
+
+        <!-- 右：标签面板 -->
+        <aside class="col gap-16" aria-label="标签">
+          <section class="card card-pad col gap-12">
+            <div class="row between"><h2>当前</h2><span class="tag t-run" id="cur-state">建议</span></div>
+            <div class="row" style="gap:10px"><span style="font-size:20px;font-weight:600" id="cur-tok">博物馆</span><span class="mono sub" id="cur-pos">NOUN</span></div>
+            <dl class="kv" style="grid-template-columns:56px 1fr;margin:0">
+              <dt>来源</dt><dd class="mono">stanza-1.9</dd>
+              <dt>置信度</dt><dd class="mono">0.97</dd>
+              <dt>依存</dt><dd class="mono">obl → 翻译</dd>
+            </dl>
+            <div class="act">
+              <button class="btn ok" type="button" id="a-ok"><span data-icon="check" class="ic-14"></span>确认<span class="kbd">Enter</span></button>
+              <button class="btn" type="button" id="a-edit"><span data-icon="edit" class="ic-14"></span>修改<span class="kbd">E</span></button>
+              <button class="btn danger" type="button" id="a-rej"><span data-icon="x" class="ic-14"></span>拒绝<span class="kbd">Del</span></button>
+            </div>
+            <div class="remain" style="border-top:1px solid var(--line-soft);padding-top:12px"><span class="small muted">剩余</span><span class="count" data-count="106" id="remain">0</span><span class="small muted">句 · 本句</span><span class="num" id="left-in">4</span><span class="small muted">处待确认</span></div>
+          </section>
+
+          <section class="card" style="padding:12px 10px">
+            <div class="row between" style="padding:2px 4px 8px"><h2>UPOS</h2><span class="small muted mono">17 个标签</span></div>
+            <div class="col gap-4" id="labels">
+              <button class="lab-opt on" type="button" data-c="1"><i></i><span class="mono">NOUN</span>名词<span class="kbd">1</span></button>
+              <button class="lab-opt" type="button" data-c="1"><i></i><span class="mono">PROPN</span>专名<span class="kbd">2</span></button>
+              <button class="lab-opt" type="button" data-c="2"><i></i><span class="mono">VERB</span>动词<span class="kbd">3</span></button>
+              <button class="lab-opt" type="button" data-c="3"><i></i><span class="mono">ADJ</span>形容词<span class="kbd">4</span></button>
+              <button class="lab-opt" type="button" data-c="6"><i></i><span class="mono">ADP</span>介词<span class="kbd">5</span></button>
+              <button class="lab-opt" type="button" data-c="5"><i></i><span class="mono">PRON</span>代词<span class="kbd">6</span></button>
+              <button class="lab-opt" type="button" data-c="7"><i></i><span class="mono">AUX</span>助动词<span class="kbd">7</span></button>
+            </div>
+          </section>
+
+          <section class="card card-pad">
+            <div class="row" style="margin-bottom:10px"><span data-icon="keyboard" class="ic-14 muted"></span><h2>快捷键</h2></div>
+            <div class="keys">
+              <span>上一句 / 下一句</span><span><span class="kbd">K</span> <span class="kbd">J</span></span>
+              <span>选词</span><span><span class="kbd">←</span> <span class="kbd">→</span></span>
+              <span>选标签</span><span><span class="kbd">1</span>–<span class="kbd">7</span></span>
+              <span>词性着色</span><span><span class="kbd">P</span></span>
+              <span>全部快捷键</span><span><span class="kbd">?</span></span>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var dep = document.getElementById('dep');
+  var info = { 1: ['她', 'PRON', 'nsubj → 翻译', '0.99'], 2: ['为', 'ADP', 'case → 博物馆', '0.98'], 3: ['博物馆', 'NOUN', 'obl → 翻译', '0.97'], 4: ['翻译', 'VERB', 'root', '0.99'], 5: ['了', 'AUX', 'aux → 翻译', '0.95'], 6: ['展板', 'NOUN', 'obj → 翻译', '0.91'], 7: ['。', 'PUNCT', 'punct → 翻译', '1.00'] };
+  var sel = 3;
+  var leftIn = document.getElementById('left-in');
+  function g(k) { return dep.querySelector('.tokg[data-k="' + k + '"]'); }
+  function select(k) {
+    sel = k;
+    dep.querySelectorAll('.tokg').forEach(function (t) { t.classList.toggle('sel', +t.dataset.k === k); });
+    var chip = g(k).querySelector('.pchip');
+    document.getElementById('cur-tok').textContent = info[k][0];
+    document.getElementById('cur-pos').textContent = info[k][1];
+    var st = document.getElementById('cur-state');
+    var c = chip.classList.contains('conf'), r = chip.classList.contains('rej');
+    st.textContent = c ? '已确认' : r ? '已拒绝' : '建议';
+    st.className = 'tag ' + (c ? 't-ok' : r ? 't-err' : 't-run');
+    document.querySelector('.kv dd:nth-of-type(2)').textContent = info[k][3];
+    document.querySelector('.kv dd:nth-of-type(3)').textContent = info[k][2];
+    document.querySelectorAll('#labels .lab-opt').forEach(function (b) { b.classList.toggle('on', b.querySelector('.mono').textContent === info[k][1]); });
+  }
+  function pending() { return Array.prototype.filter.call(dep.querySelectorAll('.pchip'), function (c) { return !c.classList.contains('conf') && !c.classList.contains('rej'); }).length; }
+  function mark(cls) {
+    var chip = g(sel).querySelector('.pchip');
+    chip.classList.remove('conf', 'rej', 'just');
+    void chip.getBBox();
+    chip.classList.add(cls, 'just');
+    leftIn.textContent = pending();
+    select(sel);
+    var next = [sel + 1, sel + 2, sel + 3, sel + 4, sel + 5, sel + 6].map(function (k) { return ((k - 1) % 7) + 1; })
+      .filter(function (k) { var c = g(k).querySelector('.pchip'); return !c.classList.contains('conf') && !c.classList.contains('rej'); })[0];
+    if (next) setTimeout(function () { select(next); }, 260);
+    else {
+      var rem = document.getElementById('remain');
+      rem.setAttribute('data-count', '105'); UI.countUp(rem.parentNode);
+      UI.toast('本句已完成，进入第 15 句');
+    }
+  }
+  dep.addEventListener('click', function (e) { var t = e.target.closest('.tokg'); if (t) select(+t.dataset.k); });
+  document.getElementById('a-ok').addEventListener('click', function () { mark('conf'); });
+  document.getElementById('a-rej').addEventListener('click', function () { mark('rej'); });
+  document.getElementById('a-edit').addEventListener('click', function () { UI.toast('选择新标签：按 1–9 或点击右侧标签', 'edit'); });
+  document.getElementById('labels').addEventListener('click', function (e) {
+    var b = e.target.closest('.lab-opt'); if (!b) return;
+    var pos = b.querySelector('.mono').textContent;
+    info[sel][1] = pos;
+    g(sel).querySelector('.pchip text').textContent = pos;
+    mark('conf');
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.target.closest('input,textarea,select,[role="tab"],a,button:not(.tokg)') && e.key === 'Enter') return;
+    if (e.target.closest('input,textarea,select') || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.overlay')) return;
+    if (e.key === 'Enter') { e.preventDefault(); mark('conf'); }
+    else if (e.key === 'Delete') mark('rej');
+    else if (e.key === 'ArrowRight') select(sel % 7 + 1);
+    else if (e.key === 'ArrowLeft') select((sel + 5) % 7 + 1);
+    else if (/^[1-7]$/.test(e.key)) document.querySelectorAll('#labels .lab-opt')[+e.key - 1].click();
+    else if (e.key === 'j' || e.key === 'J' || e.key === 'k' || e.key === 'K') moveSent(/[jJ]/.test(e.key) ? 1 : -1);
+    else if (e.key === 'p' || e.key === 'P') setPos(!posOn);
+  });
+
+  /* 句子流：J / K */
+  function moveSent(d) {
+    var items = Array.prototype.slice.call(document.querySelectorAll('#stream .sent'));
+    var i = items.indexOf(document.querySelector('#stream .sent.on'));
+    var n = items[Math.max(0, Math.min(items.length - 1, i + d))];
+    items.forEach(function (x) { x.classList.toggle('on', x === n); if (x === n) x.setAttribute('aria-current', 'true'); else x.removeAttribute('aria-current'); });
+    n.scrollIntoView({ block: 'nearest' });
+  }
+  document.getElementById('stream').addEventListener('click', function (e) { var b = e.target.closest('.sent'); if (!b) return; var items = Array.prototype.slice.call(document.querySelectorAll('#stream .sent')); moveSent(items.indexOf(b) - items.indexOf(document.querySelector('#stream .sent.on'))); });
+
+  /* 词性着色 */
+  var posOn = false;
+  function setPos(on) {
+    posOn = on;
+    document.getElementById('pos-sw').setAttribute('aria-checked', on ? 'true' : 'false');
+    document.getElementById('center').classList.toggle('poscolor', on);
+  }
+  document.addEventListener('click', function (e) { var sw = e.target.closest('#pos-sw'); if (sw) setPos(sw.getAttribute('aria-checked') === 'true'); });
+
+  /* 预标与人工差异 */
+  var DIFF = [
+    { n: 12, id: 'zh#1120394', who: '林云 · 10-27 10:18', pre: [['这', 'DET'], ['本', 'NOUN'], ['书', 'NOUN'], ['已经', 'ADV'], ['被', 'ADP'], ['翻译', 'VERB'], ['成', 'ADP'], ['三十', 'NUM'], ['多', 'ADJ'], ['种', 'NOUN'], ['语言', 'NOUN']],
+      hum: [['这', 'DET'], ['本', 'NOUN'], ['书', 'NOUN'], ['已经', 'ADV'], ['被', 'AUX', 'chg'], ['翻译', 'VERB'], ['成', 'VERB', 'chg'], ['三十', 'NUM'], ['多', 'NUM', 'chg'], ['种', 'NOUN'], ['语言', 'NOUN']] },
+    { n: 13, id: 'zh#2770998', who: '林云 · 10-27 10:20', pre: [['博物馆', 'NOUN'], ['下', 'ADP'], ['个', 'NOUN'], ['月', 'NOUN'], ['举办', 'VERB'], ['一', 'NUM'], ['场', 'NOUN'], ['新展览', 'NOUN', 'rej']],
+      hum: [['博物馆', 'NOUN'], ['下', 'ADJ', 'chg'], ['个', 'NOUN'], ['月', 'NOUN'], ['举办', 'VERB'], ['一', 'NUM'], ['场', 'NOUN'], ['新', 'ADJ', 'new'], ['展览', 'NOUN', 'new']] },
+    { n: 11, id: 'zh#884120', who: '王悦 · 10-26 16:42', pre: [['他', 'PRON'], ['把', 'ADP'], ['这', 'DET'], ['首', 'NOUN'], ['诗', 'NOUN'], ['翻译', 'VERB'], ['成', 'VERB'], ['英文', 'PROPN']],
+      hum: [['他', 'PRON'], ['把', 'ADP'], ['这', 'DET'], ['首', 'NOUN'], ['诗', 'NOUN'], ['翻译', 'VERB'], ['成', 'VERB'], ['英文', 'PROPN']] }
+  ];
+  var tally = { chg: 0, ok: 0, rej: 0 };
+  DIFF.forEach(function (d) {
+    d.hum.forEach(function (t) { if (t[2] === 'chg') tally.chg++; else if (!t[2]) tally.ok++; });
+    d.pre.forEach(function (t) { if (t[2] === 'rej') tally.rej++; });
+  });
+  var filter = 'all';
+  function tok(t, preRow) {
+    var cls = t[2] === 'chg' ? 'chg' : t[2] === 'rej' ? 'rej' : t[2] === 'new' ? 'new' : '';
+    if (preRow && t[2] !== 'rej') cls = '';
+    return '<span class="dtok ' + cls + '"><b>' + t[0] + '</b><span class="pos-tagchip" data-c="' + UI.posCat(t[1]) + '">' + t[1] + '</span></span>';
+  }
+  function renderDiff() {
+    document.getElementById('diff-sum').innerHTML =
+      '<button type="button" data-f="all" aria-pressed="' + (filter === 'all') + '">全部 <b>' + DIFF.length + '</b> 句</button>' +
+      '<button type="button" data-f="chg" aria-pressed="' + (filter === 'chg') + '"><span class="dot" style="color:var(--warning-solid)"></span>改动 <b>' + tally.chg + '</b></button>' +
+      '<button type="button" data-f="ok" aria-pressed="' + (filter === 'ok') + '"><span class="dot" style="color:var(--success-solid)"></span>确认 <b>' + tally.ok + '</b></button>' +
+      '<button type="button" data-f="rej" aria-pressed="' + (filter === 'rej') + '"><span class="dot" style="color:var(--error-solid)"></span>拒绝 <b>' + tally.rej + '</b></button>';
+    document.getElementById('diff-list').innerHTML = DIFF.filter(function (d) {
+      if (filter === 'chg') return d.hum.some(function (t) { return t[2] === 'chg'; });
+      if (filter === 'rej') return d.pre.some(function (t) { return t[2] === 'rej'; });
+      if (filter === 'ok') return !d.hum.some(function (t) { return t[2]; });
+      return true;
+    }).map(function (d, i) {
+      var c = d.hum.filter(function (t) { return t[2] === 'chg'; }).length, rj = d.pre.filter(function (t) { return t[2] === 'rej'; }).length;
+      return '<div class="diff-blk" style="--i:' + i + '"><div class="row"><span class="mono small muted grow">' + d.n + ' · ' + d.id + '</span>' + (c ? '<span class="tag t-warn">' + c + ' 处改动</span>' : '') + (rj ? '<span class="tag t-err">' + rj + ' 处拒绝</span>' : '') + (!c && !rj ? '<span class="tag t-ok">全部确认</span>' : '') + '</div>' +
+        '<div class="diff-line"><span class="dl-lab">预标</span><span class="dl-src mono">stanza-1.9</span><div class="toks">' + d.pre.map(function (t) { return tok(t, true); }).join('') + '</div></div>' +
+        '<div class="diff-line"><span class="dl-lab">人工</span><span class="dl-src">' + d.who + '</span><div class="toks">' + d.hum.map(function (t) { return tok(t, false); }).join('') + '</div></div></div>';
+    }).join('');
+  }
+  document.getElementById('diff-sum').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; filter = b.getAttribute('data-f'); renderDiff(); });
+  renderDiff();
+  leftIn.textContent = pending();
+
+  /* 片段关系线：两个片段之间的弧 */
+  function relArc() {
+    var box = document.getElementById('spanbox');
+    var old = box.querySelector('.rel-svg'); if (old) old.remove();
+    var again = !!old; // 重绘（字体到达、窗口变化）不重播动画
+    var r0 = box.getBoundingClientRect();
+    var a = document.getElementById('m1').getBoundingClientRect(), b = document.getElementById('m2').getBoundingClientRect();
+    var x1 = a.left + a.width / 2 - r0.left, x2 = b.left + b.width / 2 - r0.left, y = a.top - r0.top - 4, top = y - 40;
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg'); svg.setAttribute('class', 'rel-svg' + (again ? ' static' : '')); svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = '<path class="draw" style="--i:3" pathLength="1" d="M' + x1 + ' ' + y + ' C' + x1 + ' ' + top + ' ' + x2 + ' ' + top + ' ' + x2 + ' ' + y + '"/>' +
+      '<polygon points="' + (x2 - 4) + ',' + (y - 7) + ' ' + (x2 + 4) + ',' + (y - 7) + ' ' + x2 + ',' + y + '" fill="var(--accent)" class="fade" style="animation-delay:1s"/>' +
+      '<rect x="' + ((x1 + x2) / 2 - 22) + '" y="' + (top + 1) + '" width="44" height="16" rx="4" fill="var(--surface)" class="fade" style="animation-delay:.9s"/>' +
+      '<text x="' + (x1 + x2) / 2 + '" y="' + (top + 13) + '" text-anchor="middle" class="fade" style="animation-delay:.9s">同类</text>';
+    box.appendChild(svg);
+  }
+  relArc();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(relArc);
+  window.addEventListener('resize', relArc);
+});
+</script>
+</body>
+</html>

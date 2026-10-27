@@ -5,6 +5,7 @@
 ## 设计文档
 
 - [平台重构设计](doc/语料检索分析与标注研究平台重构设计.docx)：定位、功能范围、数据模型、查询语法、统计、标注、知识库、Agent、技术架构、页面、开发顺序与验收。维护源 [platform-redesign.md](doc/platform-redesign.md)。
+- [前端整体设计方案](doc/前端整体设计方案.docx)：视觉系统、页面、组件、动效、交互模式与实现映射。维护源 [frontend-design.md](doc/frontend-design.md)；设计稿 [doc/ui-design/index.html](doc/ui-design/index.html) 可直接用浏览器打开。
 - [变更原因日志](doc/change-log.md)：修改前阅读相关决定，修改后同批追加原因。
 - 协作规范见 [AGENTS.md](AGENTS.md)。
 

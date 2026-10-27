@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>设计稿总览 · 语料研究平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("theme");if(!t&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+  .pages { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+  .page-card { display: flex; flex-direction: column; overflow: hidden; color: var(--text); animation: rise 420ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 50ms); }
+  .page-card:hover { color: var(--text); }
+  .shot { position: relative; height: 200px; overflow: hidden; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .shot iframe { position: absolute; top: 0; left: 0; width: 1440px; height: 960px; border: 0; transform: scale(.2083); transform-origin: 0 0; pointer-events: none; }
+  .shot .name { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; color: var(--text-3); }
+  .page-card .meta { padding: 12px 14px; display: flex; align-items: center; gap: 8px; }
+  .page-card .meta b { font-weight: 600; }
+  .page-card .meta .ic { color: var(--text-3); transition: transform var(--t-fast), color var(--t-fast); }
+  .page-card:hover .meta .ic { transform: translateX(3px); color: var(--accent); }
+  .tokens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .swatches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+  .sw { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+  .sw i { height: 52px; border-radius: 10px; border: 1px solid var(--line); }
+  .sw b { font-weight: 600; font-size: 12.5px; }
+  .sw span { font-family: var(--mono); color: var(--text-3); word-break: break-all; }
+  .type-row { display: grid; grid-template-columns: 120px 1fr 170px; gap: 12px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  .type-row:last-child { border-bottom: 0; }
+  .type-row .mono { font-size: 12px; color: var(--text-3); }
+  .scale { display: flex; align-items: flex-end; gap: 14px; }
+  .scale div { display: flex; flex-direction: column; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+  .scale i { display: block; background: var(--accent-tint-2); border: 1px solid var(--accent-line); }
+  .mtable td, .mtable th { padding: 9px 12px; font-size: 13px; }
+  .mtable code { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+  .mtable td.mono { font-size: 12px; color: var(--text-2); }
+</style>
+</head>
+<body>
+<header class="doc-head">
+  <a class="brand" href="index.html" style="padding:0"><span class="brand-mark"><span data-icon="hash"></span></span>语料研究平台</a>
+  <nav aria-label="设计稿"><a href="index.html" aria-current="page">总览</a><a href="components.html">组件</a><a href="motion.html">动效</a><a href="onboarding.html">引导</a><a href="assistant.html">助手演示</a></nav>
+  <div class="grow"></div>
+  <span class="small muted mono">设计稿 · 2026-10-27</span>
+</header>
+
+<main class="doc">
+  <section>
+    <h2 class="sec">页面</h2>
+    <div class="pages">
+      <a class="card page-card lift" style="--i:0" href="login.html"><div class="shot"><span class="name">登录</span><iframe src="login.html" title="登录" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>登录</b><span class="mono small muted">login.html</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:0" href="onboarding.html"><div class="shot"><span class="name">引导</span><iframe src="onboarding.html" title="引导" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>引导</b><span class="mono small muted">onboarding.html</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:1" href="corpora.html#new"><div class="shot"><span class="name">新项目空态</span><iframe src="corpora.html#new" title="新项目空态" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>新项目空态</b><span class="mono small muted">corpora.html#new</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:1" href="corpora.html"><div class="shot"><span class="name">语料库</span><iframe src="corpora.html" title="语料库" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>语料库</b><span class="mono small muted">corpora.html</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:2" href="corpora.html#detail"><div class="shot"><span class="name">语料库详情</span><iframe src="corpora.html#detail" title="语料库详情" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>语料库详情抽屉</b><span class="mono small muted">#detail</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:3" href="search.html"><div class="shot"><span class="name">检索</span><iframe src="search.html" title="检索" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>检索</b><span class="mono small muted">search.html</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:4" href="search-drawer.html"><div class="shot"><span class="name">检索 + 助手</span><iframe src="search-drawer.html" title="检索 + 助手" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>检索 + 助手抽屉</b><span class="mono small muted">search-drawer.html</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:5" href="stats.html"><div class="shot"><span class="name">统计</span><iframe src="stats.html" title="统计" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>统计</b><span class="mono small muted">stats.html</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:6" href="annotate.html"><div class="shot"><span class="name">标注</span><iframe src="annotate.html" title="标注" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>标注</b><span class="mono small muted">annotate.html</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:7" href="assistant.html"><div class="shot"><span class="name">助手</span><iframe src="assistant.html" title="助手" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>助手</b><span class="mono small muted">assistant.html</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:8" href="knowledge.html"><div class="shot"><span class="name">知识库</span><iframe src="knowledge.html" title="知识库" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>知识库</b><span class="mono small muted">knowledge.html</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:9" href="jobs.html"><div class="shot"><span class="name">任务</span><iframe src="jobs.html" title="任务" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>任务</b><span class="mono small muted">jobs.html</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:10" href="settings.html"><div class="shot"><span class="name">项目设置</span><iframe src="settings.html" title="项目设置" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>项目设置</b><span class="mono small muted">settings.html</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:11" href="components.html"><div class="shot"><span class="name">组件规范</span><iframe src="components.html" title="组件规范" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>组件规范</b><span class="mono small muted">components.html</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+      <a class="card page-card lift" style="--i:11" href="motion.html"><div class="shot"><span class="name">动效样本</span><iframe src="motion.html" title="动效样本" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div><div class="meta"><b>动效样本</b><span class="mono small muted">motion.html</span><div class="grow"></div><span data-icon="right" class="ic-14"></span></div></a>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="sec">设计令牌</h2>
+    <div class="tokens">
+      <div class="card card-pad col gap-16">
+        <h3>颜色</h3>
+        <div class="swatches">
+          <div class="sw"><i style="background:#F6F7FA"></i><b>底色</b><span>--bg #F6F7FA</span></div>
+          <div class="sw"><i style="background:#FFFFFF"></i><b>卡片</b><span>--surface #FFFFFF</span></div>
+          <div class="sw"><i style="background:#E6E8EE"></i><b>边框</b><span>--line #E6E8EE</span></div>
+          <div class="sw"><i style="background:#F2F4F7"></i><b>填充</b><span>--fill #F2F4F7</span></div>
+          <div class="sw"><i style="background:#1570EF"></i><b>强调</b><span>--accent #1570EF</span></div>
+          <div class="sw"><i style="background:#175CD3"></i><b>强调悬停</b><span>--accent-hover #175CD3</span></div>
+          <div class="sw"><i style="background:#EFF8FF"></i><b>强调浅底</b><span>--accent-tint #EFF8FF</span></div>
+          <div class="sw"><i style="background:rgba(21, 112, 239, .2)"></i><b>强调描边</b><span>--accent-line rgba(21, 112, 239, .2)</span></div>
+          <div class="sw"><i style="background:#F5FAFF"></i><b>选中底色</b><span>--accent-fill #F5FAFF</span></div>
+          <div class="sw"><i style="background:#175CD3"></i><b>浅底文字</b><span>--accent-text #175CD3</span></div>
+          <div class="sw"><i style="background:#1A1D24"></i><b>正文</b><span>--text #1A1D24</span></div>
+          <div class="sw"><i style="background:#475467"></i><b>次要</b><span>--text-2 #475467</span></div>
+          <div class="sw"><i style="background:#6B7280"></i><b>辅助</b><span>--text-3 #6B7280</span></div>
+          <div class="sw"><i style="background:#ECFDF3;border-color:#ABEFC6"></i><b>成功</b><span>--success #067647</span></div>
+          <div class="sw"><i style="background:#FFFAEB;border-color:#FEDF89"></i><b>警告</b><span>--warning #B54708</span></div>
+          <div class="sw"><i style="background:#FEF3F2;border-color:#FECDCA"></i><b>失败</b><span>--error #B42318</span></div>
+          <div class="sw"><i style="background:#ECFDFF"></i><b>条件命中</b><span>.hit-2 #0E7090</span></div>
+          <div class="sw"><i style="background:#FEF7C3"></i><b>片段高亮</b><span>mark #FEF7C3</span></div>
+        </div>
+      </div>
+      <div class="col gap-20">
+        <div class="card card-pad">
+          <h3 style="margin-bottom:6px">字体</h3>
+          <div class="type-row"><span class="small muted">页面标题</span><span style="font-size:16px;font-weight:600">检索</span><span class="mono">Inter 16 / 600</span></div>
+          <div class="type-row"><span class="small muted">卡片标题</span><span style="font-size:14px;font-weight:600">上下文</span><span class="mono">14 / 600</span></div>
+          <div class="type-row"><span class="small muted">正文</span><span>在跨文化交流中，<span class="hit">翻译</span>不仅是语言转换。</span><span class="mono">14 / 400 · 1.5</span></div>
+          <div class="type-row"><span class="small muted">标签 / 表头</span><span style="font-size:12px;color:var(--text-3)">命中 · 句 · 文档</span><span class="mono">12 / 500</span></div>
+          <div class="type-row"><span class="small muted">计数</span><span class="count">1,284</span><span class="mono">JetBrains Mono 28 / 600</span></div>
+          <div class="type-row"><span class="small muted">查询式 / ID</span><span class="mono" style="font-size:14px;color:var(--text)">翻译/v +文化 · zh#4851204</span><span class="mono">JetBrains Mono 12–16</span></div>
+        </div>
+        <div class="card card-pad grid-2" style="gap:24px">
+          <div><h3 style="margin-bottom:12px">间距</h3><div class="scale"><div><i style="width:4px;height:4px"></i>4</div><div><i style="width:8px;height:8px"></i>8</div><div><i style="width:12px;height:12px"></i>12</div><div><i style="width:16px;height:16px"></i>16</div><div><i style="width:20px;height:20px"></i>20</div><div><i style="width:28px;height:28px"></i>28</div></div></div>
+          <div><h3 style="margin-bottom:12px">圆角</h3><div class="scale"><div><i style="width:32px;height:32px;border-radius:6px"></i>6</div><div><i style="width:32px;height:32px;border-radius:8px"></i>8</div><div><i style="width:32px;height:32px;border-radius:10px"></i>10</div><div><i style="width:32px;height:32px;border-radius:12px"></i>12</div><div><i style="width:32px;height:32px;border-radius:999px"></i>999</div></div></div>
+          <div style="grid-column:1/-1" class="small muted mono">外壳：左导航 232 · 顶栏 56 · 主区内边距 24 / 28 · 卡片间距 16–20 · 助手抽屉 420</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="row between" style="margin-bottom:16px"><h2 class="sec" style="margin:0">动效规范</h2><a class="btn s" href="motion.html"><span data-icon="play" class="ic-14"></span>查看样本</a></div>
+    <div class="card">
+      <table class="mtable">
+        <thead><tr><th>名称</th><th>类 / 接口</th><th>触发</th><th>时长</th><th>缓动</th></tr></thead>
+        <tbody class="stagger">
+          <tr style="--i:0"><td>按钮悬停上浮</td><td><code>.btn:hover</code></td><td>悬停</td><td class="mono">150ms</td><td class="mono">ease-out (.2,.8,.2,1)</td></tr>
+          <tr style="--i:1"><td>卡片悬停上浮</td><td><code>.lift:hover</code></td><td>悬停</td><td class="mono">220ms</td><td class="mono">(.2,.8,.2,1)</td></tr>
+          <tr style="--i:2"><td>导航指示滑动</td><td><code>.nav-ink</code></td><td>切换页面</td><td class="mono">320ms</td><td class="mono">(.2,.8,.2,1)</td></tr>
+          <tr style="--i:3"><td>标签页下划线 / 分段滑块</td><td><code>.tab-ink</code></td><td>切换标签</td><td class="mono">300ms</td><td class="mono">(.2,.8,.2,1)</td></tr>
+          <tr style="--i:4"><td>面板上浮</td><td><code>.panel-in</code></td><td>标签面板显示</td><td class="mono">400ms</td><td class="mono">(.2,.8,.2,1)</td></tr>
+          <tr style="--i:5"><td>数字滚动</td><td><code>[data-count]</code> · <code>UI.countUp</code></td><td>计数到达</td><td class="mono">900ms</td><td class="mono">easeOutCubic</td></tr>
+          <tr style="--i:6"><td>行依次进入</td><td><code>.stagger &gt; *</code></td><td>结果渲染</td><td class="mono">400ms / 间隔 50ms</td><td class="mono">(.2,.8,.2,1)</td></tr>
+          <tr style="--i:7"><td>柱条生长</td><td><code>.hbar</code> <code>.vbar</code> <code>.cell-bar</code></td><td>图表渲染</td><td class="mono">600–700ms / 间隔 50–60ms</td><td class="mono">(.2,.8,.2,1)</td></tr>
+          <tr style="--i:8"><td>散点弹出</td><td><code>.scatter .pt</code></td><td>图表渲染</td><td class="mono">360ms / 间隔 45ms</td><td class="mono">spring (.34,1.56,.64,1)</td></tr>
+          <tr style="--i:9"><td>弧线 / 连线绘制</td><td><code>.draw</code> (stroke-dashoffset)</td><td>依存树、对齐图渲染</td><td class="mono">800ms / 间隔 90ms</td><td class="mono">in-out (.65,0,.35,1)</td></tr>
+          <tr style="--i:10"><td>抽屉滑入 + 遮罩</td><td><code>.drawer.open</code> <code>.backdrop.open</code></td><td>打开详情</td><td class="mono">380ms + 300ms</td><td class="mono">(.2,.8,.2,1)</td></tr>
+          <tr style="--i:11"><td>提示滑入 / 退出</td><td><code>.toast</code> · <code>UI.toast</code></td><td>操作完成</td><td class="mono">320ms / 220ms</td><td class="mono">spring / in-out</td></tr>
+          <tr style="--i:12"><td>骨架屏</td><td><code>.skel</code></td><td>加载中</td><td class="mono">1.4s 循环</td><td class="mono">ease-in-out</td></tr>
+          <tr style="--i:13"><td>顶部进度线</td><td><code>.topbar.busy</code> · <code>UI.busy</code></td><td>请求或任务进行</td><td class="mono">1.4s 循环</td><td class="mono">in-out</td></tr>
+          <tr style="--i:14"><td>条纹进度条</td><td><code>.prog.striped</code></td><td>后台任务运行</td><td class="mono">0.7s 循环 · 宽度 500ms</td><td class="mono">linear</td></tr>
+          <tr style="--i:15"><td>思考标题流光</td><td><code>.shimmer-text</code></td><td>助手运行中</td><td class="mono">1.8s 循环</td><td class="mono">linear</td></tr>
+          <tr style="--i:16"><td>工具步骤进行中</td><td><code>.step.active</code></td><td>工具调用中</td><td class="mono">脉冲 1.4s · 扫光 1.5s 循环</td><td class="mono">ease-out / in-out</td></tr>
+          <tr style="--i:17"><td>工具步骤完成</td><td><code>.step.done</code> <code>.chk</code></td><td>工具返回</td><td class="mono">300ms + 360ms</td><td class="mono">spring</td></tr>
+          <tr style="--i:18"><td>思考折叠</td><td><code>.think[data-open]</code></td><td>运行结束 / 点击</td><td class="mono">380ms</td><td class="mono">(.2,.8,.2,1)</td></tr>
+          <tr style="--i:19"><td>逐字输出 + 光标</td><td><code>.caret</code> · 流式写入</td><td>回答生成</td><td class="mono">16–32ms / 2–3 字 · 光标 1s</td><td class="mono">steps(1)</td></tr>
+          <tr style="--i:20"><td>结果组件进入</td><td><code>.ou</code> + <code>--i</code></td><td>组件到达</td><td class="mono">460ms / 间隔 110ms</td><td class="mono">(.2,.8,.2,1) + blur</td></tr>
+          <tr style="--i:21"><td>用户消息进入</td><td><code>.msg-user</code></td><td>发送</td><td class="mono">320ms</td><td class="mono">spring</td></tr>
+          <tr style="--i:22"><td>词性确认</td><td><code>.pchip.conf.just</code></td><td>确认 / 修改</td><td class="mono">320ms</td><td class="mono">spring</td></tr>
+          <tr style="--i:23"><td>状态脉冲 / 旋转</td><td><code>.dot.pulse</code> <code>.spin</code></td><td>导入中 / 建索引</td><td class="mono">1.4s / 0.8s 循环</td><td class="mono">ease-out / linear</td></tr>
+          <tr style="--i:24"><td>降低动效</td><td><code>@media (prefers-reduced-motion: reduce)</code></td><td>系统设置</td><td class="mono">全部关闭</td><td class="mono">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
