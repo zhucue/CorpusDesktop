@@ -1,5 +1,5 @@
 /**
- * OpenUI component catalog (contracts/p2.md §五, p3.md §五, p4.md §五). Single source for the
+ * OpenUI component catalog (contracts/p2.md §五, p3.md §五, p4.md §五, p5.md §四). Single source for the
  * system-prompt catalog; the web app registers renderers under the same names
  * and prop order. No renderer here: `component` is null on the server.
  */
@@ -154,9 +154,36 @@ export const KbCitation = defineComponent({
   component: null,
 });
 
+export const SpanView = defineComponent({
+  name: 'SpanView',
+  description: '一句中的片段标注与关系（如翻译策略、偏误）。用户要求标出或查看某句的片段时，在 annot_spans 或 annot_suggest_spans 之后使用：text 为该句文本，spans 的 start、end 为句内码点偏移（取工具返回的 start、end），label 为标签；relations 的 from、to 为 spans 数组的 0 起下标。',
+  props: z.object({
+    document_id: z.string(),
+    sentence_index: z.number(),
+    text: z.string(),
+    spans: z.array(z.object({ start: z.number(), end: z.number(), label: z.string() })),
+    relations: z.array(z.object({ from: z.number(), to: z.number(), label: z.string() })),
+  }),
+  component: null,
+});
+
+export const AlignmentGraph = defineComponent({
+  name: 'AlignmentGraph',
+  description: '一个句对的词级对齐连线图。align_pairs 或 align_suggest 之后使用：src_tokens、tgt_tokens 取句对两侧的 tokens；links 每条对齐一项，src、tgt 为 1 起 token 序号（取 src_tokens、tgt_tokens 字段），status 原样复制。',
+  props: z.object({
+    src_tokens: z.array(z.string()),
+    tgt_tokens: z.array(z.string()),
+    links: z.array(z.object({
+      src: z.array(z.number()), tgt: z.array(z.number()),
+      status: z.enum(['suggested', 'confirmed', 'modified', 'rejected']).optional(),
+    })),
+  }),
+  component: null,
+});
+
 export const COMPONENTS = [
   KwicTable, FreqChart, CollocationTable, KeywordTable, DistributionChart, EvidenceCard, JobStatus, Callout,
-  DependencyTree, AnnotationDiff, TermCard, KbCitation,
+  DependencyTree, AnnotationDiff, TermCard, KbCitation, SpanView, AlignmentGraph,
 ];
 export const COMPONENT_NAMES = COMPONENTS.map(component => component.name);
 

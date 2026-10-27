@@ -168,6 +168,41 @@ const draftTerms = Array.from({ length: 25 }, (_, i) => ({
   created_at: `2026-10-27T00:00:${String(i).padStart(2, '0')}Z`,
 }));
 
+// ---- P5 spans, alignment, agreement fixtures (contracts/p5.md §三)
+export const SPAN_LAYER = 'layer-span';
+export const ALIGN_LAYER = 'layer-align';
+/** doc1 sentence 3 starts at code point 100. */
+export const SPAN_SENTENCE = {
+  document_id: 'doc1', sentence_index: 3, text: '他们翻译这本书。', start_cp: 100, end_cp: 108,
+  spans: [
+    { id: 'span-1', start_cp: 102, end_cp: 104, text: '翻译', label: '直译', attrs: {}, source: `human:${USER.id}`, status: 'confirmed', model_label: null, revision: 1, annotator_id: USER.id, updated_at: '2026-10-27T00:00:00Z' },
+    { id: 'span-2', start_cp: 104, end_cp: 107, text: '这本书', label: '增译', attrs: { note: '量词' }, source: 'model:fake-model', status: 'suggested', model_label: '增译', revision: 1, annotator_id: USER.id, updated_at: '2026-10-27T00:00:00Z' },
+  ],
+  relations: [
+    { id: 'rel-1', from_span_id: 'span-2', to_span_id: 'span-1', label: 'cause', source: `human:${USER.id}`, status: 'confirmed', revision: 1, annotator_id: USER.id },
+  ],
+};
+export const ALIGN_PAGE = {
+  items: [{
+    src: { document_id: 'src-doc', sentence_index: 0, text: 'He translated the book.', tokens: [
+      { index: 1, form: 'He' }, { index: 2, form: 'translated' }, { index: 3, form: 'the' }, { index: 4, form: 'book' }, { index: 5, form: '.' }] },
+    tgt: { document_id: 'tgt-doc', sentence_index: 0, text: '他翻译了这本书。', tokens: ['他', '翻译', '了', '这本书', '。'] },
+    alignments: [
+      { id: 'al-1', level: 'word', src_tokens: [1], tgt_tokens: [1], score: 0.9, source: 'model:fake-model', status: 'confirmed', revision: 1, annotator_id: USER.id },
+      { id: 'al-2', level: 'word', src_tokens: [3, 4], tgt_tokens: [4], score: null, source: 'model:fake-model', status: 'suggested', revision: 1, annotator_id: USER.id },
+    ],
+  }],
+  next_cursor: 'src-doc:0',
+};
+export const AGREEMENT = {
+  annotators: [{ user_id: USER.id, email: USER.email, done: 50 }, { user_id: 'u2', email: 'b@example.edu', done: 50 }],
+  pairwise: [{ a: USER.id, b: 'u2', kappa: 0.72, n: 50 }], alpha: 0.71, per_label: [{ label: '直译', kappa: 0.8 }],
+};
+export const DISAGREEMENTS = Array.from({ length: 12 }, (_, i) => ({
+  target_kind: 'span', target_key: `doc1:${i}:0-2`, document_id: 'doc1', sentence_index: i,
+  values: [{ annotator_id: USER.id, label: '直译' }, { annotator_id: 'u2', label: '意译' }],
+}));
+
 export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' } = {}) {
   const requests: ApiRequest[] = [];
   const jobPolls = new Map<string, number>();
@@ -209,7 +244,10 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
       return json(response, 200, { id: `job-${statJob[1]}`, project_id: PROJECT, kind: 'stats', state: 'queued', progress: { done: 0, total: null, message: '' }, result: null, error: null });
     }
     // ---- P4 knowledge base (contracts/p4.md §四)
-    if (path === `/projects/${PROJECT}/kb/search` && request.method === 'POST') return json(response, 200, KB_SEARCH);
+    if (path === `/projects/${PROJECT}/kb/search` && request.method === 'POST') {
+      const ids: string[] | undefined = body.document_ids;
+      return json(response, 200, ids ? { ...KB_SEARCH, items: KB_SEARCH.items.filter(item => ids.includes(item.document.id)) } : KB_SEARCH);
+    }
     if (path === `/projects/${PROJECT}/kb/documents` && request.method === 'POST') {
       return json(response, 201, {
         id: 'note-1', project_id: PROJECT, kind: body.kind, title: body.title, source: null, meta: {}, status: 'ready', error: null,
@@ -270,6 +308,33 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
       return json(response, 200, {
         id: 'annot-1', token_index: body.token_index, label: body.label ?? null, head: body.head ?? null, model_label: 'obj', model_head: 2,
         source: 'model:fake-model', status: 'suggested', revision: 1, updated_by: USER.id, updated_at: new Date().toISOString(),
+      });
+    }
+    // ---- P5 spans, alignment, agreement (contracts/p5.md §三)
+    if (path === `/layers/${SPAN_LAYER}/documents`) return json(response, 200, { items: LAYER_DOCS, total: LAYER_DOCS.length });
+    if (path === `/layers/${SPAN_LAYER}/spans` && request.method === 'GET') {
+      const at = url.searchParams.get('document_id') === 'doc1' && url.searchParams.get('cursor') === 'doc1:2';
+      return json(response, 200, { items: at ? [SPAN_SENTENCE] : [], next_cursor: null });
+    }
+    if (path === `/layers/${SPAN_LAYER}/spans/suggest` && request.method === 'POST') {
+      const spans = body.spans.map((s: any, i: number) => ({
+        id: `new-span-${i}`, ...s, attrs: s.attrs ?? {}, text: null, source: 'model:agent', status: 'suggested', model_label: s.label, revision: 1, annotator_id: USER.id,
+      }));
+      const relations = (body.relations ?? []).map((r: any, i: number) => ({
+        id: `new-rel-${i}`, from_span_id: typeof r.from === 'number' ? spans[r.from].id : r.from,
+        to_span_id: typeof r.to === 'number' ? spans[r.to].id : r.to, label: r.label, source: 'model:agent', status: 'suggested', revision: 1,
+      }));
+      return json(response, 200, { spans, relations, skipped: [] });
+    }
+    if (path === `/layers/${SPAN_LAYER}/agreement`) return json(response, 200, AGREEMENT);
+    if (path === `/layers/${SPAN_LAYER}/disagreements`) return json(response, 200, { items: DISAGREEMENTS, next_cursor: 'doc1:11' });
+    if (path === `/layers/${ALIGN_LAYER}/alignments` && request.method === 'GET') return json(response, 200, ALIGN_PAGE);
+    if (path === `/layers/${ALIGN_LAYER}/alignments/suggest` && request.method === 'POST') {
+      return json(response, 200, {
+        items: body.links.map((l: any, i: number) => ({
+          id: `new-al-${i}`, level: 'word', src_tokens: l.src, tgt_tokens: l.tgt, score: null, source: 'model:agent', status: 'suggested', revision: 1, annotator_id: USER.id,
+        })),
+        skipped: [],
       });
     }
     return fail(response, 404, 'NOT_FOUND');

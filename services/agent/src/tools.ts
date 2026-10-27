@@ -1,5 +1,5 @@
 /**
- * Pi customTools (contracts/p2.md §五 工具, p3.md §五 annot.*, p4.md §五 kb.*). Each tool is a thin call to the api
+ * Pi customTools (contracts/p2.md §五 工具, p3.md §五 annot.*, p4.md §五 kb.*, p5.md §四 annot.spans / align.*). Each tool is a thin call to the api
  * with the run's agent token; the api decides permissions. Results stay compact.
  */
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -40,6 +40,12 @@ type ScopeInput = { corpus_id?: string; subcorpus_id?: string } | undefined;
 
 const oneOf = (values: string[]) => Type.Optional(Type.Union(values.map(value => Type.Literal(value))));
 const positiveInt = () => Type.Optional(Type.Integer({ minimum: 1 }));
+/** Document selector of the sentence-level annotation tools (one of; none → the layer's first document). */
+const DocArgs = {
+  document_id: Type.Optional(Type.String()),
+  document_title: Type.Optional(Type.String({ minLength: 1 })),
+  document_ordinal: Type.Optional(Type.Integer({ minimum: 1 })),
+};
 const MAX_STAT_ROWS = 50;
 const MAX_HITS = 20;
 const MAX_DIFF_SENTENCES = 10;
@@ -50,6 +56,8 @@ const MAX_KB_ITEMS = 8;
 const MAX_CHUNK_CHARS = 600;
 const MAX_DRAFT_TERMS = 20;
 const MAX_LIST = 50;
+const MAX_PAIRS = 10;
+const MAX_DISAGREEMENTS = 10;
 const seg = (value: string | number) => encodeURIComponent(String(value));
 /** List endpoints return either a bare array or {items, total}. */
 const listItems = (list: any): any[] => Array.isArray(list) ? list : list?.items ?? [];
@@ -139,6 +147,8 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     layer_id: layer.id, corpus_id: layer.corpus_id, corpus_name: layer.corpus_name, kind: layer.kind, name: layer.name,
     label_set_id: layer.label_set_id, source_model: layer.source_model, status: layer.status, job_id: layer.job_id ?? null,
     progress: layer.progress, document_progress: layer.documents, error: layer.error ?? null,
+    ...Object.fromEntries(['mode', 'level', 'base_layer_id', 'src_corpus_id', 'tgt_corpus_id', 'guideline_document_id']
+      .filter(key => layer[key] !== undefined).map(key => [key, layer[key]])),
   });
 
   /** Documents of a layer in corpus order (GET /layers/{id}/documents), cached per run. */
@@ -174,6 +184,36 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     }
     return { ...docs[0], note: `未指定文档，使用该层第一个文档“${docs[0].title}”` };
   }
+
+  /** One sentence of a span layer: GET /layers/{id}/spans with the (exclusive) cursor at the previous sentence. */
+  async function readSpanSentence(layerId: string, documentId: string, sentenceIndex: number, signal?: AbortSignal): Promise<any> {
+    const page = await api.get<any>(`/layers/${seg(layerId)}/spans${query({
+      document_id: documentId, cursor: sentenceIndex > 0 ? `${documentId}:${sentenceIndex - 1}` : undefined, page_size: 1,
+    })}`, signal);
+    const sentence = listItems(page).find((s: any) => s.document_id === documentId && s.sentence_index === sentenceIndex);
+    if (!sentence) throw new Error(`SENTENCE_NOT_FOUND: 文档 ${documentId} 没有第 ${sentenceIndex + 1} 句`);
+    return sentence;
+  }
+
+  /** Spans get sentence-relative start/end (code points); relations point at span array indices. */
+  const compactSpanSentence = (sentence: any) => {
+    const base = Number(sentence.start_cp ?? 0);
+    const spans: any[] = sentence.spans ?? [];
+    const indexOf = new Map(spans.map((s, i) => [s.id, i]));
+    return {
+      document_id: sentence.document_id, sentence_index: sentence.sentence_index, text: sentence.text,
+      start_cp: sentence.start_cp, end_cp: sentence.end_cp,
+      spans: spans.map(s => ({
+        span_id: s.id, start: s.start_cp - base, end: s.end_cp - base, start_cp: s.start_cp, end_cp: s.end_cp, text: s.text,
+        label: s.label, attrs: s.attrs ?? {}, status: s.status, source: s.source, model_label: s.model_label ?? null,
+        ...(s.annotator_id ? { annotator_id: s.annotator_id } : {}),
+      })),
+      relations: (sentence.relations ?? []).map((r: any) => ({
+        relation_id: r.id, from: indexOf.get(r.from_span_id) ?? null, to: indexOf.get(r.to_span_id) ?? null,
+        from_span_id: r.from_span_id, to_span_id: r.to_span_id, label: r.label, status: r.status, source: r.source,
+      })),
+    };
+  };
 
   /** A job still running after the wait: hand back job_id instead of failing. */
   const pendingOutput = (job: Job, what: string, extra: Record<string, unknown> = {}): ToolOutput => ({
@@ -506,7 +546,7 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     }),
     spec({
       name: 'annot.layers',
-      description: `列出项目标注层（pos 或 dep）与校对进度；每层附文档列表 documents（按语料顺序，最多 ${MAX_LAYER_DOCS} 个，document_ordinal 即其中的 1 起序号）。`,
+      description: `列出项目标注层（pos、dep、span、relation、alignment）与校对进度；每层附文档列表 documents（按语料顺序，最多 ${MAX_LAYER_DOCS} 个，document_ordinal 即其中的 1 起序号）。`,
       parameters: Type.Object({ corpus_id: Type.Optional(Type.String()) }),
       run: async (args, signal) => {
         const items = listItems(await api.get<any>(`/projects/${projectId}/layers${query({ corpus_id: args.corpus_id })}`, signal));
@@ -689,6 +729,173 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
         return { data: compactJob(job), summary: `导出任务 ${job.id}`, ref: { kind: 'job', id: job.id } };
       },
     }),
+    // ---- P5 spans, relations, alignment, agreement (contracts/p5.md §三–四)
+    spec({
+      name: 'annot.spans',
+      description: '读取片段层中一句的片段与关系。片段 start/end 为句内码点偏移（可直接用于 SpanView），start_cp/end_cp 为文档内码点偏移；关系 from/to 为 spans 数组的 0 起下标。文档用 document_id、document_title 或 document_ordinal 之一指定；都省略时用该层第一个文档。',
+      parameters: Type.Object({
+        layer_id: Type.String(),
+        ...DocArgs,
+        sentence_index: Type.Integer({ minimum: 0 }),
+      }),
+      run: async (args, signal) => {
+        const doc = await resolveDocument(args.layer_id, args, signal);
+        const sentence = await readSpanSentence(args.layer_id, doc.document_id, args.sentence_index, signal);
+        return {
+          data: {
+            layer_id: args.layer_id, ...compactSpanSentence(sentence),
+            ...(doc.title !== null ? { document_title: doc.title } : {}), ...(doc.note ? { note: doc.note } : {}),
+          },
+          summary: `第 ${args.sentence_index + 1} 句，${sentence.spans?.length ?? 0} 个片段，${sentence.relations?.length ?? 0} 条关系`,
+          ref: { kind: 'layer', id: args.layer_id },
+        };
+      },
+    }),
+    spec({
+      name: 'annot.suggest_spans',
+      description: '对一句提出片段与关系建议，写入为 suggested 待人工确认。spans 的 start_cp/end_cp 为文档内码点偏移（= annot_spans 返回的句子 start_cp + 句内偏移），必须落在该句内；relations 的 from/to 为本次 spans 的 0 起下标，或已有片段的 span_id。只能建议，不能确认。',
+      parameters: Type.Object({
+        layer_id: Type.String(),
+        ...DocArgs,
+        sentence_index: Type.Integer({ minimum: 0 }),
+        spans: Type.Array(Type.Object({
+          start_cp: Type.Integer({ minimum: 0 }),
+          end_cp: Type.Integer({ minimum: 1 }),
+          label: Type.String({ minLength: 1 }),
+          attrs: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+        }), { minItems: 1, maxItems: 50 }),
+        relations: Type.Optional(Type.Array(Type.Object({
+          from: Type.Union([Type.Integer({ minimum: 0 }), Type.String()]),
+          to: Type.Union([Type.Integer({ minimum: 0 }), Type.String()]),
+          label: Type.String({ minLength: 1 }),
+        }), { maxItems: 50 })),
+      }),
+      run: async (args, signal) => {
+        const doc = await resolveDocument(args.layer_id, args, signal);
+        const sentence = await readSpanSentence(args.layer_id, doc.document_id, args.sentence_index, signal);
+        const [lo, hi] = [Number(sentence.start_cp ?? 0), Number(sentence.end_cp ?? 0)];
+        for (const span of args.spans) {
+          if (span.start_cp >= span.end_cp || span.start_cp < lo || span.end_cp > hi) {
+            throw new Error(`SPAN_OUT_OF_SENTENCE: 片段 ${span.start_cp}-${span.end_cp} 不在该句范围 ${lo}-${hi} 内（start_cp/end_cp 为文档内偏移 = 句子 start_cp + 句内偏移）`);
+          }
+        }
+        for (const rel of args.relations ?? []) {
+          for (const end of [rel.from, rel.to]) {
+            if (typeof end === 'number' && end >= args.spans.length) throw new Error(`INVALID_RELATION: 下标 ${end} 超出 spans 数量 ${args.spans.length}`);
+          }
+        }
+        const result = await api.post<any>(`/layers/${seg(args.layer_id)}/spans/suggest`, {
+          document_id: doc.document_id, sentence_index: args.sentence_index, spans: args.spans,
+          ...(args.relations?.length ? { relations: args.relations } : {}),
+        }, signal);
+        const spans = listItems(result?.spans ?? result);
+        const relations: any[] = result?.relations ?? [];
+        const chars = Array.from(String(sentence.text ?? ''));
+        return {
+          data: {
+            layer_id: args.layer_id, document_id: doc.document_id, sentence_index: args.sentence_index,
+            ...(doc.note ? { note: doc.note } : {}),
+            spans: spans.map((s: any) => ({
+              span_id: s.id, start: s.start_cp - lo, end: s.end_cp - lo, start_cp: s.start_cp, end_cp: s.end_cp,
+              text: s.text ?? chars.slice(s.start_cp - lo, s.end_cp - lo).join(''), label: s.label, status: s.status, source: s.source,
+            })),
+            relations: relations.map((r: any) => ({
+              relation_id: r.id, from_span_id: r.from_span_id, to_span_id: r.to_span_id, label: r.label, status: r.status,
+            })),
+            ...(result?.skipped !== undefined ? { skipped: result.skipped } : {}),
+          },
+          summary: `已建议 ${spans.length} 个片段、${relations.length} 条关系`,
+          ref: { kind: 'layer', id: args.layer_id },
+        };
+      },
+    }),
+    spec({
+      name: 'align.pairs',
+      description: `读取对齐层的句对与对齐（最多 ${MAX_PAIRS} 对）。tokens 为词形列表；对齐的 src_tokens/tgt_tokens 为 1 起 token 序号（句级对齐为空）。给 src_document_id 与 src_sentence_index 时从该句开始；翻页传 next_cursor。`,
+      parameters: Type.Object({
+        layer_id: Type.String(),
+        src_document_id: Type.Optional(Type.String()),
+        src_sentence_index: Type.Optional(Type.Integer({ minimum: 0 })),
+        cursor: Type.Optional(Type.String()),
+      }),
+      run: async (args, signal) => {
+        let cursor = args.cursor;
+        if (!cursor && args.src_document_id && args.src_sentence_index) cursor = `${args.src_document_id}:${args.src_sentence_index - 1}`;
+        const page = await api.get<any>(`/layers/${seg(args.layer_id)}/alignments${query({
+          src_document_id: args.src_document_id, cursor, page_size: MAX_PAIRS,
+        })}`, signal);
+        const side = (s: any) => ({
+          document_id: s?.document_id, sentence_index: s?.sentence_index, text: s?.text ?? '',
+          tokens: (s?.tokens ?? []).map((t: any) => typeof t === 'string' ? t : String(t?.form ?? '')),
+        });
+        const pairs = listItems(page).slice(0, MAX_PAIRS).map((pair: any) => ({
+          src: side(pair.src), tgt: side(pair.tgt),
+          alignments: (pair.alignments ?? []).map((a: any) => ({
+            alignment_id: a.id, level: a.level, src_tokens: a.src_tokens ?? [], tgt_tokens: a.tgt_tokens ?? [],
+            score: a.score ?? null, source: a.source, status: a.status,
+          })),
+        }));
+        return {
+          data: { layer_id: args.layer_id, pairs, next_cursor: page?.next_cursor ?? null },
+          summary: `${pairs.length} 个句对`,
+          ref: { kind: 'layer', id: args.layer_id },
+        };
+      },
+    }),
+    spec({
+      name: 'align.suggest',
+      description: '对一个句对提出词级对齐建议，写入为 suggested 待人工确认。links 中 src/tgt 为 1 起 token 序号（与 align_pairs 的 tokens 对应，一对多写成多个序号）。只能建议，不能确认。',
+      parameters: Type.Object({
+        layer_id: Type.String(),
+        src_document_id: Type.String(),
+        src_sentence_index: Type.Integer({ minimum: 0 }),
+        tgt_document_id: Type.String(),
+        tgt_sentence_index: Type.Integer({ minimum: 0 }),
+        links: Type.Array(Type.Object({
+          src: Type.Array(Type.Integer({ minimum: 1 }), { minItems: 1 }),
+          tgt: Type.Array(Type.Integer({ minimum: 1 }), { minItems: 1 }),
+        }), { minItems: 1, maxItems: 200 }),
+      }),
+      run: async (args, signal) => {
+        const { layer_id: layerId, ...body } = args;
+        const result = await api.post<any>(`/layers/${seg(layerId)}/alignments/suggest`, body, signal);
+        const items = Array.isArray(result) || Array.isArray(result?.items) ? listItems(result) : result ? [result] : [];
+        return {
+          data: {
+            layer_id: layerId, src_document_id: args.src_document_id, src_sentence_index: args.src_sentence_index,
+            tgt_document_id: args.tgt_document_id, tgt_sentence_index: args.tgt_sentence_index,
+            alignments: items.map((a: any) => ({
+              alignment_id: a.id, src_tokens: a.src_tokens ?? [], tgt_tokens: a.tgt_tokens ?? [], status: a.status, source: a.source,
+            })),
+            ...(result?.skipped !== undefined ? { skipped: result.skipped } : {}),
+          },
+          summary: `已建议 ${items.length} 条对齐`,
+          ref: { kind: 'layer', id: layerId },
+        };
+      },
+    }),
+    spec({
+      name: 'annot.agreement',
+      description: `标注层的多人一致性：各标注者进度、两两 Cohen's κ、Krippendorff's α、各标签 κ，以及前 ${MAX_DISAGREEMENTS} 条分歧。`,
+      parameters: Type.Object({ layer_id: Type.String() }),
+      run: async (args, signal) => {
+        const [agreement, disagreements] = await Promise.all([
+          api.get<any>(`/layers/${seg(args.layer_id)}/agreement`, signal),
+          api.get<any>(`/layers/${seg(args.layer_id)}/disagreements`, signal),
+        ]);
+        const items = listItems(disagreements);
+        return {
+          data: {
+            layer_id: args.layer_id, annotators: agreement.annotators ?? [], pairwise: agreement.pairwise ?? [],
+            alpha: agreement.alpha ?? null, per_label: (agreement.per_label ?? []).slice(0, MAX_LABELS),
+            disagreements: items.slice(0, MAX_DISAGREEMENTS),
+            more_disagreements: Boolean(disagreements?.next_cursor) || items.length > MAX_DISAGREEMENTS,
+          },
+          summary: `α ${agreement.alpha ?? '无'}，${(agreement.pairwise ?? []).length} 组 κ，分歧 ${items.length}${disagreements?.next_cursor ? '+' : ''} 条`,
+          ref: { kind: 'layer', id: args.layer_id },
+        };
+      },
+    }),
     // ---- P4 knowledge base (contracts/p4.md §四–五)
     spec({
       name: 'kb.search',
@@ -710,9 +917,12 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
           kind: item.document?.kind, locator: locatorText(item.chunk?.locator), text: clip(item.chunk?.text, MAX_CHUNK_CHARS), score: item.score,
         }));
         const terms = (result.terms ?? []).map(compactTerm);
+        const docIds = new Set(items.map((item: any) => item.document_id));
         return {
           data: { q: args.q, items, terms, ...(result.note ? { note: result.note } : {}) },
           summary: `${items.length} 个片段，${terms.length} 条术语`,
+          // All chunks from one document → the tool card can open it.
+          ...(items.length && docIds.size === 1 ? { ref: { kind: 'kb_document', id: String(items[0].document_id) } } : {}),
         };
       },
     }),

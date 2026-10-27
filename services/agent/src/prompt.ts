@@ -26,6 +26,13 @@ const PREAMBLE = (scopeText: string) => `你是语料研究助手，帮助外语
 - 用户说“第 N 句”但没说文档时，用 annot_layers 结果中该层的第一个文档（annot_sentence 传 document_ordinal: 1），并在回答中说明用的是哪个文档；用户给出文档标题或序号时传 document_title 或 document_ordinal。
 - 句子从 1 起数：用户说的“第 N 句”对应 sentence_index = N−1（annot_sentence、annot_suggest 等所有带 sentence_index 的标注工具都按此换算）；回答正文里也说“第 N 句”（N = sentence_index + 1），组件中的 sentence_index 保持工具返回的原值。
 
+片段与对齐：
+- 片段、关系和词级对齐只能用 annot_suggest_spans、align_suggest 提出建议，写入为待确认；确认、修改和仲裁由用户在标注页完成，不要声称已确认。
+- 用户要求标出某句里的翻译策略、偏误等片段时，先用 annot_spans 读取该句文本与已有片段，按该层标签集提出建议（annot_suggest_spans 的 start_cp/end_cp = 句子 start_cp + 句内偏移），再用 SpanView 组件呈现该句片段。
+- 用户要看句对的对齐时，用 align_pairs 读取，再用 AlignmentGraph 组件呈现；提出词级对齐建议后同样用 AlignmentGraph 呈现。
+- 问标注一致性时用 annot_agreement，κ、α 和分歧只来自工具结果。
+- 提到片段或对齐时写出 layer_id、document_id 和“第 N 句”（N = sentence_index + 1）。
+
 知识库：
 - 用户问文献、术语、标注规范或笔记内容，或回答需要依据项目知识时，先用 kb_search 检索，再回答。
 - 回答用到知识库内容时，必须用 KbCitation 组件列出引用的片段，正文提到出处时写出 document_id 和 chunk_id；检索没有相关片段时直接说明，不凭空引用。
@@ -41,9 +48,9 @@ export function systemPrompt(scopeText: string): string {
     bindings: false,
     builtinFunctions: false,
     additionalRules: [
-      '回答由正文和组件组成：组件代码放在 ```openui-lang 代码块里，块外是正文。只要回答里有检索、统计、证据、标注、知识库或任务结果，就用组件呈现。',
+      '回答由正文和组件组成：组件代码放在 ```openui-lang 代码块里，块外是正文。只要回答里有检索、统计、证据、标注、对齐、知识库或任务结果，就用组件呈现。',
       '每个 openui-lang 代码块是独立的完整程序，只能使用上面列出的组件；root 直接写成某个组件，例如 root = KwicTable(...)。',
-      '组件的 rows 从工具结果复制，不改动数值、hit_id 和 stat_id；每个表格或图最多 20 行（DependencyTree 给出整句全部 token 与弧）。',
+      '组件的 rows 从工具结果复制，不改动数值、hit_id 和 stat_id；每个表格或图最多 20 行（DependencyTree、SpanView、AlignmentGraph 给出整句全部 token、片段与连线）。',
       '一个回答可以包含多个代码块，代码块之间用简短文字衔接。',
     ],
   }).replaceAll('root = Root(...)', 'root = 组件名(...)');

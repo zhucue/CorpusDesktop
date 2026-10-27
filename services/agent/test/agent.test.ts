@@ -9,7 +9,7 @@ import { systemPrompt } from '../src/prompt.ts';
 import { Runner } from '../src/runner.ts';
 import { createApp } from '../src/server.ts';
 import {
-  AGENT_TOKEN, CORPUS, COOKIE, DEP_LAYER, KB_SEARCH, LONG_CHUNK, MemoryStore, ORIGIN, PROJECT, USER, fakeApi, fakeModel, parseSse, testConfig, type Reply,
+  AGENT_TOKEN, AGREEMENT, ALIGN_LAYER, CORPUS, COOKIE, DEP_LAYER, KB_SEARCH, SPAN_LAYER, LONG_CHUNK, MemoryStore, ORIGIN, PROJECT, USER, fakeApi, fakeModel, parseSse, testConfig, type Reply,
 } from './fixtures.ts';
 
 const closers: (() => Promise<void>)[] = [];
@@ -112,9 +112,9 @@ test('full run: search and collocation tools, prose and OpenUI streamed, message
   assert.match(system, /KwicTable\(search_id: string/);
   assert.match(system, /UD 中文/);
   const toolNames = model.requests[0].body.tools.map((t: any) => t.function.name);
-  assert.equal(toolNames.length, 32);
+  assert.equal(toolNames.length, 37);
   assert.ok(!toolNames.some((n: string) => ['read', 'bash', 'edit', 'write'].includes(n)));
-  assert.ok(toolNames.includes('stats_collocations') && toolNames.includes('jobs_cancel') && toolNames.includes('kb_search'));
+  assert.ok(toolNames.includes('stats_collocations') && toolNames.includes('jobs_cancel') && toolNames.includes('kb_search') && toolNames.includes('align_suggest'));
 
   // persisted: user + assistant, session idle, title from first message, Pi session file present
   const detail = await (await call('GET', `/agent/sessions/${session.id}`)).json() as any;
@@ -463,18 +463,184 @@ test('TermCard block parses with the contract props', () => {
   assert.equal(card.props.status, 'confirmed');
 });
 
-test('catalog lists the 12 components with the P3 and P4 signatures', () => {
-  assert.equal(COMPONENTS.length, 12);
+test('catalog lists the 14 components with the P3, P4 and P5 signatures', () => {
+  assert.equal(COMPONENTS.length, 14);
   const catalog = componentCatalog();
   for (const component of COMPONENTS) assert.ok(catalog.includes(component.name), component.name);
   assert.match(catalog, /DependencyTree\(document_id: string, sentence_index: number, tokens: .*arcs: .*highlight\?/);
   assert.match(catalog, /AnnotationDiff\(layer_id: string, document_id: string, sentence_index: number, tokens: /);
   assert.match(catalog, /TermCard\(term_id: string, term: string, translations: .*definition: string, domain: string, examples: .*status: /);
   assert.match(catalog, /KbCitation\(items: /);
+  assert.match(catalog, /SpanView\(document_id: string, sentence_index: number, text: string, spans: .*relations: /);
+  assert.match(catalog, /AlignmentGraph\(src_tokens: string\[\], tgt_tokens: string\[\], links: /);
 });
 
 test('system prompt states 1-based sentence numbering', () => {
   const prompt = systemPrompt('UD 中文');
   assert.ok(prompt.includes('用户说的“第 N 句”对应 sentence_index = N−1'));
   assert.ok(prompt.includes('组件中的 sentence_index 保持工具返回的原值'));
+  assert.match(prompt, /annot_suggest_spans/);
+  assert.match(prompt, /AlignmentGraph/);
+});
+
+// ---------------------------------------------------------------- P5 spans, alignment, agreement
+
+const toolResults = (model: { requests: any[] }, index: number) =>
+  model.requests[index].body.messages.filter((m: any) => m.role === 'tool').map((m: any) => JSON.parse(m.content));
+
+test('kb.search sets a kb_document ref when all chunks come from one document', async () => {
+  const { call, createSession } = await setup([
+    { tool: 'kb_search', args: { q: '翻译腔', document_ids: ['kb-doc-1'] } },
+    { tool: 'kb_search', args: { q: '翻译腔' } },
+    { text: '见 chunk-1。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '翻译腔' })).text());
+  const results = events.filter(e => e.event === 'tool_result').map(e => e.data);
+  assert.deepEqual(results[0].result_ref, { kind: 'kb_document', id: 'kb-doc-1' });
+  assert.equal(results[1].result_ref, undefined); // two documents → no single ref
+});
+
+test('annot.spans then a SpanView block; annot.suggest_spans posts the suggestion with the agent token', async () => {
+  const spanView = [
+    'root = SpanView("doc1", 3, "他们翻译这本书。", spans, relations)',
+    'spans = [{start: 2, end: 4, label: "直译"}, {start: 4, end: 7, label: "增译"}, {start: 0, end: 2, label: "增译"}]',
+    'relations = [{from: 1, to: 0, label: "cause"}]',
+  ].join('\n');
+  const suggest = {
+    layer_id: SPAN_LAYER, document_id: 'doc1', sentence_index: 3,
+    spans: [{ start_cp: 100, end_cp: 102, label: '增译', attrs: { note: '主语补出' } }], relations: [{ from: 0, to: 'span-1', label: 'cause' }],
+  };
+  const { api, model, call, createSession } = await setup([
+    { tool: 'annot_spans', args: { layer_id: SPAN_LAYER, document_ordinal: 2, sentence_index: 3 } },
+    { tool: 'annot_suggest_spans', args: suggest },
+    { text: `doc1 第 4 句的翻译策略（待确认）：\n\`\`\`openui-lang\n${spanView}\n\`\`\`\n` },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '标出第 4 句里的翻译策略' })).text());
+  assert.equal(events.at(-1)!.event, 'done');
+  const results = events.filter(e => e.event === 'tool_result').map(e => e.data);
+  assert.deepEqual(results.map(r => [r.name, r.state]), [['annot.spans', 'succeeded'], ['annot.suggest_spans', 'succeeded']]);
+  for (const r of results) assert.deepEqual(r.result_ref, { kind: 'layer', id: SPAN_LAYER });
+
+  const read = api.requests.find(r => r.path.startsWith(`/layers/${SPAN_LAYER}/spans?`))!;
+  assert.equal(read.path, `/layers/${SPAN_LAYER}/spans?document_id=doc1&cursor=doc1%3A2&page_size=1`);
+  assert.equal(read.headers.authorization, `Bearer ${AGENT_TOKEN}`);
+  const [spans, suggested] = toolResults(model, 2);
+  assert.equal(spans.document_title, '新闻 01');
+  assert.equal(spans.start_cp, 100);
+  assert.deepEqual(spans.spans.map((s: any) => [s.span_id, s.start, s.end, s.label, s.status]),
+    [['span-1', 2, 4, '直译', 'confirmed'], ['span-2', 4, 7, '增译', 'suggested']]);
+  assert.deepEqual(spans.relations, [{
+    relation_id: 'rel-1', from: 1, to: 0, from_span_id: 'span-2', to_span_id: 'span-1', label: 'cause', status: 'confirmed', source: `human:${USER.id}`,
+  }]);
+
+  const post = api.requests.find(r => r.path === `/layers/${SPAN_LAYER}/spans/suggest`)!;
+  assert.equal(post.method, 'POST');
+  assert.equal(post.headers.authorization, `Bearer ${AGENT_TOKEN}`);
+  assert.deepEqual(post.body, { document_id: 'doc1', sentence_index: 3, spans: suggest.spans, relations: suggest.relations });
+  assert.deepEqual(suggested.spans, [{
+    span_id: 'new-span-0', start: 0, end: 2, start_cp: 100, end_cp: 102, text: '他们', label: '增译', status: 'suggested', source: 'model:agent',
+  }]);
+  assert.deepEqual(suggested.relations, [{ relation_id: 'new-rel-0', from_span_id: 'new-span-0', to_span_id: 'span-1', label: 'cause', status: 'suggested' }]);
+  // the agent never confirms
+  assert.ok(!api.requests.some(r => r.method === 'PATCH' || r.path === `/layers/${SPAN_LAYER}/spans`));
+
+  const message = events.at(-1)!.data.message;
+  const view = createParser(library.toJSONSchema()).parse(message.parts[1].lang).root as any;
+  assert.equal(view?.typeName, 'SpanView');
+  assert.equal(view.props.document_id, 'doc1');
+  assert.equal(view.props.sentence_index, 3);
+  assert.equal(view.props.text, '他们翻译这本书。');
+  assert.deepEqual(view.props.spans[1], { start: 4, end: 7, label: '增译' });
+  assert.deepEqual(view.props.relations, [{ from: 1, to: 0, label: 'cause' }]);
+});
+
+test('annot.suggest_spans rejects spans outside the sentence before posting', async () => {
+  const { api, call, createSession } = await setup([
+    { tool: 'annot_suggest_spans', args: { layer_id: SPAN_LAYER, document_id: 'doc1', sentence_index: 3, spans: [{ start_cp: 2, end_cp: 4, label: '直译' }] } },
+    { text: '偏移有误。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '标出' })).text());
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.equal(result.state, 'failed');
+  assert.match(JSON.stringify(result), /SPAN_OUT_OF_SENTENCE/);
+  assert.ok(!api.requests.some(r => r.path.endsWith('/spans/suggest')));
+});
+
+test('align.pairs then an AlignmentGraph block; align.suggest posts links with the agent token', async () => {
+  const graph = [
+    'root = AlignmentGraph(["He", "translated", "the", "book", "."], ["他", "翻译", "了", "这本书", "。"], links)',
+    'links = [{src: [1], tgt: [1], status: "confirmed"}, {src: [3, 4], tgt: [4], status: "suggested"}, {src: [2], tgt: [2, 3], status: "suggested"}]',
+  ].join('\n');
+  const suggest = {
+    layer_id: ALIGN_LAYER, src_document_id: 'src-doc', src_sentence_index: 0, tgt_document_id: 'tgt-doc', tgt_sentence_index: 0,
+    links: [{ src: [2], tgt: [2, 3] }],
+  };
+  const { api, model, call, createSession } = await setup([
+    { tool: 'align_pairs', args: { layer_id: ALIGN_LAYER, src_document_id: 'src-doc', src_sentence_index: 0 } },
+    { tool: 'align_suggest', args: suggest },
+    { text: `src-doc 第 1 句的对齐：\n\`\`\`openui-lang\n${graph}\n\`\`\`\n` },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '看这对句子的对齐' })).text());
+  const results = events.filter(e => e.event === 'tool_result').map(e => e.data);
+  assert.deepEqual(results.map(r => [r.name, r.state]), [['align.pairs', 'succeeded'], ['align.suggest', 'succeeded']]);
+  for (const r of results) assert.deepEqual(r.result_ref, { kind: 'layer', id: ALIGN_LAYER });
+
+  const read = api.requests.find(r => r.path.startsWith(`/layers/${ALIGN_LAYER}/alignments?`))!;
+  assert.equal(read.path, `/layers/${ALIGN_LAYER}/alignments?src_document_id=src-doc&page_size=10`);
+  const [pairs, suggested] = toolResults(model, 2);
+  assert.deepEqual(pairs.pairs[0].src.tokens, ['He', 'translated', 'the', 'book', '.']);
+  assert.deepEqual(pairs.pairs[0].tgt.tokens, ['他', '翻译', '了', '这本书', '。']);
+  assert.deepEqual(pairs.pairs[0].alignments[1], {
+    alignment_id: 'al-2', level: 'word', src_tokens: [3, 4], tgt_tokens: [4], score: null, source: 'model:fake-model', status: 'suggested',
+  });
+  assert.equal(pairs.next_cursor, 'src-doc:0');
+
+  const post = api.requests.find(r => r.path === `/layers/${ALIGN_LAYER}/alignments/suggest`)!;
+  assert.equal(post.method, 'POST');
+  assert.equal(post.headers.authorization, `Bearer ${AGENT_TOKEN}`);
+  const { layer_id: _layer, ...body } = suggest;
+  assert.deepEqual(post.body, body);
+  assert.deepEqual(suggested.alignments, [{ alignment_id: 'new-al-0', src_tokens: [2], tgt_tokens: [2, 3], status: 'suggested', source: 'model:agent' }]);
+
+  const message = events.at(-1)!.data.message;
+  const view = createParser(library.toJSONSchema()).parse(message.parts[1].lang).root as any;
+  assert.equal(view?.typeName, 'AlignmentGraph');
+  assert.equal(view.props.src_tokens.length, 5);
+  assert.deepEqual(view.props.links[1], { src: [3, 4], tgt: [4], status: 'suggested' });
+});
+
+test('align.pairs starts at a given source sentence via the exclusive cursor', async () => {
+  const { api, call, createSession } = await setup([
+    { tool: 'align_pairs', args: { layer_id: ALIGN_LAYER, src_document_id: 'src-doc', src_sentence_index: 5 } },
+    { text: '好。' },
+  ]);
+  const session = await createSession();
+  parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '第 6 句' })).text());
+  assert.ok(api.requests.some(r => r.path === `/layers/${ALIGN_LAYER}/alignments?src_document_id=src-doc&cursor=src-doc%3A4&page_size=10`));
+});
+
+test('annot.agreement reads kappa, alpha and the top 10 disagreements', async () => {
+  const { api, model, call, createSession } = await setup([
+    { tool: 'annot_agreement', args: { layer_id: SPAN_LAYER } },
+    { text: 'κ = 0.72。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '一致性如何' })).text());
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([result.name, result.state], ['annot.agreement', 'succeeded']);
+  assert.deepEqual(result.result_ref, { kind: 'layer', id: SPAN_LAYER });
+  for (const path of [`/layers/${SPAN_LAYER}/agreement`, `/layers/${SPAN_LAYER}/disagreements`]) {
+    assert.equal(api.requests.find(r => r.path === path)!.headers.authorization, `Bearer ${AGENT_TOKEN}`);
+  }
+  const [agreement] = toolResults(model, 1);
+  assert.equal(agreement.alpha, 0.71);
+  assert.deepEqual(agreement.pairwise, AGREEMENT.pairwise);
+  assert.deepEqual(agreement.per_label, AGREEMENT.per_label);
+  assert.equal(agreement.annotators.length, 2);
+  assert.equal(agreement.disagreements.length, 10);
+  assert.equal(agreement.more_disagreements, true);
 });
