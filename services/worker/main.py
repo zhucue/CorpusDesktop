@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 
 from services.api.db import transaction
 from services.api.errors import ApiError
-from services.api.jobs import settle_corpus
+from services.api.jobs import settle_corpus, settle_layer
 from services.api.models import Corpus, Job
 
 log = logging.getLogger("worker")
@@ -88,6 +88,8 @@ def recover():
             job.error = {"code": "WORKER_RESTARTED", "message": "执行中断，请重试"}
             if job.kind in ("import", "index"):
                 _corpus_failed(db, job.params["corpus_id"], job.error["message"])
+            if job.kind == "preannotate":
+                settle_layer(db, job, job.error["message"])
 
 
 def _corpus_failed(db, corpus_id, message):

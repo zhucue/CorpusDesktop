@@ -68,6 +68,8 @@ def clean(database):
     from sqlalchemy import text
 
     from services.api.db import engine as db_engine
+    from services.api.db import transaction
+    from services.api.label_sets import seed_builtin
     from services.api.search import searches
 
     with db_engine().begin() as conn:
@@ -75,9 +77,12 @@ def clean(database):
             text(
                 "TRUNCATE users, login_sessions, projects, project_members, corpora, documents,"
                 " sentences, tokens, sentence_alignments, subcorpora, saved_queries, jobs,"
-                " stat_results, evidence, agent_sessions, agent_messages, agent_tokens CASCADE"
+                " stat_results, evidence, agent_sessions, agent_messages, agent_tokens,"
+                " label_sets, annotation_layers, annotations CASCADE"
             )
         )
+    with transaction() as db:
+        seed_builtin(db)
     searches.entries.clear()
 
 
@@ -156,7 +161,10 @@ class FakeEngine:
         page_size,
         context,
         count_timeout=20,
+        attr_filter=None,
     ):
+        """Hits = occurrences of self.needle; with attr_filter, the token holding the hit start is
+        checked as anchor slot 0 (as cwb.search does with `#target 0`)."""
         self.calls.append(
             {
                 "cqp": cqp,
@@ -187,6 +195,16 @@ class FakeEngine:
                             d.text[end : end + 10],
                         )
                     )
+        if attr_filter:
+            docs = dict(self.indexes.get(corpus_key, []))
+
+            def key(h):
+                toks = docs[h.doc_id].sentences[h.sentence_index].tokens
+                j = next(j for j, t in enumerate(toks) if t.start <= h.start_cp < t.end)
+                return (h.doc_id, h.sentence_index, j)
+
+            allowed = attr_filter(0, {key(h) for h in hits})
+            hits = [h for h in hits if key(h) in allowed]
         counts = em.Counts(
             hits=len(hits) if self.complete else None,
             sentences=len({(h.doc_id, h.sentence_index) for h in hits})

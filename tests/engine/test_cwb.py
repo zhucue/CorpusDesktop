@@ -213,3 +213,88 @@ def test_empty_corpus(tmp_path):
     assert (info.tokens, info.sentences, info.documents) == (0, 1, 1)
     assert run(tmp_path, "x", key="e").counts.hits == 0
     assert cwb.context(tmp_path, "e", "d1", 0, 1, 1) == ["untokenised"]
+
+
+@pytest.fixture(scope="module")
+def ud(tmp_path_factory):
+    d = tmp_path_factory.mktemp("ud")
+    docs, _ = parse(FIX / "ud-en-ewt-sample.conllu", language="en", metadata={})
+    cwb.build(d, "ud", docs, [f"u{i}" for i in range(len(docs))])
+    return d, {f"u{i}": doc for i, doc in enumerate(docs)}
+
+
+def test_attribute_slots_filter_hits(ud):
+    """#attr slots: cwb.search hands each hit's slot token (doc, sentence, 0-based token) to attr_filter."""
+    index, docs = ud
+    seen = {}
+
+    def attr_filter(constraints):
+        def check(slot, keys):
+            seen.setdefault(slot, set()).update(keys)
+            ok = set()
+            for doc_id, s, t in keys:
+                tok = docs[doc_id].sentences[s].tokens[t]
+                if all(
+                    {"pos": tok.pos, "dep": tok.deprel}[k] in v
+                    for k, v in constraints[slot].items()
+                ):
+                    ok.add((doc_id, s, t))
+            return ok
+
+        return check
+
+    def tokens():
+        for doc_id, doc in docs.items():
+            for s, sent in enumerate(doc.sentences):
+                for t, tok in enumerate(sent.tokens):
+                    yield doc_id, s, t, tok, sent.tokens
+
+    def search(q):
+        cqp = query.compile(query.parse(q))
+        return cwb.search(
+            index,
+            "ud",
+            cqp,
+            restrict=None,
+            sort="position",
+            seed=None,
+            page=1,
+            page_size=1000,
+            context=Context(),
+            attr_filter=attr_filter(query.attrs(cqp)),
+        )
+
+    r = search("the{dep=det}")
+    expected = [
+        (d, s, tok)
+        for d, s, _, tok, _ in tokens()
+        if tok.form.lower() == "the" and tok.deprel == "det"
+    ]
+    assert r.counts.hits == len(expected) > 10
+    assert [(h.doc_id, h.sentence_index, h.start_cp) for h in r.items] == [
+        (d, s, tok.start) for d, s, tok in expected
+    ]
+    assert all(
+        docs[d].sentences[s].tokens[t].form.lower() == "the" for d, s, t in seen[0]
+    )
+
+    seen.clear()  # second slot after a gap: the marked token is the one after the gap
+    r = search("/DET $1 {dep=nsubj}")
+    assert set(seen) == {1} and r.counts.hits > 0
+    for h in r.items:
+        sent = docs[h.doc_id].sentences[h.sentence_index]
+        last = next(t for t in sent.tokens if t.end == h.end_cp)
+        assert last.deprel == "nsubj"
+
+    with pytest.raises(ValueError):
+        cwb.search(
+            index,
+            "ud",
+            query.compile(query.parse("{dep=nsubj}")),
+            restrict=None,
+            sort="position",
+            seed=None,
+            page=1,
+            page_size=10,
+            context=Context(),
+        )

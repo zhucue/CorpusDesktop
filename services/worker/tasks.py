@@ -15,14 +15,23 @@ from docx.shared import Pt
 from openpyxl import Workbook
 from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Font
-from sqlalchemy import exists, func, insert, select
+from sqlalchemy import bindparam, exists, func, insert, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from engine import cwb, nlp, parsers, stats
+from engine import cwb, nlp, parsers, query, stats
 from engine import model as em
+from engine.conllu import write_conllu
+from services.api import effective
+from services.api.annotations import (
+    is_zh,
+    refresh_progress,
+)
 from services.api.db import session, transaction
 from services.api.jobs import enqueue
 from services.api.metadata import field_types
 from services.api.models import (
+    Annotation,
+    AnnotationLayer,
     Corpus,
     Document,
     Evidence,
@@ -36,13 +45,15 @@ from services.api.models import (
 )
 from services.api.search import (
     ExportInput,
+    LayersInput,
     Scope,
-    compile_query,
     corpus_tagset,
     enrich,
+    plan_query,
+    pure_attr,
     resolve_scope,
-    run_search,
     scope_filter,
+    search_page,
 )
 from services.api.storage import (
     corpus_key,
@@ -51,7 +62,7 @@ from services.api.storage import (
     stats_path,
     text_path,
 )
-from services.worker.main import JobFailed
+from services.worker.main import Cancelled, JobFailed
 
 EXPORT_PAGE = 1000
 EXPORT_COUNT_TIMEOUT = 600
@@ -374,17 +385,30 @@ def run_export(run):
     with session() as db:
         user = db.get(User, run.owner_id)
         corpus, restrict = resolve_scope(db, req.scope, user)
-        cqp = compile_query(req.query, corpus_tagset(corpus))
+        ast, cqp = plan_query(req.query, corpus_tagset(corpus))
+        layers = effective.check_layers(db, req.layers, corpus, user)
+        size = (
+            10**9 if pure_attr(ast) else EXPORT_PAGE
+        )  # PostgreSQL answers in one pass
         page = 1
         while True:
-            result = run_search(
-                corpus, restrict, cqp, req, page, EXPORT_PAGE, EXPORT_COUNT_TIMEOUT
+            result = search_page(
+                db,
+                corpus,
+                restrict,
+                ast,
+                cqp,
+                layers,
+                req,
+                page,
+                size,
+                EXPORT_COUNT_TIMEOUT,
             )
             if hits is None:
                 hits = result.counts.hits
             items += enrich(db, result.items)
             run.progress(len(items), hits, "导出")
-            if len(result.items) < EXPORT_PAGE:
+            if len(result.items) < size:
                 break
             page += 1
     header, rows = _rows(items)
@@ -450,10 +474,71 @@ def run_export_evidence(run):
     _finish_export(run, "证据篮", header, rows)
 
 
+def run_export_layer(run):
+    """CoNLL-U of a layer's documents with effective values: this layer's confirmed / modified annotations,
+    otherwise the system values in `tokens` (for the other kind always the system values)."""
+    with session() as db:
+        layer = db.get(AnnotationLayer, uuid.UUID(run.params["layer_id"]))
+        if not layer:
+            raise JobFailed("LAYER_DELETED", "标注层已删除")
+        ids = run.params.get("document_ids") or layer.document_ids
+        stmt = select(Document).where(Document.corpus_id == layer.corpus_id)
+        if ids:
+            stmt = stmt.where(Document.id.in_(ids))
+        docs = db.scalars(stmt.order_by(Document.created_at, Document.id)).all()
+        layers = {"pos": None, "dep": None, layer.kind: layer.id}
+        name = layer.name
+    parts, sentences, tokens = [], 0, 0
+    for i in range(0, len(docs), LOAD_BATCH):
+        batch = docs[i : i + LOAD_BATCH]
+        run.progress(i, len(docs), "导出")
+        with session() as db:
+            toks = effective.layer_tokens(db, [d.id for d in batch], layers)
+            spans = db.execute(
+                select(
+                    Sentence.document_id,
+                    Sentence.idx,
+                    Sentence.start_cp,
+                    Sentence.end_cp,
+                )
+                .where(Sentence.document_id.in_([d.id for d in batch]))
+                .order_by(Sentence.document_id, Sentence.idx)
+            ).all()
+        by_doc = {}
+        for doc_id, idx, a, b in spans:
+            sent_toks = [em.Token(*t) for t in toks.get(doc_id, {}).get(idx, [])]
+            by_doc.setdefault(doc_id, []).append(em.Sentence(a, b, sent_toks))
+        out = []
+        for d in batch:
+            sents = by_doc.get(d.id, [])
+            sentences += sum(1 for x in sents if x.tokens)
+            tokens += sum(len(x.tokens) for x in sents)
+            out.append(
+                em.Document(
+                    d.title,
+                    d.language,
+                    Path(d.text_path).read_text(encoding="utf-8"),
+                    {},
+                    sents,
+                    d.external_id or str(d.id),
+                )
+            )
+        parts.append(write_conllu(out))
+    path = export_path(run.id, "conllu")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(parts), encoding="utf-8", newline="\n")
+    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
+    filename = f"{safe}-{datetime.now():%Y%m%d-%H%M}.conllu"
+    with transaction() as db:
+        run.lock(db)
+        run.succeed(db, {"rows": sentences, "tokens": tokens, "filename": filename})
+
+
 EXPORTS = {
     "search": run_export,
     "stats": run_export_stats,
     "evidence": run_export_evidence,
+    "layer": run_export_layer,
 }
 
 
@@ -504,15 +589,72 @@ def _compute(p, target, reference, numeric):
     )
 
 
+def _pg_frequency(db, p, corpus, scope, user):
+    """Frequency of effective POS tags (with layers.pos) or deprels, counted in PostgreSQL."""
+    layers = effective.check_layers(
+        db, LayersInput.model_validate(p.get("layers") or {}), corpus, user
+    )
+    tagset = corpus_tagset(corpus)
+    pos_tags = query.resolve_pos(p["pos"], tagset) if p.get("pos") else None
+    filt = scope_filter(db, scope)
+    fields = field_types(db, corpus.id) if filt else {}
+    counts, row_count, totals = effective.frequency(
+        db, corpus, filt, fields, p["unit"], layers, pos_tags, p["top"], p["min_freq"]
+    )
+    rows = []
+    for value, freq, docs in counts:
+        if p["unit"] == "pos":
+            q = (
+                f"{{pos={value}}}"
+                if _plain(value) and _resolves(value, tagset)
+                else None
+            )
+        else:
+            cond = f"pos={p['pos']}," if p.get("pos") else ""
+            q = f"{{{cond}dep={value}}}" if _plain(value) else None
+        per_million = freq / totals["tokens"] * 1e6 if totals["tokens"] else 0.0
+        values = {
+            "item": value,
+            "freq": freq,
+            "per_million": per_million,
+            "doc_freq": docs,
+        }
+        rows.append({"key": value, "values": values, "search_query": q})
+    columns = [
+        {"key": "item", "label": "项", "type": "string"},
+        {"key": "freq", "label": "频次", "type": "number"},
+        {"key": "per_million", "label": "每百万词", "type": "number"},
+        {"key": "doc_freq", "label": "文档频率", "type": "number"},
+    ]
+    return stats.Table(columns, rows, row_count, totals)
+
+
+def _plain(value):
+    return not any(c in value for c in ' ,{}|=/"')
+
+
+def _resolves(value, tagset):
+    try:
+        return query.resolve_pos(value, tagset) == (value,)
+    except query.QueryError:
+        return False
+
+
 def run_stats(run):
     p = run.params
     method = p["method"]
     scope = Scope.model_validate(p["target"] if method == "keywords" else p["scope"])
     params = {k: v for k, v in p.items() if k != "method"}
-    reference = numeric = None
+    reference = numeric = table = None
+    pg = method == "frequency" and (
+        p["unit"] == "deprel"
+        or (p["unit"] == "pos" and (p.get("layers") or {}).get("pos"))
+    )
     with session() as db:
         user = db.get(User, run.owner_id)
         corpus, restrict = resolve_scope(db, scope, user)
+        if pg:
+            table = _pg_frequency(db, p, corpus, scope, user)
         target = stats.Scope(index_dir(corpus.id), corpus_key(corpus.id), restrict)
         info, base_filter = _scope_info(db, scope, corpus), scope_filter(db, scope)
         index_version = corpus.index_version
@@ -527,7 +669,7 @@ def run_stats(run):
             numeric = field_types(db, corpus.id).get(p["field"]) == "number"
     run.progress(0, None, "计算")
     try:
-        table = _compute(p, target, reference, numeric)
+        table = table or _compute(p, target, reference, numeric)
     except ValueError as e:  # includes query.QueryError
         raise JobFailed("STATS_INVALID", str(e)) from e
     search_scope = scope.model_dump(mode="json", exclude_none=True)
@@ -566,9 +708,169 @@ def run_stats(run):
         raise
 
 
+# ---- pre-annotation ----
+
+
+def _layer(db, layer_id, lock=False):
+    layer = db.get(AnnotationLayer, layer_id, with_for_update=lock)
+    if not layer:
+        raise JobFailed("LAYER_DELETED", "标注层已删除")
+    return layer
+
+
+def _document_tokens(db, doc_id):
+    return db.execute(
+        select(
+            Sentence.idx, Token.idx, Token.id, Token.start_cp, Token.end_cp, Token.form
+        )
+        .add_columns(Token.pos, Token.lemma, Token.head, Token.deprel)
+        .join(Token, Token.sentence_id == Sentence.id)
+        .where(Sentence.document_id == doc_id)
+        .order_by(Sentence.idx, Token.idx)
+    ).all()
+
+
+def _parse_zh(rows):
+    """Stanza zh dependencies for a document's stored jieba tokens → {token id: (head, deprel)}."""
+    sentences = {}
+    for idx, _, tid, a, b, form, pos, lemma, _, _ in rows:
+        sentences.setdefault(idx, []).append((tid, em.Token(a, b, form, pos, lemma)))
+    doc = em.Document(
+        "",
+        "zh",
+        "",
+        {},
+        [
+            em.Sentence(t[0][1].start, t[-1][1].end, [x for _, x in t])
+            for t in sentences.values()
+        ],
+    )
+    nlp.annotate_dependencies_zh(doc)
+    return {tid: (t.head, t.deprel) for toks in sentences.values() for tid, t in toks}
+
+
+def _preannotation(kind, doc_id, language):
+    """Pre-annotation rows of one document (read and, for Chinese dependencies, parsed outside any lock)
+    and the Stanza values to write back into `tokens` ({token id: (head, deprel)} or None)."""
+    with session() as db:
+        rows = _document_tokens(db, doc_id)
+    source, parsed = "system", None
+    if (
+        kind == "dep"
+        and is_zh(language)
+        and any(r.deprel is None or r.head is None for r in rows)
+    ):
+        parsed, source = _parse_zh(rows), "model:stanza-zh"
+    values = []
+    for idx, t_idx, tid, _, _, _, pos, _, head, deprel in rows:
+        if kind == "pos":
+            label, head = pos, None
+        else:
+            head, label = parsed[tid] if parsed else (head, deprel)
+        values.append(
+            {
+                "document_id": doc_id,
+                "sentence_index": idx,
+                "token_index": t_idx + 1,
+                "label": label,
+                "head": head,
+                "model_label": label,
+                "model_head": head,
+                "source": source,
+                "status": "suggested",
+            }
+        )
+    return values, parsed
+
+
+def _write_preannotation(db, layer_id, values, parsed):
+    conn = db.connection()
+    if parsed:  # fill the system layer where it has no dependencies yet
+        conn.execute(
+            update(Token)
+            .where(Token.id == bindparam("tid"))
+            .values(
+                head=func.coalesce(Token.head, bindparam("h")),
+                deprel=func.coalesce(Token.deprel, bindparam("d")),
+            ),
+            [{"tid": tid, "h": h, "d": d} for tid, (h, d) in parsed.items()],
+        )
+    if not values:
+        return
+    stmt = pg_insert(Annotation)
+    conn.execute(
+        stmt.on_conflict_do_update(
+            constraint="uq_annotations_token",
+            set_={
+                "label": stmt.excluded.label,
+                "head": stmt.excluded.head,
+                "model_label": stmt.excluded.model_label,
+                "model_head": stmt.excluded.model_head,
+                "source": stmt.excluded.source,
+                "revision": Annotation.revision + 1,
+                "updated_at": func.now(),
+            },
+            where=Annotation.status == "suggested",
+        ),
+        [{"layer_id": layer_id, **v} for v in values],
+    )
+
+
+def run_preannotate(run):
+    """Fill a layer from `tokens` (contracts/p3.md §三): pos = tokens.pos; dep = tokens.head / deprel, or for
+    Chinese documents without dependencies Stanza zh over the stored jieba tokens (also written back to
+    `tokens`). Re-runs only overwrite tokens still `suggested`. One transaction per document; progress counts
+    documents."""
+    layer_id = uuid.UUID(run.params["layer_id"])
+    with transaction() as db:
+        layer = _layer(db, layer_id, lock=True)
+        layer.status, layer.error, layer.job_id = "preannotating", None, run.id
+        kind = layer.kind
+        ids = run.params.get("document_ids") or layer.document_ids
+        stmt = select(Document.id, Document.language).where(
+            Document.corpus_id == layer.corpus_id
+        )
+        if ids:
+            stmt = stmt.where(Document.id.in_(ids))
+        docs = db.execute(stmt.order_by(Document.created_at, Document.id)).all()
+    try:
+        for i, (doc_id, language) in enumerate(docs):
+            run.progress(i, len(docs), "预标")
+            values, parsed = _preannotation(kind, doc_id, language)
+            with transaction() as db:
+                layer = _layer(db, layer_id, lock=True)
+                _write_preannotation(db, layer_id, values, parsed)
+                refresh_progress(db, layer)
+        with transaction() as db:
+            run.lock(db)
+            layer = _layer(db, layer_id, lock=True)
+            refresh_progress(db, layer)
+            layer.status = "ready"
+            run.succeed(
+                db,
+                {
+                    "layer_id": str(layer_id),
+                    "documents": len(docs),
+                    "tokens": layer.progress["total"],
+                },
+            )
+    except BaseException as e:
+        message = (
+            "预标已取消"
+            if isinstance(e, Cancelled)
+            else getattr(e, "message", str(e))[:500]
+        )
+        with transaction() as db:
+            layer = db.get(AnnotationLayer, layer_id, with_for_update=True)
+            if layer:
+                layer.status, layer.error = "failed", message
+        raise
+
+
 HANDLERS = {
     "import": run_import,
     "index": run_index,
     "export": run_any_export,
     "stats": run_stats,
+    "preannotate": run_preannotate,
 }

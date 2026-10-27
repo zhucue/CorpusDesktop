@@ -33,7 +33,9 @@ def test_parse_endpoint(owner):
     assert ok["anchor"] == "语言"
     assert ok["conditions"] == [{"op": "+", "text": "文化"}]
     assert ok["tokens"]
-    bad = owner.post("/api/search/parse", json={"query": "{dep=nsubj}"}).json()
+    attr = owner.post("/api/search/parse", json={"query": "学生{dep=nsubj}"}).json()
+    assert attr["ok"] and [t["kind"] for t in attr["tokens"]] == ["word", "attr"]
+    bad = owner.post("/api/search/parse", json={"query": "{dep=nsubj"}).json()
     assert (
         bad["ok"] is False and bad["error"]["position"] == 0 and bad["error"]["message"]
     )
@@ -110,7 +112,7 @@ def test_random_sort_pins_seed(owner, corpus, fake_engine):
 
 
 def test_search_errors(owner, project, corpus, make_user):
-    r = search(owner, {"corpus_id": corpus["id"]}, query="{dep=nsubj}")
+    r = search(owner, {"corpus_id": corpus["id"]}, query="{dep=nsubj")
     assert r.status_code == 422 and r.json()["error"]["code"] == "QUERY_INVALID"
     empty = owner.post(
         f"/api/projects/{project['id']}/corpora", json={"name": "空", "language": "en"}

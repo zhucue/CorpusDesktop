@@ -164,7 +164,10 @@ class _Corpus:
 
     def hits(self, text) -> list[tuple[int, int]]:
         """(match, matchend) of every hit of a query in the scope, in corpus order."""
-        anchor, conds, _ = cwb._split(query.compile(query.parse(text, self.tagset)))
+        compiled = query.compile(query.parse(text, self.tagset))
+        if query.attrs(compiled):
+            raise ValueError("统计中的查询式不支持 {…} 属性约束")
+        anchor, conds, _ = cwb._split(compiled)
         if not self.docs:
             return []
         cmds = []

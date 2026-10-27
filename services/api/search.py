@@ -12,6 +12,7 @@ from sqlalchemy import select, tuple_
 
 from engine import cwb, query
 from engine.model import Context
+from services.api import effective
 from services.api.access import (
     READ,
     WRITE,
@@ -59,6 +60,13 @@ class Scope(BaseModel):
         return self
 
 
+class LayersInput(BaseModel):
+    """Annotation layers whose effective values answer `{pos=}` / `{dep=}`; omitted = system values."""
+
+    pos: UUID | None = None
+    dep: UUID | None = None
+
+
 class ContextInput(BaseModel):
     unit: Literal["char", "sentence", "paragraph"] = "char"
     size: int = Field(default=40, ge=1, le=500)
@@ -76,6 +84,7 @@ class SearchInput(BaseModel):
     include_tokens: bool = (
         False  # add Hit.tokens (sentence tokens with POS) to each item
     )
+    layers: LayersInput | None = None
 
 
 class ExportInput(SearchInput):
@@ -121,11 +130,36 @@ def corpus_tagset(corpus) -> str:
     return cwb.tagset(index_dir(corpus.id), corpus_key(corpus.id))
 
 
-def compile_query(text, tagset="mixed"):
+def plan_query(text, tagset="mixed"):
+    """(ast, compiled engine string); 422 QUERY_INVALID on syntax errors."""
     try:
-        return query.compile(query.parse(text, tagset))
+        ast = query.parse(text, tagset)
+        return ast, query.compile(ast)
     except query.QueryError as e:
         raise ApiError(422, "QUERY_INVALID", f"第 {e.position + 1} 个字符：{e.message}")
+
+
+def compile_query(text, tagset="mixed"):
+    return plan_query(text, tagset)[1]
+
+
+def pure_attr(ast) -> bool:
+    """One `{…}` slot (optionally with `/pos`), no word and no +/- condition: answered from PostgreSQL."""
+    items = ast.anchor.items
+    return (
+        not ast.conditions
+        and len(items) == 1
+        and len(items[0]) == 1
+        and items[0][0].kind == "any"
+        and bool(items[0][0].attrs)
+    )
+
+
+def cache_key(cqp, layers):
+    """Search cache key text: attribute queries also depend on the layers they read."""
+    if not query.attrs(cqp) or not any(layers.values()):
+        return cqp
+    return f"{cqp}\n#layers {layers['pos']} {layers['dep']}"
 
 
 def scope_filter(db, scope: Scope):
@@ -158,7 +192,17 @@ def resolve_scope(db, scope: Scope, user):
     return corpus, restrict
 
 
-def run_search(corpus, restrict, cqp, req: SearchInput, page, page_size, count_timeout):
+def run_search(
+    corpus,
+    restrict,
+    cqp,
+    req: SearchInput,
+    page,
+    page_size,
+    count_timeout,
+    attr_filter=None,
+):
+    kw = {"attr_filter": attr_filter} if attr_filter else {}
     return cwb.search(
         index_dir(corpus.id),
         corpus_key(corpus.id),
@@ -170,7 +214,28 @@ def run_search(corpus, restrict, cqp, req: SearchInput, page, page_size, count_t
         page_size=page_size,
         context=Context(unit=req.context.unit, size=req.context.size),
         count_timeout=count_timeout,
+        **kw,
     )
+
+
+def search_page(db, corpus, restrict, ast, cqp, layers, req, page, page_size, timeout):
+    """One page of hits. Attribute constraints are resolved in PostgreSQL (services.api.effective):
+    pure attribute queries entirely, anchored ones by filtering the CWB hits on the slot tokens."""
+    constraints = query.attrs(cqp)
+    if not constraints:
+        return run_search(corpus, restrict, cqp, req, page, page_size, timeout)
+    if pure_attr(ast):
+        filt = scope_filter(db, req.scope)
+        fields = field_types(db, corpus.id) if filt else {}
+        atom = ast.anchor.items[0][0]
+        return effective.pg_search(
+            db, corpus, filt, fields, atom, constraints[0], layers, req, page, page_size
+        )
+
+    def attr_filter(slot, keys):
+        return effective.filter_tokens(db, layers, constraints[slot], keys)
+
+    return run_search(corpus, restrict, cqp, req, page, page_size, timeout, attr_filter)
 
 
 class SearchCache:
@@ -322,11 +387,21 @@ def parse(body: ParseInput, user: CurrentUser):
 def search(body: SearchInput, user: CurrentUser, db: Db):
     corpus, restrict = resolve_scope(db, body.scope, user)
     tagset = corpus_tagset(corpus)
-    cqp = compile_query(body.query, tagset)
-    sid, entry = searches.open(corpus, restrict, cqp, body)
+    ast, cqp = plan_query(body.query, tagset)
+    layers = effective.check_layers(db, body.layers, corpus, user)
+    sid, entry = searches.open(corpus, restrict, cache_key(cqp, layers), body)
     req = body.model_copy(update={"seed": entry["seed"]})
-    result = run_search(
-        corpus, restrict, cqp, req, body.page, body.page_size, COUNT_TIMEOUT
+    result = search_page(
+        db,
+        corpus,
+        restrict,
+        ast,
+        cqp,
+        layers,
+        req,
+        body.page,
+        body.page_size,
+        COUNT_TIMEOUT,
     )
     counts = entry["counts"] or counts_view(result.counts)
     if counts["complete"]:
@@ -383,7 +458,8 @@ def context(
 def export(body: ExportInput, user: CurrentUser, db: Db):
     corpus, restrict = resolve_scope(db, body.scope, user)
     cqp = compile_query(body.query, corpus_tagset(corpus))
-    _, entry = searches.open(corpus, restrict, cqp, body)
+    layers = effective.check_layers(db, body.layers, corpus, user)
+    _, entry = searches.open(corpus, restrict, cache_key(cqp, layers), body)
     body = body.model_copy(update={"seed": entry["seed"], "search_id": None})
     if body.scope.subcorpus_id:
         project_id = db.get(Subcorpus, body.scope.subcorpus_id).project_id

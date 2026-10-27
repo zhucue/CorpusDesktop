@@ -23,11 +23,12 @@ import random
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unicodedata
 from array import array
 from bisect import bisect_left, bisect_right
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from itertools import accumulate
 from pathlib import Path
 
@@ -296,6 +297,17 @@ class _Index:
         self.docs = json.loads((home / "docs.json").read_text(encoding="utf-8"))
         self.by_id = {unicodedata.normalize("NFC", d[0]): d for d in self.docs}
         self.empty = not (home / "data").exists()
+        self._s_starts = None
+
+    def token_index(self, cpos: int) -> int:
+        """Position of a token within its sentence (0-based), from the CWB `s` regions (s.rng)."""
+        if self._s_starts is None:
+            arr = array("i")
+            arr.frombytes((self.home / "data" / "s.rng").read_bytes())
+            if sys.byteorder == "little":
+                arr.byteswap()  # CWB stores int32 big-endian
+            self._s_starts = arr[0::2]
+        return cpos - self._s_starts[bisect_right(self._s_starts, cpos) - 1]
 
     def doc(self, doc_id: str) -> list:
         try:
@@ -370,11 +382,26 @@ def _split(cqp: str):
     lines = cqp.split("\n")
     conds = [(ln[0], ln[1:]) for ln in lines[1:] if ln[:1] in "+-"]
     edges = {
-        ln[1:].split(" ", 1)[0]: re.compile(ln.split(" ", 1)[1])
+        key: re.compile(rest)
         for ln in lines[1:]
         if ln.startswith("#")
+        for key, rest in [ln[1:].split(" ", 1)]
+        if key in ("span", "lead", "trail")
     }
     return lines[0], conds, edges
+
+
+def _targets(cqp: str) -> dict[int, str]:
+    """`#target <slot> <CQP>` lines: anchor variants marking an attribute slot's token with `@`."""
+    return {
+        int(slot): q
+        for ln in cqp.split("\n")
+        if ln.startswith("#target ")
+        for slot, q in [ln[8:].split(" ", 1)]
+    }
+
+
+AttrFilter = Callable[[int, set[tuple[str, int, int]]], set[tuple[str, int, int]]]
 
 
 def search(
@@ -389,12 +416,17 @@ def search(
     page_size: int,
     context: Context,
     count_timeout: float = 20,
+    attr_filter: AttrFilter | None = None,
 ) -> SearchResult:
     """Anchor hits within s, filtered by same-sentence conditions; counts over the filtered hits.
 
     All anchor hits are tabulated and counted in Python (exact hits / sentences / documents). If CQP does
     not finish within count_timeout, the first page is taken from the first page*page_size anchor hits
     in corpus order and counts are None with complete=False.
+
+    Attribute slots (`#attr` / `#target` lines, engine.query): for each slot the anchor is run again with
+    the target marker on it, giving that slot's token per hit; attr_filter(slot, {(doc_id, sentence_index,
+    token_index)}) returns the tokens that satisfy the slot's constraints and the other hits are dropped.
     """
     key = _key(corpus_key)
     if sort not in ("position", "left", "right", "random"):
@@ -404,6 +436,9 @@ def search(
     if ix.empty:
         return SearchResult(Counts(0, 0, 0, True), [], page, page_size)
     anchor, conds, edges = _split(cqp)
+    targets = _targets(cqp)
+    if targets and attr_filter is None:
+        raise ValueError("属性约束需要 attr_filter")
     fields = "match, matchend, match doc_id, match s_n"
     if sort == "left":
         fields += ", match[-1] word, match[-2] word, match[-3] word"
@@ -420,8 +455,15 @@ def search(
                 ".EOL.;",
             ]
         where = f" :: {restrict}" if restrict else ""
+        tail = f"{where} within s{f' cut {cut}' if cut else ''};"
+        for slot, q in sorted(targets.items()):
+            cmds += [
+                f"T{slot} = {q}{tail}",
+                f"tabulate T{slot} match, matchend, target;",
+            ]
+            cmds.append(".EOL.;")
         cmds += [
-            f"A = {anchor}{where} within s{f' cut {cut}' if cut else ''};",
+            f"A = {anchor}{tail}",
             f"tabulate A {fields};",
             ".EOL.;",
         ]
@@ -439,6 +481,16 @@ def search(
     for (op, _), sents in zip(conds, sections):
         found = {(r[0], r[1]) for r in sents}
         rows = [r for r in rows if ((r[2], r[3]) in found) == (op == "+")]
+    for slot, marked in zip(sorted(targets), sections[len(conds) : -1]):
+        at = {(r[0], r[1]): int(r[2]) for r in marked}
+        keys = [
+            (r[2], int(r[3]), ix.token_index(t))
+            if (t := at.get((r[0], r[1]), -1)) >= 0
+            else None
+            for r in rows
+        ]
+        allowed = attr_filter(slot, {k for k in keys if k})
+        rows = [r for r, k in zip(rows, keys) if k in allowed]
     if sort in ("left", "right"):
         rows.sort(key=lambda r: [w.casefold() for w in r[4:7]])
     elif sort == "random":

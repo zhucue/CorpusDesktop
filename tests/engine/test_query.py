@@ -1,6 +1,6 @@
 import pytest
 
-from engine.query import Atom, Gap, QueryError, compile, compile_filter, parse
+from engine.query import Atom, Gap, QueryError, attrs, compile, compile_filter, parse
 
 
 def test_parse_structure():
@@ -44,7 +44,13 @@ def test_parse_atoms():
     [
         ("", 0, "查询为空"),
         ("+语言", 0, "缺少主查询"),
-        ("语言 {dep=nsubj}", 3, "暂不支持"),
+        ("{dep=nsubj", 0, "缺少 }"),
+        ("{deprel=nsubj}", 1, "属性写作"),
+        ("{dep=nsubj,dep=obj}", 11, "重复"),
+        ("{pos=}", 1, "取值为空"),
+        ("a{pos=n}|b", 9, "|"),
+        ("a|b{pos=n}", 2, "|"),
+        ("语言 +{dep=nsubj}", 4, "主查询"),
         ("[偏误:时态] 语言", 0, "暂不支持"),
         ("(语言 | 文化) 研究", 0, "括号"),
         ("$3 语言", 0, "间隔"),
@@ -143,3 +149,53 @@ def test_compile_jieba_pos():
     with pytest.raises(QueryError) as e:
         parse("语言/zz", "jieba")
     assert e.value.position == 3 and "jieba" in e.value.message
+
+
+def test_attributes_parse_and_compile():
+    ast = parse("{dep=nsubj}")
+    assert ast.anchor.items == [[Atom("any", attrs={"dep": ("nsubj",)})]]
+    assert [(t.kind, t.text) for t in ast.tokens] == [("attr", "{dep=nsubj}")]
+    assert compile(ast).split("\n") == ["[]", "#attr 0 dep=nsubj", "#target 0 @[]"]
+
+    ast = parse(
+        '学生{dep=nsubj} "run"{pos=v} /d{ dep = advmod|amod , lemma=Go }', "jieba"
+    )
+    a, b, c = (item[0] for item in ast.anchor.items)
+    assert (a.kind, a.text, a.attrs, a.cjk) == (
+        "string",
+        "学生",
+        {"dep": ("nsubj",)},
+        False,
+    )
+    assert b.attrs == {"pos": ("v", "vd", "vg", "vi", "vn", "vq")}
+    assert c.kind == "any" and c.pos == ("d", "df", "dg")
+    assert c.attrs == {"dep": ("advmod", "amod"), "lemma": ("Go",)}
+    assert [t.kind for t in ast.tokens] == [
+        "word",
+        "attr",
+        "exact",
+        "attr",
+        "pos",
+        "attr",
+    ]
+    lines = compile(ast).split("\n")
+    # attributes make a CJK string one whole token, as /pos does
+    assert lines[0] == '[word="学生"] [word="run"] [pos="d|df|dg"]'
+    assert attrs(compile(ast)) == {
+        0: {"dep": ("nsubj",)},
+        1: {"pos": ("v", "vd", "vg", "vi", "vn", "vq")},
+        2: {"dep": ("advmod", "amod"), "lemma": ("Go",)},
+    }
+    targets = [ln for ln in lines if ln.startswith("#target")]
+    assert targets == [
+        '#target 0 @[word="学生"] [word="run"] [pos="d|df|dg"]',
+        '#target 1 [word="学生"] @[word="run"] [pos="d|df|dg"]',
+        '#target 2 [word="学生"] [word="run"] @[pos="d|df|dg"]',
+    ]
+    # pos values resolve like /pos on the corpus tagset; unknown labels stay literal (project label sets)
+    assert parse("{pos=n}").anchor.items[0][0].attrs == {"pos": ("NOUN", "PROPN")}
+    assert parse("{pos=VERB|myTag}").anchor.items[0][0].attrs == {
+        "pos": ("VERB", "myTag")
+    }
+    gap = compile(parse("the $2 {pos=DET}")).split("\n")
+    assert gap[-1] == '#target 1 [word="the" %c] []{0,2} @[]'

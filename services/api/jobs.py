@@ -15,7 +15,7 @@ from services.api.access import (
 )
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
-from services.api.models import Corpus, Document, Job
+from services.api.models import AnnotationLayer, Corpus, Document, Job
 from services.api.storage import export_path
 from services.api.views import job_view
 
@@ -27,6 +27,7 @@ EXPORT_TYPES = {
     "csv": "text/csv",
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "conllu": "text/plain; charset=utf-8",
 }
 
 
@@ -71,6 +72,17 @@ def settle_corpus(db, corpus_id, stopped_job_id):
         corpus.status = "empty"
 
 
+def settle_layer(db, job, message):
+    """Layer state after its pre-annotation job stops without success."""
+    layer = db.get(AnnotationLayer, job.params["layer_id"])
+    if (
+        layer
+        and layer.job_id == job.id
+        and layer.status in ("created", "preannotating")
+    ):
+        layer.status, layer.error = "failed", message
+
+
 def _load(db, job_id, user, manage=False) -> Job:
     job = db.get(Job, job_id)
     if not job:
@@ -112,6 +124,8 @@ def cancel_job(job_id: UUID, user: CurrentUser, db: Db):
     job.finished_at = datetime.now(UTC)
     if job.kind in CORPUS_STATUS_FOR_KIND:
         settle_corpus(db, job.params["corpus_id"], job.id)
+    if job.kind == "preannotate":
+        settle_layer(db, job, "预标已取消")
     db.commit()
     return job_view(job)
 

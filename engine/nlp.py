@@ -5,7 +5,7 @@ quotes and brackets kept in the sentence; sentences never cross a newline. Token
 with the bundled default dictionary and HMM off, so the same text always gives the same tokens. POS are
 jieba (ICTCLAS-style) tags (n, nr, ns, v, vn, a, d, p, r, m, q, c, u, uj, x, eng …), except that tokens made
 only of punctuation or symbols are tagged `w` and tokens made only of digits `m`. lemma = form; head and
-deprel stay empty at import (annotate_dependencies_zh adds them later from the stored tokens).
+deprel stay empty at import; annotate_dependencies_zh (P3 pre-annotation) parses the stored tokens with Stanza.
 
 English (en): Stanza tokenize, mwt, pos (UPOS), lemma, depparse; pipelines load lazily from
 STANZA_RESOURCES_DIR.
@@ -131,7 +131,7 @@ def _annotate_zh(doc: Document) -> None:
             s.tokens = zh_tokens(doc.text, s.start, s.end)
 
 
-# Rough jieba → UPOS map, only to feed Stanza's dependency parser pretagged input.
+# Rough jieba → UPOS map, for the UPOS column of CoNLL-U exports of jieba-tagged text.
 _JIEBA_UPOS = {
     "n": "NOUN",
     "nr": "PROPN",
@@ -158,8 +158,8 @@ _JIEBA_UPOS = {
 }
 
 
-def _upos(tag: str | None) -> str:
-    if not tag:
+def jieba_upos(tag: str | None) -> str:
+    if not tag or tag == "eng":
         return "X"
     for k in (tag[:2], tag[:1]):
         if k in _JIEBA_UPOS:
@@ -173,10 +173,9 @@ def _zh_depparse():
     from stanza.pipeline.core import DownloadMethod
 
     return stanza.Pipeline(
-        "zh",
-        processors="tokenize,depparse",
+        "zh-hans",
+        processors="tokenize,pos,lemma,depparse",
         tokenize_pretokenized=True,
-        depparse_pretagged=True,
         dir=os.environ.get("STANZA_RESOURCES_DIR"),
         logging_level="WARN",
         download_method=DownloadMethod.REUSE_RESOURCES,
@@ -184,30 +183,24 @@ def _zh_depparse():
 
 
 def annotate_dependencies_zh(doc: Document) -> None:
-    """P3 pre-annotation: Stanza zh dependency parse over the stored jieba tokens (tokens and POS unchanged;
-    Stanza's own POS tagger is not run, jieba tags are mapped to UPOS only as parser input). Not used at import."""
-    import stanza
+    """P3 pre-annotation: Stanza zh (simplified) dependency parse over the stored jieba tokens.
 
+    The tokens are passed pretokenized, one list per sentence, so token boundaries never change; Stanza's
+    own POS and lemma are computed only as parser input and discarded. Sets head (1-based, 0 = root) and
+    deprel on every token of every sentence with tokens; pos, lemma and offsets stay as they are. The
+    pipeline loads once per process from STANZA_RESOURCES_DIR."""
     sents = [s for s in doc.sentences if s.tokens]
-    if not sents:
-        return
-    words = [
-        [
-            {
-                "id": i + 1,
-                "text": t.form,
-                "lemma": t.form,
-                "upos": _upos(t.pos),
-                "xpos": t.pos,
-            }
-            for i, t in enumerate(s.tokens)
-        ]
-        for s in sents
-    ]
-    parsed = _zh_depparse()(stanza.Document(words))
-    for s, ps in zip(sents, parsed.sentences):
-        for t, w in zip(s.tokens, ps.words):
-            t.head, t.deprel = w.head, w.deprel
+    for i in range(0, len(sents), BATCH):
+        part = sents[i : i + BATCH]
+        parsed = _zh_depparse()([[t.form for t in s.tokens] for s in part])
+        for s, ps in zip(part, parsed.sentences, strict=True):
+            words = ps.words
+            if len(words) != len(s.tokens):
+                raise ValueError(
+                    f"依存分析 token 数不一致：{len(words)} ≠ {len(s.tokens)}"
+                )
+            for t, w in zip(s.tokens, words):
+                t.head, t.deprel = w.head, w.deprel
 
 
 # ---------------------------------------------------------------- English (Stanza)

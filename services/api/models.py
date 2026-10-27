@@ -13,13 +13,18 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 ROLES = ("owner", "editor", "annotator", "viewer")
 CORPUS_STATUSES = ("empty", "importing", "indexing", "ready", "stale", "failed")
-JOB_KINDS = ("import", "index", "export", "stats")
+JOB_KINDS = ("import", "index", "export", "stats", "preannotate")
+LABEL_SET_KINDS = ("pos", "dep", "span", "relation")
+LAYER_KINDS = ("pos", "dep")
+LAYER_STATUSES = ("created", "preannotating", "ready", "failed")
+ANNOTATION_STATUSES = ("suggested", "confirmed", "modified", "rejected")
 EVIDENCE_KINDS = ("hit", "stat_row", "text")
 AGENT_STATES = ("idle", "running")
 AGENT_ROLES = ("user", "assistant")
@@ -315,3 +320,99 @@ class AgentToken(Base):
     )
     created_at: Mapped[datetime] = _created()
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LabelSet(Base):
+    """Built-in sets have project_id null and a unique name (services.api.label_sets.BUILTIN)."""
+
+    __tablename__ = "label_sets"
+    __table_args__ = (
+        CheckConstraint(_in("kind", LABEL_SET_KINDS), name="ck_label_set_kind"),
+        Index(
+            "uq_label_sets_builtin_name",
+            "name",
+            unique=True,
+            postgresql_where=text("project_id IS NULL"),
+        ),
+    )
+    id: Mapped[uuid.UUID] = _id()
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(Text)
+    language: Mapped[str | None] = mapped_column(Text)
+    labels: Mapped[list] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = _created()
+
+
+class AnnotationLayer(Base):
+    __tablename__ = "annotation_layers"
+    __table_args__ = (
+        CheckConstraint(_in("kind", LAYER_KINDS), name="ck_layer_kind"),
+        CheckConstraint(_in("status", LAYER_STATUSES), name="ck_layer_status"),
+    )
+    id: Mapped[uuid.UUID] = _id()
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    corpus_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("corpora.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(Text)
+    name: Mapped[str] = mapped_column(Text)
+    label_set_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("label_sets.id", ondelete="RESTRICT"), index=True
+    )
+    source_model: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, server_default="created")
+    progress: Mapped[dict] = mapped_column(JSONB)
+    document_ids: Mapped[list | None] = mapped_column(JSONB)  # null = whole corpus
+    job_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("jobs.id", ondelete="SET NULL")
+    )
+    error: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class Annotation(Base):
+    """One token of a layer. token_index and head are 1-based (CoNLL-U; head 0 = root), i.e. tokens.idx + 1."""
+
+    __tablename__ = "annotations"
+    __table_args__ = (
+        CheckConstraint(
+            _in("status", ANNOTATION_STATUSES), name="ck_annotation_status"
+        ),
+        UniqueConstraint(
+            "layer_id",
+            "document_id",
+            "sentence_index",
+            "token_index",
+            name="uq_annotations_token",
+        ),
+        Index("ix_annotations_document", "document_id"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    layer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("annotation_layers.id", ondelete="CASCADE")
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE")
+    )
+    sentence_index: Mapped[int] = mapped_column(Integer)
+    token_index: Mapped[int] = mapped_column(Integer)
+    label: Mapped[str | None] = mapped_column(Text)
+    head: Mapped[int | None] = mapped_column(Integer)
+    source: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, server_default="suggested")
+    model_label: Mapped[str | None] = mapped_column(Text)
+    model_head: Mapped[int | None] = mapped_column(Integer)
+    revision: Mapped[int] = mapped_column(Integer, server_default="0")
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

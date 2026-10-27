@@ -3,7 +3,10 @@
 Syntax: `语言` string; `语言/n`, `/v` word + POS; space = adjacent; `$N` (0..N words) and `$N-M` gaps;
 `a|b` alternatives (one word slot); `"x"` exact form; `*` any word; `?` any one character;
 `+cond` / `-cond` same-sentence conditions after the main query (a condition runs to the next `+`/`-`).
-`{dep=...}` and `[标签]` are recognised but not supported in P1. Parentheses (nesting) are rejected.
+`{k=v,...}` token attributes (contracts/p3.md §三), alone (`{dep=nsubj}`) or attached to a word, quoted form or
+`/pos` (`学生{dep=nsubj}`, `"run"{pos=v}`, `/DET{dep=det}`); keys pos, dep, lemma; values may use `|`. They are
+resolved by the api against annotation layers, not by CQP, and are allowed only in the main query and not in a
+`|` alternation. `[标签]` is recognised but not supported. Parentheses (nesting) are rejected.
 
 POS depends on the corpus tagset (parse(tagset=...), from cwb.tagset): "upos" (Stanza / CoNLL-U): UPOS names
 or CCL short tags (n → NOUN|PROPN …); "jieba" (Chinese via engine.nlp): a one-letter tag matches every jieba
@@ -27,6 +30,11 @@ compile() output (opaque to callers, passed unchanged to cwb.search), one item p
     <anchor CQP sequence>          always first; search adds `:: restrict within s`
     +<CQP> / -<CQP>                same-sentence conditions; search filters anchor hits by sentence
     #span|#lead|#trail <regex>     code-point narrowing for CJK strings at the edges of the anchor
+    #attr <slot> <k>=<v>[|<v>...]  attribute constraint on anchor slot <slot> (0-based, gaps not counted);
+                                   pos values are already resolved against the tagset; read by attrs()
+    #target <slot> <CQP>           the anchor with the CQP target marker `@` on that slot, so cwb.search can
+                                   find the slot's token in each hit and pass it to the api's attribute filter
+A bare `{…}` slot compiles to `[]` (any token); a string with attributes matches one whole token (like `/pos`).
 """
 
 import re
@@ -162,6 +170,7 @@ TAGSETS = (
 
 _CJK = re.compile(r"[㐀-䶿一-鿿豈-﫿\U00020000-\U0003134f぀-ヿ가-힯]")
 _TERM_STOP = set(' \t\r\n|"{}[]()')
+ATTR_KEYS = ("pos", "dep", "lemma")
 
 
 class QueryError(ValueError):
@@ -173,7 +182,7 @@ class QueryError(ValueError):
 
 @dataclass
 class QueryToken:
-    kind: str  # word | exact | pos | any | or | gap | cond
+    kind: str  # word | exact | pos | any | or | gap | cond | attr
     text: str
     position: int
 
@@ -183,13 +192,15 @@ class Atom:
     kind: str  # string | exact | any
     text: str = ""
     pos: tuple[str, ...] = ()  # resolved UPOS tags; empty = no POS constraint
+    attrs: dict[str, tuple[str, ...]] = field(default_factory=dict)  # pos / dep / lemma
 
     @property
     def cjk(self) -> bool:
-        """Character mode: CJK string without POS and without `*`."""
+        """Character mode: CJK string without POS, attributes and `*`."""
         return (
             self.kind == "string"
             and not self.pos
+            and not self.attrs
             and "*" not in self.text
             and bool(_CJK.search(self.text))
         )
@@ -293,10 +304,10 @@ def _lex(text: str, tagset: str) -> list[tuple[QueryToken, Atom | Gap | str | No
         elif c in "()":
             raise QueryError(i, "不支持括号嵌套；查括号本身请加引号")
         elif c == "{":
-            j = text.find("}", i)
-            if j < 0:
-                raise QueryError(i, "缺少 }")
-            raise QueryError(i, f"{text[i : j + 1]} 依存查询暂不支持")
+            i, attrs = _lex_attrs(text, i, tagset)
+            out.append(
+                (QueryToken("attr", text[start:i], start), Atom("any", attrs=attrs))
+            )
         elif c == "[":
             j = text.find("]", i)
             if j < 0:
@@ -328,9 +339,9 @@ def _lex(text: str, tagset: str) -> list[tuple[QueryToken, Atom | Gap | str | No
             pos = ()
             if i < n and text[i] == "/":
                 i, pos = _lex_pos(text, i, tagset)
-            out.append(
-                (QueryToken("exact", text[start:i], start), Atom("exact", word, pos))
-            )
+            atom = Atom("exact", word, pos)
+            out.append((QueryToken("exact", text[start:i], start), atom))
+            i = _attach_attrs(text, i, tagset, atom, out)
         else:
             j = i
             while j < n and text[j] not in _TERM_STOP and text[j] != "/":
@@ -341,18 +352,53 @@ def _lex(text: str, tagset: str) -> list[tuple[QueryToken, Atom | Gap | str | No
             if i < n and text[i] == "/":
                 i, pos = _lex_pos(text, i, tagset)
             if word in ("", "*"):
-                kind = "pos" if word == "" else "any"
-                out.append(
-                    (QueryToken(kind, text[start:i], start), Atom("any", "", pos))
-                )
+                kind, atom = "pos" if word == "" else "any", Atom("any", "", pos)
             else:
-                out.append(
-                    (
-                        QueryToken("word", text[start:i], start),
-                        Atom("string", word, pos),
-                    )
-                )
+                kind, atom = "word", Atom("string", word, pos)
+            out.append((QueryToken(kind, text[start:i], start), atom))
+            i = _attach_attrs(text, i, tagset, atom, out)
     return out
+
+
+def _attach_attrs(text: str, i: int, tagset: str, atom: Atom, out: list) -> int:
+    """`{…}` right after a term: its attributes go on that atom; the lexed token carries no value."""
+    if i < len(text) and text[i] == "{":
+        start = i
+        i, atom.attrs = _lex_attrs(text, i, tagset)
+        out.append((QueryToken("attr", text[start:i], start), None))
+    return i
+
+
+def _lex_attrs(text: str, i: int, tagset: str) -> tuple[int, dict]:
+    j = text.find("}", i)
+    if j < 0:
+        raise QueryError(i, "缺少 }")
+    attrs, pos = {}, i + 1
+    for part in text[i + 1 : j].split(","):
+        key, eq, raw = part.partition("=")
+        key = key.strip().lower()
+        at = pos + len(part) - len(part.lstrip())
+        pos += len(part) + 1
+        if not eq or key not in ATTR_KEYS:
+            raise QueryError(at, f"属性写作 {{k=v}}，k 为 {'、'.join(ATTR_KEYS)}")
+        if key in attrs:
+            raise QueryError(at, f"属性 {key} 重复")
+        values = [v.strip() for v in raw.split("|")]
+        if not all(values) or any(re.search(r"\s", v) for v in values):
+            raise QueryError(at, f"{key} 的取值为空或含空白")
+        if (
+            key == "pos"
+        ):  # query-style tags (n, VERB, nr) expand as in `/pos`; other labels stay literal
+            found = []
+            for v in values:
+                try:
+                    tags = _resolve_pos(v, at, tagset)
+                except QueryError:
+                    tags = (v,)
+                found += [t for t in tags if t not in found]
+            values = found
+        attrs[key] = tuple(dict.fromkeys(values))
+    return j + 1, attrs
 
 
 def _lex_pos(text: str, i: int, tagset: str) -> tuple[int, tuple[str, ...]]:
@@ -365,10 +411,17 @@ def _lex_pos(text: str, i: int, tagset: str) -> tuple[int, tuple[str, ...]]:
     return j, _resolve_pos(tag, i + 1, tagset)
 
 
+ALT_ATTRS = "属性约束不能用于 | 并列的词；取值可写成 {pos=a|b}"
+
+
 def _sequence(text: str, toks: list) -> Sequence:
     items: list = []
     pending_or = False
     for tok, val in toks:
+        if val is None:  # `{…}` attached to the previous term
+            if len(items[-1]) > 1:
+                raise QueryError(tok.position, ALT_ATTRS)
+            continue
         if isinstance(val, Gap):
             if pending_or or not items or isinstance(items[-1], Gap):
                 raise QueryError(tok.position, "间隔须在两个词之间")
@@ -379,6 +432,8 @@ def _sequence(text: str, toks: list) -> Sequence:
             pending_or = True
         else:
             if pending_or:
+                if val.attrs or items[-1][-1].attrs:
+                    raise QueryError(tok.position, ALT_ATTRS)
                 items[-1].append(val)
                 pending_or = False
             else:
@@ -412,6 +467,9 @@ def parse(text: str, tagset: str = "upos") -> QueryAST:
             raise QueryError(pos, f"{op} 后缺少条件")
         src = text[(pos + 1 if op else 0) : end]
         parts.append((op, _sequence(src, toks)))
+        if op and any(t.kind == "attr" for t, _ in toks):
+            at = next(t.position for t, _ in toks if t.kind == "attr")
+            raise QueryError(at, "属性约束只能用于主查询，不能用于 +/- 条件")
     for _, seq in parts:
         for item in seq.items:
             for atom in item if isinstance(item, list) else []:
@@ -489,13 +547,17 @@ def _atom(a: Atom) -> list[str]:
     return [_token(_wild(a.text), a.pos, " %c")]
 
 
-def compile_sequence(seq: Sequence) -> str:
-    out = []
+def compile_sequence(seq: Sequence, target: int | None = None) -> str:
+    """CQP for a sequence; `target` puts the CQP target marker `@` on the first token of that slot."""
+    out, slot = [], -1
     for item in seq.items:
         if isinstance(item, Gap):
             out.append(f"[]{{{item.min},{item.max}}}")
             continue
+        slot += 1
         alts = [alt for atom in item for alt in _atom(atom)]
+        if slot == target:
+            alts = ["@" + alt for alt in alts]
         out.append(alts[0] if len(alts) == 1 else "(" + " | ".join(alts) + ")")
     return " ".join(out)
 
@@ -524,7 +586,23 @@ def compile(ast: QueryAST) -> str:
             lines.append("#lead " + rx)
         if (rx := _edge(items[-1])) is not None:
             lines.append("#trail " + rx)
+    slots = [item for item in items if not isinstance(item, Gap)]
+    for p, item in enumerate(slots):
+        if item[0].attrs:
+            lines += [f"#attr {p} {k}={'|'.join(v)}" for k, v in item[0].attrs.items()]
+            lines.append(f"#target {p} {compile_sequence(ast.anchor, p)}")
     return "\n".join(lines)
+
+
+def attrs(compiled: str) -> dict[int, dict[str, tuple[str, ...]]]:
+    """`#attr` lines of a compile() result: {anchor slot: {key: values}}."""
+    out = {}
+    for line in compiled.split("\n"):
+        if line.startswith("#attr "):
+            slot, kv = line[6:].split(" ", 1)
+            key, values = kv.split("=", 1)
+            out.setdefault(int(slot), {})[key] = tuple(values.split("|"))
+    return out
 
 
 def compile_filter(filter: dict, fields: dict[str, str]) -> str:

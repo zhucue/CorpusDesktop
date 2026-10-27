@@ -144,6 +144,7 @@ def test_english_tatoeba_tokenised_in_place():
 def test_chinese_dependencies_on_stored_tokens():
     doc = Document("t", "zh", "语言是文化交流的桥梁。我们研究语言。", {}, [])
     nlp.annotate(doc)
+    assert len(doc.sentences) == 2
     before = [
         [(t.start, t.end, t.form, t.pos) for t in s.tokens] for s in doc.sentences
     ]
@@ -154,6 +155,8 @@ def test_chinese_dependencies_on_stored_tokens():
     for s in doc.sentences:
         assert all(t.deprel and 0 <= t.head <= len(s.tokens) for t in s.tokens)
         assert sum(t.head == 0 for t in s.tokens) == 1
+    nlp.annotate_dependencies_zh(doc)  # cached pipeline, same result
+    assert {t.deprel for s in doc.sentences for t in s.tokens} >= {"root", "nsubj"}
 
 
 def test_conllu_tokens_untouched():

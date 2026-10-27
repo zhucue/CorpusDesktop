@@ -1,19 +1,38 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 
 from services.api import (
     agent_auth,
+    annotations,
     auth,
     corpora,
     errors,
     evidence,
     jobs,
+    label_sets,
     projects,
     search,
     stats,
     subcorpora,
 )
 
-app = FastAPI(title="Corpus API", docs_url="/api/docs", openapi_url="/api/openapi.json")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    from services.api.db import transaction
+
+    with transaction() as db:
+        label_sets.seed_builtin(db)
+    yield
+
+
+app = FastAPI(
+    title="Corpus API",
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
+    lifespan=lifespan,
+)
 errors.install(app)
 
 
@@ -39,6 +58,8 @@ for module in (
     stats,
     evidence,
     jobs,
+    label_sets,
+    annotations,
 ):
     app.include_router(module.router)
 app.include_router(auth.users_router)

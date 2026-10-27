@@ -11,13 +11,20 @@ from sqlalchemy import select
 
 from engine import query
 from engine import stats as engine_stats
+from services.api import effective
 from services.api.access import WRITE, Paging, require_project, token_project
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
 from services.api.jobs import enqueue
 from services.api.metadata import field_types
 from services.api.models import StatResult, Subcorpus
-from services.api.search import Scope, compile_query, corpus_tagset, resolve_scope
+from services.api.search import (
+    LayersInput,
+    Scope,
+    compile_query,
+    corpus_tagset,
+    resolve_scope,
+)
 from services.api.views import job_view, stat_view
 
 router = APIRouter(prefix="/api")
@@ -32,10 +39,13 @@ class StatsInput(BaseModel):
 
 
 class FrequencyInput(StatsInput):
+    """unit deprel, or unit pos with layers.pos, is counted in PostgreSQL over effective annotations."""
+
     scope: Scope
-    unit: Literal["word", "lemma", "pos"] = "word"
+    unit: Literal["word", "lemma", "pos", "deprel"] = "word"
     pos: str | None = Field(default=None, max_length=20)
     min_freq: int = Field(default=1, ge=1)
+    layers: LayersInput | None = None
 
 
 class NgramsInput(StatsInput):
@@ -97,6 +107,12 @@ def _check_pos(tagset, *tags):
                 raise ApiError(422, "VALIDATION_ERROR", e.message)
 
 
+def _plain_query(text, tagset):
+    """Statistics run queries in CWB only; `{…}` attributes are rejected."""
+    if query.attrs(compile_query(text, tagset)):
+        raise ApiError(422, "QUERY_INVALID", "统计中的查询式不支持 {…} 属性约束")
+
+
 def _submit(db, user, method, body, scope):
     corpus, _ = resolve_scope(db, scope, user)
     if scope.subcorpus_id:
@@ -117,6 +133,8 @@ def _submit(db, user, method, body, scope):
 @router.post("/stats/frequency")
 def frequency(body: FrequencyInput, user: CurrentUser, db: Db):
     _check_pos(_tagset(db, body.scope, user), body.pos)
+    corpus, _ = resolve_scope(db, body.scope, user)
+    effective.check_layers(db, body.layers, corpus, user)
     return _submit(db, user, "frequency", body, body.scope)
 
 
@@ -129,7 +147,7 @@ def ngrams(body: NgramsInput, user: CurrentUser, db: Db):
 @router.post("/stats/collocations")
 def collocations(body: CollocationsInput, user: CurrentUser, db: Db):
     tagset = _tagset(db, body.scope, user)
-    compile_query(body.node, tagset)
+    _plain_query(body.node, tagset)
     _check_pos(tagset, body.pos)
     return _submit(db, user, "collocations", body, body.scope)
 
@@ -143,7 +161,7 @@ def keywords(body: KeywordsInput, user: CurrentUser, db: Db):
 @router.post("/stats/distribution")
 def distribution(body: DistributionInput, user: CurrentUser, db: Db):
     if body.query:
-        compile_query(body.query, _tagset(db, body.scope, user))
+        _plain_query(body.query, _tagset(db, body.scope, user))
     if body.field != "position":
         corpus, _ = resolve_scope(db, body.scope, user)
         if body.field not in field_types(db, corpus.id):
