@@ -141,8 +141,8 @@ OCR、音视频、实时多人协同编辑、完整 CQL 语法暴露给用户、
 
 | 类型 | 预标方式 | 校对界面 |
 | --- | --- | --- |
-| 分词 / 词性 | Stanza 或 HanLP | 词下方标签，点选修改；可合并拆分词 |
-| 依存句法 | Stanza | 弧线图，拖动弧线改 head，点击改关系 |
+| 分词 / 词性 | 中文 jieba（ICTCLAS 词性），英文 Stanza | 词下方标签，点选修改；可合并拆分词 |
+| 依存句法 | Stanza（中文按 jieba 分词结果预分词后解析） | 弧线图，拖动弧线改 head，点击改关系 |
 | 自定义片段与关系 | LLM 按标签集与规范预标 | 文本高亮，拖选新建，片段间连线建关系 |
 | 双语对齐 | 句级：长度与向量相似度；词级：模型 | 左右两栏连线图，点线修改 |
 
@@ -242,7 +242,7 @@ OCR、音视频、实时多人协同编辑、完整 CQL 语法暴露给用户、
 
 去掉 RabbitMQ、Celery、S3 对象存储和多套任务账本。文件存本地卷。Docker Compose 一键启动，单机部署。
 
-NLP 模型（Stanza 中英、HanLP 可选）随 worker 镜像固定版本。CWB 安装在 api 与 worker 镜像。
+NLP：中文分词与词性用 jieba（固定词典、关闭 HMM），英文分词词性依存与中文依存用 Stanza；模型随 worker 镜像固定版本。CWB 安装在 api 与 worker 镜像。
 
 ### 权限
 
@@ -316,7 +316,7 @@ NLP 模型（Stanza 中英、HanLP 可选）随 worker 镜像固定版本。CWB 
 | --- | --- | --- |
 | P1 语料与检索 | 登录、项目、成员角色；语料导入（txt / docx / csv / tsv / conllu / tmx / Tatoeba）；Stanza 分词词性依存；CWB 索引；类 CCL 查询式；KWIC、上下文、对齐句；子库；保存查询；CSV / XLSX 导出；任务系统 | 已实现，联调通过（`ab8e90b`）；Tatoeba 全量导入与内置语料发布未跑 |
 | P2 统计与 Agent | 频次、n-gram、搭配、关键词、分布；证据篮；agent 服务（Pi、19 工具、OpenUI Lang）；前端按设计稿定稿（主题、外壳、命令面板、任务托盘、深色模式、统计页、助手页与抽屉、引导页、错误边界） | 已实现，联调通过（`18b0ab1`）；真实模型未验 |
-| P2 补 | 真实模型接入验收（30 个真实任务、引用准确性）；Tatoeba 全量导入与内置语料发布；管理员维护内置语料页面 | 待用户提供模型配置后进行 |
+| P2 补 | 真实模型接入验收（30 个真实任务、引用准确性）；中文分词词性切换为 jieba；Tatoeba 全量导入与内置语料发布；管理员维护内置语料页面 | 真实模型已接通并完成 1 次完整对话（14 次工具调用、3 个组件）；jieba 切换进行中 |
 | P3 标注一 | 标注层、标签集、annotations 表（source / status / revision）；词性与依存预标任务（Stanza，可选 HanLP 对比）；校对工作区（词性点选、依存弧线拖拽、键盘快捷键、进度环）；AI 与人工差异视图；确认后写入 CWB 位置属性并重建索引；`{dep=}` 与词性查询接入检索与统计；标注统计；Agent 工具 annot.*；OpenUI 组件 DependencyTree、AnnotationDiff；导出 CoNLL-U | 待开始 |
 | P4 知识库 | knowledge_bases、kb_documents、kb_chunks、kb_terms 表与 pgvector；PDF / DOCX / Markdown / TXT / URL 导入与分段向量化；术语表（手工、从双语语料与文献抽取）；标注规范；研究笔记（证据篮与助手草稿写入）；混合检索；kb.search / kb.save / kb.extract_terms / kb.summarize 工具；OpenUI 组件 TermCard、KbCitation；TBX / CSV 导出；知识库页面 | 待开始 |
 | P5 标注二 | 自定义片段与关系标注（标签集、文本高亮、连线、LLM 预标按规范）；双语句级与词级对齐（候选生成、连线图编辑、确认）；学习者偏误与翻译策略标签集模板；多人标注一致性（kappa、alpha）与仲裁；OpenUI 组件 AlignmentGraph；导出 brat standoff、JSON、TMX；按自定义标签检索 `[标签]` | 待开始 |
@@ -339,6 +339,6 @@ NLP 模型（Stanza 中英、HanLP 可选）随 worker 镜像固定版本。CWB 
 
 ## 十四 待确认
 
-1. 对话与向量模型的服务地址、密钥和模型名由用户提供（P2 补与 P4 依赖）。
-2. HanLP 是否纳入 P3 做中文分词词性对比。
+1. 对话模型已配置（DeepSeek 兼容接口，deepseek-flash），密钥只在 deploy/.env；向量模型待定。
+2. 已定：中文分词词性用 jieba，不引入 HanLP。
 3. P4 向量模型：与对话模型同一 OpenAI 兼容服务，或本地模型。
