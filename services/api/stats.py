@@ -45,7 +45,13 @@ class StatsInput(BaseModel):
     top: int = Field(default=200, ge=1, le=2000)
 
 
-class FrequencyInput(StatsInput):
+class PunctInput(BaseModel):
+    # word / lemma items made only of punctuation, symbols and digits are left out (engine.stats);
+    # token totals and measures still count them.
+    exclude_punct: bool = True
+
+
+class FrequencyInput(StatsInput, PunctInput):
     """unit deprel, or unit pos with layers.pos, is counted in PostgreSQL over effective annotations;
     span_label / relation_label count effective spans of layers.span / relations of layers.relation (default:
     the corpus's most recently updated layer of that kind)."""
@@ -59,11 +65,12 @@ class FrequencyInput(StatsInput):
     layers: LayersInput | None = None
 
 
-class NgramsInput(StatsInput):
+class NgramsInput(StatsInput, PunctInput):
     scope: Scope
     n: int = Field(default=2, ge=2, le=4)
     unit: Unit = "word"
     pos_pattern: list[str | None] | None = None
+    contains: str | None = Field(default=None, max_length=200)  # word / lemma in some slot
     min_freq: int = Field(default=2, ge=1)
 
     @model_validator(mode="after")
@@ -73,7 +80,7 @@ class NgramsInput(StatsInput):
         return self
 
 
-class CollocationsInput(StatsInput):
+class CollocationsInput(StatsInput, PunctInput):
     scope: Scope
     node: str = Field(min_length=1, max_length=1000)
     window: int = Field(default=5, ge=1, le=20)
@@ -85,7 +92,7 @@ class CollocationsInput(StatsInput):
     min_freq: int = Field(default=3, ge=1)
 
 
-class KeywordsInput(StatsInput):
+class KeywordsInput(StatsInput, PunctInput):
     target: Scope
     reference: Scope
     unit: Unit = "word"
@@ -184,6 +191,8 @@ def collocations(body: CollocationsInput, user: CurrentUser, db: Db):
 @router.post("/stats/keywords")
 def keywords(body: KeywordsInput, user: CurrentUser, db: Db):
     resolve_scope(db, body.reference, user)
+    if body.reference == body.target:
+        raise ApiError(422, "VALIDATION_ERROR", "参照与目标相同，请选择另一个参照")
     return _submit(db, user, "keywords", body, body.target)
 
 

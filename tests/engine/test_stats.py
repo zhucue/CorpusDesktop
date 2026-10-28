@@ -165,3 +165,36 @@ def test_distribution_from_positions_matches_query(ud):
         got = stats.distribution(scope, "[x]", field, 5, positions=positions)
         assert [r["values"] for r in got.rows] == [r["values"] for r in want.rows]
         assert got.totals == want.totals
+
+
+def test_is_punct():
+    for v in ("，", "。", "(", "1990", "3.5%", "——", "_"):
+        assert stats.is_punct(v), v
+    for v in ("语言", "1990年", "二〇一〇", "a", "x1"):
+        assert not stats.is_punct(v), v
+
+
+@pytest.mark.cwb
+def test_exclude_punct_and_ngram_contains(ud):
+    scope = stats.Scope(ud, "ud_en")
+    full = stats.frequency(scope, top=10000)
+    clean = stats.frequency(scope, top=10000, exclude_punct=True)
+    punct = {r["key"]: r["values"]["freq"] for r in full.rows if stats.is_punct(r["key"])}
+    assert punct  # UD English has punctuation and numbers
+    assert not any(stats.is_punct(r["key"]) for r in clean.rows)
+    assert clean.row_count == full.row_count - len(punct)
+    assert clean.totals["excluded_tokens"] == sum(punct.values())
+    assert clean.totals["tokens"] == full.totals["tokens"]  # N still counts every token
+    kept = {r["key"]: r["values"] for r in clean.rows}
+    for r in full.rows:
+        if r["key"] in kept:
+            assert kept[r["key"]] == r["values"]  # per million on the same N
+
+    bi = stats.ngrams(scope, n=2, min_freq=1, top=10000)
+    with_the = stats.ngrams(scope, n=2, min_freq=1, top=10000, contains="the")
+    assert with_the.rows and all("the" in r["key"].split("\t") for r in with_the.rows)
+    assert with_the.row_count == sum("the" in r["key"].split("\t") for r in bi.rows)
+    clean_bi = stats.ngrams(scope, n=2, min_freq=1, top=10000, exclude_punct=True)
+    assert not any(
+        stats.is_punct(v) for r in clean_bi.rows for v in r["key"].split("\t")
+    )

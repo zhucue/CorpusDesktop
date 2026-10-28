@@ -26,9 +26,14 @@ search_query (engine.query.parse accepts every generated string):
   collocation: search_query = `node $K "coll"` (collocate right of the node, K = window-1) and
   search_query_reverse = `"coll" $K node` (left); the grammar has no top-level alternation, so the two
   directions are two queries. A form containing `"` cannot be quoted: search_query is null.
+
+exclude_punct (word / lemma units): leave out items made only of punctuation, symbols and digits (`，`, `(`,
+  `1990`, `3.5%`); an n-gram is left out when any slot is such an item. N and every measure still count all tokens,
+  punctuation included (totals.tokens); frequency reports the left-out tokens as totals.excluded_tokens.
 """
 
 import math
+import re
 from bisect import bisect_right
 from collections import Counter
 from dataclasses import dataclass
@@ -41,6 +46,12 @@ MISSING = "_"
 MEASURES = ("mi", "logdice", "t", "ll")
 MEASURE_LABELS = {"mi": "MI", "logdice": "logDice", "t": "t", "ll": "LL"}
 SIGNIFICANCE = ((10.827566, "***"), (6.634897, "**"), (3.841459, "*"))
+_PUNCT = re.compile(r"[\W\d_]+")
+
+
+def is_punct(value: str) -> bool:
+    """Only punctuation, symbols, spaces and digits (no letter or CJK character)."""
+    return bool(_PUNCT.fullmatch(value))
 
 
 @dataclass
@@ -228,12 +239,17 @@ def _check_unit(unit, allowed):
 # ---------------------------------------------------------------- methods
 
 
-def frequency(scope: Scope, unit="word", pos=None, top=200, min_freq=1) -> Table:
+def frequency(
+    scope: Scope, unit="word", pos=None, top=200, min_freq=1, exclude_punct=False
+) -> Table:
     _check_unit(unit, ("word", "lemma", "pos"))
     c = _Corpus(scope)
-    freq, docs = Counter(), Counter()
+    skip = exclude_punct and unit != "pos"
+    freq, docs, excluded = Counter(), Counter(), 0
     for (value, _), f in c.scan([unit, "doc_id", *_pos_keys([pos], c.tagset)]).items():
-        if unit == "word" or value != MISSING:
+        if skip and is_punct(value):
+            excluded += f
+        elif unit == "word" or value != MISSING:
             freq[value] += f
             docs[value] += 1
     items = sorted(
@@ -258,12 +274,21 @@ def frequency(scope: Scope, unit="word", pos=None, top=200, min_freq=1) -> Table
         _col("per_million", "每百万词"),
         _col("doc_freq", "文档频率"),
     ]
-    return Table(columns, rows, len(items), c.totals)
+    totals = {**c.totals, "excluded_tokens": excluded} if skip else c.totals
+    return Table(columns, rows, len(items), totals)
 
 
 def ngrams(
-    scope: Scope, n=2, unit="word", pos_pattern=None, top=200, min_freq=2
+    scope: Scope,
+    n=2,
+    unit="word",
+    pos_pattern=None,
+    top=200,
+    min_freq=2,
+    contains=None,
+    exclude_punct=False,
 ) -> Table:
+    """contains: keep only n-grams with this unit value (exact word form or lemma) in some slot."""
     _check_unit(unit, ("word", "lemma"))
     if not 2 <= n <= 4:
         raise ValueError("n 须为 2 至 4")
@@ -271,6 +296,7 @@ def ngrams(
     if len(tags) != n:
         raise ValueError("词性模式长度须等于 n")
     tags = [t or None for t in tags]
+    contains = (contains or "").strip() or None
     c = _Corpus(scope)
     keys = [unit if i == 0 else f"{unit}+{i}" for i in range(n)] + _pos_keys(
         tags, c.tagset
@@ -278,7 +304,10 @@ def ngrams(
     counts = {
         k: f
         for k, f in c.scan(keys, within_s=True).items()
-        if f >= min_freq and (unit == "word" or MISSING not in k)
+        if f >= min_freq
+        and (unit == "word" or MISSING not in k)
+        and (contains is None or contains in k)
+        and not (exclude_punct and any(is_punct(v) for v in k))
     }
     items = sorted(counts, key=lambda k: (-counts[k], k))
     rows = []
@@ -316,6 +345,7 @@ def collocations(
     measures=MEASURES,
     min_freq=3,
     top=200,
+    exclude_punct=False,
 ) -> Table:
     _check_unit(unit, ("word", "lemma"))
     measures = list(measures) or list(MEASURES)
@@ -340,7 +370,11 @@ def collocations(
     n, f_node = c.tokens, len(hits)
     stats = {}
     for (y,), o in observed.items():
-        if o < min_freq or (unit == "lemma" and y == MISSING):
+        if (
+            o < min_freq
+            or (unit == "lemma" and y == MISSING)
+            or (exclude_punct and is_punct(y))
+        ):
             continue
         c1 = totals[(y,)]
         e = r1 * c1 / n
@@ -385,7 +419,13 @@ def significance(ll):
 
 
 def keywords(
-    target: Scope, reference: Scope, unit="word", measure="ll", min_freq=3, top=200
+    target: Scope,
+    reference: Scope,
+    unit="word",
+    measure="ll",
+    min_freq=3,
+    top=200,
+    exclude_punct=False,
 ) -> Table:
     _check_unit(unit, ("word", "lemma"))
     if measure not in ("ll", "log_ratio"):
@@ -398,7 +438,12 @@ def keywords(
     stats = {}
     for (w,), a in ft.items():
         b = fr.get((w,), 0)
-        if a < min_freq or (unit == "lemma" and w == MISSING) or a / c <= b / d:
+        if (
+            a < min_freq
+            or (unit == "lemma" and w == MISSING)
+            or a / c <= b / d
+            or (exclude_punct and is_punct(w))
+        ):
             continue
         e1, e2 = c * (a + b) / (c + d), d * (a + b) / (c + d)
         ll = 2 * (a * math.log(a / e1) + (b * math.log(b / e2) if b else 0))

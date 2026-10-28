@@ -1,12 +1,23 @@
-.params { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; padding: 16px 20px; }
+/* Parameter bar: fields wrap, 计算 stays at the end of the last row; validation text floats under its field
+   so an error never moves labels or other fields. */
+.params { display: flex; align-items: flex-end; gap: 14px; padding: 16px 20px 20px; }
+.params-fields { display: flex; align-items: flex-end; gap: 20px 14px; flex-wrap: wrap; flex: 1; min-width: 0; }
+.params-run { flex-shrink: 0; white-space: nowrap; }
 .params .ant-form-item { margin-bottom: 0; }
+.params .ant-form-item-control { position: relative; }
+.params .ant-form-item-control > div:not(.ant-form-item-control-input) { position: absolute; top: 100%; left: 0; white-space: nowrap; z-index: 1; }
+.params .ant-form-item-explain { font-size: 12px; line-height: 18px; min-height: 0; }
+.params .ant-form-item-margin-offset { display: none; }
 .params .ant-form-item-label { padding-bottom: 6px !important; }
 .params .ant-form-item-label > label { font-size: 12px; color: var(--text-2); font-weight: 500; height: auto; }
+.params .chk .ant-form-item-control-input { min-height: 32px; }
 .res { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
 .res.dist { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
 .res-meta { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-3); flex-wrap: wrap; }
+.head-btns { display: inline-flex; gap: 6px; flex-shrink: 0; white-space: nowrap; }
+.tip-wrap { display: inline-flex; }
 .stat-scroll { max-height: 640px; overflow: auto; }
-.stat-tbl td, .stat-tbl th { padding: 9px 12px; }
+.stat-tbl td, .stat-tbl th { padding: 9px 12px; white-space: nowrap; }
 .stat-tbl thead th { position: sticky; top: 0; z-index: 1; }
 .back[disabled] { opacity: .4; cursor: not-allowed; }
 .stat-tabs .ant-tabs-nav { margin-bottom: 0; }

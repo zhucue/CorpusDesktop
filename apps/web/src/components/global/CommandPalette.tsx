@@ -10,7 +10,9 @@ import { fmt } from "../../lib/format";
 import { QueryChip } from "../common";
 import { Icon, type IconName } from "../Icon";
 import { kbDocIcon, kbIcon, pageIcon } from "../iconSets";
-import { AGENT_TOOLS, TOOL_VIEW } from "./tools";
+import { AGENT_TOOLS, TOOL_COUNT, TOOL_VIEW } from "./tools";
+
+const TOOLS_GROUP = "助手工具";
 
 interface Item {
   group: string;
@@ -18,6 +20,8 @@ interface Item {
   meta?: string;
   icon: IconName;
   query?: boolean;
+  /** Keep the palette open after running (e.g. expanding a collapsed group). */
+  keep?: boolean;
   /** Server-side match (文献 / 术语): shown without the local text filter. */
   remote?: boolean;
   run: () => void;
@@ -38,12 +42,15 @@ export default function CommandPalette({
   initial,
   projectId,
   onClose,
+  scope,
   setScope,
 }: {
   open: boolean;
   initial: string;
   projectId: string;
   onClose: () => void;
+  /** The project's shared scope (lib/scope); picking a corpus here switches it for the current page too. */
+  scope?: Scope | null;
   setScope: (s: Scope) => void;
 }) {
   const navigate = useNavigate();
@@ -85,17 +92,19 @@ export default function CommandPalette({
       icon: "folder",
       run: go(`/p/${p.id}/corpora`),
     }));
+    proj.push({ group: "项目", label: "新建项目", icon: "plus", run: go("/onboarding") });
+    const current = (m: string, on: boolean) => (on ? `当前 · ${m}` : m);
     const corp: Item[] = (corpora.data?.items ?? []).map((c) => ({
       group: "语料库",
       label: c.name,
-      meta: c.status === "ready" ? `${fmt(c.stats.tokens)} 词` : c.status,
+      meta: current(c.status === "ready" ? `${fmt(c.stats.tokens)} 词` : c.status, !!scope && "corpus_id" in scope && scope.corpus_id === c.id),
       icon: "library",
       run: () => setScope({ corpus_id: c.id }),
     }));
     const subs: Item[] = (subcorpora.data?.items ?? []).map((s) => ({
       group: "子库",
       label: s.name,
-      meta: `${fmt(s.stats.tokens)} 词`,
+      meta: current(`${fmt(s.stats.tokens)} 词`, !!scope && "subcorpus_id" in scope && scope.subcorpus_id === s.id),
       icon: "filter",
       run: () => setScope({ subcorpus_id: s.id }),
     }));
@@ -107,14 +116,17 @@ export default function CommandPalette({
       query: true,
       run: go(searchHref(projectId, s.query, s.scope)),
     }));
+    // Chinese names; the English tool id stays in meta so typing it still finds the tool.
     const tools: Item[] = AGENT_TOOLS.flatMap((g) =>
-      g.tools.map((t) => ({ group: "助手工具", label: t, meta: g.group, icon: TOOL_VIEW[t]?.icon ?? ("tool" as IconName), run: go(`${base}/assistant`) })),
+      g.tools.map((t) => ({ group: TOOLS_GROUP, label: TOOL_VIEW[t]?.title ?? t, meta: `${g.group} · ${t}`, icon: TOOL_VIEW[t]?.icon ?? ("tool" as IconName), run: go(`${base}/assistant`) })),
     );
     return [...pages, ...proj, ...corp, ...subs, ...saved, ...tools];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, projects.data, corpora.data, subcorpora.data, queries.data]);
+  }, [projectId, projects.data, corpora.data, subcorpora.data, queries.data, scope]);
 
   const needle = q.trim().toLowerCase();
+  // Without a search the tools are collapsed into one entry that expands the group.
+  const toolsCollapsed: Item = { group: TOOLS_GROUP, label: `展开全部 ${TOOL_COUNT} 个工具`, icon: "tool", keep: true, run: () => setQ(TOOLS_GROUP) };
   const kbQ = useDebounced(q.trim(), 250);
   const kbOn = open && kbQ.length > 0;
   const kbDocs = useQuery({
@@ -152,7 +164,7 @@ export default function CommandPalette({
         })),
       ]
     : [];
-  const shown = [...(needle ? items.filter((it) => `${it.group} ${it.label} ${it.meta ?? ""}`.toLowerCase().includes(needle)) : items), ...remote];
+  const shown = [...(needle ? items.filter((it) => `${it.group} ${it.label} ${it.meta ?? ""}`.toLowerCase().includes(needle)) : [...items.filter((it) => it.group !== TOOLS_GROUP), toolsCollapsed]), ...remote];
   const groups: [string, { it: Item; idx: number }[]][] = [];
   shown.forEach((it, idx) => {
     let g = groups.find((x) => x[0] === it.group);
@@ -163,6 +175,11 @@ export default function CommandPalette({
 
   function pick(it: Item | undefined) {
     if (!it) return;
+    if (it.keep) {
+      it.run();
+      setActive(0);
+      return;
+    }
     onClose();
     it.run();
   }

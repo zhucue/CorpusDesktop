@@ -85,6 +85,7 @@ def test_stats_job_lifecycle(owner, project, corpus, member, fake_stats):
     scope = {"corpus_id": corpus["id"]}
     stat_id = run_stat(owner, "frequency", {"scope": scope, "unit": "word", "top": 2})
     assert fake_stats[-1]["args"][1:3] == ("word", None)
+    assert fake_stats[-1]["kw"] == {"exclude_punct": True}  # punctuation left out by default
     stat = owner.get(f"/api/stats/{stat_id}").json()
     assert stat["method"] == "frequency" and stat["project_id"] == project["id"]
     assert stat["scope"] == {
@@ -110,7 +111,20 @@ def test_stats_job_lifecycle(owner, project, corpus, member, fake_stats):
     r = viewer.get(f"/api/jobs/{job['id']}/download")
     assert r.status_code == 200, r.text
     rows = list(csv.reader(io.StringIO(r.content.decode("utf-8-sig"))))
-    assert rows[0] == ["项", "频次", "查询式"] and len(rows) == 4
+    # parameters, scope and token total (punctuation included) above the table
+    assert rows[0] == ["统计：频次（单位 词形；最低频次 1；显示前 2；排除标点和数字）"]
+    assert rows[1] == ["范围：作文，14 词（含标点）"]
+    assert rows[2][0].startswith("索引版本：")
+    head = rows.index(["项", "频次", "查询式"])
+    assert rows[head + 1 :] == [
+        ["language", "9", '"language"'],
+        ["is", "8", '"is"'],
+        ["a", "7", '"a"'],
+    ]
+    assert job["summary"].startswith("频次")
+    assert viewer.get(f"/api/jobs/{job['id']}").json()["result"]["filename"].startswith(
+        "统计-频次-"
+    )
     assert viewer.delete(f"/api/stats/{stat_id}").status_code == 403
 
     assert owner.delete(f"/api/stats/{stat_id}").status_code == 204
@@ -120,6 +134,12 @@ def test_stats_job_lifecycle(owner, project, corpus, member, fake_stats):
 def test_stats_other_methods_and_validation(owner, project, corpus, fake_stats):
     scope = {"corpus_id": corpus["id"]}
     run_stat(owner, "ngrams", {"scope": scope, "n": 3, "pos_pattern": ["v", None, "n"]})
+    run_stat(
+        owner,
+        "ngrams",
+        {"scope": scope, "n": 2, "contains": "language", "exclude_punct": False},
+    )
+    assert fake_stats[-1]["kw"] == {"contains": "language", "exclude_punct": False}
     run_stat(owner, "collocations", {"scope": scope, "node": "language", "pos": "n"})
     assert fake_stats[-1]["args"][1:3] == ("language", 5)
     sub = owner.post(
@@ -141,6 +161,7 @@ def test_stats_other_methods_and_validation(owner, project, corpus, fake_stats):
         ("collocations", {"scope": scope, "node": "a $"}, "QUERY_INVALID"),
         ("distribution", {"scope": scope, "field": "nope"}, "INVALID_FIELD"),
         ("ngrams", {"scope": scope, "n": 2, "pos_pattern": ["v"]}, "VALIDATION_ERROR"),
+        ("keywords", {"target": scope, "reference": scope}, "VALIDATION_ERROR"),
         (
             "collocations",
             {"scope": scope, "node": "x", "measures": ["dice"]},
@@ -240,6 +261,12 @@ def test_evidence_crud_and_export(owner, project, corpus, member, make_user):
     assert r.status_code == 200, r.text
     ev = r.json()
     assert ev["ref"]["hit_id"] == h["hit_id"] and ev["created_by"] == owner.user_id
+    # a pinned hit is stored as its own sentence with the match marked, not the client's KWIC text
+    assert ev["text"] == "**Language** is a system."
+    assert ev["source"] == "a · 句 1 · 作文"
+    assert ev["ref"]["sentence"] == "Language is a system."
+    assert ev["ref"]["match"] == [0, 8] and ev["ref"]["sentence_index"] == 0
+    assert ev["ref"]["aligned"] == [] and ev["ref"]["document_title"] == "a"
     annotator = member("annotator")
     own = annotator.post(
         f"/api/projects/{project['id']}/evidence",
@@ -280,16 +307,24 @@ def test_evidence_crud_and_export(owner, project, corpus, member, make_user):
             assert text == [
                 "证据篮",
                 "1. Language is a system.",
-                "出处：作文 / a",
+                "出处：a · 句 1 · 作文",
                 "查询式：language",
                 "备注：定义句",
             ]
+            assert [r.text for r in doc.paragraphs[1].runs if r.bold] == ["Language"]
             assert doc.styles["Normal"].font.name == "宋体"
         if fmt == "csv":
             rows = list(csv.reader(io.StringIO(r.content.decode("utf-8-sig"))))
             assert rows == [
-                ["原文", "出处", "查询式", "备注"],
-                ["Language is a system.", "作文 / a", "language", "定义句"],
+                ["原文", "命中", "译文", "出处", "查询式", "备注"],
+                [
+                    "Language is a system.",
+                    "Language",
+                    "",
+                    "a · 句 1 · 作文",
+                    "language",
+                    "定义句",
+                ],
             ]
 
 
@@ -468,8 +503,14 @@ def test_job_creator_manages_own_job(owner, project, corpus, member, fake_stats)
     assert {j["owner_email"] for j in stats_jobs} == {"annotator@example.edu"}
     imports = [j for j in listed if j["kind"] == "import"]
     assert {j["summary"] for j in imports} == {"作文：a.txt", "作文：b.txt"}
+    sub = owner.post(
+        f"/api/projects/{project['id']}/subcorpora",
+        json={"name": "新闻", "corpus_id": corpus["id"], "filter": {"genre": "news"}},
+    ).json()
     stat_id = run_stat(
-        owner, "keywords", {"target": body["scope"], "reference": body["scope"]}
+        owner,
+        "keywords",
+        {"target": body["scope"], "reference": {"subcorpus_id": sub["id"]}},
     )
     export = owner.post(f"/api/stats/{stat_id}/export", json={"format": "csv"}).json()
     assert export["summary"] == "关键词 · 作文 · CSV"

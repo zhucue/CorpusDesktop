@@ -5,9 +5,10 @@ import { quietJobs, useJob, useJobCreated } from "../../lib/data";
 
 /**
  * Start a statistics job for `body` (once per distinct body and runKey), poll it, then load the StatResult.
- * Pass body = null to stay idle.
+ * Pass body = null to stay idle. quiet: true = never toast on completion; "mounted" = no toast while the calling
+ * page is open (its result shows there), the task tray toasts once the user has left.
  */
-export function useStatJob(method: StatMethod, body: object | null, projectId: string, runKey = 0, opts: { quiet?: boolean } = {}) {
+export function useStatJob(method: StatMethod, body: object | null, projectId: string, runKey = 0, opts: { quiet?: boolean | "mounted" } = {}) {
   const jobCreated = useJobCreated();
   const create = useQuery({
     queryKey: ["stat-run", method, body, runKey],
@@ -18,12 +19,18 @@ export function useStatJob(method: StatMethod, body: object | null, projectId: s
     retry: false,
     meta: { background: true },
   });
+  const id = create.data?.id;
   useEffect(() => {
-    if (create.data && opts.quiet) quietJobs.add(create.data.id);
-    if (create.data) jobCreated(projectId);
+    if (!id) return;
+    if (opts.quiet) quietJobs.add(id);
+    jobCreated(projectId);
+    if (opts.quiet !== "mounted") return;
+    return () => {
+      quietJobs.delete(id);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [create.data?.id]);
-  const job = useJob(create.data?.id);
+  }, [id]);
+  const job = useJob(id);
   const current = job.data ?? create.data;
   const statId = current?.state === "succeeded" ? (current.result?.stat_id ?? null) : null;
   const stat = useStatResult(statId);

@@ -1,18 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { App, Drawer, Form, Input, InputNumber, Popconfirm, Select, Tabs } from "antd";
+import { Alert, App, Checkbox, Drawer, Form, Input, InputNumber, Popconfirm, Select, Tabs } from "antd";
 import { useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router";
-import { MAX_PAGE_SIZE, api, errorText, type Job, type MetadataField, type Page, type Scope, type StatMethod, type StatResult } from "../../api";
+import { useSearchParams } from "react-router";
+import { MAX_PAGE_SIZE, api, errorText, type Corpus, type MetadataField, type Page, type Scope, type StatMethod, type StatResult } from "../../api";
 import { Empty, ErrorAlert, exportTip, Skeleton, Tip } from "../../components/common";
 import { ScopeSelect } from "../../components/common/ScopeSelect";
 import { Icon } from "../../components/Icon";
 import { statIcon } from "../../components/iconSets";
-import { download, type EChartHandle } from "../../components/results/EChart";
+import { download, downloadText, type EChartHandle } from "../../components/results/EChart";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
-import { describeScope, useCorpora, useJobCreated, useProjectId, useSubcorpora } from "../../lib/data";
+import { describeScope, sameScope, useCorpora, useProjectId, useSubcorpora } from "../../lib/data";
+import { useExportJob } from "../../lib/exportJob";
 import { fmt, fmtShortTime, fmtVersion } from "../../lib/format";
-import { StatChart } from "./StatChart";
+import { MEASURE_LABELS, StatChart } from "./StatChart";
 import { methodLabels, StatTable } from "./StatTable";
 import "./stats.css";
 import { useStatJob, useStatResult } from "./useStatJob";
@@ -20,6 +21,8 @@ import { useLayers } from "../annotate/data";
 import { AlignmentStatsCard } from "../annotate/AlignStats";
 
 const METHODS: StatMethod[] = ["frequency", "ngrams", "collocations", "keywords", "distribution"];
+/** Methods with the 排除标点和数字 option (word / lemma units). */
+const PUNCT_METHODS: StatMethod[] = ["frequency", "ngrams", "collocations", "keywords"];
 
 const UNIT_OPTIONS = [
   { value: "word", label: "词形" },
@@ -36,21 +39,25 @@ const POS_OPTIONS = [
   ["PROPN", "专名"],
 ].map(([v, l]) => ({ value: v, label: `${l} ${v}` }));
 const TOP_OPTIONS = [50, 100, 200].map((n) => ({ value: n, label: `前 ${n}` }));
-const MEASURES = [
-  { value: "logdice", label: "logDice" },
-  { value: "mi", label: "MI" },
-  { value: "t", label: "t 值" },
-  { value: "ll", label: "LL" },
-];
+const MEASURES = ["logdice", "mi", "t", "ll"].map((m) => ({ value: m, label: MEASURE_LABELS[m] }));
 
 type Body = Record<string, unknown>;
+
+/** Simplified / traditional script of a corpus (`meta.script`), as 简体 / 繁体; null when unknown. */
+function corpusScript(c: Corpus | null | undefined): "简体" | "繁体" | null {
+  const s = (c?.meta as { script?: unknown } | undefined)?.script;
+  if (typeof s !== "string") return null;
+  const v = s.toLowerCase();
+  if (["simplified", "hans", "zh-hans", "zh-cn", "简体", "简"].includes(v)) return "简体";
+  if (["traditional", "hant", "zh-hant", "zh-tw", "zh-hk", "繁体", "繁"].includes(v)) return "繁体";
+  return null;
+}
 
 function ParamsCard({ children, onSubmit, running, form }: { children: React.ReactNode; onSubmit: () => void; running: boolean; form: ReturnType<typeof Form.useForm>[0] }) {
   return (
     <Form form={form} className="card params" layout="vertical" onFinish={onSubmit} requiredMark={false}>
-      {children}
-      <div className="grow" />
-      <button className="btn p" type="submit" disabled={running}>
+      <div className="params-fields">{children}</div>
+      <button className="btn p params-run" type="submit" disabled={running}>
         {running ? <span className="spin" /> : <Icon name="play" size={14} />}
         计算
       </button>
@@ -67,15 +74,22 @@ function toScope(v: unknown): Scope | undefined {
   return undefined;
 }
 
+/** The plain corpus / subcorpus scope a stored result was computed on (target for keywords), for the shared scope. */
+function resultScope(stat: StatResult): Scope | undefined {
+  const p = stat.params as Body;
+  const s = toScope(stat.method === "keywords" ? p.target : p.scope) ?? toScope(stat.scope);
+  return s && !("filter" in s) ? s : undefined;
+}
+
 /** Form values that reproduce a stored result's request (its method tab is chosen by the caller). */
 function formValues(stat: StatResult): Body {
   const p = stat.params as Body;
-  const v: Body = { unit: p.unit, pos: p.pos ?? undefined, min_freq: p.min_freq, top: p.top };
+  const v: Body = { unit: p.unit, pos: p.pos ?? undefined, min_freq: p.min_freq, top: p.top, exclude_punct: p.exclude_punct ?? false };
   const lay = p.layers as { span?: string; relation?: string } | undefined;
   if (lay?.span || lay?.relation) v.layer_id = lay.span ?? lay.relation;
   if (stat.method === "keywords") Object.assign(v, { target: toScope(p.target) ?? toScope(stat.scope), reference: toScope(p.reference), measure: p.measure });
   else v.scope = toScope(p.scope) ?? toScope(stat.scope);
-  if (stat.method === "ngrams") Object.assign(v, { n: p.n, pos_pattern: Array.isArray(p.pos_pattern) ? p.pos_pattern.join(" ") : undefined });
+  if (stat.method === "ngrams") Object.assign(v, { n: p.n, pos_pattern: Array.isArray(p.pos_pattern) ? p.pos_pattern.join(" ") : undefined, contains: p.contains ?? undefined });
   if (stat.method === "collocations") Object.assign(v, { node: p.node, window: p.window, measure: Array.isArray(p.measures) ? p.measures[0] : undefined });
   if (stat.method === "distribution") Object.assign(v, { query: p.query ?? undefined, field: p.field, bins: p.bins });
   return Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined && x !== null));
@@ -85,18 +99,36 @@ function scopeRule(msg = "请选择范围") {
   return [{ required: true, message: msg }];
 }
 
+/** Warn when a keyword comparison mixes simplified and traditional corpora (meta.script). */
+function ScriptWarning({ projectId, target, reference }: { projectId: string; target?: Scope | null; reference?: Scope | null }) {
+  const corpora = useCorpora(projectId).data?.items ?? [];
+  const subs = useSubcorpora(projectId).data?.items ?? [];
+  if (!target || !reference) return null;
+  const a = corpusScript(describeScope(target, corpora, subs).corpus);
+  const b = corpusScript(describeScope(reference, corpora, subs).corpus);
+  if (!a || !b || a === b) return null;
+  return <Alert type="warning" showIcon message={`目标为${a}、参照为${b}：同一个词的简繁字形会被算作不同的词，关键词前列会是简繁差异。请选用同一字形的参照。`} />;
+}
+
 /** Parameter form per method; builds the POST /stats/{method} body from contracts/p2.md §三. */
 function MethodForm({
   method,
   projectId,
-  defaultScope,
+  scope,
+  onScope,
+  reference,
+  onReference,
   initial,
   running,
   onRun,
 }: {
   method: StatMethod;
   projectId: string;
-  defaultScope: Scope | null;
+  /** The project's shared scope (lib/scope); the keyword target uses it too. */
+  scope: Scope | null;
+  onScope: (s: Scope) => void;
+  reference: Scope | null;
+  onReference: (s: Scope | null) => void;
   initial?: StatResult;
   running: boolean;
   onRun: (body: Body) => void;
@@ -104,8 +136,10 @@ function MethodForm({
   const [form] = Form.useForm();
   const corpora = useCorpora(projectId);
   const subs = useSubcorpora(projectId);
-  const scope = Form.useWatch("scope", form) as Scope | undefined;
-  const corpusId = describeScope(scope ?? null, corpora.data?.items ?? [], subs.data?.items ?? []).corpus?.id;
+  const scopeKey = method === "keywords" ? "target" : "scope";
+  const formScope = Form.useWatch(scopeKey, form) as Scope | undefined;
+  const ref = Form.useWatch("reference", form) as Scope | undefined;
+  const corpusId = describeScope(formScope ?? null, corpora.data?.items ?? [], subs.data?.items ?? []).corpus?.id;
   const fields = useQuery({
     queryKey: ["metadata-fields", corpusId],
     queryFn: () => api.get<MetadataField[]>(`/corpora/${corpusId}/metadata-fields`),
@@ -116,22 +150,35 @@ function MethodForm({
   const layers = useLayers(projectId);
   const labelUnit = method === "frequency" && (unit === "span_label" || unit === "relation_label");
   const unitLayers = (layers.data ?? []).filter((l) => l.kind === (unit === "relation_label" ? "relation" : "span") && l.status === "ready" && (!corpusId || l.corpus_id === corpusId));
+  const punctOption = PUNCT_METHODS.includes(method) && (unit === undefined || unit === "word" || unit === "lemma");
 
+  // The range follows the shared scope (palette, breadcrumb, other tabs, search); declared before the
+  // opened-result effect so an opened result's own (possibly filtered) scope wins on mount.
   useEffect(() => {
-    if (initial?.method === method) return; // the opened result's own scope wins
-    if (defaultScope && !form.getFieldValue(method === "keywords" ? "target" : "scope")) form.setFieldValue(method === "keywords" ? "target" : "scope", defaultScope);
-  }, [defaultScope, form, method, initial?.method]);
+    if (scope) form.setFieldValue(scopeKey, scope);
+  }, [scope, scopeKey, form]);
+  useEffect(() => {
+    if (method === "keywords" && reference && !form.getFieldValue("reference")) form.setFieldValue("reference", reference);
+  }, [method, reference, form]);
   // An opened result (?stat=, 统计结果 drawer) shows the parameters it was computed with.
   useEffect(() => {
     if (initial && initial.method === method) form.setFieldsValue(formValues(initial));
   }, [initial?.id, method]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The reference may not be the target: picking the reference's corpus as target clears it.
+  useEffect(() => {
+    if (method === "keywords" && formScope && ref && sameScope(formScope, ref)) {
+      form.setFieldValue("reference", undefined);
+      onReference(null);
+    }
+  }, [method, formScope, ref]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = () => {
     const v = form.getFieldsValue(true) as Body;
     const body: Body = { project_id: projectId };
+    const punct = punctOption ? !!v.exclude_punct : undefined;
     if (method === "frequency") {
       const spanUnit = v.unit === "span_label" || v.unit === "relation_label";
-      Object.assign(body, { scope: v.scope, unit: v.unit, pos: spanUnit ? undefined : v.pos || undefined, top: v.top, min_freq: v.min_freq });
+      Object.assign(body, { scope: v.scope, unit: v.unit, pos: spanUnit ? undefined : v.pos || undefined, top: v.top, min_freq: v.min_freq, exclude_punct: punct });
       if (spanUnit && v.layer_id) body.layers = { [v.unit === "span_label" ? "span" : "relation"]: v.layer_id };
     }
     if (method === "ngrams")
@@ -140,24 +187,20 @@ function MethodForm({
         n: v.n,
         unit: v.unit,
         pos_pattern: typeof v.pos_pattern === "string" && v.pos_pattern.trim() ? v.pos_pattern.trim().split(/\s+/) : undefined,
+        contains: typeof v.contains === "string" && v.contains.trim() ? v.contains.trim() : undefined,
         top: v.top,
         min_freq: v.min_freq,
+        exclude_punct: punct,
       });
     if (method === "collocations") {
       const order = [v.measure as string, ...MEASURES.map((m) => m.value).filter((m) => m !== v.measure)];
-      Object.assign(body, { scope: v.scope, node: String(v.node).trim(), window: v.window, unit: v.unit, pos: v.pos || undefined, measures: order, min_freq: v.min_freq, top: v.top });
+      Object.assign(body, { scope: v.scope, node: String(v.node).trim(), window: v.window, unit: v.unit, pos: v.pos || undefined, measures: order, min_freq: v.min_freq, top: v.top, exclude_punct: punct });
     }
-    if (method === "keywords") Object.assign(body, { target: v.target, reference: v.reference, unit: v.unit, measure: v.measure, min_freq: v.min_freq, top: v.top });
-    if (method === "distribution")
-      Object.assign(body, { scope: v.scope, query: typeof v.query === "string" && v.query.trim() ? v.query.trim() : undefined, field: v.field, bins: v.field === "position" ? v.bins : undefined });
+    if (method === "keywords") Object.assign(body, { target: v.target, reference: v.reference, unit: v.unit, measure: v.measure, min_freq: v.min_freq, top: v.top, exclude_punct: punct });
+    if (method === "distribution") Object.assign(body, { scope: v.scope, query: String(v.query).trim(), field: v.field, bins: v.field === "position" ? v.bins : undefined });
     onRun(body);
   };
 
-  const scopeField = (
-    <Form.Item name="scope" label="范围" rules={scopeRule()}>
-      <ScopeSelect projectId={projectId} value={form.getFieldValue("scope")} onChange={(s) => form.setFieldValue("scope", s)} />
-    </Form.Item>
-  );
   const minFreq = (n: number) => (
     <Form.Item name="min_freq" label="最低频次" initialValue={n}>
       <InputNumber min={1} className="mono" style={{ width: 96 }} />
@@ -170,160 +213,180 @@ function MethodForm({
   );
 
   return (
-    <ParamsCard form={form} onSubmit={submit} running={running}>
-      {method === "keywords" ? (
-        <>
-          <Form.Item name="target" label="目标" rules={scopeRule("请选择目标")}>
-            <ScopeSelect projectId={projectId} value={form.getFieldValue("target")} onChange={(s) => form.setFieldValue("target", s)} width={200} />
+    <>
+      <ParamsCard form={form} onSubmit={submit} running={running}>
+        {method === "keywords" ? (
+          <>
+            <Form.Item name="target" label="目标" rules={scopeRule("请选择目标")}>
+              <ScopeSelect projectId={projectId} value={form.getFieldValue("target")} onChange={onScope} width={200} />
+            </Form.Item>
+            <Form.Item
+              name="reference"
+              label="参照"
+              rules={[
+                ...scopeRule("请选择参照"),
+                { validator: (_, v) => (v && sameScope(v, form.getFieldValue("target")) ? Promise.reject(new Error("参照与目标相同")) : Promise.resolve()) },
+              ]}
+            >
+              <ScopeSelect projectId={projectId} value={form.getFieldValue("reference")} onChange={onReference} exclude={formScope} width={200} />
+            </Form.Item>
+          </>
+        ) : (
+          <Form.Item name="scope" label="范围" rules={scopeRule()}>
+            <ScopeSelect projectId={projectId} value={form.getFieldValue("scope")} onChange={onScope} />
           </Form.Item>
-          <Form.Item name="reference" label="参照" rules={scopeRule("请选择参照")}>
-            <ScopeSelect projectId={projectId} value={form.getFieldValue("reference")} onChange={(s) => form.setFieldValue("reference", s)} width={200} />
+        )}
+        {method === "collocations" && (
+          <Form.Item name="node" label="节点词" rules={[{ required: true, whitespace: true, message: "请输入查询式" }]}>
+            <Input className="mono" style={{ width: 150 }} placeholder="翻译/v" />
           </Form.Item>
-        </>
-      ) : (
-        scopeField
-      )}
-      {method === "collocations" && (
-        <Form.Item name="node" label="节点词" rules={[{ required: true, whitespace: true, message: "请输入查询式" }]}>
-          <Input className="mono" style={{ width: 150 }} placeholder="翻译/v" />
-        </Form.Item>
-      )}
-      {method === "distribution" && (
-        <Form.Item name="query" label="查询式">
-          <Input className="mono" style={{ width: 200 }} placeholder="翻译/v +文化" />
-        </Form.Item>
-      )}
-      {method === "ngrams" && (
-        <Form.Item name="n" label="n" initialValue={2}>
-          <Select options={[2, 3, 4].map((n) => ({ value: n, label: String(n) }))} style={{ width: 72 }} />
-        </Form.Item>
-      )}
-      {method !== "distribution" && (
-        <Form.Item name="unit" label="单位" initialValue="word">
-          <Select
-            options={method === "frequency" ? [...UNIT_OPTIONS, { value: "pos", label: "词性" }, { value: "span_label", label: "片段标签" }, { value: "relation_label", label: "关系标签" }] : UNIT_OPTIONS}
-            style={{ width: method === "frequency" ? 112 : 96 }}
-          />
-        </Form.Item>
-      )}
-      {labelUnit && (
-        <Form.Item name="layer_id" label={unit === "relation_label" ? "关系层" : "片段层"}>
-          <Select allowClear style={{ width: 180 }} placeholder="最近更新的层" options={unitLayers.map((l) => ({ value: l.id, label: l.name }))} />
-        </Form.Item>
-      )}
-      {(method === "collocations" || (method === "frequency" && !labelUnit)) && (
-        <Form.Item name="pos" label={method === "collocations" ? "搭配词词性" : "词性"}>
-          <Select allowClear placeholder="全部" options={POS_OPTIONS} style={{ width: 136 }} />
-        </Form.Item>
-      )}
-      {method === "ngrams" && (
-        <Form.Item name="pos_pattern" label="词性模式">
-          <Input className="mono" placeholder="VERB NOUN" style={{ width: 160 }} />
-        </Form.Item>
-      )}
-      {method === "collocations" && (
-        <>
-          <Form.Item name="window" label="窗口 ±" initialValue={5}>
-            <InputNumber min={1} max={10} className="mono" style={{ width: 80 }} />
+        )}
+        {method === "distribution" && (
+          <Form.Item name="query" label="查询式" rules={[{ required: true, whitespace: true, message: "请输入查询式" }]}>
+            <Input className="mono" style={{ width: 200 }} placeholder="翻译/v +文化" />
           </Form.Item>
-          <Form.Item name="measure" label="排序指标" initialValue="logdice">
-            <Select options={MEASURES} style={{ width: 104 }} />
+        )}
+        {method === "ngrams" && (
+          <Form.Item name="n" label="n" initialValue={2}>
+            <Select options={[2, 3, 4].map((n) => ({ value: n, label: String(n) }))} style={{ width: 72 }} />
           </Form.Item>
-        </>
-      )}
-      {method === "keywords" && (
-        <Form.Item name="measure" label="指标" initialValue="ll">
-          <Select options={[{ value: "ll", label: "LL" }, { value: "log_ratio", label: "Log Ratio" }]} style={{ width: 110 }} />
-        </Form.Item>
-      )}
-      {method === "distribution" && (
-        <>
-          <Form.Item name="field" label="按" initialValue="position" rules={[{ required: true }]}>
+        )}
+        {method !== "distribution" && (
+          <Form.Item name="unit" label="单位" initialValue="word">
             <Select
-              style={{ width: 150 }}
-              loading={fields.isFetching}
-              options={[{ value: "position", label: "文档位置" }, ...(fields.data ?? []).map((f) => ({ value: f.field, label: f.field === "year" ? "年份 year" : f.field }))]}
+              options={method === "frequency" ? [...UNIT_OPTIONS, { value: "pos", label: "词性" }, { value: "span_label", label: "片段标签" }, { value: "relation_label", label: "关系标签" }] : UNIT_OPTIONS}
+              style={{ width: method === "frequency" ? 112 : 96 }}
             />
           </Form.Item>
-          {field === "position" && (
-            <Form.Item name="bins" label="区间" initialValue={10}>
-              <InputNumber min={2} max={50} className="mono" style={{ width: 80 }} />
+        )}
+        {labelUnit && (
+          <Form.Item name="layer_id" label={unit === "relation_label" ? "关系层" : "片段层"}>
+            <Select allowClear style={{ width: 180 }} placeholder="最近更新的层" options={unitLayers.map((l) => ({ value: l.id, label: l.name }))} />
+          </Form.Item>
+        )}
+        {(method === "collocations" || (method === "frequency" && !labelUnit)) && (
+          <Form.Item name="pos" label={method === "collocations" ? "搭配词词性" : "词性"}>
+            <Select allowClear placeholder="全部" options={POS_OPTIONS} style={{ width: 136 }} />
+          </Form.Item>
+        )}
+        {method === "ngrams" && (
+          <>
+            <Form.Item name="contains" label="包含词">
+              <Input className="mono" placeholder="文化" style={{ width: 120 }} allowClear />
             </Form.Item>
-          )}
-        </>
-      )}
-      {method !== "distribution" && minFreq(method === "frequency" ? 1 : method === "ngrams" ? 2 : 3)}
-      {method !== "distribution" && top}
-    </ParamsCard>
+            <Form.Item name="pos_pattern" label="词性模式">
+              <Input className="mono" placeholder="VERB NOUN" style={{ width: 160 }} />
+            </Form.Item>
+          </>
+        )}
+        {method === "collocations" && (
+          <>
+            <Form.Item name="window" label="窗口 ±" initialValue={5}>
+              <InputNumber min={1} max={10} className="mono" style={{ width: 80 }} />
+            </Form.Item>
+            <Form.Item name="measure" label="排序指标" initialValue="logdice">
+              <Select options={MEASURES} style={{ width: 104 }} />
+            </Form.Item>
+          </>
+        )}
+        {method === "keywords" && (
+          <Form.Item name="measure" label="指标" initialValue="ll">
+            <Select options={[{ value: "ll", label: "LL" }, { value: "log_ratio", label: "Log Ratio" }]} style={{ width: 110 }} />
+          </Form.Item>
+        )}
+        {method === "distribution" && (
+          <>
+            <Form.Item name="field" label="按" initialValue="position" rules={[{ required: true }]}>
+              <Select
+                style={{ width: 150 }}
+                loading={fields.isFetching}
+                options={[{ value: "position", label: "文档位置" }, ...(fields.data ?? []).map((f) => ({ value: f.field, label: f.field === "year" ? "年份 year" : f.field }))]}
+              />
+            </Form.Item>
+            {field === "position" && (
+              <Form.Item name="bins" label="区间" initialValue={10}>
+                <InputNumber min={2} max={50} className="mono" style={{ width: 80 }} />
+              </Form.Item>
+            )}
+          </>
+        )}
+        {method !== "distribution" && minFreq(method === "frequency" ? 1 : method === "ngrams" ? 2 : 3)}
+        {method !== "distribution" && top}
+        {punctOption && (
+          <Form.Item name="exclude_punct" valuePropName="checked" initialValue={true} className="chk">
+            <Checkbox>排除标点和数字</Checkbox>
+          </Form.Item>
+        )}
+      </ParamsCard>
+      {method === "keywords" && <ScriptWarning projectId={projectId} target={formScope} reference={ref} />}
+    </>
   );
 }
 
 function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId: string; chartRef: React.Ref<EChartHandle> }) {
-  const { message } = App.useApp();
-  const jobCreated = useJobCreated();
   const [view, setView] = useState<"network" | "bar">("network");
   const [picked, setPicked] = useState<number | null>(null);
-  const measure = stat.method === "collocations" ? String(((stat.params as { measures?: string[] }).measures ?? ["logdice"])[0]) : undefined;
-  const exportJob = useMutation({
-    mutationFn: (format: "csv" | "xlsx") => api.post<Job>(`/stats/${stat.id}/export`, { format }),
-    onSuccess: (_, f) => {
-      jobCreated(projectId);
-      message.success(
-        <span>
-          已提交导出任务：{f.toUpperCase()}，<Link to={`/p/${projectId}/jobs`}>查看任务</Link>
-        </span>,
-      );
-    },
-    onError: (e) => message.error(errorText(e)),
-  });
+  const exporter = useExportJob(projectId);
+  const p = stat.params as Body;
+  const measure = stat.method === "collocations" ? String(((p as { measures?: string[] }).measures ?? ["logdice"])[0]) : undefined;
+  const runExport = (format: "csv" | "xlsx") => exporter.start({ url: `/stats/${stat.id}/export`, body: { format }, label: format.toUpperCase() });
 
   const t = stat.totals;
-  const meta = (
-    <span className="res-meta">
-      <span>{stat.scope.name}</span> · <span className="num">{fmt(t.tokens)}</span> 词
-      {stat.method === "keywords" && t.reference && (
-        <>
-          对 <span className="num">{fmt(t.reference.tokens)}</span> 词
-        </>
-      )}
-      {stat.method === "collocations" && t.node_hits != null && (
-        <>
-          · 节点 <span className="num">{fmt(t.node_hits)}</span> 次
-        </>
-      )}
-      {stat.method === "distribution" && t.hits != null && (
-        <>
-          · <span className="num">{fmt(t.hits)}</span> 命中
-        </>
-      )}
-      · 索引 {fmtVersion(stat.index_version)} · {fmtShortTime(stat.created_at)} ·{" "}
+  const n = (v: number) => <span className="num">{fmt(v)}</span>;
+  // Token totals count every token, punctuation included, also when punctuation is left out of the rows.
+  const parts: React.ReactNode[] = [
+    stat.scope.name,
+    <>
+      {n(t.tokens)} 词（含标点）
+      {stat.method === "keywords" && t.reference && <> 对 {n(t.reference.tokens)} 词</>}
+    </>,
+  ];
+  if (stat.method === "collocations" && t.node_hits != null) parts.push(<>节点 {n(t.node_hits)} 次</>);
+  if (stat.method === "distribution" && t.hits != null) parts.push(<>{n(t.hits)} 命中</>);
+  if (stat.method === "ngrams" && typeof p.contains === "string" && p.contains) parts.push(`含“${p.contains}”`);
+  if (p.exclude_punct === true) parts.push(<>已排除标点和数字{t.excluded_tokens != null && <> {n(t.excluded_tokens)} 词</>}</>);
+  parts.push(`索引 ${fmtVersion(stat.index_version)}`, fmtShortTime(stat.created_at));
+  parts.push(
+    <>
       <span className="num">
         {fmt(stat.rows.length)}
         {stat.row_count > stat.rows.length ? ` / ${fmt(stat.row_count)}` : ""}
       </span>{" "}
       项
+    </>,
+  );
+  const meta = (
+    <span className="res-meta">
+      {parts.map((x, i) => (
+        <span key={i}>
+          {i > 0 && "· "}
+          {x}
+        </span>
+      ))}
     </span>
   );
 
   const table = (
-    <div className="card">
+    <div className="card" key="table">
       <div className="card-head">
-        <h2>{stat.method === "ngrams" ? `${(stat.params as { n?: number }).n ?? ""}-gram` : methodLabels[stat.method]}</h2>
+        <h2>{stat.method === "ngrams" ? `${(p as { n?: number }).n ?? ""}-gram` : methodLabels[stat.method]}</h2>
         {meta}
         <div className="grow" />
-        <Tip title={exportTip("导出 CSV")}>
-          <button className="btn xs" type="button" disabled={exportJob.isPending} onClick={() => exportJob.mutate("csv")}>
-            CSV
-          </button>
-        </Tip>
-        <Tip title={exportTip("导出 XLSX")}>
-          <button className="btn xs" type="button" disabled={exportJob.isPending} onClick={() => exportJob.mutate("xlsx")}>
-            XLSX
-          </button>
-        </Tip>
+        <span className="head-btns">
+          <Tip title={exportTip("导出 CSV")}>
+            <button className="btn xs" type="button" disabled={exporter.busy} onClick={() => runExport("csv")}>
+              CSV
+            </button>
+          </Tip>
+          <Tip title={exportTip("导出 XLSX")}>
+            <button className="btn xs" type="button" disabled={exporter.busy} onClick={() => runExport("xlsx")}>
+              XLSX
+            </button>
+          </Tip>
+        </span>
       </div>
       {stat.rows.length === 0 ? (
-        <Empty icon="barchart" text={`当前参数下无结果${(stat.params as { min_freq?: number }).min_freq ? `（最低频次 ${(stat.params as { min_freq?: number }).min_freq}）` : ""}`} />
+        <Empty icon="barchart" text={`当前参数下无结果${(p as { min_freq?: number }).min_freq ? `（最低频次 ${(p as { min_freq?: number }).min_freq}）` : ""}`} />
       ) : (
         <div className="stat-scroll">
           <StatTable stat={stat} projectId={projectId} highlight={measure} selected={picked} cellBar={stat.method === "ngrams" ? "freq" : undefined} />
@@ -342,7 +405,7 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
           ? "Log Ratio × LL"
           : distTitle(stat);
   const chart = (
-    <div className="card card-pad col gap-16 chart-card">
+    <div className="card card-pad col gap-16 chart-card" key="chart">
       <div className="row between">
         <h2>{chartTitle}</h2>
         {stat.method === "collocations" && (
@@ -357,7 +420,11 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
         )}
       </div>
       <StatChart ref={chartRef} stat={stat} measure={measure} view={view} onPick={setPicked} />
-      {stat.method === "collocations" && view === "network" && <div className="small muted" style={{ textAlign: "center" }}>距离 / 线宽 = {measure}</div>}
+      {stat.method === "collocations" && view === "network" && measure && (
+        <div className="small muted" style={{ textAlign: "center" }}>
+          距离 / 线宽 = {MEASURE_LABELS[measure] ?? measure}
+        </div>
+      )}
     </div>
   );
   return <div className={`res ${stat.method === "distribution" ? "dist" : ""}`}>{stat.method === "distribution" ? [chart, table] : [table, chart]}</div>;
@@ -416,31 +483,48 @@ function summary(s: StatResult): string {
   const p = s.params as Record<string, unknown>;
   if (s.method === "collocations") return `${p.node ?? ""} · ±${p.window ?? ""}`;
   if (s.method === "distribution") return `${p.query ?? "全部"} · ${p.field ?? ""}`;
-  if (s.method === "ngrams") return `${p.n ?? ""}-gram · ${p.unit ?? ""}`;
+  if (s.method === "ngrams") return `${p.n ?? ""}-gram · ${p.unit ?? ""}${p.contains ? ` · 含 ${p.contains}` : ""}`;
   if (s.method === "keywords") return `${p.measure ?? ""} · ${p.unit ?? ""}`;
   return `${p.unit ?? ""}${p.pos ? ` · ${p.pos}` : ""}`;
+}
+
+/** Why the chart export buttons are off; null when a chart is shown. */
+function chartOffReason(stat: StatResult | undefined): string | null {
+  if (!stat) return "先计算出结果";
+  if (stat.method === "ngrams") return "n-gram 结果没有图表";
+  if (stat.rows.length === 0) return "没有结果，无图表";
+  return null;
 }
 
 export default function Stats() {
   const projectId = useProjectId();
   const shell = useShell();
+  const { message } = App.useApp();
   const allLayers = useLayers(projectId);
   const alignLayers = (allLayers.data ?? []).filter((l) => l.kind === "alignment" && l.status === "ready");
   const [tab, setTab] = useState<StatMethod>("frequency");
   const [runs, setRuns] = useState<Partial<Record<StatMethod, { body: Body; n: number }>>>({});
   const [opened, setOpened] = useState<Partial<Record<StatMethod, string>>>({});
+  const [reference, setReference] = useState<Scope | null>(null);
   const [savedOpen, setSavedOpen] = useState(false);
   const chartRef = useRef<EChartHandle>(null);
   const [params] = useSearchParams();
   const linked = useStatResult(params.get("stat"));
-  useEffect(() => {
-    const s = linked.data;
-    if (!s) return;
+
+  /** Show a stored result: its tab, its parameters, and its range as the shared scope. */
+  const openResult = (s: StatResult) => {
     setTab(s.method);
     setOpened((o) => ({ ...o, [s.method]: s.id }));
-  }, [linked.data]);
+    const sc = resultScope(s);
+    if (sc) shell.setScope(sc);
+    if (s.method === "keywords") setReference(toScope((s.params as Body).reference) ?? null);
+  };
+  useEffect(() => {
+    if (linked.data) openResult(linked.data);
+  }, [linked.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const live = useStatJob(tab, runs[tab]?.body ?? null, projectId, runs[tab]?.n ?? 0);
+  // The result shows on this page: no completion toast while it is open (the tray still lists the job).
+  const live = useStatJob(tab, runs[tab]?.body ?? null, projectId, runs[tab]?.n ?? 0, { quiet: "mounted" });
   const savedId = opened[tab];
   const saved = useStatResult(savedId);
   const stat = savedId ? saved.data : live.stat;
@@ -462,11 +546,31 @@ export default function Stats() {
   async function exportChart(kind: "svg" | "png") {
     const h = chartRef.current;
     if (!h || !stat) return;
-    const url = kind === "svg" ? h.svgDataUrl() : await h.pngDataUrl();
-    if (url) download(url, `${methodLabels[stat.method]}-${stat.id.slice(0, 8)}.${kind}`);
+    const name = `${methodLabels[stat.method]}-${stat.scope.name}-${stat.id.slice(0, 8)}.${kind}`;
+    try {
+      if (kind === "svg") {
+        const svg = h.svg();
+        if (svg) downloadText(svg, "image/svg+xml", name);
+      } else {
+        const url = await h.png();
+        if (url) download(url, name);
+      }
+    } catch (e) {
+      message.error(`图表导出失败：${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
-  const hasChart = !!stat && stat.method !== "ngrams" && stat.rows.length > 0;
+  const off = running ? "计算中" : chartOffReason(stat);
+  const chartButton = (kind: "svg" | "png") => (
+    <Tip title={off ?? `导出图表 ${kind.toUpperCase()}（浅色、白底）`}>
+      <span className="tip-wrap">
+        <button className="btn s" type="button" disabled={!!off} onClick={() => exportChart(kind)}>
+          <Icon name="download" size={14} />
+          {kind.toUpperCase()}
+        </button>
+      </span>
+    </Tip>
+  );
   return (
     <>
       <PageHeader
@@ -478,14 +582,8 @@ export default function Stats() {
               <Icon name="history" size={14} />
               <span className="lbl">统计结果</span>
             </button>
-            <button className="btn s" type="button" disabled={!hasChart} onClick={() => exportChart("svg")}>
-              <Icon name="download" size={14} />
-              SVG
-            </button>
-            <button className="btn s" type="button" disabled={!hasChart} onClick={() => exportChart("png")}>
-              <Icon name="download" size={14} />
-              PNG
-            </button>
+            {chartButton("svg")}
+            {chartButton("png")}
           </>
         }
       />
@@ -500,7 +598,10 @@ export default function Stats() {
           <MethodForm
             method={tab}
             projectId={projectId}
-            defaultScope={shell.scope}
+            scope={shell.scope}
+            onScope={shell.setScope}
+            reference={reference}
+            onReference={setReference}
             initial={savedId ? saved.data : undefined}
             running={running}
             onRun={(body) => {
@@ -537,8 +638,7 @@ export default function Stats() {
         onClose={() => setSavedOpen(false)}
         projectId={projectId}
         onOpen={(s) => {
-          setTab(s.method);
-          setOpened((o) => ({ ...o, [s.method]: s.id }));
+          openResult(s);
           setSavedOpen(false);
         }}
       />

@@ -1,7 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Scope } from "../../api";
 import { describeScope, useCorpora, useSubcorpora, type ScopeInfo } from "../../lib/data";
-import { readJson, writeJson } from "../../lib/storage";
+import { useProjectScope } from "../../lib/scope";
 
 /** What the assistant drawer should know about the page it was opened from. */
 export interface AssistantContext {
@@ -46,22 +46,12 @@ export function ShellProvider({
   openKeys: () => void;
   children: React.ReactNode;
 }) {
-  const key = `scope:${projectId}`;
-  const [scope, setScopeState] = useState<Scope | null>(() => readJson<Scope | null>(key, null));
+  // One scope per project for every page (lib/scope): stats tabs, search, breadcrumb and palette share it.
+  const [scope, setScope] = useProjectScope(projectId);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantContext, setAssistantContext] = useState<AssistantContext | null>(null);
   const corpora = useCorpora(projectId);
   const subcorpora = useSubcorpora(projectId);
-
-  useEffect(() => setScopeState(readJson<Scope | null>(key, null)), [key]);
-
-  const setScope = useCallback(
-    (s: Scope | null) => {
-      setScopeState(s);
-      writeJson(key, s);
-    },
-    [key],
-  );
 
   // Default to the first ready corpus once the list arrives.
   const items = corpora.data?.items;

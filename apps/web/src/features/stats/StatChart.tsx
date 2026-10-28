@@ -5,10 +5,22 @@ import { posCat } from "../../lib/pos";
 import { fmtValue } from "../../lib/format";
 import { distRows, num, rowLabel } from "./columns";
 
+/** Display names of collocation measures (engine.stats.MEASURE_LABELS). */
+export const MEASURE_LABELS: Record<string, string> = { logdice: "logDice", mi: "MI", t: "t 值", ll: "LL" };
+
+/** Rough rendered width of a label: CJK characters are about one em, others about 0.6 em. */
+export function textWidth(s: string, fontSize: number): number {
+  let w = 0;
+  for (const ch of s) w += /[⺀-￿]/.test(ch) ? fontSize : fontSize * 0.62;
+  return w;
+}
+
 export function hbarOption(t: ChartTokens, labels: string[], values: number[], valueText: (i: number) => string): EChartsOption {
+  // Value labels sit right of the bars: leave room for the longest one (12px mono).
+  const right = 16 + Math.max(0, ...values.map((_, i) => textWidth(valueText(i), 12)));
   return {
     ...baseOption(t),
-    grid: { left: 8, right: 64, top: 4, bottom: 4, containLabel: true },
+    grid: { left: 8, right, top: 4, bottom: 4, containLabel: true },
     xAxis: { type: "value", show: false, max: (v: { max: number }) => v.max },
     yAxis: {
       type: "category",
@@ -89,30 +101,39 @@ function networkOption(t: ChartTokens, stat: StatResult, measure: string): EChar
     const tag = typeof r.values.pos === "string" ? r.values.pos : null;
     return posCat(tag);
   };
+  // Circles grow to hold their word (up to a cap); longer words are cut with an ellipsis, never drawn outside.
+  const fit = (label: string, fontSize: number, base: number, cap: number) => {
+    const size = Math.min(cap, Math.max(base, textWidth(label, fontSize) + 14));
+    return { size, label: { fontSize, width: size - 8, overflow: "truncate" as const, ellipsis: "…" } };
+  };
+  const center = fit(node, 14, 60, 92);
   // ids, not names, identify graph nodes: a collocate can share the node's word form (the → The).
   const nodes = [
-    { id: "node", name: node, x: 0, y: 0, symbolSize: 60, fixed: true, itemStyle: { color: t.accent }, label: { color: "#fff", fontWeight: 700, fontSize: 14 } },
+    { id: "node", name: node, x: 0, y: 0, symbolSize: center.size, fixed: true, itemStyle: { color: t.accent }, label: { ...center.label, color: "#fff", fontWeight: 700 } },
     ...rows.map((r, i) => {
       const a = -Math.PI / 2 + (i * 2 * Math.PI) / rows.length + 0.35;
       const k = (vals[i] - min) / (max - min || 1);
       const rad = 120 + (1 - k) * 80;
       const c = posOf(r) - 1;
       const freq = num(r.values.freq) ?? 1;
+      const name = rowLabel(stat, r);
+      const f = fit(name, 12, 34 + Math.min(26, Math.sqrt(freq)), 76);
       return {
         id: `c${i}`,
-        name: rowLabel(stat, r),
+        name,
         x: Math.cos(a) * rad * 1.25,
         y: Math.sin(a) * rad * 0.85,
-        symbolSize: 34 + Math.min(26, Math.sqrt(freq)),
+        symbolSize: f.size,
         itemStyle: { color: t.paletteBg[c], borderColor: t.palette[c], borderWidth: 1.5 },
-        label: { color: t.paletteFg[c], fontWeight: 600, fontSize: 12 },
+        label: { ...f.label, color: t.paletteFg[c], fontWeight: 600 },
         value: vals[i],
       };
     }),
   ];
+  const mLabel = MEASURE_LABELS[measure] ?? measure;
   return {
     ...baseOption(t),
-    tooltip: { ...(baseOption(t).tooltip as object), formatter: (p: { dataType: string; name: string; value?: number }) => (p.dataType === "node" && p.value != null ? `${p.name} · ${measure} ${fmtValue(p.value)}` : p.name) },
+    tooltip: { ...(baseOption(t).tooltip as object), formatter: (p: { dataType: string; name: string; value?: number }) => (p.dataType === "node" && p.value != null ? `${p.name} · ${mLabel} ${fmtValue(p.value)}` : p.name) },
     series: [
       {
         type: "graph",

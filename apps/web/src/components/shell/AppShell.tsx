@@ -26,7 +26,7 @@ const NAV: [string, string, IconName][] = [
   ["assistant", "助手", pageIcon.assistant],
   ["jobs", "任务", pageIcon.jobs],
 ];
-const EVIDENCE_PAGES = ["search", "stats", "assistant", "annotate", "knowledge"];
+const EVIDENCE_PAGES = ["search", "stats", "assistant", "annotate", "knowledge", "settings"];
 
 export function usePageId(): string {
   return useLocation().pathname.split("/")[3] ?? "corpora";
@@ -125,7 +125,7 @@ export function ScopeCrumbs({ depth = 3 }: { depth?: 1 | 3 }) {
   if (depth === 3) {
     segs.push(scopeInfo.corpus ? { label: scopeInfo.corpus.name, group: "语料库" } : { label: "选择语料库", group: "语料库", placeholder: true });
     if (scopeInfo.subcorpus) segs.push({ label: scopeInfo.subcorpus.name, group: "子库" });
-    else if (scopeInfo.corpus) segs.push({ label: "全部", group: "子库", placeholder: true });
+    else if (scopeInfo.corpus) segs.push({ label: "不限子库", group: "子库", placeholder: true });
   }
   return (
     <nav className="crumbs" aria-label="范围">
@@ -308,6 +308,6 @@ export default function AppShell() {
 }
 
 function PaletteHost({ open, q, onClose }: { open: boolean; q: string; onClose: () => void }) {
-  const { projectId, setScope } = useShell();
-  return <CommandPalette open={open} initial={q} projectId={projectId} onClose={onClose} setScope={setScope} />;
+  const { projectId, scope, setScope } = useShell();
+  return <CommandPalette open={open} initial={q} projectId={projectId} onClose={onClose} scope={scope} setScope={setScope} />;
 }
