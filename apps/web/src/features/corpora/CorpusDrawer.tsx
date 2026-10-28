@@ -9,6 +9,7 @@ import { canEdit, useCorpus, useJobCreated, useMe, useProject, useProjectId } fr
 import { fmt, fmtTime, fmtVersion, metadataText } from "../../lib/format";
 import { CorpusMetaList } from "./CorpusMeta";
 import { StatusCell } from "./StatusCell";
+import { TableMappingFields, useTableMapping } from "./TableMapping";
 import { ACCEPT, languageOptions, metadataRule, parseMetadata, uploadFiles } from "./UploadDialog";
 
 const PAGE_SIZE = 50;
@@ -205,6 +206,7 @@ function UploadTab({ corpusId, defaultLanguage }: { corpusId: string; defaultLan
   const { message } = App.useApp();
   const jobCreated = useJobCreated();
   const [files, setFiles] = useState<UploadFile[]>([]);
+  const table = useTableMapping(files.map((f) => f.originFileObj as File));
   const upload = useMutation({
     mutationFn: (v: { language?: string; metadata?: string }) =>
       uploadFiles(
@@ -212,6 +214,7 @@ function UploadTab({ corpusId, defaultLanguage }: { corpusId: string; defaultLan
         files.map((f) => f.originFileObj as File),
         v.language,
         parseMetadata(v.metadata),
+        table.mapping,
       ),
     onSuccess: (job: Job) => {
       setFiles([]);
@@ -236,6 +239,7 @@ function UploadTab({ corpusId, defaultLanguage }: { corpusId: string; defaultLan
           </div>
         </Upload.Dragger>
       </Form.Item>
+      <TableMappingFields state={table} />
       <Form.Item name="language" label="语言">
         <Select allowClear options={languageOptions} />
       </Form.Item>
@@ -243,7 +247,7 @@ function UploadTab({ corpusId, defaultLanguage }: { corpusId: string; defaultLan
         <Input.TextArea rows={2} placeholder='{"year": 2020}' style={{ fontFamily: "var(--mono)" }} />
       </Form.Item>
       <ErrorAlert error={upload.error} style={{ marginBottom: 12 }} />
-      <button className="btn p" type="submit" disabled={upload.isPending || files.length === 0}>
+      <button className="btn p" type="submit" disabled={upload.isPending || files.length === 0 || !table.ready}>
         <Icon name="upload" size={14} />
         上传
       </button>

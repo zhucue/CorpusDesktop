@@ -6,7 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import or_, select, update
 
 from services.api.access import (
@@ -19,7 +19,7 @@ from services.api.access import (
 )
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
-from services.api.jobs import ACTIVE, enqueue, has_active_job
+from services.api.jobs import ACTIVE, enqueue, has_active_job, retry_job
 from services.api.metadata import metadata_fields
 from services.api.models import Corpus, Document, Job
 from services.api.storage import corpus_dir, upload_dir
@@ -28,7 +28,20 @@ from services.api.views import corpus_view, document_view, job_view
 router = APIRouter(prefix="/api")
 
 FORMATS = {".txt", ".docx", ".csv", ".tsv", ".conllu", ".tmx"}
+TABLES = {".csv", ".tsv"}
 MAX_UPLOAD = 500 * 1024 * 1024
+PREVIEW_BYTES = (
+    256 * 1024
+)  # the web client sends at most this much of a table for preview
+
+
+class TableMapping(BaseModel):
+    """CSV/TSV columns for one upload batch; see engine/parsers/table.py."""
+
+    text: list[str] = Field(min_length=1, max_length=2)
+    title: str | None = None
+    language: str | None = None
+    metadata: list[str] | None = None  # None = every other column
 
 
 class CorpusMeta(BaseModel):
@@ -119,7 +132,7 @@ def delete_corpus(corpus_id: UUID, user: CurrentUser, db: Db):
     shutil.rmtree(corpus_dir(corpus_id), ignore_errors=True)
 
 
-def _save_upload(db, corpus, user, files, language, metadata):
+def _save_upload(db, corpus, user, files, language, metadata, mapping):
     job_id = uuid.uuid4()
     target = upload_dir(job_id)
     target.mkdir(parents=True)
@@ -140,6 +153,7 @@ def _save_upload(db, corpus, user, files, language, metadata):
             "files": names,
             "language": language or corpus.language,
             "metadata": metadata,
+            **({"mapping": mapping} if mapping else {}),
         },
         user.id,
         corpus.project_id,
@@ -160,6 +174,7 @@ def upload_documents(
     files: Annotated[list[UploadFile], File()],
     language: Annotated[str | None, Form(max_length=20)] = None,
     metadata: Annotated[str | None, Form()] = None,
+    mapping: Annotated[str | None, Form()] = None,
 ):
     human_only(user)
     corpus = load_corpus(db, corpus_id, user, write=True)
@@ -178,7 +193,35 @@ def upload_documents(
         meta = None
     if not isinstance(meta, dict):
         raise ApiError(422, "INVALID_METADATA", "metadata 须为 JSON 对象")
-    return _save_upload(db, corpus, user, files, (language or "").strip() or None, meta)
+    table_mapping = None
+    if mapping:
+        try:
+            table_mapping = TableMapping.model_validate_json(mapping).model_dump()
+        except ValidationError as e:
+            raise ApiError(
+                422,
+                "INVALID_MAPPING",
+                "mapping 须为 {text: [1–2 列], title, language, metadata}",
+            ) from e
+    return _save_upload(
+        db, corpus, user, files, (language or "").strip() or None, meta, table_mapping
+    )
+
+
+@router.post("/imports/preview")
+async def preview_table(user: CurrentUser, file: Annotated[UploadFile, File()]):
+    """Header, first rows and default column mapping of a CSV/TSV (or its first PREVIEW_BYTES)."""
+    from engine.parsers import ParseError, table
+
+    human_only(user)
+    name = PurePath((file.filename or "").replace("\\", "/")).name
+    if PurePath(name.lower()).suffix not in TABLES:
+        raise ApiError(422, "UNSUPPORTED_FORMAT", f"只有 CSV/TSV 需要列映射：{name}")
+    data = await file.read(PREVIEW_BYTES)
+    try:
+        return table.preview(data, name, partial=len(data) >= PREVIEW_BYTES)
+    except ParseError as e:
+        raise ApiError(422, "PARSE_ERROR", str(e)) from e
 
 
 @router.get("/corpora/{corpus_id}/documents")
@@ -248,6 +291,26 @@ def reindex(corpus_id: UUID, user: CurrentUser, db: Db):
     corpus.error = None
     db.commit()
     return job_view(job)
+
+
+@router.post("/corpora/{corpus_id}/retry")
+def retry_corpus(corpus_id: UUID, user: CurrentUser, db: Db):
+    """Retry the failed corpus's latest import/index job (same params, so an import keeps its
+    files and column mapping)."""
+    human_only(user)
+    load_corpus(db, corpus_id, user, write=True)
+    job = db.scalar(
+        select(Job)
+        .where(
+            Job.kind.in_(["import", "index"]),
+            Job.params["corpus_id"].astext == str(corpus_id),
+        )
+        .order_by(Job.created_at.desc())
+        .limit(1)
+    )
+    if job is None or job.state not in ("failed", "cancelled"):
+        raise ApiError(409, "JOB_NOT_RETRYABLE", "没有可重试的导入或索引任务")
+    return retry_job(job.id, user, db)
 
 
 @router.get("/corpora/{corpus_id}/metadata-fields")

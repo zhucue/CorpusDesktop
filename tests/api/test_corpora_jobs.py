@@ -323,3 +323,78 @@ def test_builtin_jobs_for_admins(owner, project, corpus, make_user):
     assert admin.get("/api/jobs").status_code == 422
     assert owner.get("/api/jobs", params={"builtin": 1}).status_code == 403
     assert owner.get(f"/api/jobs/{job['id']}").status_code == 404
+
+
+CSV = (
+    "record_key,headline,abstract,pub_date\r\n"
+    'k1,"States, Fixes",Climate series.,2026-01-02\r\n'
+    "k2,Heat,,2025-07-01\r\n"
+)
+
+
+def _params(job_id):
+    from services.api.db import transaction
+    from services.api.models import Job
+
+    with transaction() as db:
+        return db.get(Job, job_id).params
+
+
+def test_table_preview(owner):
+    def preview(name, body):
+        return owner.post(
+            "/api/imports/preview", files={"file": (name, body, "text/csv")}
+        )
+
+    r = preview("nyt.csv", (chr(0xFEFF) + CSV).encode())
+    assert r.status_code == 200, r.text
+    assert r.json() == {
+        "columns": ["record_key", "headline", "abstract", "pub_date"],
+        "rows": [
+            ["k1", "States, Fixes", "Climate series.", "2026-01-02"],
+            ["k2", "Heat", "", "2025-07-01"],
+        ],
+        "defaults": {
+            "text": ["abstract"],
+            "title": "headline",
+            "language": None,
+            "metadata": None,
+        },
+    }
+    assert preview("a.txt", b"x").json()["error"]["code"] == "UNSUPPORTED_FORMAT"
+    assert preview("e.csv", b"").json()["error"]["code"] == "PARSE_ERROR"
+
+
+def test_table_mapping_import_and_retry(owner, corpus):
+    mapping = {"text": ["headline", "abstract"], "title": "record_key"}
+    job = upload(owner, corpus["id"], {"nyt.csv": CSV}, mapping=json.dumps(mapping))
+    assert job.status_code == 200, job.text
+    drain()
+    assert owner.get(f"/api/jobs/{job.json()['id']}").json()["state"] == "succeeded"
+    docs = owner.get(f"/api/corpora/{corpus['id']}/documents").json()["items"]
+    assert all(d["metadata"].keys() == {"pub_date"} for d in docs)
+    assert sorted((d["title"], d["metadata"]["pub_date"]) for d in docs) == [
+        ("k1", "2026-01-02"),
+        ("k2", "2025-07-01"),
+    ]
+
+    # a column missing from the file: PARSE_ERROR naming the file; retry keeps the mapping
+    bad = {"text": ["body"]}
+    job = upload(owner, corpus["id"], {"x.csv": CSV}, mapping=json.dumps(bad)).json()
+    assert _params(job["id"])["mapping"]["text"] == ["body"]
+    drain()
+    failed = owner.get(f"/api/jobs/{job['id']}").json()
+    assert failed["error"] == {"code": "PARSE_ERROR", "message": "x.csv 缺少列：body"}
+    retry = owner.post(f"/api/jobs/{job['id']}/retry").json()
+    assert _params(retry["id"])["mapping"] == _params(job["id"])["mapping"]
+    drain()  # fails again; the corpus page retries its latest failed import
+    c = owner.get(f"/api/corpora/{corpus['id']}").json()
+    assert c["status"] == "failed" and c["error"] == "x.csv 缺少列：body"
+    again = owner.post(f"/api/corpora/{corpus['id']}/retry")
+    assert again.status_code == 200, again.text
+    assert _params(again.json()["id"])["files"] == ["x.csv"]
+    assert owner.post(f"/api/corpora/{corpus['id']}/retry").status_code == 409
+
+    for invalid in ('{"text": []}', '{"text": ["a", "b", "c"]}', "[1]", "x"):
+        r = upload(owner, corpus["id"], {"y.csv": CSV}, mapping=invalid)
+        assert r.json()["error"]["code"] == "INVALID_MAPPING", invalid

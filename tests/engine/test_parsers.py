@@ -3,9 +3,10 @@ from pathlib import Path
 import pytest
 
 from engine.model import Alignment
-from engine.parsers import ParseError, parse
+from engine.parsers import ParseError, decode, parse, table
 
 FIX = Path(__file__).resolve().parents[1] / "fixtures"
+IMP = FIX / "import"
 
 
 def check_offsets(doc):
@@ -61,11 +62,118 @@ def test_csv_and_tsv():
     ]
 
 
-def test_csv_requires_text(tmp_path):
+def test_csv_without_text_column_detects_defaults():
+    docs, _ = parse(IMP / "headlines.csv", language="en", metadata={})
+    # abstract is a text-like name, headline a title-like one; BOM, CRLF and quoted newlines handled
+    assert [(d.title, d.text) for d in docs] == [
+        ("50 States, 50 Fixes", "A series on climate initiatives."),
+        ("Heat Waves", "Cities prepare for heat.\nA second line."),
+    ]
+    assert docs[0].metadata == {
+        "record_key": "k1",
+        "pub_date": "2026-01-02",
+        "source": "nyt",
+    }
+
+
+def test_csv_mapping_joins_two_columns():
+    mapping = {
+        "text": ["headline", "abstract"],
+        "title": "record_key",
+        "language": None,
+        "metadata": ["pub_date"],
+    }
+    docs, _ = parse(
+        IMP / "headlines.csv", language="en", metadata={"b": 1}, mapping=mapping
+    )
+    assert [(d.title, d.text) for d in docs] == [
+        ("k1", "50 States, 50 Fixes\n\nA series on climate initiatives."),
+        ("k2", "Heat Waves\n\nCities prepare for heat.\nA second line."),
+        ("k3", "No Abstract"),
+    ]
+    assert docs[0].metadata == {"b": 1, "pub_date": "2026-01-02"}
+
+
+def test_csv_mapping_errors(tmp_path):
+    with pytest.raises(ParseError, match="headlines.csv 缺少列：body"):
+        parse(
+            IMP / "headlines.csv",
+            language="en",
+            metadata={},
+            mapping={"text": ["body"]},
+        )
+    with pytest.raises(ParseError, match="1–2 个正文列"):
+        parse(IMP / "headlines.csv", language="en", metadata={}, mapping={"text": []})
     p = tmp_path / "x.csv"
-    p.write_text("title,body\na,b\n", encoding="utf-8")
-    with pytest.raises(ParseError, match="text"):
-        parse(p, language="en", metadata={})
+    p.write_text("title,body\na,\n", encoding="utf-8")
+    with pytest.raises(ParseError, match="x.csv 正文列"):
+        parse(p, language="en", metadata={}, mapping={"text": ["body"]})
+
+
+def test_csv_longest_column_and_preview(tmp_path):
+    p = tmp_path / "y.csv"
+    p.write_text(
+        "id,a,b\n1,short,a much longer value here\n2,x,another long value\n",
+        encoding="utf-8",
+    )
+    [d1, _], _ = parse(p, language="en", metadata={})
+    assert d1.text == "a much longer value here"
+    assert d1.metadata == {"id": 1, "a": "short"}
+    data = (IMP / "headlines.csv").read_bytes()
+    pv = table.preview(
+        data[:150], "headlines.csv"
+    )  # cut mid-file: partial line dropped
+    assert pv["columns"] == ["record_key", "headline", "abstract", "pub_date", "source"]
+    assert pv["rows"][0][:2] == ["k1", "50 States, 50 Fixes"]
+    assert pv["defaults"] == {
+        "text": ["abstract"],
+        "title": "headline",
+        "language": None,
+        "metadata": None,
+    }
+
+
+def test_txt_encodings():
+    [doc], _ = parse(IMP / "gbk.txt", language="zh", metadata={})
+    assert doc.text == "气候变化影响全球。\n翻译研究关注语言与文化。"
+    [doc], _ = parse(IMP / "utf16.txt", language="zh", metadata={})
+    assert doc.text == "语料库语言学\nCorpus linguistics"
+    assert decode("abc".encode("utf-16-le"), "x.txt") == "abc"
+    assert decode(b"a\r\nb\rc", "x.txt") == "a\nb\nc"
+    assert decode("中文".encode()[:-1], "x.txt", partial=True) == "中"
+
+
+def test_docx_tables_headings_images():
+    [doc], _ = parse(IMP / "table.docx", language="zh", metadata={})
+    assert doc.title == "table"
+    assert doc.text == "气候报告\n第一段正文。\n年份\n排放\n合并单元格\n结尾段落。"
+
+
+def test_tmx_lang_attribute_and_inline_codes():
+    docs, al = parse(IMP / "inline.tmx", language=None, metadata={})
+    assert {d.language: d.text for d in docs} == {
+        "en": "Press Save now.\nSecond unit.",
+        "zh": "立即保存。\n第二个单元。",
+    }
+    assert al == [
+        Alignment("inline:1:en", "inline:1:zh"),
+        Alignment("inline:2:en", "inline:2:zh"),
+    ]
+
+
+def test_conllu_multiword_and_empty_nodes():
+    [doc], _ = parse(IMP / "mwt.conllu", language="es", metadata={})
+    [s] = doc.sentences
+    assert doc.text == "Vámonos al mar." and s.external_id == "es-1"
+    assert [(t.form, doc.text[t.start : t.end]) for t in s.tokens] == [
+        ("Vamos", "Vámonos"),
+        ("nos", "Vámonos"),
+        ("a", "al"),
+        ("el", "al"),
+        ("mar", "mar"),
+        (".", "."),
+    ]
+    check_offsets(doc)
 
 
 def test_conllu_ud_english():

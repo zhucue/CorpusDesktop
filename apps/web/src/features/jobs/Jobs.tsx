@@ -3,9 +3,10 @@ import { App, Segmented, Switch, Table } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, errorText, type Job, type Page, type User } from "../../api";
-import { ErrorAlert, JobStateTag, Progress, RelTime, Sparkline, Tip } from "../../components/common";
+import { Empty, ErrorAlert, JobStateTag, Progress, RelTime, Sparkline, Tip } from "../../components/common";
 import { hasDownload, jobKindLabels, progressText } from "../../components/global/TaskTray";
 import { Icon, type IconName } from "../../components/Icon";
+import { jobKindIcon, jobStateIcon } from "../../components/iconSets";
 import { PageHeader } from "../../components/shell/AppShell";
 import { canEdit, isActiveJob, useJob, useMe, useProject, useProjectId } from "../../lib/data";
 import { fmt, fmtDuration, fmtTime } from "../../lib/format";
@@ -14,7 +15,6 @@ import "./jobs.css";
 const PAGE_SIZE = 50;
 export type JobFilter = "all" | "active" | "failed" | "mine";
 type Act = "cancel" | "retry";
-const kindIcon: Record<string, IconName> = { import: "upload", index: "layers", export: "download", stats: "chart", preannotate: "pen", kb_import: "book", kb_summarize: "spark", kb_extract: "term" };
 
 export function filterJobs(items: Job[], filter: JobFilter, meId: string | undefined): Job[] {
   if (filter === "active") return items.filter(isActiveJob);
@@ -91,7 +91,7 @@ function Inspector({ id, projectId, manage, onAct, onClose, pending }: { id: str
             <div className="row">
               <span className="jtype">
                 <span className="ji">
-                  <Icon name={kindIcon[j.kind] ?? "clock"} />
+                  <Icon name={jobKindIcon[j.kind] ?? "clock"} />
                 </span>
                 {jobKindLabels[j.kind] ?? j.kind}
               </span>
@@ -218,10 +218,10 @@ export default function Jobs() {
   const all = jobs.data?.items ?? [];
   const today = new Date().toDateString();
   const sums: [string, number, IconName, string][] = [
-    ["运行中", all.filter((j) => j.state === "running").length, "play", "t-run"],
-    ["排队", all.filter((j) => j.state === "queued").length, "clock", "t-gray"],
-    ["失败", all.filter((j) => j.state === "failed").length, "alert", "t-err"],
-    ["今日完成", all.filter((j) => j.state === "succeeded" && j.finished_at && new Date(j.finished_at).toDateString() === today).length, "check", "t-ok"],
+    ["运行中", all.filter((j) => j.state === "running").length, jobStateIcon.running, "t-run"],
+    ["排队", all.filter((j) => j.state === "queued").length, jobStateIcon.queued, "t-gray"],
+    ["失败", all.filter((j) => j.state === "failed").length, jobStateIcon.failed, "t-err"],
+    ["今日完成", all.filter((j) => j.state === "succeeded" && j.finished_at && new Date(j.finished_at).toDateString() === today).length, jobStateIcon.succeeded, "t-ok"],
   ];
   const shown = filterJobs(all, filter, me.data?.id);
 
@@ -283,7 +283,7 @@ export default function Jobs() {
               scroll={{ x: 1100 }}
               loading={jobs.isPending}
               dataSource={shown}
-              locale={{ emptyText: <span className="muted">{builtin ? "暂无内置语料任务" : "暂无任务"}</span> }}
+              locale={{ emptyText: <Empty icon="inbox" text={builtin ? "暂无内置语料任务" : "暂无任务"} /> }}
               rowClassName={(j) => (j.id === selected ? "ant-table-row-selected" : "")}
               onRow={(j) => ({ onClick: () => setParams({ job: j.id }), style: { cursor: "pointer" } })}
               expandable={{
@@ -305,7 +305,7 @@ export default function Jobs() {
                   render: (_, j) => (
                     <span className="jtype">
                       <span className="ji">
-                        <Icon name={kindIcon[j.kind] ?? "clock"} />
+                        <Icon name={jobKindIcon[j.kind] ?? "clock"} />
                       </span>
                       <span className="jt-name">
                         {jobKindLabels[j.kind] ?? j.kind}

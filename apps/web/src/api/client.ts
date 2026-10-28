@@ -10,6 +10,8 @@ const codeLabels: Record<string, { label: string; detail?: boolean }> = {
   QUERY_INVALID: { label: "查询式无效", detail: true },
   INVALID_FILTER: { label: "筛选条件无效", detail: true },
   UNSUPPORTED_FORMAT: { label: "不支持的文件格式", detail: true },
+  PARSE_ERROR: { label: "文件解析失败", detail: true },
+  INVALID_MAPPING: { label: "列映射无效", detail: true },
   TOO_LARGE: { label: "文件超过 500 MB" },
   SESSION_BUSY: { label: "该会话正在运行" },
   MODEL_NOT_CONFIGURED: { label: "未配置对话模型" },

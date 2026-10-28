@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tmx version="1.1">
+  <header srclang="EN-US" datatype="plaintext" segtype="sentence" adminlang="en" creationtool="t" creationtoolversion="1" o-tmf="none"/>
+  <body>
+    <tu><tuv lang="EN-US"><seg>Press <ph x="1">&lt;br/&gt;</ph>Save<bpt i="1">&lt;b&gt;</bpt> now<ept i="1">&lt;/b&gt;</ept>.</seg></tuv><tuv lang="ZH-CN"><seg>立即<it pos="begin">&lt;i&gt;</it>保存。</seg></tuv></tu>
+    <tu><tuv xml:lang="en"><seg>Second unit.</seg></tuv><tuv xml:lang="zh"><seg>第二个单元。</seg></tuv></tu>
+  </body>
+</tmx>

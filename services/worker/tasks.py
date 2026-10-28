@@ -65,7 +65,7 @@ from services.api.storage import (
     text_path,
 )
 from services.worker import annot_tasks, kb_tasks
-from services.worker.main import Cancelled, JobFailed
+from services.worker.main import Cancelled, JobFailed, log
 
 EXPORT_PAGE = 1000
 EXPORT_COUNT_TIMEOUT = 600
@@ -101,10 +101,16 @@ def _parse_batch(run):
         run.progress(i, len(targets), f"解析 {path.name}")
         try:
             docs, links = parsers.parse(
-                path, language=params["language"], metadata=params["metadata"]
+                path,
+                language=params["language"],
+                metadata=params["metadata"],
+                mapping=params.get("mapping"),
             )
         except parsers.ParseError as e:
             raise JobFailed("PARSE_ERROR", str(e)) from e
+        except Exception as e:  # a malformed file must not surface as INTERNAL
+            log.exception("parsing %s failed", path)
+            raise JobFailed("PARSE_ERROR", f"{path.name} 无法解析：{e}"[:500]) from e
         documents += docs
         alignments += links
     if not documents:
@@ -188,10 +194,16 @@ def run_import(run):
             last = time.monotonic()
             run.progress(done + offset, chars, "标注（字符）")
 
-    for doc in documents:
-        report(0)
-        nlp.annotate(doc, report)
-        done += len(doc.text)
+    # CoNLL-U arrives tokenized and is stored as is, whatever its language
+    todo = [
+        d for d in documents if not (d.sentences and all(s.tokens for s in d.sentences))
+    ]
+    done = chars - sum(len(d.text) for d in todo)
+    report(0)
+    try:  # Stanza batches paragraphs across documents (many short CSV rows)
+        nlp.annotate_many(todo, report)
+    except ValueError as e:  # e.g. a language without an annotation model
+        raise JobFailed("ANNOTATE_ERROR", str(e)[:500]) from e
     run.progress(chars, chars, "写入")
     written = []
     try:

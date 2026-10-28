@@ -2,10 +2,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { App, Form, Input, Modal, Select, Upload, type UploadFile } from "antd";
 import { useState } from "react";
 import { Link } from "react-router";
-import { api, errorText, type Corpus, type Job, type Metadata } from "../../api";
+import { api, errorText, type Corpus, type Job, type Metadata, type TableMapping } from "../../api";
 import { ErrorAlert } from "../../components/common";
 import { Icon } from "../../components/Icon";
 import { useJobCreated } from "../../lib/data";
+import { TableMappingFields, useTableMapping } from "./TableMapping";
 
 export const languageOptions = [
   { value: "zh", label: "中文 zh" },
@@ -35,11 +36,18 @@ export const metadataRule = {
 const NEW = "__new__";
 
 /** Upload files into an existing corpus, or create a project corpus first. Returns the import job. */
-export async function uploadFiles(corpusId: string, files: File[], language?: string, metadata?: Metadata): Promise<Job> {
+export async function uploadFiles(
+  corpusId: string,
+  files: File[],
+  language?: string,
+  metadata?: Metadata,
+  mapping?: TableMapping | null,
+): Promise<Job> {
   const body = new FormData();
   for (const f of files) body.append("files", f);
   if (language) body.append("language", language);
   if (metadata && Object.keys(metadata).length) body.append("metadata", JSON.stringify(metadata));
+  if (mapping) body.append("mapping", JSON.stringify(mapping));
   return api.post<Job>(`/corpora/${corpusId}/documents`, body);
 }
 
@@ -67,6 +75,7 @@ export default function UploadDialog({
   const [files, setFiles] = useState<UploadFile[]>([]);
   const target = Form.useWatch("corpus", form);
   const own = corpora.filter((c) => c.project_id === projectId || (isAdmin && c.project_id === null));
+  const table = useTableMapping(files.map((f) => f.originFileObj as File));
 
   const upload = useMutation({
     mutationFn: async (v: Values) => {
@@ -80,6 +89,7 @@ export default function UploadDialog({
         files.map((f) => f.originFileObj as File),
         v.language,
         parseMetadata(v.metadata),
+        table.mapping,
       );
     },
     onSuccess: () => {
@@ -103,8 +113,8 @@ export default function UploadDialog({
       onCancel={onClose}
       okText="上传"
       cancelText="取消"
-      width={560}
-      okButtonProps={{ disabled: files.length === 0, loading: upload.isPending }}
+      width={table.tables.length ? 720 : 560}
+      okButtonProps={{ disabled: files.length === 0 || !table.ready, loading: upload.isPending }}
       onOk={() => form.submit()}
       destroyOnHidden
     >
@@ -138,6 +148,7 @@ export default function UploadDialog({
             </div>
           </Upload.Dragger>
         </Form.Item>
+        <TableMappingFields state={table} />
         <Form.Item name="language" label="语言">
           <Select options={languageOptions} />
         </Form.Item>

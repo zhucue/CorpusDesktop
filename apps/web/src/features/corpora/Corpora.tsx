@@ -55,6 +55,15 @@ export default function Corpora() {
     },
     onError: (e) => message.error(errorText(e)),
   });
+  const retry = useMutation({
+    mutationFn: (id: string) => api.post<Job>(`/corpora/${id}/retry`),
+    onSuccess: () => {
+      message.success("已重新排队");
+      jobCreated(projectId);
+      qc.invalidateQueries({ queryKey: ["corpora", projectId] });
+    },
+    onError: (e) => message.error(errorText(e)),
+  });
   const createBuiltin = useMutation({
     mutationFn: ({ name, language, description, ...m }: { name: string; language: string; description?: string } & Partial<Record<keyof CorpusMeta, string>>) =>
       api.post<Corpus>("/corpora", { name, language, description, meta: metaFromForm(m) }),
@@ -213,9 +222,14 @@ export default function Corpora() {
                   if (!mine) return null;
                   return (
                     <span className="row" style={{ justifyContent: "flex-end", gap: 4 }} onClick={(e) => e.stopPropagation()}>
-                      {(c.status === "stale" || c.status === "failed") && (
+                      {c.status === "stale" && (
                         <button className="btn xs" type="button" onClick={() => reindex.mutate(c.id)} disabled={reindex.isPending}>
-                          {c.status === "stale" ? "重建" : "重试"}
+                          重建
+                        </button>
+                      )}
+                      {c.status === "failed" && (
+                        <button className="btn xs" type="button" onClick={() => retry.mutate(c.id)} disabled={retry.isPending}>
+                          重试
                         </button>
                       )}
                       {c.project_id !== null && (

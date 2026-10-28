@@ -182,6 +182,21 @@ export interface Job {
   finished_at: string | null;
 }
 
+/** CSV/TSV column mapping for one upload batch; metadata null = every other column. */
+export interface TableMapping {
+  text: string[];
+  title: string | null;
+  language: string | null;
+  metadata: string[] | null;
+}
+
+/** POST /imports/preview: header, first rows and detected mapping of a CSV/TSV. */
+export interface TablePreview {
+  columns: string[];
+  rows: string[][];
+  defaults: TableMapping;
+}
+
 export interface Page<T> {
   items: T[];
   total: number;

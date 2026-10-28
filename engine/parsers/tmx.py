@@ -1,5 +1,7 @@
 """TMX: one Document per language, one sentence per <tuv>; Alignment per <tu> from the source language
-(header srclang, else the first tuv) to each other language. Sentence ids: "<file stem>:<tu number>:<lang>"."""
+(header srclang, else the first tuv) to each other language. Language from xml:lang (TMX 1.4) or
+lang (TMX 1.1); inline codes (bpt/ept/ph/it/ut) inside <seg> are dropped, other inline tags keep their text.
+Sentence ids: "<file stem>:<tu number>:<lang>"."""
 
 from pathlib import Path
 
@@ -29,19 +31,20 @@ def parse(path: Path, metadata: dict) -> tuple[list[Document], list[Alignment]]:
 
     try:
         root = etree.parse(
-            str(path), etree.XMLParser(resolve_entities=False, no_network=True)
+            str(path),
+            etree.XMLParser(resolve_entities=False, no_network=True, huge_tree=True),
         ).getroot()
-    except etree.XMLSyntaxError as e:
+    except (etree.XMLSyntaxError, OSError) as e:
         raise ParseError(f"{path.name} 不是有效的 TMX：{e}") from e
-    header = root.find("header")
+    header = root.find("{*}header")
     src_lang = _lang(header.get("srclang", "")) if header is not None else ""
     docs: dict[str, dict] = {}
     alignments = []
-    for n, tu in enumerate(root.iter("tu"), 1):
+    for n, tu in enumerate(root.iter("{*}tu"), 1):
         ids = {}
-        for tuv in tu.findall("tuv"):
+        for tuv in tu.findall("{*}tuv"):
             lang = _lang(tuv.get(XML_LANG) or tuv.get("lang") or "")
-            seg = tuv.find("seg")
+            seg = tuv.find("{*}seg")
             text = _seg_text(seg) if seg is not None else ""
             if not lang or not text or lang in ids:
                 continue

@@ -16,3 +16,10 @@
 .seg-n { margin-left: 5px; color: var(--text-3); }
 .corp-meta { grid-template-columns: 72px 1fr; }
 .corp .num-col { white-space: nowrap; }
+.table-map { border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 12px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.table-map-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.table-map-grid { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px 10px; align-items: center; }
+.table-map-grid label { font-size: 13px; color: var(--text-2); }
+.table-map-preview { max-width: 100%; }
+.table-map-preview .cell-clip { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.table-map-preview th.map-text, .table-map-preview td.map-text { background: var(--accent-tint); }

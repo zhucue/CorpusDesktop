@@ -247,4 +247,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # `python -m` loads this file as `__main__`; tasks import `services.worker.main`. Run that module so
+    # JobFailed / Cancelled raised by tasks are the classes `execute` catches (else every JobFailed
+    # was reported as INTERNAL).
+    from services.worker import main as worker
+
+    worker.main()

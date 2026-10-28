@@ -294,6 +294,40 @@ def _ignore(_offset: int) -> None:
     pass
 
 
+def annotate_many(docs: list[Document], progress=None) -> None:
+    """Annotate documents in order. Paragraphs of unsentenced Stanza-language documents are batched
+    across documents: a 12,000-row CSV otherwise pays one pipeline call per row (about 50 words/s
+    instead of several hundred). progress(offset): characters into the concatenated texts, may step
+    back when Chinese and Stanza documents are mixed."""
+    progress = progress or _ignore
+    pending: dict[str, list] = {}
+    base = 0
+    for doc in docs:
+        if not doc.language:
+            doc.language = detect_language(doc.text)
+        lang = _lang(doc.language)
+        if lang == "zh" or doc.sentences:
+            annotate(doc, lambda off, b=base: progress(b + off))
+        else:
+            pos = 0
+            for line in doc.text.split("\n"):
+                if line.strip():
+                    pending.setdefault(lang, []).append((doc, base, pos, line))
+                pos += len(line) + 1
+        base += len(doc.text)
+    for lang, items in pending.items():
+        texts = [line for *_, line in items]
+        for i, ((doc, doc_base, para, line), sd) in enumerate(
+            zip(items, _process(lang, texts)), 1
+        ):
+            for sent in sd.sentences:
+                toks = _tokens(sent, para)
+                if toks:
+                    doc.sentences.append(Sentence(toks[0].start, toks[-1].end, toks))
+            if i % BATCH == 0:
+                progress(doc_base + para + len(line))
+
+
 def annotate(doc: Document, progress=None) -> None:
     if not doc.language:
         doc.language = detect_language(doc.text)

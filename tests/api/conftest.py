@@ -97,8 +97,16 @@ class FakeEngine:
         self.needle = "language"
         self.complete = True
 
-    def parse(self, path, *, language, metadata):
+    def parse(self, path, *, language, metadata, mapping=None):
         path = Path(path)
+        if path.suffix in (
+            ".csv",
+            ".tsv",
+        ):  # the real table parser: column mapping is under test
+            from engine.parsers import table
+
+            delimiter = table.delimiter_for(path.name)
+            return table.parse(path, language, dict(metadata), delimiter, mapping), []
         content = path.read_text(encoding="utf-8")
         if content.startswith("FAIL"):
             raise parsers.ParseError(f"{path.name} 无法解析")
@@ -227,6 +235,12 @@ def fake_engine(monkeypatch):
         )
     monkeypatch.setattr(parsers, "parse", fake.parse, raising=False)
     monkeypatch.setattr(nlp, "annotate", fake.annotate, raising=False)
+    monkeypatch.setattr(
+        nlp,
+        "annotate_many",
+        lambda docs, progress=None: [fake.annotate(d) for d in docs],
+        raising=False,
+    )
     monkeypatch.setattr(cwb, "build", fake.build, raising=False)
     monkeypatch.setattr(cwb, "search", fake.search, raising=False)
     return fake
