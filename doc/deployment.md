@@ -17,7 +17,8 @@
 | --- | --- | --- | --- |
 | postgres | pgvector/pgvector:pg16 | 127.0.0.1:${POSTGRES_PORT} | postgres |
 | api | deploy/Dockerfile.api | 内部 8000 | data、models、stanza |
-| worker | deploy/Dockerfile.worker | — | data、models、stanza |
+| worker | deploy/Dockerfile.worker | — | data、models、stanza；处理全部任务，`--scale worker=N` 可加导入容量 |
+| worker-light | 同 worker | — | 只处理导出、统计、预标、知识库等短任务，避免被大导入阻塞 |
 | agent | deploy/Dockerfile.agent | 内部 8700 | agentdata |
 | web | deploy/Dockerfile.web（nginx） | 127.0.0.1:${HTTP_PORT} | — |
 | test | api 镜像 | — | 同 api |
@@ -132,5 +133,6 @@ HTTP_PORT=18088 POSTGRES_PORT=25432 docker compose -f deploy/compose.yaml -p cor
 | 助手报 MODEL_AUTH_FAILED / RATE_LIMITED / TIMEOUT | 模型服务密钥、限额或网络；agent 日志有细节 |
 | 知识库检索提示向量未就绪 | worker 尚未下载完模型或 `models` 卷不可写；看 worker 日志 |
 | 网页导入返回 403 / 失败 | 目标站点拒绝容器访问（如维基百科）；改用文件导入 |
-| 导入很慢 | Stanza 英文解析与中文依存为 CPU 密集；大语料用管理员脚本后台导入 |
+| 导入很慢 | Stanza 英文解析与中文依存为 CPU 密集；大语料用管理员脚本后台导入；短任务由 worker-light 处理不受阻塞；需要更多导入并发时 `--scale worker=2` |
+| 升级后 worker 报错 | 新镜像需要最新迁移，先 `up -d api` 再启动 worker |
 | api 刚启动时 503 | 迁移执行中或数据库未就绪，等待健康检查 |
