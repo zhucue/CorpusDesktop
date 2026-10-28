@@ -118,7 +118,7 @@ CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读�
 | 字段 | 取值 | 用途 |
 | --- | --- | --- |
 | `tagset` | `upos` / `jieba` / `mixed` | 与检索引擎解析词性所用一致；语料列表"语言 · 词性"列与详情显示为 UPOS / jieba 词性 / jieba + UPOS；助手据此提示词性写法 |
-| `script` | `simplified` / `traditional` / `mixed` | 只对中文文档抽样（前 3,000 句）判定，按 69 组常用简繁对照字中繁体字形占比（≥ 85% 繁体，≤ 15% 简体，其余混合；对照字少于 5 个不记）；列表显示简体 / 繁体 / 简繁混合 |
+| `script` | `simplified` / `traditional` / `mixed` | 只对中文文档抽样判定（约 3,000 句，按句 id 等距取自全库；只取前几千句时 Tatoeba 中英被误标为简体，复测 2026-10-28），按 69 组常用简繁对照字中繁体字形占比（≥ 85% 繁体，≤ 15% 简体，其余混合；对照字少于 5 个不记）；列表显示简体 / 繁体 / 简繁混合 |
 | `languages` | 语言代码数组，按文本量从多到少 | 多语言（平行）语料显示为 zh-en（语料语言在前） |
 | `indexed_at` | ISO 时间 | 列表"索引更新"列、详情"索引更新"显示相对时间，索引版本哈希只在悬停提示中出现 |
 
@@ -165,7 +165,7 @@ CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读�
 - 双语语料的命中默认附带对齐句；上下文面板提供中英对照视图，词级对齐连线悬停高亮。
 - KWIC 可开启词性着色，使用 8 色低饱和色板并附图例。
 - 导出 CSV / XLSX，含出处、码点、元数据。导出在后台执行：点击后提示"已开始导出"，完成后自动下载并在提示中给出"下载"链接。
-- 证据篮中的命中按句保存：服务端（`POST /projects/{id}/evidence`，手动钉住与 Pi 共用）根据文档与码点取命中所在句，`text` 为本句（命中词以 `**…**` 加粗）加每条对齐译文一行，`ref` 记录 `sentence_index`、`sentence`、`match`（句内码点区间）、`aligned`、`document_title`，出处为"文档 · 句 n · 语料库"；只给 `hit_id` 时从中解析文档与码点。证据篮、笔记引用和导出都用这份句子，不再保存 KWIC 窗口；DOCX 中命中词加粗，CSV / XLSX 列为原文、命中、译文、出处、查询式、备注。统计行证据显示为"「项」 方法 数值"。
+- 证据篮中的命中按句保存：服务端（`POST /projects/{id}/evidence`，手动钉住与 Pi 共用）根据文档与码点取命中所在句，`text` 为本句（命中词以 `**…**` 加粗）加每条对齐译文一行，`ref` 记录 `sentence_index`、`sentence`、`match`（句内码点区间）、`aligned`、`document_title`，出处为"文档 · 句 n · 语料库"；只给 `hit_id` 时从中解析文档与码点。同一命中（同一文档与码点区间，等价于同一 `hit_id`）或同一统计行（`stat_id` + `row_key`）在项目证据篮中只存一条：再次提交（检索页钉住、助手 `evidence.add`）返回已有条目并带 `existing: true`，页面仍显示“已钉”，助手说明“证据篮里已有”（复测 2026-10-28）。证据篮、笔记引用和导出都用这份句子，不再保存 KWIC 窗口；DOCX 中命中词加粗，CSV / XLSX 列为原文、命中、译文、出处、查询式、备注。统计行证据显示为"「项」 方法 数值"。
 
 ### 子库
 
@@ -222,6 +222,7 @@ CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读�
 - 标注层列表显示进度环；多人标注层显示一致性仪表（kappa）。
 - 提供"AI 与人工差异视图"：同一句上下两行对比预标与人工结果，改动处高亮，并统计改动、确认、拒绝数。
 - 多人层新建时默认不预标；勾选预标或对多人层点“预标注”时提示：每位标注者得到同一份模型建议，会影响独立标注和一致性。
+- 片段 / 关系层的句子完成（2026 年 10 月 28 日复测）：一句对某位标注者算完成，须该人“整句确认”过（`sentence_reviews`），或该人在句中有行且没有一条仍是建议。未动过的句子不算完成，预标没给建议的句子也一样，需整句确认（未动过的句子也可点“整句确认”或 Shift+Enter）。多人层只看自己时按本人计；负责人 / 编辑不在标注者名单里时看全部，须名单上每位标注者都完成。句子列表“待办”、句子 `done` 和文档进度（`done` / `pending` = 未完成句数）用同一规则（`services/api/spans.py` `_open`）。原因：多人片段层建好未标注时句子全部显示“已完成”、待办 0（复测 R 其他发现）。
 - 一致性（2026 年 10 月 28 日）：严格 κ / α 以片段范围为单位（某人在该范围无片段记 ∅，页面写“未标注”）；重叠宽松版先按范围成组，再把与其他标注者片段重叠、且没有共同标注者的组合并（同标签优先，其次重叠最长，`engine.agreement.overlap_units`），同一标注者的嵌套片段不合并，因此范围完全一致时宽松值等于严格值，只有边界不同才被宽容。原实现把同一人嵌套的片段串成“主谓一致+时态”一个单位，QA 数据上宽松 κ 0.57 反而低于严格 0.61，已改。κ 校正机会一致，合并会改变边际分布，个别数据上宽松值仍可能略低于严格值，属正常。按标签 κ 附 n（至少一人给出该标签的单位数）。分歧接口另给 `target_text`（争议词）与 `marks`（句内码点区间）。
 
 ### 标注导出
@@ -292,11 +293,11 @@ JSON 顶层带 `scope`（口径行）、`offsets: "code points"`、`sentence_ind
 
 ### 工具
 
-共 38 个，界面按能力分组、显示中文名（`apps/web/src/components/global/tools.ts`）；带 * 的是写操作。
+共 39 个，界面按能力分组、显示中文名（`apps/web/src/components/global/tools.ts`）；带 * 的是写操作。
 
 | 分组 | 工具 |
 | --- | --- |
-| 语料与检索 | corpora.list、corpora.get、corpora.documents、subcorpora.list、subcorpora.create*、corpus.parse、corpus.search、corpus.context |
+| 语料与检索 | corpora.list、corpora.get、corpora.documents、subcorpora.list、subcorpora.create*、corpus.parse、corpus.search、corpus.context、corpus.sentence |
 | 统计 | stats.frequency、stats.ngrams、stats.collocations、stats.keywords、stats.distribution |
 | 词性与依存标注 | annot.layers、annot.create_layer*、annot.sentence、annot.diff、annot.stats、annot.suggest*、annot.export* |
 | 片段与对齐 | annot.spans、annot.suggest_spans*、align.pairs、align.suggest*、annot.agreement |
@@ -310,14 +311,14 @@ JSON 顶层带 `scope`（口径行）、`offsets: "code points"`、`sentence_ind
 
 - 用户只要求查看、检索、统计、展示时，助手只用读取类工具；写操作只在用户明确要求该动作时提出，范围只覆盖用户所说（“这篇文档”只传这篇）。原因：试用中只读请求“用依存树展示 UD 中文 GSD 的第 1 句”触发在整库上建依存层并预标 111,279 个词，“给我看三条例句”自行加入证据篮（QA Q65、Q19）。
 - 写操作一律先确认：模型调用写工具时不执行，返回 `NEEDS_CONFIRMATION` 与说明（标题 + 若干行：语料库、文档数、规模、标签集等），界面显示确认卡片“执行 / 取消”；用户点执行后由 agent 服务按卡片上的参数原样执行，再请模型简述结果。取消后下一条消息告诉模型，除非用户再次要求不再提出。协议见 [contracts/p2.md](../contracts/p2.md) 第十二节。
-- 助手不在内置语料上建标注层（提出前即报 `BUILTIN_CORPUS`）；用户可在标注页自己建层。只读的依存展示使用项目里已有的 dep 层，没有时说明并引导到标注页。
+- 助手不在内置语料上建标注层（提出前即报 `BUILTIN_CORPUS`）；用户可在标注页自己建层。只读的依存或词性展示先用项目里已有的 dep 层（`annot.sentence`，含人工校对）；没有层时用 `corpus.sentence` 读取语料自带的系统标注（`GET /corpora/{id}/documents/{doc}/sentences/{n}`，返回每个词的 index、form、pos、lemma、head、deprel，不需要层），再用 DependencyTree 呈现；系统标注也没有依存时才说明。原因：复测中“用依存树展示 UD 中文 GSD 的第 1 句”答“该语料没有依存标注层”，而 UD 自带依存。
 - 建议类写入（标注、片段、对齐建议）确认后仍是待人工确认的 suggested，确认权在标注页。
 
 ### 内部 ID
 
 - 回答正文和思考中不写内部 ID（search_id、stat_id、hit_id、job_id、layer_id、document_id、chunk_id、term_id、corpus_id 等、任何 UUID）；ID 只出现在工具参数与组件参数里，正文用语料库名、文档标题、“第 N 句”、统计方法与节点词、层名。
 - 工具结果摘要（步骤行、右栏引用）用中文方法名与状态，不含 ID；前端对正文、思考与步骤再做一次过滤（`scrubIds`），去掉漏出的“xxx_id: …”、UUID 和长十六进制串。
-- 思考要求用中文、不复述规则；模型仍可能夹英文，过滤只保证不露 ID。
+- 思考要求用中文、围绕研究问题、不引用规则，提到工具只用能力名称；推理模型仍可能写出工具名，前端把思考中的工具名（`corpora_list`、`stats.collocations` 等）换成中文能力名（`toolNamesToTitles`），过滤只保证不露 ID 与工具名。
 
 ### OpenUI
 
