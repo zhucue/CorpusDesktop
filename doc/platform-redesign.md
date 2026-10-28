@@ -320,7 +320,7 @@ NLP：中文分词与词性用 jieba（固定词典、关闭 HMM），英文分�
 | P3 标注一 | 标注层、标签集、annotations 表（source / status / revision）；词性与依存预标任务（Stanza，可选 HanLP 对比）；校对工作区（词性点选、依存弧线拖拽、键盘快捷键、进度环）；AI 与人工差异视图；确认后写入 CWB 位置属性并重建索引；`{dep=}` 与词性查询接入检索与统计；标注统计；Agent 工具 annot.*；OpenUI 组件 DependencyTree、AnnotationDiff；导出 CoNLL-U | 已实现，联调通过 |
 | P4 知识库 | knowledge_bases、kb_documents、kb_chunks、kb_terms 表与 pgvector；PDF / DOCX / Markdown / TXT / URL 导入与分段向量化；术语表（手工、从双语语料与文献抽取）；标注规范；研究笔记（证据篮与助手草稿写入）；混合检索；kb.search / kb.save / kb.extract_terms / kb.summarize 工具；OpenUI 组件 TermCard、KbCitation；TBX / CSV 导出；知识库页面 | 已实现，联调通过 |
 | P5 标注二 | 自定义片段与关系标注（标签集、文本高亮、连线、LLM 预标按规范）；双语句级与词级对齐（候选生成、连线图编辑、确认）；学习者偏误与翻译策略标签集模板；多人标注一致性（kappa、alpha）与仲裁；OpenUI 组件 AlignmentGraph；导出 brat standoff、JSON、TMX；按自定义标签检索 `[标签]` | 已实现，联调通过 |
-| P6 收尾 | 前端完成度专项审查（对照设计方案、设计稿与契约逐页逐状态核对并补齐）；维基中英子集内置语料；UD 中文树库内置；权限与撤销回归；备份恢复说明；性能基线（Tatoeba 全量检索与统计耗时）；部署文档；README；两条研究流程端到端验收 | 进行中：前端审查、权限回归、备份恢复已完成；内置语料导入、性能基线、干净环境验收待完成 |
+| P6 收尾 | 前端完成度专项审查（对照设计方案、设计稿与契约逐页逐状态核对并补齐）；维基中英子集内置语料；UD 中文树库内置；权限与撤销回归；备份恢复说明；性能基线（Tatoeba 全量检索与统计耗时）；部署文档；README；两条研究流程端到端验收 | 进行中：前端审查、权限回归、备份恢复已完成；内置语料按缩减范围导入（维基中英各 1000 篇、UD 英文 EWT 与中文 GSD 全量、Tatoeba 中英第 1 批约 26 万句对，其余 7 批与性能基线按用户决定暂停）；干净环境验收待完成 |
 | 二期 | 命名实体、句子与文档分类、语义检索、更多内置语料、实时多人协作 | 不在首版 |
 
 贯穿各阶段：每阶段先写 `contracts/pN.md`，三方并行实现，整栈联调后提交；设计文档、Word、change-log 同批更新；每个新业务能力同批注册 Agent 工具与 OpenUI 组件。

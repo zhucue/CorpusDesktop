@@ -77,7 +77,18 @@ class Api:
         )
 
     def call(self, method, path, **kw):
-        r = self.http.request(method, path, **kw)
+        # reads survive an API restart (502 / 503 from nginx, refused connections) for up to 10 minutes
+        for attempt in range(60 if method == "GET" else 1):
+            try:
+                r = self.http.request(method, path, **kw)
+            except httpx.TransportError:
+                if method != "GET" or attempt == 59:
+                    raise
+                time.sleep(10)
+                continue
+            if method != "GET" or r.status_code not in (502, 503, 504):
+                break
+            time.sleep(10)
         if r.status_code >= 400:
             try:
                 err = r.json().get("error") or r.json()
@@ -211,6 +222,13 @@ def connect(args):
 def import_parts(api, corpus, parts, key, language=None):
     """parts: [(value, [paths], metadata)]; documents carry metadata[key] = value. Returns timing rows."""
     done = {d["metadata"].get(key) for d in api.documents(corpus["id"])}
+    # job ids of earlier uploads, so a rerun waits for a queued / running import instead of uploading twice
+    state_path = WORK / f"jobs-{corpus['id']}.json"
+    state = (
+        json.loads(state_path.read_text(encoding="utf-8"))
+        if state_path.exists()
+        else {}
+    )
     rows = []
     for i, (value, paths, metadata) in enumerate(parts, 1):
         label = f"[{key}={value} {i}/{len(parts)}]"
@@ -218,10 +236,20 @@ def import_parts(api, corpus, parts, key, language=None):
             log(f"{label} 已导入，跳过")
             continue
         t0 = time.monotonic()
-        job = api.upload(corpus["id"], paths, {**metadata, key: value}, language)
-        log(
-            f"{label} 已上传 {sum(p.stat().st_size for p in paths) / 2**20:.1f} MB，导入任务 {job['id']}"
-        )
+        job = None
+        if str(value) in state:
+            job = api.call("GET", f"/jobs/{state[str(value)]}")
+            if job["state"] in ("queued", "running", "succeeded"):
+                log(f"{label} 沿用导入任务 {job['id']}（{job['state']}）")
+            else:
+                job = None
+        if job is None:
+            job = api.upload(corpus["id"], paths, {**metadata, key: value}, language)
+            state[str(value)] = job["id"]
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            log(
+                f"{label} 已上传 {sum(p.stat().st_size for p in paths) / 2**20:.1f} MB，导入任务 {job['id']}"
+            )
         job = api.wait_job(job["id"], label)
         rows.append(
             {
@@ -246,7 +274,7 @@ def report(name, corpus, rows, index_wait, started):
         "total_seconds": round(total, 1),
         "finished_at": datetime.now(UTC).isoformat(),
     }
-    out = WORK / f"run-{re.sub(r'[^A-Za-z0-9_-]+', '_', name)}.json"
+    out = WORK / f"run-{corpus['id']}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     s = corpus["stats"]
@@ -397,6 +425,7 @@ def cmd_tatoeba(args):
     parts = [
         (k, sorted((out / f"part-{k:02d}").iterdir()), {})
         for k in range(1, args.parts + 1)
+        if not args.only or k in args.only
     ]
     corpus, rows, wait = import_parts(api, corpus, parts, "part")
     report(name, corpus, rows, wait, started)
@@ -411,11 +440,21 @@ UD = {
 }
 
 
-def ud_release(repo, client):
+def ud_release(repo, client, treebank):
     tags = client.get(
         f"https://api.github.com/repos/UniversalDependencies/{repo}/tags",
         params={"per_page": 100},
     )
+    if tags.status_code in (
+        403,
+        429,
+    ):  # anonymous GitHub API rate limit: reuse the newest download
+        local = sorted(
+            (WORK / "ud").glob(f"{treebank}-r2.*"),
+            key=lambda d: int(d.name.split(".")[-1]),
+        )
+        if local:
+            return local[-1].name.split("-")[-1]
     tags.raise_for_status()
     names = [t["name"] for t in tags.json() if re.fullmatch(r"r2\.\d+", t["name"])]
     if not names:
@@ -429,7 +468,7 @@ def cmd_ud(args):
     client = httpx.Client(
         headers={"User-Agent": UA}, follow_redirects=True, timeout=120
     )
-    tag = args.release or ud_release(repo, client)
+    tag = args.release or ud_release(repo, client, args.treebank)
     raw = f"https://raw.githubusercontent.com/UniversalDependencies/{repo}/{tag}/"
     folder = WORK / "ud" / f"{args.treebank}-{tag}"
     readme = folder / "README.md"
@@ -854,6 +893,11 @@ def main():
     )
     t.add_argument(
         "--parts", type=int, default=8, help="分批数（每批一次上传与导入任务）"
+    )
+    t.add_argument(
+        "--only",
+        type=lambda v: {int(x) for x in v.split(",")},
+        help="只导入这些批，如 1,2（其余批之后再跑）",
     )
     u = sub.add_parser("ud", help="UD 树库 CoNLL-U")
     u.add_argument("--treebank", choices=sorted(UD), required=True)

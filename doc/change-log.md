@@ -112,3 +112,5 @@
 - P6-7 文档收口（第一轮）：README 改为最终定位、功能表、文档入口、工程结构与命令；新增《部署手册》（`doc/deployment.md` 及 Word，含备份恢复）；重构设计第十二节进度更新（P3–P5 已实现并联调通过，P6 进行中）。原因：contracts/p6.md P6-6、P6-7。待内置语料与性能基线、干净环境验收完成后再收一次。
 - Worker 心跳与分队列：迁移 0007 增加 `jobs.heartbeat_at` / `worker_id`；`WORKER_KINDS` / `WORKER_HEAVY` 限定可领取类型，新增 `worker-light` 服务只处理导出、统计、预标、知识库等短任务；重启与 5 分钟回收只失败心跳过期的任务，允许多 worker 并行。原因：内置 Tatoeba 全量导入占用唯一 worker 数小时，其他用户的统计、导出、预标全部排队。部署手册与 P1 契约同步。
 - README 改版：徽章、功能表、真实界面截图（`doc/screenshots/`，取自联调截图）、查询语法表、Mermaid 架构图、快速开始、折叠的开发与结构说明、文档表与进度表。原因：用户认为原 README 过于平淡，要求更有展示性；内容仍只写已验收事实。
+- 内置语料导入收口：`scripts/import_builtin.py` 增加 GET 重试（api 重启期间不中断）、按语料记录已上传批次的任务 ID（重跑沿用排队或运行中的任务，不重复上传）、`tatoeba --only 1,2` 只导指定批、GitHub 匿名限流时沿用本地已下载的 UD 版本。实际导入：维基中英各 1000 篇、UD en_ewt 与 zh_gsd r2.18 全量、Tatoeba 中英第 1 批（约 26 万句对，1 小时 17 分）；第 2 批导入到 35% 时取消，第 3–8 批与 `scripts/bench.py` 性能基线暂停。原因：英文 Stanza 标注约 440 词/秒，完整 Tatoeba 需 10 小时以上，用户决定测试阶段不需要全量，先到此为止；需要时重跑 `import_builtin.py tatoeba` 会跳过已导批次继续。
+- 权限矩阵重跑：worker 分队列后 `tests/integration/test_permissions_matrix.py` 对运行栈 5 项全部通过（含 Bearer 删除类禁止、任务创建者取消重试、`GET /jobs?builtin=1`、单人层仅创建者写入）。原因：P6-3 验收。
