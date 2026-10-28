@@ -376,9 +376,9 @@ export default function SpanWorkspace({
       <div className="card-pad">
         <ErrorAlert error={one.error ?? win.error} />
         {!docId ? (
-          <Empty icon="file" text={docs.isPending ? "加载中" : "该层没有文档"} />
+          <Empty icon="folderopen" text={docs.isPending ? "加载中" : "该层没有文档"} />
         ) : !s ? (
-          list.isPending || one.isFetching ? <Skeleton rows={3} /> : <Empty icon="filetext" text="选择句子" />
+          list.isPending || one.isFetching ? <Skeleton rows={3} /> : <Empty icon="pilcrow" text="选择句子" />
         ) : (
           <>
             <div className="legend" style={{ justifyContent: "flex-end", marginBottom: 4 }}>
@@ -812,7 +812,7 @@ function SpanDiffTab({ layer, docId, keep, onOpen }: { layer: Layer; docId: stri
       {q.isPending && docId ? (
         <Skeleton rows={4} />
       ) : shown.length === 0 && !q.error ? (
-        <Empty icon="diff" text="本文档没有片段" />
+        <Empty icon="squaredashed" text="本文档没有片段" />
       ) : (
         <div className="diff-list">
           {shown.map(({ s, toks, c }, i) => (

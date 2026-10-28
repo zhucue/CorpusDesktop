@@ -24,3 +24,11 @@
 .tool-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .tool-group { font-size: 12px; color: var(--text-3); margin: 10px 0 6px; }
 .ui-block { min-width: 0; }
+.chat-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.to-bottom {
+  position: absolute; left: 50%; bottom: 12px; z-index: 2; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--text-2); box-shadow: var(--shadow-pop); font: inherit; font-size: 12.5px; cursor: pointer;
+  opacity: 0; visibility: hidden; transform: translate(-50%, 8px) scale(.96); transition: opacity 200ms ease, transform 280ms var(--ease-spring), visibility 0s linear 280ms, background var(--t-fast);
+}
+.to-bottom[data-show="true"] { opacity: 1; visibility: visible; transform: translate(-50%, 0); transition: opacity 200ms ease, transform 280ms var(--ease-spring), visibility 0s, background var(--t-fast); }
+.to-bottom:hover { background: var(--bg); color: var(--text); }

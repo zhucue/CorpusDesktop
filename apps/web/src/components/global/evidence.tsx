@@ -7,7 +7,9 @@ import { knowledgeHref } from "../../features/knowledge/data";
 import { NotePicker, evidenceMarkdown, writeToNote, type NoteTarget } from "../../features/knowledge/NotePicker";
 import { useJobCreated } from "../../lib/data";
 import { reducedMotion } from "../../theme/motion";
-import { Icon, type IconName } from "../Icon";
+import { Tip } from "../common";
+import { Icon } from "../Icon";
+import { evidenceIcon } from "../iconSets";
 
 interface EvidenceState {
   items: Evidence[];
@@ -128,7 +130,6 @@ export function PinButton({ input, className }: { input: EvidenceInput; classNam
   );
 }
 
-const kindIcon: Record<Evidence["kind"], IconName> = { hit: "quote", stat_row: "chart", text: "spark" };
 
 export function EvidenceBasket({ projectId, open, onToggle }: { projectId: string; open: boolean; onToggle: () => void }) {
   const ev = useEvidence();
@@ -191,21 +192,25 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
             </div>
           ) : n === 0 ? (
             <div className="empty" style={{ padding: "24px 12px" }}>
-              <Icon name="pin" />
+              <span className="empty-ic" aria-hidden>
+                <Icon name="pin" size={20} />
+              </span>
               <span className="sm">暂无证据，点行尾的钉住图标添加</span>
             </div>
           ) : (
             ev.items.map((it, i) => (
               <div className="ev-item" key={it.id} style={{ animationDelay: `${i * 30}ms` }}>
                 <span className="ev-k">
-                  <Icon name={kindIcon[it.kind] ?? "quote"} />
+                  <Icon name={evidenceIcon[it.kind] ?? "quote"} />
                 </span>
                 <span className="ev-t" title={it.text}>
                   {it.text}
                 </span>
-                <button className="pin-btn" type="button" aria-label="移出证据篮" onClick={() => ev.remove(it.id)}>
-                  <Icon name="x" />
-                </button>
+                <Tip title="移出证据篮">
+                  <button className="pin-btn" type="button" aria-label="移出证据篮" onClick={() => ev.remove(it.id)}>
+                    <Icon name="x" />
+                  </button>
+                </Tip>
                 <span className="ev-s" title={it.source}>
                   {it.source}
                   {it.ref.search_query ? ` · ${it.ref.search_query}` : ""}

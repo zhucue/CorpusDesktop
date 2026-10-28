@@ -2,9 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { api, type KbSearchResult, type Term } from "../../api";
-import { ErrorAlert } from "../../components/common";
+import { Empty, ErrorAlert } from "../../components/common";
 import { PinButton } from "../../components/global/evidence";
 import { Icon } from "../../components/Icon";
+import { kbDocIcon } from "../../components/iconSets";
 import { kindLabels, knowledgeHref, locatorText } from "./data";
 import { Marked, queryWords, snippetParts } from "./highlight";
 
@@ -63,7 +64,7 @@ export function KbHits({ projectId, q, result }: { projectId: string; q: string;
         </div>
       )}
       {items.length === 0 ? (
-        <div className="empty sm">没有匹配的片段</div>
+        <Empty icon="searchx" text="没有匹配的片段" />
       ) : (
         <div className="hits">
           {items.map((h, i) => {
@@ -74,7 +75,10 @@ export function KbHits({ projectId, q, result }: { projectId: string; q: string;
                 <div style={{ minWidth: 0 }}>
                   <div className="row">
                     <b style={{ fontWeight: 600 }}>{h.document.title}</b>
-                    <span className="tag t-gray">{kindLabels[h.document.kind] ?? h.document.kind}</span>
+                    <span className="tag t-gray">
+                      <Icon name={kbDocIcon(h.document.kind, h.document.source, h.document.title)} size={12} />
+                      {kindLabels[h.document.kind] ?? h.document.kind}
+                    </span>
                   </div>
                   {loc && <div className="src mono">{loc}</div>}
                   <p className="snippet">

@@ -1,12 +1,13 @@
 import { createContext, useContext } from "react";
 import { Link, useNavigate } from "react-router";
-import type { EvidenceInput, JobState, Scope } from "../../api";
+import type { EvidenceInput, JobKind, JobState, Scope } from "../../api";
 import { useJob } from "../../lib/data";
 import { fmt, fmtValue } from "../../lib/format";
-import { JobStateTag, Progress } from "../common";
+import { Empty, JobStateTag, Progress } from "../common";
 import { PinButton } from "../global/evidence";
 import { jobKindLabels } from "../global/TaskTray";
 import { Icon, type IconName } from "../Icon";
+import { jobKindIcon } from "../iconSets";
 import { KwicTable as KwicRows } from "./Kwic";
 
 /** Where result cards link to: the project and the session scope. */
@@ -84,7 +85,7 @@ export function KwicTableCard(p: KwicTableProps) {
   return (
     <Card
       component="KwicTable"
-      icon="table"
+      icon="textsearch"
       title="KWIC"
       meta={p.query}
       right={`${fmt(p.counts?.hits ?? p.total)} 命中`}
@@ -107,7 +108,7 @@ export function KwicTableCard(p: KwicTableProps) {
           evidence: { kind: "hit", ref: { hit_id: r.hit_id, search_query: p.query, scope: scope ?? undefined }, text: `${r.left}${r.match}${r.right}`, source: `${r.source} · ${p.scope_name}` },
         }))}
       />
-      {(p.rows ?? []).length === 0 && <div className="empty sm">没有命中</div>}
+      {(p.rows ?? []).length === 0 && <Empty icon="searchx" text="没有命中" />}
     </Card>
   );
 }
@@ -129,7 +130,7 @@ export function FreqChartCard(p: FreqChartProps) {
   return (
     <Card
       component="FreqChart"
-      icon="chart"
+      icon="chartbar"
       title={p.title || "频次"}
       meta={p.unit}
       right={`前 ${rows.length}${p.rows?.length > rows.length ? ` / ${p.rows.length}` : ""}`}
@@ -138,7 +139,7 @@ export function FreqChartCard(p: FreqChartProps) {
     >
       <div className="ou-body">
         {rows.length === 0 ? (
-          <div className="empty sm">无结果</div>
+          <Empty icon="barchart" text="无结果" />
         ) : (
           <div className="hbars">
             {rows.map((r, i) => (
@@ -184,7 +185,7 @@ export function CollocationTableCard(p: CollocationTableProps) {
   return (
     <Card
       component="CollocationTable"
-      icon="network"
+      icon="chartnetwork"
       title="搭配"
       meta={`${p.node} · ±${p.window} · ${p.measure}`}
       right={`${fmt(p.rows?.length ?? 0)} 项`}
@@ -239,7 +240,7 @@ export function KeywordTableCard(p: KeywordTableProps) {
   return (
     <Card
       component="KeywordTable"
-      icon="scatter"
+      icon="chartscatter"
       title="关键词"
       meta={`${p.target} 对 ${p.reference}`}
       right={p.measure === "log_ratio" ? "Log Ratio" : "LL"}
@@ -283,7 +284,7 @@ export function DistributionChartCard(p: DistributionChartProps) {
   const rows = p.rows ?? [];
   const max = Math.max(...rows.map((r) => r.per_million ?? 0), 1e-9);
   return (
-    <Card component="DistributionChart" icon="chart" title="分布" meta={`${p.field === "position" ? "文档位置" : p.field} · 每百万词`} foot={<StatLink statId={p.stat_id} />}>
+    <Card component="DistributionChart" icon="barchart" title="分布" meta={`${p.field === "position" ? "文档位置" : p.field} · 每百万词`} foot={<StatLink statId={p.stat_id} />}>
       <div className="ou-body">
         <div className="vbars">
           {rows.map((r, i) => (
@@ -308,7 +309,7 @@ export interface EvidenceCardProps {
 
 export function EvidenceCardView(p: EvidenceCardProps) {
   return (
-    <Card component="EvidenceCard" icon="pin" title="证据" right="已钉住">
+    <Card component="EvidenceCard" icon="basket" title="证据" right="已钉住">
       <div className="ou-body col" style={{ gap: 4 }}>
         <div className="sm" style={{ lineHeight: 1.7 }}>
           {p.text}
@@ -335,7 +336,7 @@ export function JobStatusCard(p: JobStatusProps) {
   return (
     <Card
       component="JobStatus"
-      icon="clock"
+      icon={jobKindIcon[p.kind as JobKind] ?? "clock"}
       title={`${jobKindLabels[p.kind] ?? p.kind}任务`}
       meta={`#${p.job_id.slice(0, 8)}`}
       right={<JobStateTag state={state} />}

@@ -9,7 +9,8 @@ import { useDebounced } from "../../lib/useDebounced";
 import { fmt } from "../../lib/format";
 import { QueryChip } from "../common";
 import { Icon, type IconName } from "../Icon";
-import { AGENT_TOOLS } from "./tools";
+import { kbDocIcon, kbIcon, pageIcon } from "../iconSets";
+import { AGENT_TOOLS, TOOL_VIEW } from "./tools";
 
 interface Item {
   group: string;
@@ -67,14 +68,14 @@ export default function CommandPalette({
   const items: Item[] = useMemo(() => {
     const base = `/p/${projectId}`;
     const pages: Item[] = [
-      { group: "页面", label: "语料库", icon: "db", run: go(`${base}/corpora`) },
-      { group: "页面", label: "检索", icon: "search", run: go(`${base}/search`) },
-      { group: "页面", label: "统计", icon: "chart", run: go(`${base}/stats`) },
-      { group: "页面", label: "标注", icon: "pen", run: go(`${base}/annotate`) },
-      { group: "页面", label: "知识库", icon: "book", run: go(`${base}/knowledge`) },
-      { group: "页面", label: "助手", icon: "spark", run: go(`${base}/assistant`) },
-      { group: "页面", label: "任务", icon: "clock", run: go(`${base}/jobs`) },
-      { group: "页面", label: "项目设置", icon: "sliders", run: go(`${base}/settings`) },
+      { group: "页面", label: "语料库", icon: pageIcon.corpora, run: go(`${base}/corpora`) },
+      { group: "页面", label: "检索", icon: pageIcon.search, run: go(`${base}/search`) },
+      { group: "页面", label: "统计", icon: pageIcon.stats, run: go(`${base}/stats`) },
+      { group: "页面", label: "标注", icon: pageIcon.annotate, run: go(`${base}/annotate`) },
+      { group: "页面", label: "知识库", icon: pageIcon.knowledge, run: go(`${base}/knowledge`) },
+      { group: "页面", label: "助手", icon: pageIcon.assistant, run: go(`${base}/assistant`) },
+      { group: "页面", label: "任务", icon: pageIcon.jobs, run: go(`${base}/jobs`) },
+      { group: "页面", label: "项目设置", icon: pageIcon.settings, run: go(`${base}/settings`) },
       { group: "页面", label: "打开引导", icon: "compass", run: go(`/onboarding?project=${projectId}`) },
     ];
     const proj: Item[] = (projects.data?.items ?? []).map((p) => ({
@@ -88,7 +89,7 @@ export default function CommandPalette({
       group: "语料库",
       label: c.name,
       meta: c.status === "ready" ? `${fmt(c.stats.tokens)} 词` : c.status,
-      icon: "db",
+      icon: "library",
       run: () => setScope({ corpus_id: c.id }),
     }));
     const subs: Item[] = (subcorpora.data?.items ?? []).map((s) => ({
@@ -102,12 +103,12 @@ export default function CommandPalette({
       group: "保存的查询",
       label: s.query,
       meta: s.name,
-      icon: "search",
+      icon: "bookmark",
       query: true,
       run: go(searchHref(projectId, s.query, s.scope)),
     }));
     const tools: Item[] = AGENT_TOOLS.flatMap((g) =>
-      g.tools.map((t) => ({ group: "助手工具", label: t, meta: g.group, icon: "tool" as IconName, run: go(`${base}/assistant`) })),
+      g.tools.map((t) => ({ group: "助手工具", label: t, meta: g.group, icon: TOOL_VIEW[t]?.icon ?? ("tool" as IconName), run: go(`${base}/assistant`) })),
     );
     return [...pages, ...proj, ...corp, ...subs, ...saved, ...tools];
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,7 +138,7 @@ export default function CommandPalette({
           group: "文献",
           label: d.title,
           meta: kindName[d.kind] ?? d.kind,
-          icon: (d.kind === "note" ? "note" : "book") as IconName,
+          icon: kbDocIcon(d.kind, d.source, d.title),
           remote: true,
           run: go(knowledgeHref(projectId, { doc: d.id })),
         })),
@@ -145,7 +146,7 @@ export default function CommandPalette({
           group: "术语",
           label: t.term,
           meta: t.translations?.[0]?.text ?? t.language,
-          icon: "term" as IconName,
+          icon: kbIcon.term,
           remote: true,
           run: go(knowledgeHref(projectId, { tab: "terms", term: t.id, tq: t.term })),
         })),

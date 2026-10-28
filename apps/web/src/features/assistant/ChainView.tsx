@@ -1,5 +1,5 @@
 import { App } from "antd";
-import { lazy, Suspense, useContext, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { errorText, type ToolCall } from "../../api";
 import { ResultContext } from "../../components/results/cards";
@@ -8,7 +8,7 @@ import { NotePicker, writeToNote, type NoteTarget } from "../knowledge/NotePicke
 import { Icon } from "../../components/Icon";
 import { TOOL_VIEW } from "../../components/global/tools";
 import { reducedMotion } from "../../theme/motion";
-import { answerParts, plainText, thinkingText, type ChainMessage } from "./chain";
+import { answerParts, fmtChars, isThinking, plainText, thinkingChars, thinkingText, type ChainMessage } from "./chain";
 
 const UiBlock = lazy(() => import("../../openui/UiBlock"));
 
@@ -36,100 +36,178 @@ export function useTypewriter(text: string, active: boolean): number {
   return active ? Math.min(shown, text.length) : text.length;
 }
 
+function argText(v: unknown): string {
+  const s = typeof v === "string" ? `"${v}"` : JSON.stringify(v);
+  return s && s.length > 60 ? `${s.slice(0, 60)}…` : (s ?? "");
+}
+
+const KEY_ARGS = ["query", "q", "node", "term", "text", "title", "word"];
+
+/** The argument shown in bold on the step row (query, node word, term…). */
+function keyArg(args: Record<string, unknown>): string | null {
+  for (const k of KEY_ARGS) {
+    const v = args?.[k];
+    if (typeof v === "string" && v.trim()) return argText(v);
+  }
+  return null;
+}
+
 function argsText(args: Record<string, unknown>): React.ReactNode[] {
   return Object.entries(args ?? {})
     .slice(0, 5)
-    .map(([k, v], i) => {
-      const s = typeof v === "string" ? `"${v}"` : JSON.stringify(v);
-      const short = s && s.length > 60 ? `${s.slice(0, 60)}…` : s;
-      return (
-        <span key={k}>
-          {i > 0 && " "}
-          {k}=
-          {k === "query" || k === "node" || k === "q" ? <b>{short}</b> : short}
-        </span>
-      );
-    });
+    .map(([k, v], i) => (
+      <span key={k}>
+        {i > 0 && " "}
+        {k}={KEY_ARGS.includes(k) ? <b>{argText(v)}</b> : argText(v)}
+      </span>
+    ));
 }
 
-function Step({ call }: { call: ToolCall }) {
+/** One tool call as a compact row: family icon, title, key argument, result, state dot; `detail` adds the raw call. */
+function Step({ call, detail }: { call: ToolCall; detail?: boolean }) {
   const view = TOOL_VIEW[call.name];
   const cls = call.state === "running" ? "active" : call.state === "succeeded" ? "done" : "failed";
   const res =
     call.state === "running" ? "运行中" : call.state === "cancelled" ? "已取消" : call.state === "failed" ? call.result_summary || "失败" : call.result_summary;
+  const key = keyArg(call.args);
   return (
     <li className={`step ${cls}`} data-state={call.state}>
-      <span className="step-node">
-        {call.state === "succeeded" ? (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path className="chk" pathLength={1} d="M20 6 9 17l-5-5" />
-          </svg>
-        ) : call.state === "failed" || call.state === "cancelled" ? (
-          <Icon name="x" />
-        ) : (
-          <Icon name={view?.icon ?? "tool"} />
-        )}
-      </span>
-      <div className="step-card">
-        <div className="step-top">
-          <span className="step-tool">{call.name}</span>
-          <span className="step-title">{view?.title ?? ""}</span>
-          <span className="step-res" title={res}>
-            {res}
-          </span>
-        </div>
-        {Object.keys(call.args ?? {}).length > 0 && <div className="step-args">{argsText(call.args)}</div>}
+      <Icon name={view?.icon ?? "tool"} size={14} className="step-ic" />
+      <div className="step-row">
+        <span className="step-title" title={call.name}>
+          {view?.title ?? call.name}
+        </span>
+        {key && <b className="step-key">{key}</b>}
+        <span className="step-res" title={res}>
+          {res}
+        </span>
+        <span className="step-dot" aria-hidden />
       </div>
+      {detail && (
+        <div className="step-args">
+          <span className="step-tool">{call.name}</span>
+          {Object.keys(call.args ?? {}).length > 0 && <> {argsText(call.args)}</>}
+        </div>
+      )}
     </li>
   );
 }
 
-export function chainLabel(m: ChainMessage, now: number): { text: string; shimmer: boolean } {
+/** Header text: live "思考中 · 3.2 秒 · 1.2k 字 · 正在检索语料…"; afterwards one trace line. */
+export function chainLabel(m: ChainMessage, now: number): { text: string; live: boolean; meta: string; tool: string | null } {
   const n = m.tools.length;
-  if (m.status === "stopped") return { text: `已停止 · ${n} 次工具调用`, shimmer: false };
-  if (m.status === "error") return { text: `出错 · ${n} 次工具调用`, shimmer: false };
-  const running = m.tools.find((t) => t.state === "running");
-  if (m.status === "running" && (running || m.answerAt == null)) {
-    if (running) return { text: TOOL_VIEW[running.name]?.label ?? `正在调用 ${running.name}…`, shimmer: true };
-    return { text: "正在思考…", shimmer: true };
+  const chars = thinkingChars(m);
+  const charText = chars ? ` · ${fmtChars(chars)}` : "";
+  if (m.status === "stopped") return { text: `已停止 · ${n} 次工具调用`, live: false, meta: "", tool: null };
+  if (m.status === "error") return { text: `出错 · ${n} 次工具调用`, live: false, meta: "", tool: null };
+  if (isThinking(m)) {
+    const running = m.tools.find((t) => t.state === "running");
+    const secs = Math.max(0, (now - m.startedAt) / 1000);
+    const tool = running ? (TOOL_VIEW[running.name]?.label ?? `正在调用 ${running.name}…`) : null;
+    return { text: "思考中", live: true, meta: `${secs.toFixed(1)} 秒${charText}`, tool };
   }
   // Live messages: time until the answer started. Stored messages: the recorded duration.
   const ms = m.answerAt != null ? m.answerAt - m.startedAt : (m.durationMs ?? now - m.startedAt);
   const secs = Math.max(0, ms / 1000);
-  return { text: `已思考 ${secs.toFixed(1)} 秒 · ${n} 次工具调用`, shimmer: false };
+  return { text: `已思考 ${secs.toFixed(1)} 秒 · ${n} 次工具调用${charText}`, live: false, meta: "", tool: null };
 }
 
-/** Thinking chain: shimmer header → tool timeline → collapses to "已思考 N 秒 · N 次工具调用". */
+/** Re-render every `ms` while `active`; returns the current time. */
+function useNow(active: boolean, ms = 100): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(t);
+  }, [active, ms]);
+  return active ? now : Date.now();
+}
+
+/** While `active`, keep a scroll box pinned to the bottom as `dep` changes, unless the reader scrolled up in it. */
+function useStickToBottom<T extends HTMLElement>(dep: unknown, active: boolean, threshold = 24) {
+  const ref = useRef<T>(null);
+  const stick = useRef(true);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && active && stick.current) el.scrollTop = el.scrollHeight;
+  }, [dep, active]);
+  const onScroll = () => {
+    const el = ref.current;
+    if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+  };
+  return { ref, onScroll };
+}
+
+/**
+ * Thinking chain after Kimi CLI's compact indicator. While thinking: one header line (思考中 + dots, seconds,
+ * characters, current tool), a two-line ticker of the latest reasoning and the latest tool row — the chat does
+ * not grow. Click → full reasoning and tool timeline in a 40vh scroll box. When the answer starts it settles
+ * into the trace line "已思考 N 秒 · N 次工具调用 · N 字"; a manual expand is kept.
+ */
 export function ThinkingChain({ m }: { m: ChainMessage }) {
   const thinking = thinkingText(m);
-  const live = m.status === "running" && (m.answerAt == null || m.tools.some((t) => t.state === "running"));
-  const [override, setOverride] = useState<boolean | null>(null);
-  useEffect(() => setOverride(null), [live]);
-  const open = override ?? live;
-  const label = chainLabel(m, Date.now());
+  const live = isThinking(m);
+  const [expanded, setExpanded] = useState<boolean | null>(null);
+  const open = expanded ?? false;
+  const now = useNow(live);
+  const label = chainLabel(m, now);
   const shownThinking = useTypewriter(thinking, m.status === "running");
+  const visible = thinking.slice(0, shownThinking);
+  const full = useStickToBottom<HTMLDivElement>(`${visible.length}:${m.tools.length}:${open}`, m.status === "running");
+  const bodyId = useId();
   if (!m.tools.length && !thinking && m.status !== "running") return null;
+  const latest = m.tools.find((t) => t.state === "running") ?? m.tools.at(-1);
   return (
     <div className={`think ${live ? "running" : ""}`} data-open={open ? "true" : "false"}>
-      <button className="think-head" type="button" aria-expanded={open} onClick={() => setOverride(!open)}>
+      <button className="think-head" type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => setExpanded(!open)}>
         <Icon name="spark" className="spark-ic" />
-        <span key={label.text} className={`think-label swap ${label.shimmer ? "shimmer-text" : ""}`}>
+        <span key={label.live ? "live" : label.text} className="think-label swap">
           {label.text}
+          {label.live && (
+            <span className="dots" aria-hidden>
+              <i />
+              <i />
+              <i />
+            </span>
+          )}
         </span>
-        <Icon name="down" className="chev" />
+        {label.meta && <span className="think-meta">{label.meta}</span>}
+        {label.tool && (
+          <span key={label.tool} className="think-tool swap">
+            {label.tool}
+          </span>
+        )}
+        <Icon name="down" size={14} className="chev" />
       </button>
-      <div className="think-body">
+      {live && !open && (thinking || latest) && (
+        <div className="think-peek">
+          {thinking && (
+            <div className="think-ticker" aria-hidden>
+              <span>{visible.slice(-400)}</span>
+            </div>
+          )}
+          {latest && (
+            <ol className="steps">
+              <Step key={latest.id} call={latest} />
+            </ol>
+          )}
+        </div>
+      )}
+      <div className="think-body" id={bodyId}>
         <div className="think-inner">
-          <div className="think-flow">
-            {thinking && <div className="think-text">{thinking.slice(0, shownThinking)}</div>}
-            {m.tools.length > 0 && (
-              <ol className="steps">
-                {m.tools.map((t) => (
-                  <Step key={t.id} call={t} />
-                ))}
-              </ol>
-            )}
-          </div>
+          {open && (
+            <div className="think-scroll" ref={full.ref} onScroll={full.onScroll}>
+              {visible && <div className="think-text">{visible}</div>}
+              {m.tools.length > 0 && (
+                <ol className="steps">
+                  {m.tools.map((t) => (
+                    <Step key={t.id} call={t} detail />
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

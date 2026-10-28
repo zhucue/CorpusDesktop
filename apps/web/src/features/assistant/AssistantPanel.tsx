@@ -1,11 +1,12 @@
 import { Popover } from "antd";
 import { useEffect, useRef, useState } from "react";
 import type { AgentSession, Scope } from "../../api";
-import { ErrorAlert } from "../../components/common";
+import { Empty, ErrorAlert } from "../../components/common";
 import { ScopeSelect } from "../../components/common/ScopeSelect";
 import { TOOL_COUNT } from "../../components/global/tools";
 import { Icon } from "../../components/Icon";
 import { ResultContext } from "../../components/results/cards";
+import { reducedMotion } from "../../theme/motion";
 import { AiMessage } from "./ChainView";
 import { useAgentChat, useAgentHealth, useSessions, type ChatItem } from "./useAgentChat";
 import "./assistant.css";
@@ -63,16 +64,47 @@ export default function AssistantPanel({
     onItems?.(chat.items);
   }, [chat.items, onItems]);
 
-  // Follow the bottom while content grows.
+  // Follow the bottom only while the reader is at (or within 40 px of) it; otherwise offer 回到底部.
+  const pinned = useRef(true);
+  // Set by 回到底部 until a smooth scroll reaches the bottom, so its intermediate scroll events don't unpin.
+  const jumping = useRef(false);
+  const [away, setAway] = useState(false);
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const obs = new MutationObserver(() => {
-      el.scrollTop = el.scrollHeight;
-    });
+    const follow = () => {
+      if (pinned.current) el.scrollTop = el.scrollHeight;
+      else setAway(el.scrollHeight - el.clientHeight > 40);
+    };
+    const onScroll = () => {
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 40;
+      if (jumping.current) {
+        if (!atBottom) return;
+        jumping.current = false;
+      }
+      pinned.current = atBottom;
+      setAway(!atBottom);
+    };
+    const obs = new MutationObserver(follow);
     obs.observe(el, { childList: true, subtree: true, characterData: true });
-    return () => obs.disconnect();
+    const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(follow);
+    resize?.observe(el);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      obs.disconnect();
+      resize?.disconnect();
+      el.removeEventListener("scroll", onScroll);
+    };
   }, []);
+
+  function toBottom(smooth = true) {
+    const el = scroller.current;
+    if (!el) return;
+    pinned.current = true;
+    jumping.current = smooth && !reducedMotion();
+    setAway(false);
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth && !reducedMotion() ? "smooth" : "auto" });
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -86,6 +118,7 @@ export default function AssistantPanel({
     if (disabled || chat.running || !text.trim()) return;
     const sent = text;
     setText("");
+    toBottom(false);
     const ok = await chat.send(sent);
     if (!ok) setText(sent);
   }
@@ -99,32 +132,37 @@ export default function AssistantPanel({
   return (
     <ResultContext.Provider value={{ projectId, scope }}>
       <div className={`chat ${compact ? "compact" : ""}`}>
-        <div className="chat-scroll" ref={scroller}>
-          <div className="chat-log" aria-live="polite">
-            {chat.loading && <span className="skel h20" style={{ width: "60%" }} />}
-            <ErrorAlert error={chat.loadError} />
-            {chat.items.length === 0 && !chat.loading && !compact && (
-              <div className="empty" style={{ paddingTop: 80 }}>
-                <Icon name="spark" />
-                <span className="sm">针对「{scopeLabel || "当前范围"}」提问，可检索、统计并生成图表</span>
-              </div>
-            )}
-            {chat.items.map((it, i) =>
-              it.kind === "user" ? (
-                <div className="msg-user" key={it.id + i}>
-                  {it.content}
+        <div className="chat-body">
+          <div className="chat-scroll" ref={scroller}>
+            <div className="chat-log" aria-live="polite">
+              {chat.loading && <span className="skel h20" style={{ width: "60%" }} />}
+              <ErrorAlert error={chat.loadError} />
+              {chat.items.length === 0 && !chat.loading && !compact && (
+                <div style={{ paddingTop: 44 }}>
+                  <Empty icon="sparkles" text={`针对「${scopeLabel || "当前范围"}」提问，可检索、统计并生成图表`} />
                 </div>
-              ) : (
-                <AiMessage
-                  key={it.m.id || i}
-                  m={it.m}
-                  noteTitle={noteTitle}
-                  onRegenerate={i === chat.items.length - 1 && lastUser?.kind === "user" && !disabled ? () => void chat.send(lastUser.content) : undefined}
-                />
-              ),
-            )}
-            <ErrorAlert error={chat.error} />
+              )}
+              {chat.items.map((it, i) =>
+                it.kind === "user" ? (
+                  <div className="msg-user" key={it.id + i}>
+                    {it.content}
+                  </div>
+                ) : (
+                  <AiMessage
+                    key={it.m.id || i}
+                    m={it.m}
+                    noteTitle={noteTitle}
+                    onRegenerate={i === chat.items.length - 1 && lastUser?.kind === "user" && !disabled ? () => void chat.send(lastUser.content) : undefined}
+                  />
+                ),
+              )}
+              <ErrorAlert error={chat.error} />
+            </div>
           </div>
+          <button className="to-bottom" type="button" data-show={away} tabIndex={away ? 0 : -1} aria-hidden={!away} onClick={() => toBottom()}>
+            回到底部
+            <Icon name="arrowdown" size={14} />
+          </button>
         </div>
         <div className="composer">
           {compact && <HealthNotice compact />}

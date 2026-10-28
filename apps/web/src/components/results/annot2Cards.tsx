@@ -6,6 +6,7 @@ import { SpanText, type FlowSpan } from "../annot/SpanText";
 import { cpLength, labelColor } from "../annot/spans";
 import { Icon } from "../Icon";
 import { Card, ResultContext } from "./cards";
+import { Empty } from "../common";
 
 function annotateUrl(projectId: string, q: Record<string, string | number | undefined>) {
   const p = new URLSearchParams();
@@ -46,7 +47,7 @@ export function SpanViewCard(p: SpanViewProps) {
   return (
     <Card
       component="SpanView"
-      icon="pen"
+      icon="squaredashed"
       title="片段标注"
       meta={`句 ${n} · ${shown.length} 个片段`}
       pin={{ kind: "text", ref: { document_id: p.document_id }, text, source: `助手 · SpanView · 句 ${n}` }}
@@ -58,7 +59,7 @@ export function SpanViewCard(p: SpanViewProps) {
       }
     >
       <div className="ou-body">
-        {text ? <SpanText pieces={[{ key: "t", cp: 0, text }]} spans={shown} relations={relations} className="sm-size" label={text} /> : <div className="empty sm">没有文本</div>}
+        {text ? <SpanText pieces={[{ key: "t", cp: 0, text }]} spans={shown} relations={relations} className="sm-size" label={text} /> : <Empty icon="pilcrow" text="没有文本" />}
       </div>
     </Card>
   );
@@ -93,7 +94,7 @@ export function AlignmentGraphCard(p: AlignmentGraphProps) {
   return (
     <Card
       component="AlignmentGraph"
-      icon="align"
+      icon="languages"
       title="词对齐"
       meta={`${links.length} 组`}
       right={sugg > 0 ? <span className="tag t-run">{sugg} 组建议</span> : undefined}
@@ -105,7 +106,7 @@ export function AlignmentGraphCard(p: AlignmentGraphProps) {
         </Link>
       }
     >
-      <div className="ou-body">{src.length && tgt.length ? <AlignGraph src={src} tgt={tgt} links={links} /> : <div className="empty sm">没有词</div>}</div>
+      <div className="ou-body">{src.length && tgt.length ? <AlignGraph src={src} tgt={tgt} links={links} /> : <Empty icon="languages" text="没有词" />}</div>
     </Card>
   );
 }

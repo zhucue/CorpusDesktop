@@ -201,10 +201,12 @@ export function Progress({ done, total, state, thin }: { done: number; total: nu
 }
 
 /* ---------- empty state and errors ---------- */
-export function Empty({ icon = "info", text, children }: { icon?: IconName; text: ReactNode; children?: ReactNode }) {
+export function Empty({ icon = "inbox", text, children }: { icon?: IconName; text: ReactNode; children?: ReactNode }) {
   return (
     <div className="empty">
-      <Icon name={icon} />
+      <span className="empty-ic" aria-hidden>
+        <Icon name={icon} size={20} />
+      </span>
       <span className="sm">{text}</span>
       {children && <div className="row">{children}</div>}
     </div>

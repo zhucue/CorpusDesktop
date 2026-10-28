@@ -4,7 +4,9 @@ import { Link } from "react-router";
 import type { Job } from "../../api";
 import { isActiveJob, quietJobs, useBuiltinJobs, useMe, useProjectJobs } from "../../lib/data";
 import { fmt } from "../../lib/format";
-import { Progress, Sparkline } from "../common";
+import { Empty, Progress, Sparkline } from "../common";
+import { Icon } from "../Icon";
+import { jobKindIcon } from "../iconSets";
 
 export const jobKindLabels: Record<string, string> = {
   import: "导入",
@@ -98,12 +100,13 @@ export function TaskTray({ projectId, open, onToggle }: { projectId: string; ope
           </Link>
         </div>
         <div className="dp-body">
-          {shown.length === 0 && <div className="empty sm">暂无任务</div>}
+          {shown.length === 0 && <Empty icon="inbox" text="暂无任务" />}
           {shown.map((j) => {
             const deltas = (speed.current.get(j.id) ?? []).map((v, i, a) => (i ? v - a[i - 1] : 0)).slice(1);
             return (
               <div className="job-mini" key={j.id}>
                 <div className="row">
+                  <Icon name={jobKindIcon[j.kind] ?? "clock"} size={14} className="muted" />
                   <span className="grow ellipsis">{jobTitle(j)}</span>
                   {j.project_id === null && <span className="tag t-gray">内置</span>}
                   <span className="mono small muted">#{j.id.slice(0, 8)}</span>

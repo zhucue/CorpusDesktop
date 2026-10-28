@@ -129,3 +129,12 @@ export const plainText = (m: ChainMessage) =>
     .filter((p): p is { type: "text"; text: string } => p.type === "text")
     .map((p) => p.text)
     .join("\n\n");
+
+/** Thinking phase: no answer yet, or a tool is still running. */
+export const isThinking = (m: ChainMessage) => m.status === "running" && (m.answerAt == null || m.tools.some((t) => t.state === "running"));
+
+/** Reasoning length in characters, whitespace excluded. */
+export const thinkingChars = (m: ChainMessage) => Array.from(thinkingText(m).replace(/\s+/g, "")).length;
+
+/** 860 字 / 1.2k 字 */
+export const fmtChars = (n: number) => (n < 1000 ? `${n} 字` : `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k 字`);

@@ -3,8 +3,8 @@ import { App, Popconfirm } from "antd";
 import { useCallback, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { agentApi, errorText, type AgentSession, type Scope, type ToolCall } from "../../api";
-import { ErrorAlert } from "../../components/common";
-import { AGENT_TOOLS } from "../../components/global/tools";
+import { Empty, ErrorAlert } from "../../components/common";
+import { AGENT_TOOLS, TOOL_VIEW } from "../../components/global/tools";
 import { Icon } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
@@ -65,7 +65,7 @@ function SessionList({ projectId, current }: { projectId: string; current: strin
         新对话
       </button>
       <ErrorAlert error={sessions.error} />
-      {sessions.isSuccess && items.length === 0 && <div className="empty sm">暂无会话</div>}
+      {sessions.isSuccess && items.length === 0 && <Empty icon="messages" text="暂无会话" />}
       {items.map((s) => {
         const g = dayGroup(s.updated_at);
         const head = g !== group ? <div className="conv-group">{(group = g)}</div> : null;
@@ -111,7 +111,7 @@ function Rail({ projectId, scope, items }: { projectId: string; scope: Scope | n
     <aside className="rail" aria-label="上下文">
       <section>
         <h2>
-          <Icon name="db" size={14} />
+          <Icon name="library" size={14} />
           当前范围
         </h2>
         {info.corpus ? (
@@ -147,7 +147,9 @@ function Rail({ projectId, scope, items }: { projectId: string; scope: Scope | n
             <div className="ev" key={c.id}>
               <span className="cite">{i + 1}</span>
               <div style={{ minWidth: 0 }}>
-                <div className="mono small">{c.name}</div>
+                <div className="mono small">
+                  <Icon name={TOOL_VIEW[c.name]?.icon ?? "tool"} size={12} /> {c.name}
+                </div>
                 <div className="ellipsis">{href ? <Link to={href}>{c.result_summary || c.result_ref?.id}</Link> : c.result_summary}</div>
               </div>
             </div>
@@ -165,6 +167,7 @@ function Rail({ projectId, scope, items }: { projectId: string; scope: Scope | n
             <div className="tool-chips">
               {g.tools.map((t) => (
                 <span key={t} className={`chip static ${used.has(t) ? "used" : ""}`}>
+                  <Icon name={TOOL_VIEW[t]?.icon ?? "tool"} size={12} />
                   {t}
                 </span>
               ))}

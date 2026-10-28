@@ -49,20 +49,21 @@
         <div class="stage tall" id="s-think"><div id="think-log" class="col" style="gap:14px"></div></div>
         <div class="spec-info">
           <div class="row between"><h3>思考链：运行 → 工具 → 折叠 → 流式回答</h3><button class="btn xs" type="button" id="think-replay">重播</button></div>
-          <dl><dt>类</dt><dd><code>.think.running</code> <code>.step.active</code> <code>.step.done</code> <code>.caret</code> · <code>UI.agentDemo()</code></dd><dt>时长</dt><dd>标题切换 260ms · 完成勾 300ms + 360ms · 折叠 380ms · 逐字 16–32ms/2–3 字</dd><dt>缓动</dt><dd>cubic-bezier(.2,.8,.2,1)；勾选 cubic-bezier(.34,1.56,.64,1)</dd></dl>
+          <dl><dt>类</dt><dd><code>.think.running</code> <code>.step.active</code> <code>.step.done</code> <code>.caret</code> · <code>UI.agentDemo()</code></dd><dt>时长</dt><dd>标题切换 260ms · 状态点 300ms · 展开 / 折叠 380ms · 逐字 16–32ms/2–3 字</dd><dt>缓动</dt><dd>cubic-bezier(.2,.8,.2,1)；勾选 cubic-bezier(.34,1.56,.64,1)</dd></dl>
         </div>
       </article>
 
       <article class="card spec">
         <div class="stage" style="gap:10px">
-          <div><span class="think-label shimmer-text" style="font-weight:600;font-size:15px">正在检索语料…</span></div>
-          <ol class="steps">
-            <li class="step active"><span class="step-node"><span data-icon="search"></span></span><div class="step-card"><div class="step-top"><span class="step-tool">corpus.search</span><span class="step-res">运行中</span></div><div class="step-args">query=<b>"翻译/v +文化"</b></div></div></li>
-          </ol>
+          <div class="think running" data-open="false" style="width:100%">
+            <button class="think-head" type="button" aria-expanded="false"><span data-icon="spark" class="spark"></span><span class="think-label">思考中<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></span><span class="think-meta">3.2 秒 · 214 字</span><span class="think-tool">正在检索语料…</span></button>
+            <div class="think-peek"><div class="think-ticker" aria-hidden="true"><span>需要在子库「2015 年后」中查“翻译”作动词、同句含“文化”的用法。先用 翻译/v +文化 检索，确认命中规模。</span></div>
+              <ol class="steps"><li class="step active"><span data-icon="search" class="step-ic"></span><div class="step-row"><span class="step-title">检索语料</span><b class="step-key">"翻译/v +文化"</b><span class="step-res">运行中</span><span class="step-dot"></span></div></li></ol></div>
+          </div>
         </div>
         <div class="spec-info">
-          <h3>流光标题 · 进行中步骤</h3>
-          <dl><dt>类</dt><dd><code>.shimmer-text</code> <code>.step.active</code></dd><dt>时长</dt><dd>流光 1.8s · 脉冲环 1.4s · 扫光 1.5s，循环</dd><dt>缓动</dt><dd>linear / cubic-bezier(.65,0,.35,1)</dd></dl>
+          <h3>思考中单行指示 · 两行窥视</h3>
+          <dl><dt>类</dt><dd><code>.dots</code> <code>.think-peek</code> <code>.step.active</code></dd><dt>时长</dt><dd>点波 1.2s · 状态点脉冲 1.4s，循环；计时 0.1s 刷新</dd><dt>缓动</dt><dd>ease-in-out / cubic-bezier(.2,.8,.2,1)</dd></dl>
         </div>
       </article>
 
@@ -240,12 +241,12 @@
       <article class="card spec">
         <div class="stage" id="s-done" style="gap:6px;justify-content:flex-start;padding-top:14px">
           <ol class="steps">
-            <li class="step done"><span class="step-node"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="chk" pathLength="1" d="M20 6 9 17l-5-5"/></svg></span><div class="step-card"><div class="step-top"><span class="step-tool">kb.search</span><span class="step-res">3 个片段</span></div><div class="step-args">q=<b>"文化负载词 定义"</b></div></div></li>
+            <li class="step done"><span data-icon="book" class="step-ic"></span><div class="step-row"><span class="step-title">查阅知识库</span><b class="step-key">"文化负载词 定义"</b><span class="step-res">3 个片段</span><span class="step-dot"></span></div></li>
           </ol>
           <div class="dep" style="align-self:center" data-dep="博物馆/NOUN 翻译/VERB" data-arcs="1>2:obl" data-chips data-conf="2" id="chip-dep"></div>
         </div>
         <div class="spec-info">
-          <div class="row between"><h3>完成勾 · 标签确认</h3><span class="row gap-4"><button class="btn xs" type="button" data-replay="#s-done">重播</button><button class="btn xs" type="button" id="chip-ok">确认词性</button></span></div>
+          <div class="row between"><h3>完成状态点 · 标签确认</h3><span class="row gap-4"><button class="btn xs" type="button" data-replay="#s-done">重播</button><button class="btn xs" type="button" id="chip-ok">确认词性</button></span></div>
           <dl><dt>类</dt><dd><code>.step.done</code> <code>.chk</code> · <code>.pchip.conf.just</code></dd><dt>时长</dt><dd>节点 300ms · 勾 360ms（延迟 80ms）· 标签 320ms</dd><dt>缓动</dt><dd>cubic-bezier(.34,1.56,.64,1)</dd></dl>
         </div>
       </article>

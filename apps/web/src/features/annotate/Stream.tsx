@@ -107,7 +107,7 @@ export function Stream({
         {loading && docId ? (
           <Skeleton rows={5} />
         ) : items.length === 0 && docId ? (
-          <Empty icon="check" text={filter === "pending" ? `本文档没有待办${unit}` : `没有${unit}`}>
+          <Empty icon="circlecheck" text={filter === "pending" ? `本文档没有待办${unit}` : `没有${unit}`}>
             {filter === "pending" && onFilter && (
               <button className="btn s" type="button" onClick={() => onFilter("all")}>
                 显示全部

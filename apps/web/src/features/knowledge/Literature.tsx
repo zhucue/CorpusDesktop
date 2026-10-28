@@ -6,6 +6,7 @@ import { api, errorText, type Job, type KbChunk, type KbDocument, type Page } fr
 import { Empty, ErrorAlert, Progress, Skeleton } from "../../components/common";
 import { Markdown } from "../../components/common/Markdown";
 import { Icon } from "../../components/Icon";
+import { kbDocIcon } from "../../components/iconSets";
 import { useJob, useJobCreated } from "../../lib/data";
 import { fmt, fmtBytes, fmtShortTime, fmtTime } from "../../lib/format";
 import {
@@ -268,7 +269,7 @@ export function DocTable({ docs, onOpen, loading, error }: { docs: KbDocument[];
       {loading ? (
         <Skeleton rows={5} />
       ) : literature.length === 0 ? (
-        <Empty icon="book" text="还没有文献，拖入文件或粘贴网页链接导入" />
+        <Empty icon="bookopentext" text="还没有文献，拖入文件或粘贴网页链接导入" />
       ) : (
         <table className="tbl mid">
           <thead>
@@ -288,7 +289,12 @@ export function DocTable({ docs, onOpen, loading, error }: { docs: KbDocument[];
                     {d.title}
                   </button>
                 </td>
-                <td className="mono small">{docType(d)}</td>
+                <td className="mono small">
+                  <span className="row gap-4">
+                    <Icon name={kbDocIcon(d.kind, d.source, d.title)} size={14} className="muted" />
+                    {docType(d)}
+                  </span>
+                </td>
                 <td className="r num">{d.chunk_count ? fmt(d.chunk_count) : <span className="muted">—</span>}</td>
                 <td className="mono small muted">{fmtShortTime(d.created_at)}</td>
                 <td>
@@ -411,7 +417,10 @@ export function DocDrawer({
         d && (
           <span className="row" style={{ minWidth: 0 }}>
             <span className="ellipsis">{d.title}</span>
-            <span className="tag t-gray">{kindLabels[d.kind]}</span>
+            <span className="tag t-gray">
+              <Icon name={kbDocIcon(d.kind, d.source, d.title)} size={12} />
+              {kindLabels[d.kind]}
+            </span>
             <DocStatusTag doc={d} />
           </span>
         )

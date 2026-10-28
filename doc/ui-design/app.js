@@ -294,25 +294,34 @@
     }).then(function () { if (run && run.stopped) throw new Error('stopped'); });
   };
 
+  /* 紧凑思考指示（参照 Kimi CLI）：单行标题 + 两行窥视 + 当前工具行；点击展开 40vh 全文；回答开始折叠为痕迹行 */
   function thinkBlock() {
     var el = document.createElement('div');
     el.className = 'think running';
-    el.setAttribute('data-open', 'true');
+    el.setAttribute('data-open', 'false');
     el.innerHTML =
-      '<button class="think-head" type="button" aria-expanded="true">' + svg('spark', 'spark') +
-      '<span class="think-label shimmer-text">正在思考…</span><span class="think-meta"></span>' + svg('down', 'chev') + '</button>' +
-      '<div class="think-body"><div class="think-inner"><div class="think-flow"><div class="think-text"></div><ol class="steps"></ol></div></div></div>';
+      '<button class="think-head" type="button" aria-expanded="false">' + svg('spark', 'spark') +
+      '<span class="think-label">思考中<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></span><span class="think-meta"></span><span class="think-tool"></span>' + svg('down', 'chev') + '</button>' +
+      '<div class="think-peek"><div class="think-ticker" aria-hidden="true"><span></span></div><ol class="steps now"></ol></div>' +
+      '<div class="think-body"><div class="think-inner"><div class="think-scroll"><div class="think-text"></div><ol class="steps all"></ol></div></div></div>';
     el.querySelector('.think-head').addEventListener('click', function () {
       var open = el.getAttribute('data-open') !== 'true';
       el.setAttribute('data-open', open ? 'true' : 'false');
       this.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
+    var t0 = performance.now();
+    var text = el.querySelector('.think-text'), ticker = el.querySelector('.think-ticker span'), meta = el.querySelector('.think-meta');
+    el.chars = function () { return text.textContent.replace(/\s+/g, '').length; };
+    el.timer = setInterval(function () {
+      var n = el.chars();
+      meta.textContent = ((performance.now() - t0) / 1000).toFixed(1) + ' 秒' + (n ? ' · ' + (n < 1000 ? n + ' 字' : (n / 1000).toFixed(1) + 'k 字') : '');
+      ticker.textContent = text.textContent.slice(-400);
+    }, 100);
     return el;
   }
-  function setLabel(block, text, shimmer) {
-    var l = block.querySelector('.think-label');
-    l.textContent = text;
-    l.classList.toggle('shimmer-text', shimmer !== false);
+  function setLabel(block, text) {
+    var l = block.querySelector('.think-tool');
+    l.textContent = /^正在思考/.test(text) ? '' : text;
     l.classList.remove('swap'); void l.offsetWidth; l.classList.add('swap');
   }
 
@@ -361,9 +370,6 @@
     var run = { stopped: false, timers: [] };
     var log = opts.log;
     var cur = { block: null, flow: null, answer: null, tools: 0, t0: 0 };
-    var stepIcon = function (name) {
-      return '<span class="step-node">' + svg(name) + '</span>';
-    };
     var ops = {
       user: function (op) {
         var m = document.createElement('div');
@@ -388,33 +394,44 @@
       label: function (op) { setLabel(cur.block, op.text); return sleep(op.after || 120, run); },
       reason: function (op) {
         var p = document.createElement('div');
+        p.style.marginBottom = '6px';
         cur.block.querySelector('.think-text').appendChild(p);
         return streamHTML(p, op.text, run, 14).then(function () { return sleep(op.after || 200, run); });
       },
       tool: function (op) {
+        var key = /<b>(.*?)<\/b>/.exec(op.args);
         var li = document.createElement('li');
         li.className = 'step active';
-        li.innerHTML = stepIcon(op.icon || 'tool') +
-          '<div class="step-card"><div class="step-top"><span class="step-tool">' + op.tool + '</span><span class="step-title">' + op.title + '</span><span class="step-res">运行中</span></div>' +
-          '<div class="step-args">' + op.args + '</div></div>';
-        cur.block.querySelector('.steps').appendChild(li);
+        li.innerHTML = svg(op.icon || 'tool', 'step-ic') +
+          '<div class="step-row"><span class="step-title">' + op.title + '</span>' + (key ? '<b class="step-key">' + key[1] + '</b>' : '') +
+          '<span class="step-res">运行中</span><span class="step-dot"></span></div>' +
+          '<div class="step-args"><span class="step-tool">' + op.tool + '</span> ' + op.args + '</div>';
+        cur.block.querySelector('.steps.all').appendChild(li);
+        var now = li.cloneNode(true);
+        now.querySelector('.step-args').remove();
+        var nowList = cur.block.querySelector('.steps.now');
+        nowList.innerHTML = '';
+        nowList.appendChild(now);
         cur.tools++;
         if (op.label) setLabel(cur.block, op.label);
         if (op.hold) return new Promise(function () { /* 保持运行态，用于静态的“运行中”截面 */ });
         return sleep(op.dur || 1400, run).then(function () {
-          li.className = 'step done';
-          li.querySelector('.step-node').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="chk" pathLength="1" d="M20 6 9 17l-5-5"/></svg>';
-          li.querySelector('.step-res').textContent = op.res;
+          [li, now].forEach(function (x) { x.className = 'step done'; x.querySelector('.step-res').textContent = op.res; });
           if (op.onDone) op.onDone();
           return sleep(op.after || 350, run);
         });
       },
       done: function () {
         var secs = ((performance.now() - cur.t0) / 1000).toFixed(1);
+        var n = cur.block.chars();
+        clearInterval(cur.block.timer);
         cur.block.classList.remove('running');
-        setLabel(cur.block, '已思考 ' + secs + ' 秒 · ' + cur.tools + ' 次工具调用', false);
-        cur.block.setAttribute('data-open', 'false');
-        cur.block.querySelector('.think-head').setAttribute('aria-expanded', 'false');
+        var head = cur.block.querySelector('.think-head');
+        head.querySelector('.think-meta').textContent = '';
+        head.querySelector('.think-tool').textContent = '';
+        var l = head.querySelector('.think-label');
+        l.textContent = '已思考 ' + secs + ' 秒 · ' + cur.tools + ' 次工具调用' + (n ? ' · ' + (n < 1000 ? n + ' 字' : (n / 1000).toFixed(1) + 'k 字') : '');
+        l.classList.remove('swap'); void l.offsetWidth; l.classList.add('swap');
         return sleep(380, run);
       },
       say: function (op) {

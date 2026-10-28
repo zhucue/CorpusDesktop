@@ -66,7 +66,7 @@ export function DiffTab({ layer, docId, onOpen }: { layer: Layer; docId: string 
       {q.isPending && docId ? (
         <Skeleton rows={4} />
       ) : shown.length === 0 && !q.error ? (
-        <Empty icon="diff" text={onlyChanged ? "本文档没有改动" : "没有句子"} />
+        <Empty icon="compare" text={onlyChanged ? "本文档没有改动" : "没有句子"} />
       ) : (
         <div className="diff-list">
           {shown.map(({ s, toks, c }, i) => (
@@ -148,7 +148,7 @@ export function StatsTab({ layer }: { layer: Layer }) {
             <span className="small muted">有效标注</span>
           </div>
           {labels.length === 0 ? (
-            <Empty icon="chart" text="没有标签数据" />
+            <Empty icon="tags" text="没有标签数据" />
           ) : (
             <div className="stat-scroll">
               <table className="tbl stat-tbl">
@@ -200,7 +200,7 @@ export function StatsTab({ layer }: { layer: Layer }) {
           <span className="small muted">句</span>
         </div>
         {q.data.per_document.length === 0 ? (
-          <Empty icon="file" text="没有文档" />
+          <Empty icon="folderopen" text="没有文档" />
         ) : (
           <table className="tbl">
             <tbody>

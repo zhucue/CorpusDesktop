@@ -3,7 +3,7 @@ import { Select, Upload, type UploadFile } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { api, type Corpus, type Job, type Project, type SavedQuery, type SearchResult } from "../../api";
-import { Count, CorpusStatusTag, ErrorAlert, Monogram, Progress, QueryChip } from "../../components/common";
+import { Empty, Count, CorpusStatusTag, ErrorAlert, Monogram, Progress, QueryChip } from "../../components/common";
 import { Icon, type IconName } from "../../components/Icon";
 import { KwicTable } from "../../components/results/Kwic";
 import { isActiveJob, useCorpora, useCorpus, useJob, useProjectJobs, useProjects } from "../../lib/data";
@@ -120,21 +120,21 @@ export default function Onboarding() {
   const sums: { icon: IconName; title: React.ReactNode; sub: React.ReactNode; tag: string; cls: string }[] = [
     { icon: "folder", title: project?.name ?? name, sub: "仅成员可见", tag: projectId ? "已创建" : "未创建", cls: projectId ? "t-ok" : "t-gray" },
     {
-      icon: "db",
+      icon: "library",
       title: corpus.data?.name ?? "未选择语料",
       sub: corpus.data ? `${fmt(corpus.data.stats.sentences)} 句 · 索引 ${fmtVersion(corpus.data.index_version)}` : "",
       tag: ready ? "可检索" : "未就绪",
       cls: ready ? "t-ok" : "t-gray",
     },
     {
-      icon: "search",
+      icon: "textsearch",
       title: query ? <QueryChip q={query} /> : "未检索",
       sub: search.data ? `${search.data.counts.complete ? fmt(search.data.counts.hits) : "计算中"} 次命中${saveQuery.isSuccess ? " · 已保存查询" : ""}` : "",
       tag: saveQuery.isSuccess ? "已保存" : search.data ? "已检索" : "未检索",
       cls: search.data ? "t-ok" : "t-gray",
     },
     {
-      icon: "spark",
+      icon: "sparkles",
       title: "助手",
       sub: health.data?.ok ? `${health.data.model_id ?? ""} · ${TOOL_COUNT} 个工具` : (health.data?.reason ?? "不可用"),
       tag: health.data?.ok ? "可用" : "不可用",
@@ -320,7 +320,7 @@ export default function Onboarding() {
                       <KwicTable compact rows={search.data.items.map((h) => ({ id: h.hit_id, left: h.left, match: h.match, right: h.right, source: h.document_title }))} />
                     </div>
                   ) : (
-                    <div className="empty sm">没有命中</div>
+                    <Empty icon="searchx" text="没有命中" />
                   )}
                 </div>
               )}

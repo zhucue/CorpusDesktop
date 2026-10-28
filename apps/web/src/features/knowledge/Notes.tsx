@@ -170,7 +170,7 @@ export function NoteEditor({ note, editable }: { note: KbDocument; editable: boo
           <span className="small muted num">{refs.length}</span>
         </div>
         {refs.length === 0 ? (
-          <div className="empty sm">暂无引用。证据篮"加入笔记"或助手保存的内容会出现在这里</div>
+          <Empty icon="link" text={"暂无引用。证据篮\"加入笔记\"或助手保存的内容会出现在这里"} />
         ) : (
           <div className="card-pad col" style={{ gap: 6, paddingTop: 10 }}>
             {refs.map((r, i) => {
@@ -232,7 +232,7 @@ export default function NotesTab({
             新建笔记
           </button>
         )}
-        {notes.length === 0 && <div className="empty sm">暂无笔记</div>}
+        {notes.length === 0 && <Empty icon="notebookpen" text="暂无笔记" />}
         {notes.map((n) => (
           <button key={n.id} className={`list-item ${n.id === current ? "on" : ""}`} type="button" style={{ width: "100%" }} onClick={() => onSelect(n.id)}>
             <span className="grow" style={{ textAlign: "left" }}>
@@ -244,7 +244,7 @@ export default function NotesTab({
           </button>
         ))}
       </div>
-      {current ? <NotePane key={current} noteId={current} editable={editable} /> : <Empty icon="note" text="新建一篇笔记，或从证据篮、助手保存内容" />}
+      {current ? <NotePane key={current} noteId={current} editable={editable} /> : <Empty icon="notebookpen" text="新建一篇笔记，或从证据篮、助手保存内容" />}
     </section>
   );
 }

@@ -4,6 +4,7 @@ import { knowledgeHref, locatorText } from "../../features/knowledge/data";
 import { PinButton } from "../global/evidence";
 import { Icon } from "../Icon";
 import { Card, ResultContext } from "./cards";
+import { Empty } from "../common";
 
 /* ---------- TermCard ---------- */
 export interface TermCardProps {
@@ -23,7 +24,7 @@ export function TermCardView(p: TermCardProps) {
   return (
     <Card
       component="TermCard"
-      icon="term"
+      icon="booka"
       title="术语"
       meta={p.domain || undefined}
       right={p.status === "confirmed" ? <span className="tag t-ok">已确认</span> : <span className="tag t-gray">草稿</span>}
@@ -68,9 +69,9 @@ export function KbCitationCard(p: KbCitationProps) {
   const { projectId } = useContext(ResultContext);
   const items = (p.items ?? []).filter((x) => x && typeof x.document_id === "string");
   return (
-    <Card component="KbCitation" icon="book" title="知识库出处" right={`${items.length} 条`}>
+    <Card component="KbCitation" icon="textquote" title="知识库出处" right={`${items.length} 条`}>
       <div className="ou-body">
-        {items.length === 0 && <div className="empty sm">没有出处</div>}
+        {items.length === 0 && <Empty icon="textquote" text="没有出处" />}
         {items.map((x, i) => {
           const loc = locatorText(x.locator as never);
           return (

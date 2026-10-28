@@ -312,7 +312,7 @@ function HistoryPanel({
         </button>
       </div>
       <div className="hist-list">
-        {items.length === 0 && <div className="empty sm">暂无查询历史</div>}
+        {items.length === 0 && <Empty icon="history" text="暂无查询历史" />}
         {items.map((h, i) => (
           <button
             key={`${h.query}-${i}`}
@@ -942,7 +942,7 @@ export default function Search() {
                   ))}
                 </div>
               ) : result && result.items.length === 0 ? (
-                <Empty icon="search" text="没有命中" />
+                <Empty icon="searchx" text="没有命中" />
               ) : (
                 result && (
                   <div className="kwic-scroll" style={{ opacity: search.isFetching ? 0.55 : 1, transition: "opacity 200ms" }}>

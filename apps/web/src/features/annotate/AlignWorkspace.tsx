@@ -267,9 +267,9 @@ export default function AlignWorkspace({
       </div>
       <div className="col card-pad">
         {!docId ? (
-          <Empty icon="file" text={docs.isPending ? "加载中" : "该层没有文档"} />
+          <Empty icon="folderopen" text={docs.isPending ? "加载中" : "该层没有文档"} />
         ) : pairs.length === 0 ? (
-          list.isPending || one.isFetching ? <Skeleton rows={4} /> : <Empty icon="columns" text="选择句对" />
+          list.isPending || one.isFetching ? <Skeleton rows={4} /> : <Empty icon="languages" text="选择句对" />
         ) : (
           pairs.map((p) => (
             <div className="bi-pair" key={`${p.tgt?.document_id}:${p.tgt?.sentence_index}`}>

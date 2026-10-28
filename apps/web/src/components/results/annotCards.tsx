@@ -5,6 +5,7 @@ import { DepGraph } from "../annot/DepGraph";
 import { DiffRows, diffCounts } from "../annot/DiffRows";
 import { Icon } from "../Icon";
 import { Card, ResultContext } from "./cards";
+import { Empty } from "../common";
 
 function annotateUrl(projectId: string, q: Record<string, string | number | undefined>) {
   const p = new URLSearchParams();
@@ -38,7 +39,7 @@ export function DependencyTreeCard(p: DependencyTreeProps) {
   return (
     <Card
       component="DependencyTree"
-      icon="tree"
+      icon="listtree"
       title="依存树"
       meta={`句 ${p.sentence_index + 1}`}
       pin={{ kind: "text", ref: { document_id: p.document_id }, text, source: `助手 · DependencyTree · 句 ${p.sentence_index + 1}` }}
@@ -50,7 +51,7 @@ export function DependencyTreeCard(p: DependencyTreeProps) {
       }
     >
       <div className="ou-body depwrap left">
-        {tokens.length ? <DepGraph tokens={tokens} arcs={arcs} highlight={p.highlight} /> : <div className="empty sm">没有词</div>}
+        {tokens.length ? <DepGraph tokens={tokens} arcs={arcs} highlight={p.highlight} /> : <Empty icon="listtree" text="没有词" />}
       </div>
     </Card>
   );
@@ -71,7 +72,7 @@ export function AnnotationDiffCard(p: AnnotationDiffProps) {
   return (
     <Card
       component="AnnotationDiff"
-      icon="diff"
+      icon="compare"
       title="预标差异"
       meta={`句 ${p.sentence_index + 1}`}
       right={
@@ -88,7 +89,7 @@ export function AnnotationDiffCard(p: AnnotationDiffProps) {
         </Link>
       }
     >
-      <div className="ou-body">{tokens.length ? <DiffRows tokens={tokens} /> : <div className="empty sm">无差异</div>}</div>
+      <div className="ou-body">{tokens.length ? <DiffRows tokens={tokens} /> : <Empty icon="circlecheck" text="无差异" />}</div>
     </Card>
   );
 }

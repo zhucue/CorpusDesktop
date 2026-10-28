@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { api, type ContextResult, type EvidenceInput, type Hit, type Layer } from "../../api";
 import { AlignGraph } from "../../components/annot/AlignGraph";
-import { ErrorAlert, Skeleton } from "../../components/common";
+import { Empty, ErrorAlert, Skeleton } from "../../components/common";
 import { PinButton } from "../../components/global/evidence";
 import { Icon } from "../../components/Icon";
 import { markTerms } from "../../components/results/Kwic";
@@ -128,7 +128,7 @@ export default function ContextInspector({
         )}
       </div>
       {!hit ? (
-        <div className="empty sm">选择一行查看上下文</div>
+        <Empty icon="textquote" text="选择一行查看上下文" />
       ) : (
         <>
           <div className="insp-body">

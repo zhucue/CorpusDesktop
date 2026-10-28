@@ -320,7 +320,7 @@ export function AgreementTab({ layer, labels, canAdjudicate }: { layer: Layer; l
         {dis.isPending ? (
           <Skeleton rows={4} />
         ) : items.length === 0 && !dis.error ? (
-          <Empty icon="check" text={only ? "没有未仲裁的分歧" : "没有分歧"} />
+          <Empty icon="circlecheck" text={only ? "没有未仲裁的分歧" : "没有分歧"} />
         ) : (
           <div className="diff-list">
             {items.map((d) => (

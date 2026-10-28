@@ -5,6 +5,7 @@ import { Link, useSearchParams } from "react-router";
 import { api, errorText, type Job, type Layer, type LayerDocument } from "../../api";
 import { Empty, ErrorAlert, exportTip, Skeleton, Tip } from "../../components/common";
 import { Icon } from "../../components/Icon";
+import { layerIcon } from "../../components/iconSets";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
 import { canEdit, useCorpora, useJob, useJobCreated, useMe, useProject, useProjectId } from "../../lib/data";
@@ -64,6 +65,7 @@ function LayerItem({
             <span className="li-title">
               <span className="ellipsis">{layer.name}</span>
               <span className="tag t-gray" style={{ marginLeft: "auto" }}>
+                <Icon name={layerIcon[layer.kind]} size={12} />
                 {kindLabels[layer.kind]}
               </span>
             </span>
@@ -286,7 +288,7 @@ export default function Annotate() {
         ) : list.length === 0 ? (
           <section className="card empty-hero dotgrid" aria-label="没有标注层">
             <span className="eh-ic">
-              <Icon name="pen" />
+              <Icon name="highlighter" />
             </span>
             <h3>还没有标注层</h3>
             <div className="row">
@@ -299,7 +301,7 @@ export default function Annotate() {
                 )
               ) : (
                 <Link className="btn p" to={`/p/${projectId}/corpora`}>
-                  <Icon name="db" size={14} />
+                  <Icon name="library" size={14} />
                   先导入语料
                 </Link>
               )}
@@ -314,7 +316,7 @@ export default function Annotate() {
             <Workspace key={layer.id} layer={layer} projectId={projectId} canAnnotate={canAnnotate} readOnlyNote={readOnlyNote} leftTop={layerList} />
           )
         ) : (
-          <Empty icon="pen" text="选择标注层" />
+          <Empty icon="highlighter" text="选择标注层" />
         )}
       </div>
       <NewLayerDialog

@@ -6,6 +6,7 @@ import { MAX_PAGE_SIZE, api, errorText, type Job, type MetadataField, type Page,
 import { Empty, ErrorAlert, exportTip, Skeleton, Tip } from "../../components/common";
 import { ScopeSelect } from "../../components/common/ScopeSelect";
 import { Icon } from "../../components/Icon";
+import { statIcon } from "../../components/iconSets";
 import { download, type EChartHandle } from "../../components/results/EChart";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
@@ -322,7 +323,7 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
         </Tip>
       </div>
       {stat.rows.length === 0 ? (
-        <Empty icon="chart" text={`当前参数下无结果${(stat.params as { min_freq?: number }).min_freq ? `（最低频次 ${(stat.params as { min_freq?: number }).min_freq}）` : ""}`} />
+        <Empty icon="barchart" text={`当前参数下无结果${(stat.params as { min_freq?: number }).min_freq ? `（最低频次 ${(stat.params as { min_freq?: number }).min_freq}）` : ""}`} />
       ) : (
         <div className="stat-scroll">
           <StatTable stat={stat} projectId={projectId} highlight={measure} selected={picked} cellBar={stat.method === "ngrams" ? "freq" : undefined} />
@@ -385,11 +386,14 @@ function SavedResults({ open, onClose, projectId, onOpen }: { open: boolean; onC
     <Drawer open={open} onClose={onClose} width={420} title="统计结果">
       <ErrorAlert error={list.error} />
       {list.isPending && <Skeleton />}
-      {list.data?.items.length === 0 && <div className="empty sm">暂无统计结果</div>}
+      {list.data?.items.length === 0 && <Empty icon="barchart" text="暂无统计结果" />}
       <div className="col" style={{ gap: 4 }}>
         {list.data?.items.map((s) => (
           <div key={s.id} className="list-item" role="button" tabIndex={0} onClick={() => onOpen(s)} onKeyDown={(e) => e.key === "Enter" && onOpen(s)}>
-            <span className="tag t-info">{methodLabels[s.method]}</span>
+            <span className="tag t-info">
+              <Icon name={statIcon[s.method] ?? "barchart"} size={12} />
+              {methodLabels[s.method]}
+            </span>
             <div className="grow col" style={{ gap: 2 }}>
               <span className="li-title ellipsis">{summary(s)}</span>
               <span className="small muted num">
@@ -489,7 +493,7 @@ export default function Stats() {
         <Tabs
           activeKey={tab}
           onChange={(k) => setTab(k as StatMethod)}
-          items={METHODS.map((m) => ({ key: m, label: methodLabels[m] }))}
+          items={METHODS.map((m) => ({ key: m, label: methodLabels[m], icon: <Icon name={statIcon[m]} size={14} /> }))}
           className="stat-tabs"
         />
         <div className="col gap-20 panel-in" key={tab}>
@@ -524,7 +528,7 @@ export default function Stats() {
             </div>
           )}
           {!running && stat && <ResultView key={stat.id} stat={stat} projectId={projectId} chartRef={chartRef} />}
-          {!running && !stat && !error && <Empty icon="chart" text="设置参数后点“计算”" />}
+          {!running && !stat && !error && <Empty icon="sigma" text="设置参数后点“计算”" />}
           {tab === "frequency" && alignLayers.length > 0 && <AlignmentStatsCard projectId={projectId} layers={alignLayers} />}
         </div>
       </div>

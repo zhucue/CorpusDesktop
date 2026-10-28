@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Icon } from "../../components/Icon";
+import { Icon, type IconName } from "../../components/Icon";
+import { kbIcon } from "../../components/iconSets";
 import { PageHeader } from "../../components/shell/AppShell";
 import { canEdit, useProject, useProjectId } from "../../lib/data";
 import { fmt } from "../../lib/format";
@@ -12,11 +13,11 @@ import NotesTab from "./Notes";
 import TermsTab, { useTermExport } from "./Terms";
 import "./knowledge.css";
 
-const TABS: [KbTab, string][] = [
-  ["lit", "文献"],
-  ["terms", "术语"],
-  ["guides", "规范"],
-  ["notes", "笔记"],
+const TABS: [KbTab, string, IconName][] = [
+  ["lit", "文献", kbIcon.literature],
+  ["terms", "术语", kbIcon.term],
+  ["guides", "规范", kbIcon.guideline],
+  ["notes", "笔记", kbIcon.note],
 ];
 
 export default function Knowledge() {
@@ -95,7 +96,7 @@ export default function Knowledge() {
       <div className="content kb">
         <KbSearch projectId={projectId} />
         <div className="tabs" role="tablist" aria-label="分区" ref={tabsRef}>
-          {TABS.map(([k, label]) => (
+          {TABS.map(([k, label, icon]) => (
             <button
               key={k}
               role="tab"
@@ -104,7 +105,7 @@ export default function Knowledge() {
               aria-controls={`kb-p-${k}`}
               onClick={() => set({ tab: k, doc: null, chunk: null, term: null, tq: null })}
             >
-              {label} <span className="num muted small">{fmt(counts[k])}</span>
+              <Icon name={icon} size={14} /> {label} <span className="num muted small">{fmt(counts[k])}</span>
             </button>
           ))}
           <span className="tab-ink" aria-hidden style={{ transform: `translateX(${ink?.x ?? 0}px)`, width: ink?.w ?? 0 }} />

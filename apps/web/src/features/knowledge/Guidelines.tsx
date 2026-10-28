@@ -162,7 +162,7 @@ export default function GuidelinesTab({
             新建规范
           </button>
         )}
-        {guides.length === 0 && <div className="empty sm">暂无规范</div>}
+        {guides.length === 0 && <Empty icon="scrolltext" text="暂无规范" />}
         {guides.map((g) => {
           const ls = (labelSets.data ?? []).find((l) => l.id === g.meta?.label_set_id);
           return (
@@ -177,7 +177,7 @@ export default function GuidelinesTab({
           );
         })}
       </div>
-      {current ? <GuidePane key={current} id={current} editable={editable} /> : <Empty icon="filetext" text="新建一份标注规范，关联到标签集" />}
+      {current ? <GuidePane key={current} id={current} editable={editable} /> : <Empty icon="scrolltext" text="新建一份标注规范，关联到标签集" />}
     </section>
   );
 }

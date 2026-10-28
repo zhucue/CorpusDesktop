@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { MAX_PAGE_SIZE, api, errorText, type Doc, type LabelSet, type Layer, type LayerKind, type Page } from "../../api";
 import { ErrorAlert } from "../../components/common";
 import { Icon } from "../../components/Icon";
+import { layerIcon } from "../../components/iconSets";
 import { useCorpora, useJobCreated } from "../../lib/data";
 import { useKbDocuments } from "../knowledge/data";
 import { useLabelSets, useLayers } from "./data";
@@ -186,6 +187,7 @@ export default function NewLayerDialog({
           <div className="seg-mini" role="tablist" aria-label="类型">
             {KINDS.map((k) => (
               <button key={k} type="button" role="tab" aria-selected={kind === k} onClick={() => form.setFieldValue("kind", k)}>
+                <Icon name={layerIcon[k]} size={14} />
                 {kindLabels[k]}
               </button>
             ))}

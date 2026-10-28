@@ -2,6 +2,9 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+// Node global; the web tsconfig has no @types/node.
+declare const process: { env: Record<string, string | undefined> };
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -9,9 +12,10 @@ export default defineConfig({
     port: 5173,
     // The API checks Origin on non-GET requests: its PUBLIC_ORIGIN must include http://127.0.0.1:5173 in dev.
     proxy: {
-      "/api": "http://127.0.0.1:8000",
+      // VITE_PROXY_TARGET=http://127.0.0.1:8088 points both at the Compose nginx instead.
+      "/api": process.env.VITE_PROXY_TARGET ?? "http://127.0.0.1:8000",
       // Agent service (services/agent, PORT 8700 as in deploy/nginx.conf); SSE passes through unbuffered.
-      "/agent": "http://127.0.0.1:8700",
+      "/agent": process.env.VITE_PROXY_TARGET ?? "http://127.0.0.1:8700",
     },
   },
   build: {

@@ -272,7 +272,7 @@ export default function Workspace({
         {list.isPending && docId ? (
           <Skeleton rows={5} />
         ) : items.length === 0 && docId ? (
-          <Empty icon="check" text={statusFilter === "pending" ? "本文档没有待办句子" : "没有句子"}>
+          <Empty icon="circlecheck" text={statusFilter === "pending" ? "本文档没有待办句子" : "没有句子"}>
             {statusFilter === "pending" && (
               <button className="btn s" type="button" onClick={() => setStatusFilter("all")}>
                 显示全部
@@ -343,9 +343,9 @@ export default function Workspace({
       <div className="card-pad">
         <ErrorAlert error={sent.error} />
         {!docId ? (
-          <Empty icon="file" text={docs.isPending ? "加载中" : "该层没有文档"} />
+          <Empty icon="folderopen" text={docs.isPending ? "加载中" : "该层没有文档"} />
         ) : !s ? (
-          sent.isFetching || list.isPending ? <Skeleton rows={3} /> : <Empty icon="filetext" text="选择句子" />
+          sent.isFetching || list.isPending ? <Skeleton rows={3} /> : <Empty icon="pilcrow" text="选择句子" />
         ) : layer.kind === "pos" ? (
           <PosRow views={views} selected={curTok} onSelect={select} posColor={posColor} />
         ) : (

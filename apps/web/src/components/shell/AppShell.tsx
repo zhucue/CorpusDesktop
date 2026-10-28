@@ -12,18 +12,19 @@ import { EvidenceBasket, EvidenceProvider } from "../global/evidence";
 import KeysOverlay from "../global/KeysOverlay";
 import { TaskTray } from "../global/TaskTray";
 import { Icon, type IconName } from "../Icon";
+import { pageIcon } from "../iconSets";
 import { ShellProvider, useShell } from "./shell";
 
 const AssistantDrawer = lazy(() => import("../../features/assistant/AssistantDrawer"));
 
 const NAV: [string, string, IconName][] = [
-  ["corpora", "语料库", "db"],
-  ["search", "检索", "search"],
-  ["stats", "统计", "chart"],
-  ["annotate", "标注", "pen"],
-  ["knowledge", "知识库", "book"],
-  ["assistant", "助手", "spark"],
-  ["jobs", "任务", "clock"],
+  ["corpora", "语料库", pageIcon.corpora],
+  ["search", "检索", pageIcon.search],
+  ["stats", "统计", pageIcon.stats],
+  ["annotate", "标注", pageIcon.annotate],
+  ["knowledge", "知识库", pageIcon.knowledge],
+  ["assistant", "助手", pageIcon.assistant],
+  ["jobs", "任务", pageIcon.jobs],
 ];
 const EVIDENCE_PAGES = ["search", "stats", "assistant", "annotate", "knowledge"];
 
@@ -96,7 +97,7 @@ function SideNav() {
       </button>
       <NavList items={NAV} projectId={projectId} />
       <div className="side-spacer" />
-      <NavList items={[["settings", "项目设置", "sliders"]]} projectId={projectId} />
+      <NavList items={[["settings", "项目设置", pageIcon.settings]]} projectId={projectId} />
       <div className="me">
         <Avatar name={me.data?.display_name || me.data?.email || "?"} />
         <div className="sm grow" style={{ minWidth: 0 }}>
