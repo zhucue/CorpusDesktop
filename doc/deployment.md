@@ -35,6 +35,7 @@ nginx 把 `/api/` 反代到 api、`/agent/` 反代到 agent（SSE：关闭缓冲
 | MODEL_CONTEXT_WINDOW、MODEL_MAX_TOKENS、MODEL_TIMEOUT_MS、MODEL_REASONING | 可选 |
 | EMBED_PROVIDER、EMBED_MODEL、EMBED_BASE_URL、EMBED_API_KEY、EMBED_DIM | 向量模型；默认本地 `paraphrase-multilingual-MiniLM-L12-v2`（384 维），远程须 384 维 |
 | MODELS_DIR、HF_HOME | 模型缓存目录（容器内 `/models`） |
+| SEARCH_COUNT_TIMEOUT | 检索完整计数的超时秒数，默认 20；超时后页面显示"计算中"并可重取 |
 
 密钥只放在 `deploy/.env`，不入库、不放 `tmp/`。
 

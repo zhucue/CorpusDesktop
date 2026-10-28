@@ -316,11 +316,11 @@ NLP：中文分词与词性用 jieba（固定词典、关闭 HMM），英文分�
 | --- | --- | --- |
 | P1 语料与检索 | 登录、项目、成员角色；语料导入（txt / docx / csv / tsv / conllu / tmx / Tatoeba）；Stanza 分词词性依存；CWB 索引；类 CCL 查询式；KWIC、上下文、对齐句；子库；保存查询；CSV / XLSX 导出；任务系统 | 已实现，联调通过（`ab8e90b`）；Tatoeba 全量导入与内置语料发布未跑 |
 | P2 统计与 Agent | 频次、n-gram、搭配、关键词、分布；证据篮；agent 服务（Pi、19 工具、OpenUI Lang）；前端按设计稿定稿（主题、外壳、命令面板、任务托盘、深色模式、统计页、助手页与抽屉、引导页、错误边界） | 已实现，联调通过（`18b0ab1`）；真实模型未验 |
-| P2 补 | 真实模型接入验收（30 个真实任务、引用准确性）；中文分词词性切换为 jieba；Tatoeba 全量导入与内置语料发布；管理员维护内置语料页面 | 真实模型已接通并完成 1 次完整对话（14 次工具调用、3 个组件）；jieba 切换进行中 |
-| P3 标注一 | 标注层、标签集、annotations 表（source / status / revision）；词性与依存预标任务（Stanza，可选 HanLP 对比）；校对工作区（词性点选、依存弧线拖拽、键盘快捷键、进度环）；AI 与人工差异视图；确认后写入 CWB 位置属性并重建索引；`{dep=}` 与词性查询接入检索与统计；标注统计；Agent 工具 annot.*；OpenUI 组件 DependencyTree、AnnotationDiff；导出 CoNLL-U | 待开始 |
-| P4 知识库 | knowledge_bases、kb_documents、kb_chunks、kb_terms 表与 pgvector；PDF / DOCX / Markdown / TXT / URL 导入与分段向量化；术语表（手工、从双语语料与文献抽取）；标注规范；研究笔记（证据篮与助手草稿写入）；混合检索；kb.search / kb.save / kb.extract_terms / kb.summarize 工具；OpenUI 组件 TermCard、KbCitation；TBX / CSV 导出；知识库页面 | 待开始 |
-| P5 标注二 | 自定义片段与关系标注（标签集、文本高亮、连线、LLM 预标按规范）；双语句级与词级对齐（候选生成、连线图编辑、确认）；学习者偏误与翻译策略标签集模板；多人标注一致性（kappa、alpha）与仲裁；OpenUI 组件 AlignmentGraph；导出 brat standoff、JSON、TMX；按自定义标签检索 `[标签]` | 待开始 |
-| P6 收尾 | 前端完成度专项审查（对照设计方案、设计稿与契约逐页逐状态核对并补齐）；维基中英子集内置语料；UD 中文树库内置；权限与撤销回归；备份恢复说明；性能基线（Tatoeba 全量检索与统计耗时）；部署文档；README；两条研究流程端到端验收 | 待开始 |
+| P2 补 | 真实模型接入验收；中文分词词性切换为 jieba；Tatoeba 全量导入与内置语料发布；管理员维护内置语料页面 | 真实模型已在 P2–P5 验收中使用（对话、预标、摘要、抽取、对齐）；jieba 已完成；内置语料导入与管理员页面在 P6-2 |
+| P3 标注一 | 标注层、标签集、annotations 表（source / status / revision）；词性与依存预标任务（Stanza，可选 HanLP 对比）；校对工作区（词性点选、依存弧线拖拽、键盘快捷键、进度环）；AI 与人工差异视图；确认后写入 CWB 位置属性并重建索引；`{dep=}` 与词性查询接入检索与统计；标注统计；Agent 工具 annot.*；OpenUI 组件 DependencyTree、AnnotationDiff；导出 CoNLL-U | 已实现，联调通过 |
+| P4 知识库 | knowledge_bases、kb_documents、kb_chunks、kb_terms 表与 pgvector；PDF / DOCX / Markdown / TXT / URL 导入与分段向量化；术语表（手工、从双语语料与文献抽取）；标注规范；研究笔记（证据篮与助手草稿写入）；混合检索；kb.search / kb.save / kb.extract_terms / kb.summarize 工具；OpenUI 组件 TermCard、KbCitation；TBX / CSV 导出；知识库页面 | 已实现，联调通过 |
+| P5 标注二 | 自定义片段与关系标注（标签集、文本高亮、连线、LLM 预标按规范）；双语句级与词级对齐（候选生成、连线图编辑、确认）；学习者偏误与翻译策略标签集模板；多人标注一致性（kappa、alpha）与仲裁；OpenUI 组件 AlignmentGraph；导出 brat standoff、JSON、TMX；按自定义标签检索 `[标签]` | 已实现，联调通过 |
+| P6 收尾 | 前端完成度专项审查（对照设计方案、设计稿与契约逐页逐状态核对并补齐）；维基中英子集内置语料；UD 中文树库内置；权限与撤销回归；备份恢复说明；性能基线（Tatoeba 全量检索与统计耗时）；部署文档；README；两条研究流程端到端验收 | 进行中：前端审查、权限回归、备份恢复已完成；内置语料导入、性能基线、干净环境验收待完成 |
 | 二期 | 命名实体、句子与文档分类、语义检索、更多内置语料、实时多人协作 | 不在首版 |
 
 贯穿各阶段：每阶段先写 `contracts/pN.md`，三方并行实现，整栈联调后提交；设计文档、Word、change-log 同批更新；每个新业务能力同批注册 Agent 工具与 OpenUI 组件。
