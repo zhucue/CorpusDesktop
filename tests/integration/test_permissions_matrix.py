@@ -58,6 +58,10 @@ MANAGE_H = exp(OK, 403, 403, 403, 404, 404, 403)
 ANYONE = exp(OK, OK, OK, OK, OK, OK, OK)
 COOKIE = {**ANYONE, "bearer": 403}
 ADMIN = exp(403, 403, 403, 403, 403, OK, 403)
+ADMIN_FLAG = {**ADMIN, "admin": 422}  # admin without builtin=1
+CREATOR = exp(OK, 403, 403, 403, 404, 404, OK)  # single-mode layer: creator only
+CREATOR_H = {**CREATOR, "bearer": 403}
+JOB_OWN = exp(OK, OK, 403, OK, 404, 404, OK)  # viewer's job: creator, owner, editor
 AGENT_LIST = exp(OK, OK, OK, OK, 404, 404, 401)
 AGENT_OWN = exp(OK, 404, 404, 404, 404, 404, 401)
 
@@ -371,6 +375,13 @@ def world():
     )
     assert wait_job(o, export["id"])["state"] == "succeeded"
     ids["export_job"] = export["id"]
+    viewer_export = u["viewer"].ok(
+        "POST",
+        "/api/search/export",
+        json={"scope": scope, "query": "language", "format": "csv"},
+    )
+    assert wait_job(u["viewer"], viewer_export["id"])["state"] == "succeeded"
+    ids["viewer_job"] = viewer_export["id"]
     ids["note"] = o.ok(
         "POST",
         f"/api/projects/{p}/kb/documents",
@@ -680,7 +691,7 @@ def build_cases(w: World):
         C(
             "语料",
             "POST /corpora/{id}/documents",
-            WRITE,
+            WRITE_H,
             lambda c, x, r: upload(c, x["id"], txt(1)),
             fresh_corpus,
         ),
@@ -696,21 +707,21 @@ def build_cases(w: World):
         C(
             "语料",
             "DELETE documents/{doc}",
-            WRITE,
+            WRITE_H,
             lambda c, x, r: c.delete(f"/api/corpora/{i['victim']}/documents/{x['id']}"),
             fresh("victim_doc"),
         ),
         C(
             "语料",
             "POST reindex",
-            WRITE,
+            WRITE_H,
             lambda c, x, r: c.post(f"/api/corpora/{x['id']}/reindex"),
             fresh_corpus,
         ),
         C(
             "语料",
             "DELETE /corpora/{id}",
-            WRITE,
+            WRITE_H,
             lambda c, x, r: c.delete(f"/api/corpora/{x['id']}"),
             fresh_corpus,
         ),
@@ -768,7 +779,7 @@ def build_cases(w: World):
         C(
             "子库",
             "DELETE /subcorpora/{id}",
-            WRITE,
+            WRITE_H,
             lambda c, x, r: c.delete(f"/api/subcorpora/{x['id']}"),
             fresh("subcorpus"),
         ),
@@ -832,7 +843,7 @@ def build_cases(w: World):
         C(
             "检索",
             "DELETE /queries/{id}",
-            WRITE,
+            WRITE_H,
             lambda c, x, r: c.delete(f"/api/queries/{x['id']}"),
             fresh("query"),
         ),
@@ -877,7 +888,7 @@ def build_cases(w: World):
         C(
             "统计",
             "DELETE /stats/{id}",
-            WRITE,
+            WRITE_H,
             lambda c, x, r: c.delete(f"/api/stats/{x['id']}"),
             fresh("stat"),
         ),
@@ -908,7 +919,7 @@ def build_cases(w: World):
         C(
             "证据",
             "DELETE /evidence/{id}",
-            WRITE,
+            WRITE_H,
             lambda c, x, r: c.delete(f"/api/evidence/{x['id']}"),
             fresh("evidence"),
         ),
@@ -950,6 +961,30 @@ def build_cases(w: World):
             "POST /jobs/{id}/retry",
             WRITE,
             lambda c, x, r: c.post(f"/api/jobs/{i['export_job']}/retry"),
+        ),
+        C(
+            "任务",
+            "POST cancel (viewer's job)",
+            JOB_OWN,
+            lambda c, x, r: c.post(f"/api/jobs/{i['viewer_job']}/cancel"),
+        ),
+        C(
+            "任务",
+            "POST retry (viewer's job)",
+            JOB_OWN,
+            lambda c, x, r: c.post(f"/api/jobs/{i['viewer_job']}/retry"),
+        ),
+        C(
+            "任务",
+            "GET /jobs?builtin=1",
+            ADMIN,
+            lambda c, x, r: c.get("/api/jobs", params={"builtin": 1}),
+        ),
+        C(
+            "任务",
+            "GET /jobs (no builtin)",
+            ADMIN_FLAG,
+            lambda c, x, r: c.get("/api/jobs"),
         ),
         # label sets
         C(
@@ -1051,7 +1086,7 @@ def build_cases(w: World):
         C(
             "标注层",
             "POST annotations",
-            ANNOT_H,
+            CREATOR_H,
             lambda c, x, r: c.post(
                 f"/api/layers/{i['layer_pos']}/annotations",
                 json={
@@ -1065,7 +1100,7 @@ def build_cases(w: World):
         C(
             "标注层",
             "POST sentence confirm",
-            ANNOT_H,
+            CREATOR_H,
             lambda c, x, r: c.post(
                 f"/api/layers/{i['layer_pos']}/sentences/{doc_en}/0/confirm", json={}
             ),
@@ -1073,7 +1108,7 @@ def build_cases(w: World):
         C(
             "标注层",
             "POST sentence reset",
-            ANNOT_H,
+            CREATOR_H,
             lambda c, x, r: c.post(
                 f"/api/layers/{i['layer_pos']}/sentences/{doc_en}/0/reset", json={}
             ),
@@ -1101,7 +1136,7 @@ def build_cases(w: World):
         C(
             "标注层",
             "POST suggest",
-            ANNOT,
+            CREATOR,
             lambda c, x, r: c.post(
                 f"/api/layers/{i['layer_pos']}/suggest",
                 json={
@@ -1122,7 +1157,7 @@ def build_cases(w: World):
         C(
             "片段",
             "POST spans",
-            ANNOT_H,
+            CREATOR_H,
             lambda c, x, r: c.post(
                 f"/api/layers/{i['layer_span']}/spans", json=span_body(r)
             ),
@@ -1130,7 +1165,7 @@ def build_cases(w: World):
         C(
             "片段",
             "PATCH spans/{id}",
-            ANNOT_H,
+            CREATOR_H,
             lambda c, x, r: c.patch(
                 f"/api/layers/{i['layer_span']}/spans/{x['id']}",
                 json={"action": "confirm"},
@@ -1140,14 +1175,14 @@ def build_cases(w: World):
         C(
             "片段",
             "DELETE spans/{id}",
-            ANNOT_H,
+            CREATOR_H,
             lambda c, x, r: c.delete(f"/api/layers/{i['layer_span']}/spans/{x['id']}"),
             span_maker,
         ),
         C(
             "片段",
             "POST relations",
-            ANNOT_H,
+            CREATOR_H,
             lambda c, x, r: c.post(
                 f"/api/layers/{i['layer_rel']}/relations",
                 json={
@@ -1161,7 +1196,7 @@ def build_cases(w: World):
         C(
             "片段",
             "PATCH relations/{id}",
-            ANNOT_H,
+            CREATOR_H,
             lambda c, x, r: c.patch(
                 f"/api/layers/{i['layer_rel']}/relations/{x['rel']['id']}",
                 json={"action": "confirm"},
@@ -1171,7 +1206,7 @@ def build_cases(w: World):
         C(
             "片段",
             "DELETE relations/{id}",
-            ANNOT_H,
+            CREATOR_H,
             lambda c, x, r: c.delete(
                 f"/api/layers/{i['layer_rel']}/relations/{x['rel']['id']}"
             ),
@@ -1180,7 +1215,7 @@ def build_cases(w: World):
         C(
             "片段",
             "POST spans/suggest",
-            ANNOT,
+            CREATOR,
             lambda c, x, r: c.post(
                 f"/api/layers/{i['layer_span']}/spans/suggest",
                 json={
@@ -1206,7 +1241,7 @@ def build_cases(w: World):
         C(
             "对齐",
             "POST alignments",
-            ANNOT_H,
+            CREATOR_H,
             lambda c, x, r: c.post(
                 f"/api/layers/{i['layer_align']}/alignments",
                 json={
@@ -1220,7 +1255,7 @@ def build_cases(w: World):
         C(
             "对齐",
             "PATCH alignments/{id}",
-            ANNOT_H,
+            CREATOR_H,
             lambda c, x, r: c.patch(
                 f"/api/layers/{i['layer_align']}/alignments/{x['id']}",
                 json={"action": "confirm"},
@@ -1230,7 +1265,7 @@ def build_cases(w: World):
         C(
             "对齐",
             "POST alignments/suggest",
-            ANNOT,
+            CREATOR,
             lambda c, x, r: c.post(
                 f"/api/layers/{i['layer_align_word']}/alignments/suggest",
                 json={
