@@ -559,9 +559,24 @@ def run_export_evidence(run):
             .where(Evidence.project_id == uuid.UUID(run.params["project_id"]))
             .order_by(Evidence.created_at, Evidence.id)
         ).all()
+        # source / license lines for the corpora behind pinned hits and stat rows
+        corpus_ids = []
+        for e in items:
+            if e.ref.get("document_id"):
+                doc = db.get(Document, uuid.UUID(e.ref["document_id"]))
+                corpus_ids.append(doc and doc.corpus_id)
+            if e.ref.get("stat_id"):
+                stat = db.get(StatResult, uuid.UUID(e.ref["stat_id"]))
+                if stat:
+                    reference = (stat.params or {}).get("reference") or {}
+                    corpus_ids += [
+                        stat.scope.get("corpus_id"),
+                        reference.get("corpus_id"),
+                    ]
+        notice = source_notice(db, corpus_ids)
     header = ["原文", "出处", "查询式", "备注"]
     rows = [[e.text, e.source, e.ref.get("search_query"), e.note] for e in items]
-    _finish_export(run, "证据篮", header, rows)
+    _finish_export(run, "证据篮", header, rows, notice=notice)
 
 
 def run_export_layer(run):

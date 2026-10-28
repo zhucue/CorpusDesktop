@@ -3,6 +3,7 @@
 import csv
 import io
 
+from docx import Document
 from openpyxl import load_workbook
 
 from tests.api.conftest import drain, upload
@@ -68,6 +69,28 @@ def test_corpus_meta_and_export_notice(owner, project, make_user):
     # corpora without license / attribution export the table only
     rows = list(csv.reader(io.StringIO(export(plain["id"], "csv").decode("utf-8-sig"))))
     assert rows[0][0] == "命中 ID"
+
+    # evidence basket DOCX: the notice of the pinned hit's corpus under the title
+    doc_id = owner.get(f"/api/corpora/{builtin['id']}/documents").json()["items"][0][
+        "id"
+    ]
+    owner.post(
+        f"/api/projects/{project['id']}/evidence",
+        json={
+            "kind": "hit",
+            "text": "language",
+            "source": "a.txt",
+            "ref": {"document_id": doc_id},
+        },
+    )
+    job = owner.post(
+        f"/api/projects/{project['id']}/evidence/export", json={"format": "docx"}
+    ).json()
+    drain()
+    paragraphs = Document(
+        io.BytesIO(owner.get(f"/api/jobs/{job['id']}/download").content)
+    ).paragraphs
+    assert [p.text for p in paragraphs[:2]] == ["证据篮", NOTICE]
 
 
 def test_import_and_index_in_rounds(owner, project, monkeypatch, fake_engine):
