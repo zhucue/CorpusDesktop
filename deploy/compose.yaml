@@ -48,9 +48,10 @@ services:
       interval: 3s
       retries: 40
 
-  worker:
+  # 处理全部任务类型。增加导入/索引并发：docker compose ... up -d --scale worker=2
+  worker: &worker
     build: { context: .., dockerfile: deploy/Dockerfile.worker }
-    environment:
+    environment: &worker-env
       <<: *python-env
       # 摘要与术语草稿调用的对话模型（与 agent 相同）
       MODEL_BASE_URL: ${MODEL_BASE_URL:-}
@@ -63,6 +64,13 @@ services:
       - models:/models
     depends_on:
       api: { condition: service_healthy }
+
+  # 只处理短任务，长时间导入/索引运行时统计、导出、预标注和知识库任务不排队
+  worker-light:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      WORKER_KINDS: export,stats,preannotate,kb_import,kb_summarize,kb_extract
 
   agent:
     build: { context: .., dockerfile: deploy/Dockerfile.agent }

@@ -1,19 +1,31 @@
-"""Single worker process: polls `jobs` with FOR UPDATE SKIP LOCKED and runs one job at a time."""
+"""Worker process: polls `jobs` with FOR UPDATE SKIP LOCKED and runs one job at a time.
+
+Several workers may run side by side. WORKER_KINDS limits the job kinds one takes (empty = all);
+a running job's heartbeat_at is refreshed every HEARTBEAT_SECONDS, and jobs whose heartbeat went
+stale (their worker died) are failed at startup and by a periodic reaper."""
 
 import logging
+import os
+import socket
 import threading
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, func, or_, select, update
 
 from services.api.db import transaction
 from services.api.errors import ApiError
 from services.api.jobs import settle_corpus, settle_kb_document, settle_layer
-from services.api.models import Corpus, Job
+from services.api.models import JOB_KINDS, Corpus, Job
 
+HEAVY_KINDS = ("import", "index")
 log = logging.getLogger("worker")
 POLL_SECONDS = 1.0
+HEARTBEAT_SECONDS = 30
+REAP_SECONDS = 300
+STALE_AFTER = timedelta(minutes=10)
+LEGACY_STALE_AFTER = timedelta(hours=24)
+WORKER_ID = os.environ.get("WORKER_ID") or socket.gethostname()
 
 
 class Cancelled(Exception):
@@ -65,26 +77,73 @@ def now():
     return datetime.now(UTC)
 
 
-def claim():
+def worker_kinds():
+    """WORKER_KINDS: comma list of job kinds this worker takes; empty = all kinds.
+    WORKER_HEAVY=0 additionally drops the long-running import/index kinds."""
+    kinds = [
+        k.strip() for k in os.environ.get("WORKER_KINDS", "").split(",") if k.strip()
+    ]
+    if os.environ.get("WORKER_HEAVY", "1") == "0":
+        kinds = [k for k in kinds or JOB_KINDS if k not in HEAVY_KINDS]
+    return kinds
+
+
+def claim(kinds=None):
+    kinds = worker_kinds() if kinds is None else kinds
     with transaction() as db:
+        q = select(Job).where(Job.state == "queued")
+        if kinds:
+            q = q.where(Job.kind.in_(kinds))
         job = db.scalar(
-            select(Job)
-            .where(Job.state == "queued")
-            .order_by(Job.created_at)
-            .limit(1)
-            .with_for_update(skip_locked=True)
+            q.order_by(Job.created_at).limit(1).with_for_update(skip_locked=True)
         )
         if job is None:
             return None
         job.state, job.started_at = "running", now()
+        job.heartbeat_at, job.worker_id = func.now(), WORKER_ID
         return Run(job)
 
 
-def recover():
-    """Jobs left running by a previous worker process cannot resume; fail them for manual retry."""
+def heartbeat(job_id):
     with transaction() as db:
-        jobs = db.scalars(select(Job).where(Job.state == "running")).all()
+        db.execute(
+            update(Job)
+            .where(Job.id == job_id, Job.state == "running")
+            .values(heartbeat_at=func.now())
+        )
+
+
+def _beat(job_id, stop):
+    while not stop.wait(HEARTBEAT_SECONDS):
+        try:
+            heartbeat(job_id)
+        except Exception:
+            log.exception("heartbeat for job %s failed", job_id)
+
+
+def recover():
+    """Fail running jobs whose worker is gone: heartbeat older than STALE_AFTER, or (jobs claimed
+    before heartbeats existed) no heartbeat and started more than LEGACY_STALE_AFTER ago.
+    Jobs of live workers are never touched. They cannot resume; the user retries manually."""
+    with transaction() as db:
+        jobs = db.scalars(
+            select(Job)
+            .where(
+                Job.state == "running",
+                or_(
+                    Job.heartbeat_at < func.now() - STALE_AFTER,
+                    and_(
+                        Job.heartbeat_at.is_(None),
+                        Job.started_at < func.now() - LEGACY_STALE_AFTER,
+                    ),
+                ),
+            )
+            .with_for_update(skip_locked=True)
+        ).all()
         for job in jobs:
+            log.warning(
+                "job %s %s stale (worker %s), failing", job.id, job.kind, job.worker_id
+            )
             job.state, job.finished_at = "failed", now()
             job.error = {"code": "WORKER_RESTARTED", "message": "执行中断，请重试"}
             if job.kind in ("import", "index"):
@@ -140,8 +199,24 @@ def execute(run):
 def run_once():
     run = claim()
     if run:
-        execute(run)
+        stop = threading.Event()
+        beat = threading.Thread(target=_beat, args=(run.id, stop), daemon=True)
+        beat.start()
+        try:
+            execute(run)
+        finally:
+            stop.set()
+            beat.join()
     return run is not None
+
+
+def reap():
+    while True:
+        time.sleep(REAP_SECONDS)
+        try:
+            recover()
+        except Exception:
+            log.exception("reaper failed")
 
 
 def warm_embeddings():
@@ -163,8 +238,9 @@ def warm_embeddings():
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     recover()
+    threading.Thread(target=reap, daemon=True).start()
     threading.Thread(target=warm_embeddings, daemon=True).start()
-    log.info("worker ready")
+    log.info("worker %s ready, kinds: %s", WORKER_ID, ",".join(worker_kinds()) or "all")
     while True:
         if not run_once():
             time.sleep(POLL_SECONDS)

@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 
 import pytest
 
@@ -168,15 +169,76 @@ def test_cancel_running_import_rolls_back(owner, corpus):
     assert owner.get(f"/api/projects/{corpus['project_id']}/jobs").json()["total"] == 1
 
 
-def test_worker_restart_fails_running_jobs(owner, corpus):
+def _set_running(job_id, heartbeat_ago, started_ago):
+    """Backdate a running job: heartbeat/started ages as timedelta, heartbeat None = no heartbeat."""
+    from sqlalchemy import func, update
+
+    from services.api.db import transaction
+    from services.api.models import Job
+
+    with transaction() as db:
+        db.execute(
+            update(Job)
+            .where(Job.id == job_id)
+            .values(
+                heartbeat_at=None
+                if heartbeat_ago is None
+                else func.now() - heartbeat_ago,
+                started_at=func.now() - started_ago,
+            )
+        )
+
+
+def test_worker_restart_fails_stale_running_jobs(owner, corpus):
     from services.worker.main import claim, recover
 
     job = upload(owner, corpus["id"], {"a.txt": TEXT_A}).json()
     claim()
+    recover()  # fresh heartbeat: another worker is still on it
+    assert owner.get(f"/api/jobs/{job['id']}").json()["state"] == "running"
+    _set_running(job["id"], timedelta(minutes=11), timedelta(minutes=30))
     recover()
     j = owner.get(f"/api/jobs/{job['id']}").json()
     assert j["state"] == "failed" and j["error"]["code"] == "WORKER_RESTARTED"
     assert owner.get(f"/api/corpora/{corpus['id']}").json()["status"] == "failed"
+
+
+def test_recover_legacy_jobs_without_heartbeat(owner, project):
+    from services.worker.main import claim, recover
+
+    jobs = []
+    for _ in range(3):
+        r = owner.post(
+            f"/api/projects/{project['id']}/corpora",
+            json={"name": f"c{len(jobs)}", "language": "en"},
+        )
+        assert r.status_code == 200, r.text
+        jobs.append(upload(owner, r.json()["id"], {"a.txt": TEXT_A}).json())
+    for _ in jobs:
+        claim()
+    _set_running(jobs[0]["id"], None, timedelta(hours=25))  # legacy, old: failed
+    _set_running(jobs[1]["id"], None, timedelta(hours=2))  # legacy, recent: kept
+    _set_running(
+        jobs[2]["id"], timedelta(minutes=9), timedelta(hours=30)
+    )  # fresh: kept
+    recover()
+    states = [owner.get(f"/api/jobs/{j['id']}").json()["state"] for j in jobs]
+    assert states == ["failed", "running", "running"]
+
+
+def test_claim_filters_kinds(owner, corpus, monkeypatch):
+    from services.worker.main import claim
+
+    job = upload(owner, corpus["id"], {"a.txt": TEXT_A}).json()
+    assert claim(["stats", "export"]) is None
+    monkeypatch.setenv("WORKER_HEAVY", "0")
+    assert claim() is None
+    monkeypatch.setenv("WORKER_HEAVY", "1")
+    monkeypatch.setenv("WORKER_KINDS", "stats, import")
+    run = claim()
+    assert str(run.id) == job["id"] and run.kind == "import"
+    j = owner.get(f"/api/jobs/{job['id']}").json()
+    assert j["state"] == "running"
 
 
 def test_subcorpora(owner, project, corpus, member):
