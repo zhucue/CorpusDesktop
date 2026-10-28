@@ -3,7 +3,7 @@ import { App, Dropdown, Popconfirm } from "antd";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, errorText, type Job, type Layer, type LayerDocument } from "../../api";
-import { Empty, ErrorAlert, Skeleton, Tip } from "../../components/common";
+import { Empty, ErrorAlert, exportTip, Skeleton, Tip } from "../../components/common";
 import { Icon } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
@@ -249,10 +249,12 @@ export default function Annotate() {
               </button>
             )}
             {!layer || layer.kind === "pos" || layer.kind === "dep" ? (
-              <button className="btn s" type="button" disabled={!layer || exportJob.isPending} onClick={() => layer && exportJob.mutate({ id: layer.id, format: "conllu" })}>
-                <Icon name="download" size={14} />
-                <span className="lbl">导出 CoNLL-U</span>
-              </button>
+              <Tip title={exportTip("导出 CoNLL-U")}>
+                <button className="btn s" type="button" disabled={!layer || exportJob.isPending} onClick={() => layer && exportJob.mutate({ id: layer.id, format: "conllu" })}>
+                  <Icon name="download" size={14} />
+                  <span className="lbl">导出 CoNLL-U</span>
+                </button>
+              </Tip>
             ) : (
               <Dropdown
                 trigger={["click"]}

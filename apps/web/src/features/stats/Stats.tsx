@@ -3,7 +3,7 @@ import { App, Drawer, Form, Input, InputNumber, Popconfirm, Select, Tabs } from 
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { MAX_PAGE_SIZE, api, errorText, type Job, type MetadataField, type Page, type Scope, type StatMethod, type StatResult } from "../../api";
-import { Empty, ErrorAlert, Skeleton } from "../../components/common";
+import { Empty, ErrorAlert, exportTip, Skeleton, Tip } from "../../components/common";
 import { ScopeSelect } from "../../components/common/ScopeSelect";
 import { Icon } from "../../components/Icon";
 import { download, type EChartHandle } from "../../components/results/EChart";
@@ -310,12 +310,16 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
         <h2>{stat.method === "ngrams" ? `${(stat.params as { n?: number }).n ?? ""}-gram` : methodLabels[stat.method]}</h2>
         {meta}
         <div className="grow" />
-        <button className="btn xs" type="button" disabled={exportJob.isPending} onClick={() => exportJob.mutate("csv")}>
-          CSV
-        </button>
-        <button className="btn xs" type="button" disabled={exportJob.isPending} onClick={() => exportJob.mutate("xlsx")}>
-          XLSX
-        </button>
+        <Tip title={exportTip("导出 CSV")}>
+          <button className="btn xs" type="button" disabled={exportJob.isPending} onClick={() => exportJob.mutate("csv")}>
+            CSV
+          </button>
+        </Tip>
+        <Tip title={exportTip("导出 XLSX")}>
+          <button className="btn xs" type="button" disabled={exportJob.isPending} onClick={() => exportJob.mutate("xlsx")}>
+            XLSX
+          </button>
+        </Tip>
       </div>
       {stat.rows.length === 0 ? (
         <Empty icon="chart" text={`当前参数下无结果${(stat.params as { min_freq?: number }).min_freq ? `（最低频次 ${(stat.params as { min_freq?: number }).min_freq}）` : ""}`} />

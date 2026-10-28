@@ -1,8 +1,8 @@
 import { App } from "antd";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router";
 import type { Job } from "../../api";
-import { isActiveJob, quietJobs, useProjectJobs } from "../../lib/data";
+import { isActiveJob, quietJobs, useBuiltinJobs, useMe, useProjectJobs } from "../../lib/data";
 import { fmt } from "../../lib/format";
 import { Progress, Sparkline } from "../common";
 
@@ -31,8 +31,16 @@ export function progressText(j: Job): string {
 
 export function TaskTray({ projectId, open, onToggle }: { projectId: string; open: boolean; onToggle: () => void }) {
   const jobs = useProjectJobs(projectId);
+  const me = useMe();
+  const builtin = useBuiltinJobs(!!me.data?.is_admin);
   const { notification } = App.useApp();
-  const items = jobs.data?.items ?? [];
+  // Platform admins also see built-in corpus jobs, newest first together with the project's.
+  const items = useMemo(() => {
+    const own = jobs.data?.items ?? [];
+    const extra = builtin.data?.items ?? [];
+    if (!extra.length) return own;
+    return [...own, ...extra].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  }, [jobs.data, builtin.data]);
   const running = items.filter(isActiveJob);
   const prev = useRef<Map<string, Job["state"]> | null>(null);
   const speed = useRef(new Map<string, number[]>());
@@ -69,7 +77,7 @@ export function TaskTray({ projectId, open, onToggle }: { projectId: string; ope
       if (h[h.length - 1] !== j.progress.done) h.push(j.progress.done);
       speed.current.set(j.id, h.slice(-8));
     }
-  }, [jobs.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const withTotal = running.filter((j) => j.progress.total);
   const pct = withTotal.length
@@ -97,6 +105,7 @@ export function TaskTray({ projectId, open, onToggle }: { projectId: string; ope
               <div className="job-mini" key={j.id}>
                 <div className="row">
                   <span className="grow ellipsis">{jobTitle(j)}</span>
+                  {j.project_id === null && <span className="tag t-gray">内置</span>}
                   <span className="mono small muted">#{j.id.slice(0, 8)}</span>
                 </div>
                 <Progress done={j.progress.done} total={j.progress.total} state={j.state} thin />
@@ -111,10 +120,12 @@ export function TaskTray({ projectId, open, onToggle }: { projectId: string; ope
         </div>
       </div>
       <button className="capsule" type="button" aria-expanded={open} aria-controls="tray-panel" onClick={onToggle}>
-        <svg className={`ring ${anyFailed && !running.length ? "err" : ""}`} viewBox="0 0 24 24" aria-hidden>
-          <circle className="bg" cx="12" cy="12" r="9" />
-          <circle className="fg" cx="12" cy="12" r="9" pathLength={100} strokeDasharray={100} strokeDashoffset={(100 - pct).toFixed(1)} />
-        </svg>
+        {(running.length > 0 || anyFailed) && (
+          <svg className={`ring ${anyFailed && !running.length ? "err" : ""}`} viewBox="0 0 24 24" aria-hidden>
+            <circle className="bg" cx="12" cy="12" r="9" />
+            <circle className="fg" cx="12" cy="12" r="9" pathLength={100} strokeDasharray={100} strokeDashoffset={(100 - pct).toFixed(1)} />
+          </svg>
+        )}
         <span>{running.length ? `${running.length} 个任务运行中` : "任务"}</span>
       </button>
     </div>

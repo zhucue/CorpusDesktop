@@ -2,15 +2,16 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { App, Form, Input, Modal, Popconfirm, Segmented, Select, Table } from "antd";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { api, errorText, type Corpus, type Job } from "../../api";
-import { ErrorAlert, Tip } from "../../components/common";
+import { api, errorText, type Corpus, type CorpusMeta, type Job } from "../../api";
+import { ErrorAlert, RelTime, Tip } from "../../components/common";
 import { Icon } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
 import { canEdit, useCorpora, useJobCreated, useMe, useProject, useProjectId } from "../../lib/data";
-import { fmt, fmtTime, fmtVersion } from "../../lib/format";
+import { fmt, fmtVersion } from "../../lib/format";
 import "./corpora.css";
 import CorpusDrawer from "./CorpusDrawer";
+import { metaEntries, metaFromForm } from "./CorpusMeta";
 import { StatusCell } from "./StatusCell";
 import Subcorpora from "./Subcorpora";
 import UploadDialog, { languageOptions } from "./UploadDialog";
@@ -55,7 +56,8 @@ export default function Corpora() {
     onError: (e) => message.error(errorText(e)),
   });
   const createBuiltin = useMutation({
-    mutationFn: (v: { name: string; language: string; description?: string }) => api.post<Corpus>("/corpora", v),
+    mutationFn: ({ name, language, description, ...m }: { name: string; language: string; description?: string } & Partial<Record<keyof CorpusMeta, string>>) =>
+      api.post<Corpus>("/corpora", { name, language, description, meta: metaFromForm(m) }),
     onSuccess: () => {
       setCreatingBuiltin(false);
       qc.invalidateQueries({ queryKey: ["corpora", projectId] });
@@ -77,9 +79,9 @@ export default function Corpora() {
               value={filter}
               onChange={setFilter}
               options={[
-                { value: "all", label: "全部" },
-                { value: "builtin", label: "内置" },
-                { value: "project", label: "项目" },
+                { value: "all", label: <SegCount label="全部" n={items.length} ready={corpora.isSuccess} /> },
+                { value: "builtin", label: <SegCount label="内置" n={builtin.length} ready={corpora.isSuccess} /> },
+                { value: "project", label: <SegCount label="项目" n={own.length} ready={corpora.isSuccess} /> },
               ]}
             />
             {isAdmin && (
@@ -175,13 +177,33 @@ export default function Corpora() {
                   </div>
                 ),
               },
+              {
+                title: "许可",
+                width: 120,
+                ellipsis: true,
+                render: (_, c) => {
+                  const rows = metaEntries(c.meta);
+                  if (!rows.length) return null;
+                  return (
+                    <Tip
+                      title={rows.map(([k, label, v]) => (
+                        <div key={k}>
+                          {label}：{v}
+                        </div>
+                      ))}
+                    >
+                      <span className="small">{c.meta?.license?.trim() || "见署名"}</span>
+                    </Tip>
+                  );
+                },
+              },
               { title: "语言", dataIndex: "language", width: 70, render: (l: string) => <span className="mono">{l}</span> },
               { title: "文档", width: 80, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.documents) },
               { title: "句", width: 90, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.sentences) },
               { title: "词", width: 100, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.tokens) },
-              { title: "状态", width: 180, render: (_, c) => <StatusCell c={c} /> },
-              { title: "索引", width: 100, className: "num-col", render: (_, c) => <span title={c.index_version != null ? String(c.index_version) : undefined}>{fmtVersion(c.index_version)}</span> },
-              { title: "创建", width: 160, render: (_, c) => <span className="small muted">{fmtTime(c.created_at)}</span> },
+              { title: "状态", width: 160, render: (_, c) => <StatusCell c={c} /> },
+              { title: "索引", width: 80, className: "num-col", render: (_, c) => <span title={c.index_version != null ? String(c.index_version) : undefined}>{fmtVersion(c.index_version)}</span> },
+              { title: "创建", width: 110, render: (_, c) => <RelTime at={c.created_at} /> },
               {
                 title: "",
                 width: 90,
@@ -229,6 +251,18 @@ export default function Corpora() {
           <Form.Item name="description" label="描述">
             <Input.TextArea rows={2} />
           </Form.Item>
+          <Form.Item name="license" label="许可">
+            <Input maxLength={200} placeholder="CC BY 2.0 FR" />
+          </Form.Item>
+          <Form.Item name="attribution" label="署名">
+            <Input.TextArea rows={2} maxLength={2000} />
+          </Form.Item>
+          <Form.Item name="source_url" label="来源链接">
+            <Input maxLength={1000} placeholder="https://" />
+          </Form.Item>
+          <Form.Item name="version" label="版本">
+            <Input maxLength={200} />
+          </Form.Item>
           <ErrorAlert error={createBuiltin.error} style={{ marginBottom: 12 }} />
           <button className="btn p" type="submit" disabled={createBuiltin.isPending}>
             创建
@@ -236,5 +270,14 @@ export default function Corpora() {
         </Form>
       </Modal>
     </>
+  );
+}
+
+function SegCount({ label, n, ready }: { label: string; n: number; ready: boolean }) {
+  return (
+    <span>
+      {label}
+      {ready && <span className="num seg-n">{fmt(n)}</span>}
+    </span>
   );
 }

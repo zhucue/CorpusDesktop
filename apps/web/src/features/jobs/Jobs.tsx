@@ -1,29 +1,48 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { App, Segmented, Table } from "antd";
+import { App, Segmented, Switch, Table } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { api, errorText, type Job, type Page } from "../../api";
-import { ErrorAlert, JobStateTag, Progress, Sparkline } from "../../components/common";
+import { api, errorText, type Job, type Page, type User } from "../../api";
+import { ErrorAlert, JobStateTag, Progress, RelTime, Sparkline, Tip } from "../../components/common";
 import { hasDownload, jobKindLabels, progressText } from "../../components/global/TaskTray";
 import { Icon, type IconName } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
-import { isActiveJob, useJob, useProjectId } from "../../lib/data";
+import { canEdit, isActiveJob, useJob, useMe, useProject, useProjectId } from "../../lib/data";
 import { fmt, fmtDuration, fmtTime } from "../../lib/format";
 import "./jobs.css";
 
 const PAGE_SIZE = 50;
-type Filter = "all" | "active" | "failed";
+export type JobFilter = "all" | "active" | "failed" | "mine";
+type Act = "cancel" | "retry";
 const kindIcon: Record<string, IconName> = { import: "upload", index: "layers", export: "download", stats: "chart", preannotate: "pen", kb_import: "book", kb_summarize: "spark", kb_extract: "term" };
 
-function Actions({ job, onAct, pending }: { job: Job; onAct: (a: "cancel" | "retry") => void; pending: boolean }) {
+export function filterJobs(items: Job[], filter: JobFilter, meId: string | undefined): Job[] {
+  if (filter === "active") return items.filter(isActiveJob);
+  if (filter === "failed") return items.filter((j) => j.state === "failed");
+  if (filter === "mine") return items.filter((j) => !!meId && j.owner_id === meId);
+  return items;
+}
+
+/** Cancel / retry: the creator, project owners and editors; platform admins for built-in corpus jobs. */
+export function canManageJob(j: Job, me: User | undefined, projectEditable: boolean): boolean {
+  if (!me) return false;
+  if (j.owner_id && j.owner_id === me.id) return true;
+  return j.project_id ? projectEditable : me.is_admin;
+}
+
+const canCancel = (j: Job, manage: boolean) => manage && isActiveJob(j);
+const canRetry = (j: Job, manage: boolean) => manage && (j.state === "failed" || j.state === "cancelled");
+const hasActions = (j: Job, manage: boolean) => canCancel(j, manage) || canRetry(j, manage) || hasDownload(j);
+
+function Actions({ job, manage, onAct, pending }: { job: Job; manage: boolean; onAct: (a: Act) => void; pending: boolean }) {
   return (
     <span className="row" style={{ gap: 4 }} onClick={(e) => e.stopPropagation()}>
-      {isActiveJob(job) && (
+      {canCancel(job, manage) && (
         <button className="btn xs" type="button" disabled={pending} onClick={() => onAct("cancel")}>
           取消
         </button>
       )}
-      {(job.state === "failed" || job.state === "cancelled") && (
+      {canRetry(job, manage) && (
         <button className="btn xs" type="button" disabled={pending} onClick={() => onAct("retry")}>
           <Icon name="retry" size={14} />
           重试
@@ -47,7 +66,7 @@ function resultText(j: Job): React.ReactNode {
   return null;
 }
 
-function Inspector({ id, projectId, onAct, onClose, pending }: { id: string; projectId: string; onAct: (job: Job, a: "cancel" | "retry") => void; onClose: () => void; pending: boolean }) {
+function Inspector({ id, projectId, manage, onAct, onClose, pending }: { id: string; projectId: string; manage: (j: Job) => boolean; onAct: (job: Job, a: Act) => void; onClose: () => void; pending: boolean }) {
   const job = useJob(id, 2000);
   const hist = useRef<number[]>([]);
   useEffect(() => {
@@ -76,6 +95,7 @@ function Inspector({ id, projectId, onAct, onClose, pending }: { id: string; pro
                 </span>
                 {jobKindLabels[j.kind] ?? j.kind}
               </span>
+              {j.project_id === null && <span className="tag t-gray">内置</span>}
               <div className="grow" />
               <JobStateTag state={j.state} />
             </div>
@@ -98,6 +118,18 @@ function Inspector({ id, projectId, onAct, onClose, pending }: { id: string; pro
             <dl className="kv">
               <dt>编号</dt>
               <dd className="mono">{j.id}</dd>
+              {j.summary && (
+                <>
+                  <dt>对象与参数</dt>
+                  <dd>{j.summary}</dd>
+                </>
+              )}
+              {j.owner_email && (
+                <>
+                  <dt>发起人</dt>
+                  <dd>{j.owner_email}</dd>
+                </>
+              )}
               {j.progress.message && (
                 <>
                   <dt>当前</dt>
@@ -136,9 +168,11 @@ function Inspector({ id, projectId, onAct, onClose, pending }: { id: string; pro
               </div>
             )}
           </div>
-          <div className="insp-foot">
-            <Actions job={j} pending={pending} onAct={(a) => onAct(j, a)} />
-          </div>
+          {hasActions(j, manage(j)) && (
+            <div className="insp-foot">
+              <Actions job={j} manage={manage(j)} pending={pending} onAct={(a) => onAct(j, a)} />
+            </div>
+          )}
         </>
       )}
     </aside>
@@ -147,23 +181,33 @@ function Inspector({ id, projectId, onAct, onClose, pending }: { id: string; pro
 
 export default function Jobs() {
   const projectId = useProjectId();
+  const project = useProject();
+  const me = useMe();
   const qc = useQueryClient();
   const { message } = App.useApp();
   const [params, setParams] = useSearchParams();
   const [page, setPage] = useState(1);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<JobFilter>("all");
+  const [builtinOn, setBuiltinOn] = useState(false);
+  const isAdmin = !!me.data?.is_admin;
+  const builtin = isAdmin && builtinOn;
+  const editable = canEdit(project.data);
+  const manage = (j: Job) => canManageJob(j, me.data, editable);
   const selected = params.get("job");
   const jobs = useQuery({
-    queryKey: ["jobs", projectId, "page", page],
-    queryFn: () => api.get<Page<Job>>(`/projects/${projectId}/jobs`, { page, page_size: PAGE_SIZE }),
+    queryKey: builtin ? ["jobs", "builtin", "page", page] : ["jobs", projectId, "page", page],
+    queryFn: () =>
+      builtin
+        ? api.get<Page<Job>>("/jobs", { builtin: 1, page, page_size: PAGE_SIZE })
+        : api.get<Page<Job>>(`/projects/${projectId}/jobs`, { page, page_size: PAGE_SIZE }),
     placeholderData: keepPreviousData,
     refetchInterval: (q) => (q.state.data?.items.some(isActiveJob) ? 2000 : false),
     meta: { background: true },
   });
   const act = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: "cancel" | "retry" }) => api.post<Job>(`/jobs/${id}/${action}`),
+    mutationFn: ({ id, action }: { id: string; action: Act }) => api.post<Job>(`/jobs/${id}/${action}`),
     onSuccess: (j, v) => {
-      qc.invalidateQueries({ queryKey: ["jobs", projectId] });
+      qc.invalidateQueries({ queryKey: ["jobs"] });
       qc.invalidateQueries({ queryKey: ["job"] });
       qc.invalidateQueries({ queryKey: ["corpora", projectId] });
       if (v.action === "retry") setParams({ job: j.id });
@@ -179,7 +223,7 @@ export default function Jobs() {
     ["失败", all.filter((j) => j.state === "failed").length, "alert", "t-err"],
     ["今日完成", all.filter((j) => j.state === "succeeded" && j.finished_at && new Date(j.finished_at).toDateString() === today).length, "check", "t-ok"],
   ];
-  const shown = filter === "active" ? all.filter(isActiveJob) : filter === "failed" ? all.filter((j) => j.state === "failed") : all;
+  const shown = filterJobs(all, filter, me.data?.id);
 
   return (
     <>
@@ -188,16 +232,32 @@ export default function Jobs() {
         crumbs={1}
         busy={all.some(isActiveJob)}
         actions={
-          <Segmented<Filter>
-            size="small"
-            value={filter}
-            onChange={setFilter}
-            options={[
-              { value: "all", label: "全部" },
-              { value: "active", label: "运行中" },
-              { value: "failed", label: "失败" },
-            ]}
-          />
+          <>
+            {isAdmin && (
+              <label className="row small" style={{ gap: 6, cursor: "pointer" }}>
+                <Switch
+                  size="small"
+                  checked={builtinOn}
+                  onChange={(v) => {
+                    setBuiltinOn(v);
+                    setPage(1);
+                  }}
+                />
+                内置语料任务
+              </label>
+            )}
+            <Segmented<JobFilter>
+              size="small"
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: "all", label: "全部" },
+                { value: "active", label: "运行中" },
+                { value: "failed", label: "失败" },
+                { value: "mine", label: "我发起的" },
+              ]}
+            />
+          </>
         }
       />
       <div className="content">
@@ -215,14 +275,15 @@ export default function Jobs() {
           ))}
         </section>
         <div className="row" style={{ alignItems: "flex-start", gap: 20 }}>
-          <section className="card grow">
+          <section className="card grow" style={{ minWidth: 0 }}>
             <ErrorAlert error={jobs.error} style={{ margin: 16 }} />
             <Table<Job>
               className="jobs"
               rowKey="id"
+              scroll={{ x: 1100 }}
               loading={jobs.isPending}
               dataSource={shown}
-              locale={{ emptyText: <span className="muted">暂无任务</span> }}
+              locale={{ emptyText: <span className="muted">{builtin ? "暂无内置语料任务" : "暂无任务"}</span> }}
               rowClassName={(j) => (j.id === selected ? "ant-table-row-selected" : "")}
               onRow={(j) => ({ onClick: () => setParams({ job: j.id }), style: { cursor: "pointer" } })}
               expandable={{
@@ -240,20 +301,34 @@ export default function Jobs() {
               columns={[
                 {
                   title: "类型",
+                  width: 130,
                   render: (_, j) => (
                     <span className="jtype">
                       <span className="ji">
                         <Icon name={kindIcon[j.kind] ?? "clock"} />
                       </span>
-                      {jobKindLabels[j.kind] ?? j.kind}
-                      <span className="mono small muted">#{j.id.slice(0, 8)}</span>
+                      <span className="jt-name">
+                        {jobKindLabels[j.kind] ?? j.kind}
+                        <span className="mono small muted">#{j.id.slice(0, 8)}</span>
+                      </span>
                     </span>
                   ),
                 },
-                { title: "状态", width: 100, render: (_, j) => <JobStateTag state={j.state} /> },
+                {
+                  title: "对象与参数",
+                  width: 220,
+                  ellipsis: { showTitle: false },
+                  render: (_, j) =>
+                    j.summary ? (
+                      <Tip title={j.summary}>
+                        <span className="jsum">{j.summary}</span>
+                      </Tip>
+                    ) : null,
+                },
+                { title: "状态", width: 96, render: (_, j) => <JobStateTag state={j.state} /> },
                 {
                   title: "进度",
-                  width: 240,
+                  width: 230,
                   render: (_, j) => (
                     <div className="jprog">
                       <Progress done={j.progress.done} total={j.progress.total} state={j.state} />
@@ -264,12 +339,23 @@ export default function Jobs() {
                     </div>
                   ),
                 },
-                { title: "开始", width: 170, render: (_, j) => <span className="small muted">{fmtTime(j.created_at)}</span> },
-                { title: "", width: 150, render: (_, j) => <Actions job={j} pending={act.isPending} onAct={(a) => act.mutate({ id: j.id, action: a })} /> },
+                {
+                  title: "发起人",
+                  width: 140,
+                  ellipsis: { showTitle: false },
+                  render: (_, j) =>
+                    j.owner_email ? (
+                      <Tip title={j.owner_email}>
+                        <span className="small">{j.owner_id && j.owner_id === me.data?.id ? "我" : j.owner_email}</span>
+                      </Tip>
+                    ) : null,
+                },
+                { title: "开始", width: 96, render: (_, j) => <RelTime at={j.created_at} /> },
+                { title: "", width: 150, render: (_, j) => <Actions job={j} manage={manage(j)} pending={act.isPending} onAct={(a) => act.mutate({ id: j.id, action: a })} /> },
               ]}
             />
           </section>
-          {selected && <Inspector id={selected} projectId={projectId} pending={act.isPending} onAct={(j, a) => act.mutate({ id: j.id, action: a })} onClose={() => setParams({})} />}
+          {selected && <Inspector id={selected} projectId={projectId} manage={manage} pending={act.isPending} onAct={(j, a) => act.mutate({ id: j.id, action: a })} onClose={() => setParams({})} />}
         </div>
       </div>
     </>

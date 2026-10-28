@@ -205,7 +205,9 @@ export function KwicTable({
             >
               {offset != null && <td className="mono muted small">{offset + i + 1}</td>}
               <td className="lc">
-                <span>{pos ? <PosText tokens={r.tokens!} part="left" /> : mk?.length ? markSpans(r.left, 0, mk, terms) : markTerms(r.left, terms)}</span>
+                <div className="lcw">
+                  <span>{pos ? <PosText tokens={r.tokens!} part="left" /> : mk?.length ? markSpans(r.left, 0, mk, terms) : markTerms(r.left, terms)}</span>
+                </div>
               </td>
               <td className="kw">
                 <span className="hit" data-testid="kwic-match">

@@ -11,6 +11,20 @@ export function fmtValue(v: unknown, digits = 2): string {
 
 export const fmtTime = (s: string | null | undefined) => (s ? new Date(s).toLocaleString("zh-CN", { hour12: false }) : "");
 
+/** 刚刚 / 5 分钟前 / 3 小时前 / 2 天前; from 30 days on, the date. */
+export function fmtRelative(s: string | null | undefined, now = Date.now()): string {
+  if (!s) return "";
+  const t = Date.parse(s);
+  const m = Math.floor((now - t) / 60000);
+  if (m < 1) return "刚刚";
+  if (m < 60) return `${m} 分钟前`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} 小时前`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d} 天前`;
+  return new Date(t).toLocaleDateString("zh-CN");
+}
+
 export function fmtShortTime(s: string | null | undefined): string {
   if (!s) return "";
   const d = new Date(s);

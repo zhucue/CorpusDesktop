@@ -7,6 +7,7 @@ import { ErrorAlert, Skeleton } from "../../components/common";
 import { Icon } from "../../components/Icon";
 import { canEdit, useCorpus, useJobCreated, useMe, useProject, useProjectId } from "../../lib/data";
 import { fmt, fmtTime, fmtVersion, metadataText } from "../../lib/format";
+import { CorpusMetaList } from "./CorpusMeta";
 import { StatusCell } from "./StatusCell";
 import { ACCEPT, languageOptions, metadataRule, parseMetadata, uploadFiles } from "./UploadDialog";
 
@@ -74,6 +75,7 @@ export default function CorpusDrawer({ corpusId, onClose }: { corpusId: string |
             </span>
           </div>
           {c.description && <p className="sm sub">{c.description}</p>}
+          <CorpusMetaList meta={c.meta} />
           <Tabs
             items={[
               { key: "docs", label: "文档", children: <Documents corpusId={c.id} editable={editable} /> },

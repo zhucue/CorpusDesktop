@@ -17,7 +17,7 @@ import {
   type SearchResult,
   type SearchScope,
 } from "../../api";
-import { Count, ErrorAlert, Empty, QueryChip, Sparkline, Tip } from "../../components/common";
+import { Count, ErrorAlert, Empty, exportTip, QueryChip, Sparkline, Tip } from "../../components/common";
 import { Icon } from "../../components/Icon";
 import { conditionTerms, hasPos, KwicTable, type KwicMark, type KwicRow } from "../../components/results/Kwic";
 import { cpLength, labelColor } from "../../components/annot/spans";
@@ -920,14 +920,18 @@ export default function Search() {
                     继续计数
                   </button>
                 )}
-                <button className="btn s" type="button" disabled={!req || exportJob.isPending} onClick={() => exportJob.mutate("csv")}>
-                  <Icon name="download" size={14} />
-                  CSV
-                </button>
-                <button className="btn s" type="button" disabled={!req || exportJob.isPending} onClick={() => exportJob.mutate("xlsx")}>
-                  <Icon name="download" size={14} />
-                  XLSX
-                </button>
+                <Tip title={exportTip("导出 CSV")}>
+                  <button className="btn s" type="button" disabled={!req || exportJob.isPending} onClick={() => exportJob.mutate("csv")}>
+                    <Icon name="download" size={14} />
+                    CSV
+                  </button>
+                </Tip>
+                <Tip title={exportTip("导出 XLSX")}>
+                  <button className="btn s" type="button" disabled={!req || exportJob.isPending} onClick={() => exportJob.mutate("xlsx")}>
+                    <Icon name="download" size={14} />
+                    XLSX
+                  </button>
+                </Tip>
               </div>
               <ErrorAlert error={search.error} style={{ margin: 16 }} />
               {pollState?.error && pollState.id === result?.search_id ? <ErrorAlert error={pollState.error} style={{ margin: 16 }} /> : null}

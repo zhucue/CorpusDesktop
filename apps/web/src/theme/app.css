@@ -204,8 +204,11 @@ table.tbl { border-collapse: collapse; width: 100%; }
 /* KWIC */
 .kwic { table-layout: fixed; }
 .kwic td { line-height: 1.6; }
-.kwic .lc { text-align: right; color: var(--text-2); white-space: nowrap; overflow: hidden; direction: rtl; }
-.kwic .lc > span { direction: ltr; unicode-bidi: embed; }
+.kwic .lc { text-align: right; color: var(--text-2); }
+.kwic td.lc:first-child { padding-left: 16px; }
+/* Clip inside the cell so the left padding stays clear of overflowing context. */
+.kwic .lcw { white-space: nowrap; overflow: hidden; direction: rtl; }
+.kwic .lcw > span { direction: ltr; unicode-bidi: embed; }
 .kwic .kw { white-space: nowrap; text-align: center; overflow: hidden; text-overflow: ellipsis; }
 .kwic .rc { color: var(--text-2); }
 .kwic .rc .rt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

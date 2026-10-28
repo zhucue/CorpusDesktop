@@ -13,3 +13,6 @@
 .docs-tools { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
 .counts-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .counts-row .count { font-size: 22px; }
+.seg-n { margin-left: 5px; color: var(--text-3); }
+.corp-meta { grid-template-columns: 72px 1fr; }
+.corp .num-col { white-space: nowrap; }

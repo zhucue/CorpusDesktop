@@ -1,7 +1,7 @@
 import { Tooltip } from "antd";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { errorCode, errorText, type CorpusStatus, type JobState } from "../../api";
-import { fmt } from "../../lib/format";
+import { fmt, fmtRelative, fmtTime } from "../../lib/format";
 import { reducedMotion } from "../../theme/motion";
 import { Icon, type IconName } from "../Icon";
 
@@ -35,6 +35,21 @@ export function Tip({ title, children }: { title: ReactNode; children: React.Rea
     <Tooltip title={title} mouseEnterDelay={0.3}>
       {children}
     </Tooltip>
+  );
+}
+
+/** Tooltip for export buttons: corpora with a license or attribution get a source line (contracts/p6.md §四). */
+export const exportTip = (what: string) => `${what}；语料带许可或署名时，文件开头附来源行`;
+
+/** Relative time; the exact time shows on hover. */
+export function RelTime({ at }: { at: string | null | undefined }) {
+  if (!at) return null;
+  return (
+    <Tip title={fmtTime(at)}>
+      <time className="small muted" dateTime={at}>
+        {fmtRelative(at)}
+      </time>
+    </Tip>
   );
 }
 

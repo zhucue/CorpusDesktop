@@ -94,13 +94,27 @@ export function useProjectJobs(projectId: string | undefined) {
   });
 }
 
+/** Built-in corpus jobs (platform admins). Import scripts start them outside the page, so poll slowly while idle. */
+export function useBuiltinJobs(enabled: boolean) {
+  return useQuery({
+    queryKey: ["jobs", "builtin", "tray"],
+    queryFn: () => api.get<Page<Job>>("/jobs", { builtin: 1, page: 1, page_size: 50 }),
+    enabled,
+    refetchInterval: (q) => (q.state.data?.items.some(activeJob) ? 2000 : 30000),
+    meta: { background: true },
+  });
+}
+
 /** Jobs started in the background of a page (e.g. the search distribution): the tray lists them without a toast. */
 export const quietJobs = new Set<string>();
 
 /** Call after creating a job so the tray starts polling. */
 export function useJobCreated() {
   const qc = useQueryClient();
-  return (projectId: string) => qc.invalidateQueries({ queryKey: ["jobs", projectId] });
+  return (projectId: string) => {
+    qc.invalidateQueries({ queryKey: ["jobs", projectId] });
+    qc.invalidateQueries({ queryKey: ["jobs", "builtin"] });
+  };
 }
 
 /** Poll one job until it finishes. */

@@ -9,3 +9,5 @@
 .sumcard { padding: 14px 18px; display: flex; align-items: center; gap: 14px; }
 .sumcard .si { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; padding: 0; }
 .sumcard .count { font-size: 24px; }
+.jsum { font-size: 13px; color: var(--text-2); }
+.jt-name { display: flex; flex-direction: column; line-height: 1.3; }

@@ -39,7 +39,16 @@ export interface Corpus {
   error: string | null;
   stats: Stats;
   index_version: number | string | null;
+  /** Source and license; empty object when none. */
+  meta?: CorpusMeta;
   created_at: string;
+}
+
+export interface CorpusMeta {
+  license?: string;
+  attribution?: string;
+  source_url?: string;
+  version?: string;
 }
 
 export type Metadata = Record<string, unknown>;
@@ -157,7 +166,12 @@ export type JobKind = "import" | "index" | "export" | "stats" | "preannotate" | 
 
 export interface Job {
   id: string;
-  project_id: string;
+  /** null for built-in corpus jobs. */
+  project_id: string | null;
+  owner_id?: string | null;
+  owner_email?: string | null;
+  /** Target and parameters in one line. */
+  summary?: string | null;
   kind: JobKind;
   state: JobState;
   progress: { done: number; total: number | null; message: string };
