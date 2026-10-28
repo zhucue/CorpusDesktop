@@ -557,17 +557,21 @@ def _hit(
         end = toks[max(j, 0)][0] + b - cum[max(j, 0)]
     else:
         start, end = t0, t1
-    if ctx.unit == "sentence":
+    if ctx.unit == "sentence" or (ctx.sentence_only and ctx.unit == "paragraph"):
         ss, se = ix.pairs("sents.bin", d[4] + n, 1)[0]
         left, right = ix.text(d, ss, start), ix.text(d, end, se)
     elif ctx.unit == "paragraph":
         left = ix.text(d, start - PARA_MAX, start).rsplit("\n", 1)[-1]
         right = ix.text(d, end, end + PARA_MAX).split("\n", 1)[0]
     else:
-        left, right = (
-            ix.text(d, start - ctx.size, start),
-            ix.text(d, end, end + ctx.size),
-        )
+        floor, ceil = 0, d[2]
+        if ctx.sentence_only:
+            floor, ceil = ix.pairs("sents.bin", d[4] + n, 1)[0]
+        lo, hi = max(floor, start - ctx.size), min(ceil, end + ctx.size)
+        # the window cuts the text: one extra character outside it tells whether a word is cut
+        more_l, more_r = lo > floor, hi < ceil
+        left = _word_cut_left(ix.text(d, lo - more_l, start), more_l)
+        right = _word_cut_right(ix.text(d, end, hi + more_r), more_r)
     return Hit(
         f"{d[0]}:{start}-{end}",
         d[0],
@@ -578,6 +582,62 @@ def _hit(
         ix.text(d, start, end),
         right,
     )
+
+
+def _wordy(c: str) -> bool:
+    """Letter or digit of a space-separated script (Latin, Cyrillic …), not CJK."""
+    return c.isalnum() and not query._CJK.match(c)
+
+
+def _word_cut_left(s: str, more: bool) -> str:
+    """Left character context; with `more` it starts with one extra character from outside the window, which
+    tells whether the window cut a word in half: then that half word is dropped (English starts at a word)."""
+    if not more or not s:
+        return s
+    extra, s = s[0], s[1:]
+    if s and _wordy(extra) and _wordy(s[0]) and (m := re.search(r"\s", s)):
+        return s[m.end() :]
+    return s
+
+
+def _word_cut_right(s: str, more: bool) -> str:
+    """Right character context; with `more` it ends with one extra character (see _word_cut_left)."""
+    if not more or not s:
+        return s
+    s, extra = s[:-1], s[-1]
+    if s and _wordy(extra) and _wordy(s[-1]) and (m := re.search(r"\s\S*$", s)):
+        return s[: m.start()]
+    return s
+
+
+def lexicon(index_dir: Path, corpus_key: str, attr: str) -> list[str]:
+    """Distinct values of a positional attribute (pos, deprel …) in the current index, "_" (empty) excluded;
+    [] without an index. Meant for small lexicons: callers check `has_values` before reading lemma/word."""
+    try:
+        home = _home(Path(index_dir), _key(corpus_key))
+    except ValueError:
+        return []
+    return list(_lexicon(str(home), attr))
+
+
+@functools.lru_cache(maxsize=256)
+def _lexicon(home: str, attr: str) -> tuple[str, ...]:
+    try:
+        raw = (Path(home) / "data" / f"{attr}.lexicon").read_bytes()
+    except FileNotFoundError:
+        return ()
+    return tuple(v for v in raw.decode("utf-8").split("\0") if v and v != "_")
+
+
+def has_values(index_dir: Path, corpus_key: str, attr: str) -> bool | None:
+    """Whether any token has a value for the attribute (deprel: the corpus has system dependencies);
+    None when unknown (no index on disk)."""
+    try:
+        home = _home(Path(index_dir), _key(corpus_key))
+        size = (home / "data" / f"{attr}.lexicon").stat().st_size
+    except (ValueError, FileNotFoundError):
+        return None
+    return size > 2 or bool(_lexicon(str(home), attr))
 
 
 def context(

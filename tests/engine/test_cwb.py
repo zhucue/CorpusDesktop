@@ -128,6 +128,12 @@ def test_context_units(zh):
     assert (h.left, h.match, h.right) == ("他", "说", "语言。")
     h = run(zh, "研究", ctx=Context("char", 100)).items[0]
     assert h.left == "社会语言学" and h.right == "语言与社会。 语言文化很重要。"
+    # parallel corpora: the context never leaves the hit's sentence (neighbours are unrelated pairs)
+    for unit in ("char", "paragraph"):
+        h = run(zh, "研究", ctx=Context(unit, 100, sentence_only=True)).items[0]
+        assert (h.left, h.right) == ("社会语言学", "语言与社会。")
+    h = run(zh, "重要", ctx=Context("char", 3, sentence_only=True)).items[0]
+    assert (h.left, h.right) == ("文化很", "。")
     assert cwb.context(zh, "zh", "zh2", 1, 1, 1) == ["他说语言。", "汉语言文字学"]
     assert cwb.context(zh, "zh", "zh1", 0, 0, 5) == [
         "社会语言学研究语言与社会。",
@@ -298,3 +304,23 @@ def test_attribute_slots_filter_hits(ud):
             page_size=10,
             context=Context(),
         )
+
+
+def test_lexicon_and_has_values(zh, tmp_path):
+    assert {"NOUN", "VERB"} <= set(cwb.lexicon(zh, "zh", "pos"))
+    assert (
+        cwb.has_values(zh, "zh", "deprel") is True
+    )  # CoNLL-U fixture carries dependencies
+    plain = Document(
+        "t",
+        "zh",
+        "语言。",
+        {},
+        [Sentence(0, 3, [Token(0, 2, "语言", "n"), Token(2, 3, "。", "w")])],
+    )
+    cwb.build(tmp_path, "plain", [plain], ["p1"])
+    assert cwb.has_values(tmp_path, "plain", "deprel") is False
+    assert (
+        cwb.has_values(tmp_path, "missing", "deprel") is None
+        and cwb.lexicon(tmp_path, "missing", "pos") == []
+    )

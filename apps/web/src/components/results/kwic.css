@@ -1,0 +1,25 @@
+/* KWIC additions (QA Q25 / Q27 / Q33): base rules live in theme/app.css. */
+
+/* 40 字: the left context is clipped at its left edge; an ellipsis there instead of half a glyph */
+.kwic .lcw { text-overflow: ellipsis; }
+
+/* 整句 / 整段: whole sentences and translations wrap */
+.kwic.wrap td { vertical-align: top; }
+.kwic.wrap .lcw { white-space: normal; overflow: visible; direction: ltr; text-align: right; }
+.kwic.wrap .kw { white-space: normal; }
+.kwic.wrap .rc .rt,
+.kwic.wrap .al { white-space: normal; overflow: visible; }
+
+.kwic .al { white-space: normal; }
+.kwic .al.none { font-style: italic; }
+.kwic .src .loc { display: block; font-size: 11px; color: var(--text-4); overflow: hidden; text-overflow: ellipsis; }
+
+/* labelled row buttons: 依存 / 术语 / 钉住 */
+.kwic:not(.compact) .row-acts .pin-btn { width: auto; min-width: 26px; padding: 0 6px; gap: 3px; display: inline-flex; align-items: center; font: inherit; font-size: 12px; }
+.kwic .act-l { font-size: 12px; line-height: 1; }
+.kwic:not(.compact) .act-term .pin-btn::after { content: "术语"; font-size: 12px; line-height: 1; }
+
+/* 40 字, space-separated text: whole words only (QA Q75). Left: see LeftWords in Kwic.tsx; right: one clamped line */
+.kwic .lww { direction: rtl; text-align: right; white-space: normal; height: 1.6em; overflow: hidden; }
+.kwic .lww .w { display: inline-block; direction: ltr; unicode-bidi: isolate; white-space: nowrap; margin-left: .3em; }
+.kwic:not(.wrap) .rc .rt { white-space: normal; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }

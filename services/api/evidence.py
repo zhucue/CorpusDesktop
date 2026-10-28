@@ -1,5 +1,6 @@
 """Evidence basket (contracts/p2.md §四): pinned hits, stat rows and text, kept per project."""
 
+import re
 from typing import Literal
 from uuid import UUID
 
@@ -17,7 +18,8 @@ from services.api.access import (
 from services.api.auth import CurrentUser, Db
 from services.api.errors import forbidden, not_found
 from services.api.jobs import enqueue
-from services.api.models import Document, Evidence, StatResult
+from services.api.models import Corpus, Document, Evidence, Sentence, StatResult
+from services.api.search import aligned_texts
 from services.api.views import evidence_view, job_view
 
 router = APIRouter(prefix="/api")
@@ -35,6 +37,7 @@ class EvidenceRef(BaseModel):
     end_cp: int | None = Field(default=None, ge=0)
     stat_id: UUID | None = None
     row_key: str | None = Field(default=None, max_length=2000)
+    sentence_index: int | None = Field(default=None, ge=0)
 
 
 class EvidenceInput(BaseModel):
@@ -47,6 +50,63 @@ class EvidenceInput(BaseModel):
 
 class ExportInput(BaseModel):
     format: Literal["csv", "xlsx", "docx"]
+
+
+def hit_sentence(db, doc, ref):
+    """The sentence holding a pinned hit: by ref.sentence_index, else the one containing start_cp."""
+    if ref.sentence_index is not None:
+        return db.scalar(
+            select(Sentence).where(
+                Sentence.document_id == doc.id, Sentence.idx == ref.sentence_index
+            )
+        )
+    return db.scalar(
+        select(Sentence)
+        .where(
+            Sentence.document_id == doc.id,
+            Sentence.start_cp <= ref.start_cp,
+            Sentence.end_cp > ref.start_cp,
+        )
+        .order_by(Sentence.idx)
+        .limit(1)
+    )
+
+
+def _flat(s: str) -> str:
+    """Whitespace runs → one space (edge spaces kept, so the pieces around the match join correctly)."""
+    return re.sub(r"\s+", " ", s)
+
+
+def sentence_evidence(db, doc, ref):
+    """A pinned hit is kept as its own sentence (parallel corpora: its sentence pair), never the KWIC window,
+    which can run into unrelated neighbouring sentences. Returns (text, source, ref fields) or None:
+    text = the sentence with the match in **bold** plus one `XX：…` line per aligned translation;
+    ref gets sentence_index, sentence (plain), match [start, end) code points in it, aligned, document_title."""
+    if ref.start_cp is None or ref.end_cp is None:
+        return None
+    s = hit_sentence(db, doc, ref)
+    if s is None or not (s.start_cp <= ref.start_cp < s.end_cp):
+        return None
+    a = ref.start_cp - s.start_cp
+    b = min(max(ref.end_cp - s.start_cp, a), len(s.text))
+    before = _flat(s.text[:a]).lstrip()
+    match = _flat(s.text[a:b])
+    after = _flat(s.text[b:]).rstrip()
+    aligned = aligned_texts(db, [s.id]).get(s.id, [])
+    sentence = before + match + after
+    lines = [f"{before}**{match}**{after}"] + [
+        f"{x['language'].upper()}：{_flat(x['text'])}" for x in aligned
+    ]
+    corpus = db.get(Corpus, doc.corpus_id)
+    source = f"{doc.title} · 句 {s.idx + 1} · {corpus.name}"
+    fields = {
+        "sentence_index": s.idx,
+        "sentence": sentence,
+        "match": [len(before), len(before) + len(match)],
+        "aligned": aligned,
+        "document_title": doc.title,
+    }
+    return "\n".join(lines), source, fields
 
 
 @router.get("/projects/{project_id}/evidence")
@@ -64,11 +124,29 @@ def list_evidence(project_id: UUID, user: CurrentUser, db: Db, paging: Paging):
 def create_evidence(project_id: UUID, body: EvidenceInput, user: CurrentUser, db: Db):
     require_project(db, project_id, user, PIN)
     ref = body.ref
+    text, source, extra = body.text, body.source, {}
+    if body.kind == "hit" and not ref.document_id and ref.hit_id:
+        # hit_id is "<document id>:<start_cp>-<end_cp>" (engine.model.Hit); assistant cards send only that
+        m = re.fullmatch(
+            r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
+            r":(\d+)-(\d+)",
+            ref.hit_id,
+        )
+        if m:
+            ref = ref.model_copy(
+                update={
+                    "document_id": UUID(m[1]),
+                    "start_cp": int(m[2]),
+                    "end_cp": int(m[3]),
+                }
+            )
     if ref.document_id:  # the pinned document must be readable by this user
         doc = db.get(Document, ref.document_id)
         if not doc:
             raise not_found("文档")
         load_corpus(db, doc.corpus_id, user)
+        if body.kind == "hit" and (built := sentence_evidence(db, doc, ref)):
+            text, source, extra = built
     if ref.stat_id:
         stat = db.get(StatResult, ref.stat_id)
         if not stat or stat.project_id != project_id:
@@ -76,9 +154,9 @@ def create_evidence(project_id: UUID, body: EvidenceInput, user: CurrentUser, db
     item = Evidence(
         project_id=project_id,
         kind=body.kind,
-        ref=ref.model_dump(mode="json", exclude_none=True),
-        text=body.text,
-        source=body.source,
+        ref=ref.model_dump(mode="json", exclude_none=True) | extra,
+        text=text,
+        source=source,
         note=body.note,
         created_by=user.id,
     )

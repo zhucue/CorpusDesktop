@@ -1,15 +1,15 @@
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { App, Form, Input, Modal, Select } from "antd";
+import { App, Form, Input, Modal, Popover, Select } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import {
   ApiError,
   api,
   errorText,
   type Counts,
   type Hit,
-  type Job,
   type MetadataField,
+  type ParseCorpus,
   type ParseResult,
   type SavedQuery,
   type Scope,
@@ -17,15 +17,17 @@ import {
   type SearchResult,
   type SearchScope,
 } from "../../api";
-import { Count, ErrorAlert, Empty, exportTip, QueryChip, Sparkline, Tip } from "../../components/common";
+import { ErrorAlert, Empty, exportTip, QueryChip, Sparkline, Tip } from "../../components/common";
+import { ScopeSelect } from "../../components/common/ScopeSelect";
 import { Icon } from "../../components/Icon";
 import { conditionTerms, hasPos, KwicTable, type KwicMark, type KwicRow } from "../../components/results/Kwic";
 import { cpLength, labelColor } from "../../components/annot/spans";
 import { fetchSentenceSpans } from "../annotate/spanData";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
-import { describeScope, useCorpora, useJobCreated, useProjectId, useSubcorpora } from "../../lib/data";
+import { describeScope, useCorpora, useProjectId, useSubcorpora } from "../../lib/data";
 import { fmt, fmtShortTime } from "../../lib/format";
+import { useExportJob } from "../../lib/exportJob";
 import { posLegend } from "../../lib/pos";
 import { distRows, type DistRow } from "../stats/columns";
 import { useStatJob } from "../stats/useStatJob";
@@ -35,6 +37,9 @@ import SentenceTree from "./SentenceTree";
 import TermExampleButton from "../knowledge/TermExampleButton";
 import { useDebounced } from "../../lib/useDebounced";
 import { loadHistory, pushHistory, type HistoryEntry } from "./history";
+import { distributionFields, fieldLabel } from "./fields";
+import { posGroups } from "./posTags";
+import { convertScript, guessScript, scriptLabel } from "./script";
 import "./search.css";
 
 const PAGE_SIZE = 50;
@@ -128,8 +133,30 @@ export function ParseLine({ query, parse, error }: { query: string; parse: Parse
   );
 }
 
-export function CountsCards({ counts, timedOut, spark }: { counts: Counts | null; timedOut: boolean; spark?: { values: number[]; label: string } | null }) {
-  const pending = counts && !counts.complete ? (timedOut ? "未完成" : "计算中") : undefined;
+/** Final value straight away: rolling from the previous search's count read as a wrong number (QA Q24). */
+function Count({ value, unit, pending }: { value: number | null; unit: string; pending?: string }) {
+  if (pending) return <div className="count pending">{pending}</div>;
+  return (
+    <div className="count">
+      <span className="n">{fmt(value ?? 0)}</span>
+      <span className="unit">{unit}</span>
+    </div>
+  );
+}
+
+export function CountsCards({
+  counts,
+  timedOut,
+  spark,
+  searching,
+}: {
+  counts: Counts | null;
+  timedOut: boolean;
+  spark?: { values: number[]; label: string } | null;
+  /** A new search is running: the previous counts are not shown. */
+  searching?: boolean;
+}) {
+  const pending = searching ? "检索中" : counts && !counts.complete ? (timedOut ? "未完成" : "计算中") : undefined;
   const v = (n: number | undefined) => (counts ? (n ?? 0) : null);
   return (
     <section className="grid-3" aria-label="计数">
@@ -156,7 +183,60 @@ export function CountsCards({ counts, timedOut, spark }: { counts: Counts | null
   );
 }
 
-const fieldLabel = (field: string) => (field === "position" ? "文档位置" : field === "year" ? "年份" : field);
+/** 插入 → 词性: the POS tags of the searched corpus's index, inserted as /TAG at the caret (QA Q21). */
+function PosPicker({ info, onInsert }: { info: ParseCorpus | undefined; onInsert: (snippet: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const tags = info ? posGroups(info.pos_tags) : [];
+  return (
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      trigger="click"
+      placement="bottomLeft"
+      content={
+        <div style={{ width: 340 }}>
+          <div className="small muted" style={{ marginBottom: 8 }}>
+            {info ? `词性体系 ${info.tagset_name} · 写作 词/标签，如 语言/${tags.find((t) => t.tag === "NOUN" || t.tag === "n")?.tag ?? tags[0]?.tag ?? "n"}` : "选择语料库后列出词性"}
+          </div>
+          <div className="row wrap" style={{ gap: 4, maxHeight: 260, overflow: "auto" }}>
+            {tags.map((t) => (
+              <button
+                key={t.tag}
+                className="chip"
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onInsert(`/${t.tag}`);
+                }}
+              >
+                <span className="mono">{t.tag}</span>
+                {t.name && <span className="muted"> {t.name}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      }
+    >
+      <button className="chip" type="button" aria-label="插入词性">
+        词性{info ? ` · ${info.tagset_name}` : ""}
+      </button>
+    </Popover>
+  );
+}
+
+/** Temporary filter chip text: field names in Chinese, plain values (no JSON quotes). */
+function filterText(filter: Record<string, unknown>): string {
+  return Object.entries(filter)
+    .map(([k, v]) => {
+      if (Array.isArray(v)) return `${fieldLabel(k)} = ${v.join("、")}`;
+      if (v && typeof v === "object") {
+        const r = v as { gte?: number; lte?: number };
+        return `${fieldLabel(k)} ${r.gte ?? ""}–${r.lte ?? ""}`;
+      }
+      return `${fieldLabel(k)} = ${String(v)}`;
+    })
+    .join("，");
+}
 
 /** Distribution of the current hits; computed only when the user asks (stats.distribution job). */
 function DistributionCard({
@@ -352,7 +432,6 @@ export default function Search() {
   const shell = useShell();
   const corpora = useCorpora(projectId);
   const subcorpora = useSubcorpora(projectId);
-  const jobCreated = useJobCreated();
   const [params, setParams] = useSearchParams();
 
   const [query, setQuery] = useState("");
@@ -403,11 +482,23 @@ export default function Search() {
     return pos || dep || span ? { ...(pos ? { pos } : {}), ...(dep ? { dep } : {}), ...(span ? { span } : {}) } : undefined;
   }
 
-  /* ---------- parse as you type ---------- */
+  /* ---------- parse as you type, against the corpus searched (tagset, layers) ---------- */
+  const scopeStr = scope ? JSON.stringify(scope) : "";
+  const corpusReady = info.corpus?.status === "ready" || info.corpus?.status === "stale";
+  // What the corpus offers (POS tags, tagset, layers): an empty query parsed with the scope.
+  const corpusFacts = useQuery({
+    queryKey: ["parse-corpus", scopeStr, info.corpus?.index_version],
+    queryFn: () => api.post<ParseResult>("/search/parse", { query: "", scope }),
+    enabled: !!scope && corpusReady,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+    meta: { background: true },
+  });
+  const facts = corpusFacts.data?.corpus;
   const debounced = useDebounced(query.trim(), 300);
   const parse = useQuery({
-    queryKey: ["parse", debounced],
-    queryFn: () => api.post<ParseResult>("/search/parse", { query: debounced }),
+    queryKey: ["parse", debounced, scopeStr],
+    queryFn: () => api.post<ParseResult>("/search/parse", scope && corpusReady ? { query: debounced, scope } : { query: debounced }),
     enabled: debounced.length > 0,
     placeholderData: keepPreviousData,
     staleTime: Infinity,
@@ -491,10 +582,7 @@ export default function Search() {
     staleTime: 5 * 60 * 1000,
     meta: { background: true },
   });
-  const distFields = useMemo(() => {
-    const numeric = (fields.data ?? []).filter((f) => f.type === "number").map((f) => f.field);
-    return [...numeric.filter((f) => f === "year"), ...numeric.filter((f) => f !== "year"), "position"];
-  }, [fields.data]);
+  const distFields = useMemo(() => distributionFields(fields.data ?? []), [fields.data]);
   const distSelected = distPick && distFields.includes(distPick) ? distPick : distFields[0];
   const distKey = distBase ? JSON.stringify(distBase) : "";
   // Re-paging keeps distBase, so the same computed field (and the cached stat) is reused.
@@ -504,6 +592,18 @@ export default function Search() {
   const dRows = useMemo(() => (dist.stat ? distRows(dist.stat) : undefined), [dist.stat]);
 
   /* ---------- actions ---------- */
+  function insert(snippet: string) {
+    const el = inputRef.current;
+    const s = el?.selectionStart ?? query.length;
+    const e = el?.selectionEnd ?? query.length;
+    const r = insertAt(query, s, e, snippet);
+    setQuery(r.value);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(r.caret, r.caret);
+    });
+  }
+
   function run(opts?: { query?: string; scope?: SearchScope | null; fromDist?: boolean; layers?: SearchRequest["layers"] }) {
     const q = (opts?.query ?? query).trim();
     const sc = opts && "scope" in opts ? opts.scope : scope;
@@ -567,6 +667,15 @@ export default function Search() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
+  // The project scope changed elsewhere (palette, breadcrumb, header picker): a temporary filter no longer applies.
+  const shellScopeKey = JSON.stringify(shell.scope ?? null);
+  const lastShellScope = useRef(shellScopeKey);
+  useEffect(() => {
+    if (lastShellScope.current === shellScopeKey) return;
+    lastShellScope.current = shellScopeKey;
+    setTempScope(null);
+  }, [shellScopeKey]);
+
   // Re-run when context length or sort changes.
   useEffect(() => {
     if (req) run({ query: req.query, scope: req.scope, fromDist: true });
@@ -586,19 +695,10 @@ export default function Search() {
     setSelected(null);
   }
 
-  const exportJob = useMutation({
-    mutationFn: (format: "csv" | "xlsx") => api.post<Job>("/search/export", { ...withoutSearchId(req!), format, project_id: projectId }),
-    onSuccess: (_, format) => {
-      jobCreated(projectId);
-      message.success(
-        <span>
-          已提交导出任务：{format.toUpperCase()}
-          {counts?.complete ? `，${fmt(counts.hits)} 行` : ""}，<Link to={`/p/${projectId}/jobs`}>查看任务</Link>
-        </span>,
-      );
-    },
-    onError: (e) => message.error(errorText(e)),
-  });
+  // Background export: "已开始导出", then a toast with 下载 when the job finishes (QA Q32).
+  const exporter = useExportJob(projectId);
+  const exportAs = (format: "csv" | "xlsx") =>
+    exporter.start({ url: "/search/export", body: { ...withoutSearchId(req!), format, project_id: projectId }, label: format.toUpperCase() });
 
   const saveQuery = useMutation({
     mutationFn: (name: string) => api.post<SavedQuery>(`/projects/${projectId}/queries`, { name, query: query.trim(), scope }),
@@ -636,6 +736,7 @@ export default function Search() {
   /* ---------- rows ---------- */
   const terms = conditionTerms(result?.parse.conditions);
   const corpusName = info.corpus?.name ?? "";
+  const parallel = !!info.corpus?.parallel;
   const rows: (KwicRow & { hit: Hit })[] = (result?.items ?? [])
     .filter((h) => !within || `${h.left}${h.match}${h.right}`.includes(within))
     .map((h) => ({
@@ -644,12 +745,34 @@ export default function Search() {
       match: h.match,
       right: h.right,
       source: h.document_title,
+      locator: `句 ${h.sentence_index + 1}`,
       aligned: h.aligned,
+      noAligned: parallel,
       tokens: h.tokens,
       evidence: hitEvidence(h, req!.query, req!.scope, corpusName),
       hit: h,
     }));
   const posAvailable = hasPos(rows);
+
+  /* ---------- script (简/繁): recorded at import, else guessed from the hits; zero-hit hint (QA Q36) ---------- */
+  const script = info.corpus?.meta?.script ?? facts?.script ?? guessScript(rows.slice(0, 20).map((r) => r.left + r.match + r.right).join(""));
+  const zeroHits = !!req && !!counts?.complete && counts.hits === 0 && /[一-鿿]/.test(req.query) && !req.search_id;
+  const altScript = useQuery({
+    queryKey: ["script-alt", req],
+    enabled: zeroHits,
+    staleTime: Infinity,
+    retry: false,
+    meta: { background: true },
+    queryFn: async () => {
+      for (const to of ["traditional", "simplified"] as const) {
+        const alt = convertScript(req!.query, to);
+        if (alt === req!.query) continue;
+        const r = await api.post<SearchResult>("/search", { ...withoutSearchId(req!), query: alt, page: 1, page_size: 1, include_tokens: false });
+        if (r.counts.hits !== 0) return { query: alt, to, hits: r.counts.complete ? r.counts.hits : null };
+      }
+      return null;
+    },
+  });
 
   /* ---------- span highlights: spans of the sentences of rows that scrolled into view (片段层) ---------- */
   const markLayer = req?.layers?.span ?? null;
@@ -699,10 +822,22 @@ export default function Search() {
       <PageHeader
         title="检索"
         actions={
-          <button className="btn s" type="button" onClick={() => setSaving(true)} disabled={!query.trim() || !scope || !!tempScope}>
-            <Icon name="plus" size={14} />
-            <span className="lbl">保存查询</span>
-          </button>
+          <>
+            {/* direct corpus / subcorpus picker (QA Q28) */}
+            <ScopeSelect
+              projectId={projectId}
+              value={tempScope ? null : shell.scope}
+              onChange={(sc) => {
+                setTempScope(null);
+                shell.setScope(sc);
+              }}
+              width={220}
+            />
+            <button className="btn s" type="button" onClick={() => setSaving(true)} disabled={!query.trim() || !scope || !!tempScope}>
+              <Icon name="plus" size={14} />
+              <span className="lbl">保存查询</span>
+            </button>
+          </>
         }
       />
       <HistoryPanel
@@ -766,27 +901,15 @@ export default function Search() {
             <span className="small muted" style={{ marginRight: 2 }}>
               插入
             </span>
+            <PosPicker info={facts} onInsert={insert} />
             {CHIPS.map(([label, snippet, tip]) => (
               <Tip key={label} title={tip}>
-                <button
-                  className="chip"
-                  type="button"
-                  onClick={() => {
-                    const el = inputRef.current;
-                    const s = el?.selectionStart ?? query.length;
-                    const e = el?.selectionEnd ?? query.length;
-                    const r = insertAt(query, s, e, snippet);
-                    setQuery(r.value);
-                    requestAnimationFrame(() => {
-                      el?.focus();
-                      el?.setSelectionRange(r.caret, r.caret);
-                    });
-                  }}
-                >
+                <button className="chip" type="button" onClick={() => insert(snippet)}>
                   {label}
                 </button>
               </Tip>
             ))}
+            {script && script !== "simplified" && <span className="tag t-gray">{scriptLabel[script]}</span>}
             <div className="grow" />
             <div className="parse" aria-live="polite">
               <ParseLine query={query.trim()} parse={parseShown} error={parse.error} />
@@ -816,18 +939,14 @@ export default function Search() {
           {!scope && (
             <div className="alert info">
               <Icon name="info" size={14} />
-              <span>
-                先选择范围：
-                <button className="back" type="button" onClick={() => shell.openPalette("语料库")}>
-                  选择语料库
-                </button>
-              </span>
+              <span>先选择范围</span>
+              <ScopeSelect projectId={projectId} value={null} onChange={(sc) => shell.setScope(sc)} size="small" />
             </div>
           )}
           {tempScope && (
             <div className="row">
               <span className="filter-chip">
-                临时筛选 · {"filter" in tempScope ? Object.entries(tempScope.filter).map(([k, v]) => `${k} = ${JSON.stringify(v)}`).join("，") : ""}
+                临时筛选 · {"filter" in tempScope ? filterText(tempScope.filter) : ""}
                 <button
                   type="button"
                   aria-label="清除筛选"
@@ -843,7 +962,9 @@ export default function Search() {
           )}
         </section>
 
-        {(result || search.isFetching) && <CountsCards counts={counts} timedOut={timedOut} spark={spark} />}
+        {(result || search.isFetching) && (
+          <CountsCards counts={counts} timedOut={timedOut} spark={spark} searching={search.isFetching && search.isPlaceholderData && !req?.search_id} />
+        )}
 
         {result && distBase && (
           <DistributionCard
@@ -864,7 +985,8 @@ export default function Search() {
         )}
 
         {(result || search.error) && (
-          <section className="results-row">
+          // a query with a syntax error greys out the previous results (QA Q23)
+          <section className="results-row" style={parseBad ? { opacity: 0.45 } : undefined}>
             <div className="card grow" style={{ display: "flex", flexDirection: "column" }}>
               <div className="card-head kwic-head">
                 <SegmentedCtx value={ctxMode} onChange={setCtxMode} />
@@ -921,19 +1043,19 @@ export default function Search() {
                   </button>
                 )}
                 <Tip title={exportTip("导出 CSV")}>
-                  <button className="btn s" type="button" disabled={!req || exportJob.isPending} onClick={() => exportJob.mutate("csv")}>
+                  <button className="btn s" type="button" disabled={!req || exporter.busy} onClick={() => exportAs("csv")}>
                     <Icon name="download" size={14} />
                     CSV
                   </button>
                 </Tip>
                 <Tip title={exportTip("导出 XLSX")}>
-                  <button className="btn s" type="button" disabled={!req || exportJob.isPending} onClick={() => exportJob.mutate("xlsx")}>
+                  <button className="btn s" type="button" disabled={!req || exporter.busy} onClick={() => exportAs("xlsx")}>
                     <Icon name="download" size={14} />
                     XLSX
                   </button>
                 </Tip>
               </div>
-              <ErrorAlert error={search.error} style={{ margin: 16 }} />
+              <ErrorAlert error={parseBad ? null : search.error} style={{ margin: 16 }} />
               {pollState?.error && pollState.id === result?.search_id ? <ErrorAlert error={pollState.error} style={{ margin: 16 }} /> : null}
               {search.isFetching && !result ? (
                 <div className="col" style={{ padding: 16 }}>
@@ -942,12 +1064,34 @@ export default function Search() {
                   ))}
                 </div>
               ) : result && result.items.length === 0 ? (
-                <Empty icon="searchx" text="没有命中" />
+                <>
+                  <Empty icon="searchx" text="没有命中" />
+                  {altScript.data && (
+                    <div className="alert info" style={{ margin: "0 16px 16px" }}>
+                      <Icon name="info" size={14} />
+                      <span className="grow">
+                        该库为{altScript.data.to === "traditional" ? "繁体" : "简体"}，试试「{altScript.data.query}」
+                        {altScript.data.hits != null ? `（${fmt(altScript.data.hits)} 次）` : ""}
+                      </span>
+                      <button
+                        className="btn xs"
+                        type="button"
+                        onClick={() => {
+                          setQuery(altScript.data!.query);
+                          run({ query: altScript.data!.query });
+                        }}
+                      >
+                        检索「{altScript.data.query}」
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 result && (
                   <div className="kwic-scroll" style={{ opacity: search.isFetching ? 0.55 : 1, transition: "opacity 200ms" }}>
                     <KwicTable
                       rows={rows}
+                      wrap={ctxMode !== "char"}
                       terms={terms}
                       posColor={posOn && posAvailable}
                       selected={selected}
@@ -958,7 +1102,11 @@ export default function Search() {
                       onRowVisible={markLayer ? rowVisible : undefined}
                       extraActions={(r) => {
                         const hit = rows.find((x) => x.id === r.id)?.hit;
-                        return hit ? <TermExampleButton projectId={projectId} hit={hit} source={r.evidence?.source ?? hit.document_title} /> : null;
+                        return hit ? (
+                          <span className="act-term">
+                            <TermExampleButton projectId={projectId} hit={hit} source={r.evidence?.source ?? hit.document_title} />
+                          </span>
+                        ) : null;
                       }}
                       renderExpanded={
                         treeLayer
@@ -985,10 +1133,10 @@ export default function Search() {
             <ContextInspector
               hit={selectedHit}
               terms={terms}
-              indexVersion={info.corpus?.index_version}
               evidence={selectedHit && req ? hitEvidence(selectedHit, req.query, req.scope, corpusName) : null}
               alignLayer={alignLayer}
               projectId={projectId}
+              parallel={parallel}
               onClose={() => setSelected(null)}
             />
           </section>

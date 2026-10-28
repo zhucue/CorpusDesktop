@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 import secrets
 from collections import OrderedDict
 from threading import Lock
@@ -99,7 +100,10 @@ class ExportInput(SearchInput):
 
 
 class ParseInput(BaseModel):
+    """scope: resolve POS against that corpus's tagset and check the annotation layers the query needs."""
+
     query: str = Field(max_length=1000)
+    scope: Scope | None = None
 
 
 class SavedQueryInput(BaseModel):
@@ -147,6 +151,66 @@ def plan_query(text, tagset="mixed"):
 
 def compile_query(text, tagset="mixed"):
     return plan_query(text, tagset)[1]
+
+
+TAGSET_NAMES = {"upos": "UPOS", "jieba": "jieba（北大标注）", "mixed": "UPOS + jieba"}
+
+
+def corpus_info(db, corpus, user, tagset):
+    """What the parse line shows about the searched corpus: POS tagset and the tags in its index, script
+    (Corpus.meta.script when import recorded it), and whether dependency / span layers exist."""
+    key, ix = corpus_key(corpus.id), index_dir(corpus.id)
+    dep = cwb.has_values(ix, key, "deprel") or bool(
+        effective.default_layer(db, corpus, user, "dep")
+    )
+    return {
+        "tagset": tagset,
+        "tagset_name": TAGSET_NAMES.get(tagset, tagset),
+        "pos_tags": sorted(cwb.lexicon(ix, key, "pos")),
+        "script": (corpus.meta or {}).get("script"),
+        "parallel": corpus.parallel,
+        "layers": {
+            "dep": dep,
+            "span": effective.default_layer(db, corpus, user, "span") is not None,
+        },
+    }
+
+
+_ATTR_KEY = re.compile(r"(?:^\{|,)\s*(\w+)\s*=")
+
+
+def layer_problem(db, corpus, user, ast, layers=None):
+    """(position, message) when the query needs an annotation the corpus lacks, else None: `{dep=}` without
+    system dependencies or a dependency layer, `{lemma=}` without lemmas, `[标签]` without a span layer.
+    layers None (parse line): any of the user's layers on the corpus counts; otherwise the chosen ones."""
+    key, ix = corpus_key(corpus.id), index_dir(corpus.id)
+
+    def has_layer(kind):
+        if layers is not None:
+            return layers.get(kind) is not None
+        return effective.default_layer(db, corpus, user, kind) is not None
+
+    for tok in ast.tokens:
+        if tok.kind == "attr":
+            keys = {k.lower() for k in _ATTR_KEY.findall(tok.text)}
+            if (
+                "dep" in keys
+                and cwb.has_values(ix, key, "deprel") is False
+                and not has_layer("dep")
+            ):
+                return tok.position, "该语料无依存层，{dep=} 无法检索"
+            if "lemma" in keys and cwb.has_values(ix, key, "lemma") is False:
+                return tok.position, "该语料无词元标注，{lemma=} 无法检索"
+        elif tok.kind == "span" and not has_layer("span"):
+            return tok.position, "该语料无片段标注层，[标签] 无法检索"
+    return None
+
+
+def check_layer_problem(db, corpus, user, ast, layers):
+    if problem := layer_problem(db, corpus, user, ast, layers):
+        raise ApiError(
+            422, "INVALID_LAYER", f"第 {problem[0] + 1} 个字符：{problem[1]}"
+        )
 
 
 def pure_attr(ast) -> bool:
@@ -229,7 +293,10 @@ def run_search(
         seed=req.seed,
         page=page,
         page_size=page_size,
-        context=Context(unit=req.context.unit, size=req.context.size),
+        # parallel corpora: neighbouring sentences are unrelated pairs, so context stays in the hit's sentence
+        context=Context(
+            unit=req.context.unit, size=req.context.size, sentence_only=corpus.parallel
+        ),
         count_timeout=count_timeout,
         **kw,
     )
@@ -327,6 +394,27 @@ def counts_view(c):
     }
 
 
+def aligned_texts(db, sentence_ids):
+    """{sentence id: [{"language", "text"}]}: sentences aligned to each id, in either direction."""
+    aligned = {}
+    if sentence_ids:
+        ids = list(sentence_ids)
+        for mine, other in (
+            (SentenceAlignment.src_sentence_id, SentenceAlignment.tgt_sentence_id),
+            (SentenceAlignment.tgt_sentence_id, SentenceAlignment.src_sentence_id),
+        ):
+            rows = db.execute(
+                select(mine, Document.language, Sentence.text)
+                .join(Sentence, Sentence.id == other)
+                .join(Document, Document.id == Sentence.document_id)
+                .where(mine.in_(ids))
+                .order_by(Document.language, Sentence.document_id, Sentence.idx)
+            )
+            for sid, language, text in rows:
+                aligned.setdefault(sid, []).append({"language": language, "text": text})
+    return aligned
+
+
 def enrich(db, hits):
     """Engine hits → HTTP hits with document title, metadata and aligned sentences."""
     doc_ids = {UUID(h.doc_id) for h in hits}
@@ -342,22 +430,7 @@ def enrich(db, hits):
             )
         )
         sentence_ids = {(doc, idx): sid for sid, doc, idx in rows}
-    aligned = {}
-    if sentence_ids:
-        ids = list(sentence_ids.values())
-        for mine, other in (
-            (SentenceAlignment.src_sentence_id, SentenceAlignment.tgt_sentence_id),
-            (SentenceAlignment.tgt_sentence_id, SentenceAlignment.src_sentence_id),
-        ):
-            rows = db.execute(
-                select(mine, Document.language, Sentence.text)
-                .join(Sentence, Sentence.id == other)
-                .join(Document, Document.id == Sentence.document_id)
-                .where(mine.in_(ids))
-                .order_by(Document.language, Sentence.document_id, Sentence.idx)
-            )
-            for sid, language, text in rows:
-                aligned.setdefault(sid, []).append({"language": language, "text": text})
+    aligned = aligned_texts(db, sentence_ids.values())
     items = []
     for h in hits:
         doc = docs.get(UUID(h.doc_id))
@@ -418,8 +491,19 @@ def attach_tokens(db, items):
 
 
 @router.post("/search/parse")
-def parse(body: ParseInput, user: CurrentUser):
-    return parse_view(body.query)
+def parse(body: ParseInput, user: CurrentUser, db: Db):
+    if body.scope is None:
+        return parse_view(body.query)
+    corpus, _ = resolve_scope(db, body.scope, user)
+    tagset = corpus_tagset(corpus)
+    view = parse_view(body.query, tagset)
+    view["corpus"] = corpus_info(db, corpus, user, tagset)
+    if view["ok"]:
+        problem = layer_problem(db, corpus, user, query.parse(body.query, tagset))
+        if problem:
+            view["ok"] = False
+            view["error"] = {"position": problem[0], "message": problem[1]}
+    return view
 
 
 @router.post("/search")
@@ -429,6 +513,7 @@ def search(body: SearchInput, user: CurrentUser, db: Db):
     ast, cqp = plan_query(body.query, tagset)
     layers = effective.check_layers(db, body.layers, corpus, user)
     with_span_layer(db, cqp, layers, corpus, user)
+    check_layer_problem(db, corpus, user, ast, layers)
     sid, entry = searches.open(corpus, restrict, cache_key(cqp, layers), body)
     req = body.model_copy(update={"seed": entry["seed"]})
     result = search_page(
@@ -497,9 +582,10 @@ def context(
 @router.post("/search/export")
 def export(body: ExportInput, user: CurrentUser, db: Db):
     corpus, restrict = resolve_scope(db, body.scope, user)
-    cqp = compile_query(body.query, corpus_tagset(corpus))
+    ast, cqp = plan_query(body.query, corpus_tagset(corpus))
     layers = effective.check_layers(db, body.layers, corpus, user)
     with_span_layer(db, cqp, layers, corpus, user)
+    check_layer_problem(db, corpus, user, ast, layers)
     if layers.get("span"):
         body = body.model_copy(
             update={

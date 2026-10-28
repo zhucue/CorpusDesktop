@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { MAX_PAGE_SIZE, api, errorText, type Evidence, type EvidenceInput, type Job, type Page } from "../../api";
 import { knowledgeHref } from "../../features/knowledge/data";
-import { NotePicker, evidenceMarkdown, writeToNote, type NoteTarget } from "../../features/knowledge/NotePicker";
-import { useJobCreated } from "../../lib/data";
+import { EVIDENCE_MIME, NotePicker, evidenceMarkdown, writeEvidenceToNote, type NoteTarget } from "../../features/knowledge/NotePicker";
+import { isActiveJob, quietJobs, useJob, useJobCreated } from "../../lib/data";
+import { cpSlice } from "../annot/spans";
 import { reducedMotion } from "../../theme/motion";
 import { Tip } from "../common";
 import { Icon } from "../Icon";
@@ -106,8 +107,8 @@ export function EvidenceProvider({ projectId, children }: { projectId: string; c
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-/** Pin to evidence basket. Renders nothing outside an EvidenceProvider. */
-export function PinButton({ input, className }: { input: EvidenceInput; className?: string }) {
+/** Pin to evidence basket. Renders nothing outside an EvidenceProvider. label: show 钉住 / 已钉 next to the icon. */
+export function PinButton({ input, className, label }: { input: EvidenceInput; className?: string; label?: boolean }) {
   const ev = useEvidence();
   const ref = useRef<HTMLButtonElement>(null);
   if (!ev) return null;
@@ -126,38 +127,128 @@ export function PinButton({ input, className }: { input: EvidenceInput; classNam
       }}
     >
       <Icon name="pin" />
+      {label && <span className="act-l">{on ? "已钉" : "钉住"}</span>}
     </button>
   );
+}
+
+/** Basket line for one item: a pinned hit shows its sentence with the match in bold and the aligned translations;
+ * a statistics row shows 「项」 method value (QA Q60 / Q76). */
+function EvidenceBody({ it }: { it: Evidence }) {
+  const r = it.ref;
+  if (it.kind === "hit" && r.sentence && r.match) {
+    const [a, b] = r.match;
+    return (
+      <>
+        <span className="ev-t" title={r.sentence} style={{ whiteSpace: "normal", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>
+          {cpSlice(r.sentence, 0, a)}
+          <b>{cpSlice(r.sentence, a, b)}</b>
+          {cpSlice(r.sentence, b)}
+        </span>
+        {r.aligned?.map((x, i) => (
+          <span key={i} className="ev-s" style={{ fontFamily: "inherit", fontSize: 12, whiteSpace: "normal" }}>
+            {x.language.toUpperCase()} · {x.text}
+          </span>
+        ))}
+        <span className="ev-s" title={it.source}>
+          {it.source}
+          {r.search_query ? ` · ${r.search_query}` : ""}
+        </span>
+      </>
+    );
+  }
+  if (it.kind === "stat_row") {
+    // text "项 · 值", source "方法 · 范围" (features/stats/StatTable rowEvidence)
+    const m = /^(.*) · ([^·]+)$/.exec(it.text);
+    const [method, ...rest] = it.source.split(" · ");
+    return (
+      <>
+        <span className="ev-t" title={it.text}>
+          {m ? (
+            <>
+              「{m[1]}」 {method} <b className="num">{m[2]}</b>
+            </>
+          ) : (
+            it.text
+          )}
+        </span>
+        <span className="ev-s" title={it.source}>
+          {m ? rest.join(" · ") : it.source}
+        </span>
+      </>
+    );
+  }
+  return (
+    <>
+      <span className="ev-t" title={it.text}>
+        {it.text}
+      </span>
+      <span />
+      <span className="ev-s" title={it.source}>
+        {it.source}
+        {r.search_query ? ` · ${r.search_query}` : ""}
+      </span>
+    </>
+  );
+}
+
+/** Basket export as a background job: toast at the top (the dock sits bottom right), download when done. */
+function useBasketExport(projectId: string) {
+  const { message } = App.useApp();
+  const jobCreated = useJobCreated();
+  const [jobId, setJobId] = useState<string | null>(null);
+  const job = useJob(jobId);
+  const start = useMutation({
+    mutationFn: (format: "csv" | "xlsx" | "docx") => api.post<Job>(`/projects/${projectId}/evidence/export`, { format }),
+    onSuccess: (j, format) => {
+      quietJobs.add(j.id);
+      setJobId(j.id);
+      jobCreated(projectId);
+      message.info(`已开始导出 ${format.toUpperCase()}`);
+    },
+    onError: (e) => message.error(errorText(e)),
+  });
+  useEffect(() => {
+    const j = job.data;
+    if (!j || j.id !== jobId || isActiveJob(j)) return;
+    setJobId(null);
+    if (j.state !== "succeeded") {
+      message.error(`导出失败：${j.error?.message ?? "任务已取消"}`);
+      return;
+    }
+    const href = `/api/jobs/${j.id}/download`;
+    const name = typeof j.result?.filename === "string" ? j.result.filename : "";
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    message.success({
+      content: (
+        <span>
+          导出完成，<a href={href}>下载 {name}</a>
+        </span>
+      ),
+      duration: 6,
+    });
+  }, [job.data, jobId]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { start: start.mutate, busy: start.isPending || !!jobId };
 }
 
 
 export function EvidenceBasket({ projectId, open, onToggle }: { projectId: string; open: boolean; onToggle: () => void }) {
   const ev = useEvidence();
   const { message } = App.useApp();
-  const jobCreated = useJobCreated();
-  const exportJob = useMutation({
-    mutationFn: (format: "csv" | "xlsx" | "docx") => api.post<Job>(`/projects/${projectId}/evidence/export`, { format }),
-    onSuccess: () => {
-      jobCreated(projectId);
-      message.success(
-        <span>
-          已创建导出任务，<Link to={`/p/${projectId}/jobs`}>查看任务</Link>
-        </span>,
-      );
-    },
-    onError: (e) => message.error(errorText(e)),
-  });
+  const exportJob = useBasketExport(projectId);
   const [clearing, setClearing] = useState(false);
   const [picking, setPicking] = useState(false);
   if (!ev) return null;
   const n = ev.items.length;
 
-  /** Append every item to the note as a quote, then record each as an evidence ref. */
+  /** One evidence ref per item; the API appends each quote block once (Q58). */
   async function toNote(t: NoteTarget) {
-    const items = ev!.items;
-    const note = await writeToNote(projectId, t, items.map(evidenceMarkdown).join("\n\n"));
-    for (const it of items)
-      await api.post(`/kb/documents/${note.id}/refs`, { kind: "evidence", ref: { evidence_id: it.id, ...it.ref, text: it.text, source: it.source } });
+    const note = await writeEvidenceToNote(projectId, t, ev!.items);
     message.success(
       <span>
         已加入笔记「{note.title}」，<Link to={knowledgeHref(projectId, { tab: "notes", doc: note.id })}>打开笔记</Link>
@@ -199,21 +290,28 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
             </div>
           ) : (
             ev.items.map((it, i) => (
-              <div className="ev-item" key={it.id} style={{ animationDelay: `${i * 30}ms` }}>
+              <div
+                className="ev-item"
+                key={it.id}
+                style={{ animationDelay: `${i * 30}ms` }}
+                draggable
+                onDragStart={(e) => {
+                  // drop into a note editor: Markdown quote as text, the item for the 引用 record
+                  e.dataTransfer.setData("text/plain", `\n\n${evidenceMarkdown(it)}\n\n`);
+                  e.dataTransfer.setData(EVIDENCE_MIME, JSON.stringify({ id: it.id, text: it.text, source: it.source, ref: it.ref }));
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
+              >
                 <span className="ev-k">
                   <Icon name={evidenceIcon[it.kind] ?? "quote"} />
                 </span>
-                <span className="ev-t" title={it.text}>
-                  {it.text}
-                </span>
-                <Tip title="移出证据篮">
-                  <button className="pin-btn" type="button" aria-label="移出证据篮" onClick={() => ev.remove(it.id)}>
-                    <Icon name="x" />
-                  </button>
-                </Tip>
-                <span className="ev-s" title={it.source}>
-                  {it.source}
-                  {it.ref.search_query ? ` · ${it.ref.search_query}` : ""}
+                <EvidenceBody it={it} />
+                <span style={{ gridColumn: 3, gridRow: 1 }}>
+                  <Tip title="移出证据篮">
+                    <button className="pin-btn" type="button" aria-label="移出证据篮" onClick={() => ev.remove(it.id)}>
+                      <Icon name="x" />
+                    </button>
+                  </Tip>
                 </span>
               </div>
             ))
@@ -224,11 +322,11 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
             <Icon name="note" size={14} />
             加入笔记
           </button>
-          <button className="btn xs" type="button" disabled={!n || exportJob.isPending} onClick={() => exportJob.mutate("xlsx")}>
+          <button className="btn xs" type="button" disabled={!n || exportJob.busy} onClick={() => exportJob.start("xlsx")}>
             <Icon name="download" size={14} />
             XLSX
           </button>
-          <button className="btn xs" type="button" disabled={!n || exportJob.isPending} onClick={() => exportJob.mutate("docx")}>
+          <button className="btn xs" type="button" disabled={!n || exportJob.busy} onClick={() => exportJob.start("docx")}>
             <Icon name="download" size={14} />
             DOCX
           </button>

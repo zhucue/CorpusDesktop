@@ -56,6 +56,8 @@ class IndexInfo:
 class Context:
     unit: str = "char"  # char | sentence | paragraph
     size: int = 40  # code points, only for unit=char
+    # parallel corpora: context never leaves the hit's sentence (neighbouring sentences are unrelated pairs)
+    sentence_only: bool = False
 
 
 @dataclass

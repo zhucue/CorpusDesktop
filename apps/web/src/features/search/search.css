@@ -43,3 +43,6 @@
 /* KWIC keeps readable columns when the assistant drawer narrows the page: the table scrolls inside its card. */
 .kwic-scroll { overflow-x: auto; }
 .kwic-scroll .kwic { min-width: 680px; }
+
+/* The dock (任务 / 证据篮 pills, fixed bottom right) must not cover the inspector's last fields (QA Q34). */
+.results-row .inspector.ctx { max-height: calc(100vh - 160px); }

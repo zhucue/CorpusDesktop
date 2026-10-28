@@ -4,6 +4,7 @@ import { isPunctPos, posCat } from "../../lib/pos";
 import { cpLength, cpSlice } from "../annot/spans";
 import { PinButton } from "../global/evidence";
 import { Icon } from "../Icon";
+import "./kwic.css";
 
 export interface KwicRow {
   id: string;
@@ -11,7 +12,11 @@ export interface KwicRow {
   match: string;
   right: string;
   source: string;
+  /** Position inside the source, shown under it (句 747). */
+  locator?: string;
   aligned?: { language: string; text: string }[];
+  /** Parallel corpus row without an aligned sentence: says so instead of showing nothing. */
+  noAligned?: boolean;
   tokens?: HitToken[];
   evidence?: EvidenceInput;
 }
@@ -100,6 +105,24 @@ export function markSpans(text: string, offset: number, marks: KwicMark[], terms
   return out;
 }
 
+/** Text written with spaces between words (English …), not CJK: clipped by whole words in the 40 字 view. */
+const spaced = (t: string) => / /.test(t) && !cjk.test(t);
+
+/** Left context clipped by whole words (QA Q75): words in reverse order as inline blocks in a right-to-left,
+ * one-line box, so the words nearest the hit stay and earlier ones wrap out of sight. */
+function LeftWords({ text, terms }: { text: string; terms: string[] }) {
+  const words = text.split(/\s+/).filter(Boolean).reverse();
+  return (
+    <div className="lww" title={text}>
+      {words.map((w, i) => (
+        <span key={i} className="w">
+          {markTerms(w, terms)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function hasPos(rows: KwicRow[]): boolean {
   return rows.some((r) => r.tokens?.some((t) => t.pos));
 }
@@ -120,6 +143,7 @@ export function KwicTable({
   extraActions,
   marks,
   onRowVisible,
+  wrap = false,
 }: {
   rows: KwicRow[];
   terms?: string[];
@@ -139,6 +163,8 @@ export function KwicTable({
   marks?: (row: KwicRow) => KwicMark[] | undefined;
   /** Called once a row scrolls into view (lazy loading of row data). */
   onRowVisible?: (id: string) => void;
+  /** Whole sentences / paragraphs: contexts and translations wrap instead of being clipped. */
+  wrap?: boolean;
 }) {
   const body = useRef<HTMLTableSectionElement>(null);
   const visibleRef = useRef(onRowVisible);
@@ -163,16 +189,19 @@ export function KwicTable({
     return () => io.disconnect();
   }, [ids, !!onRowVisible]); // eslint-disable-line react-hooks/exhaustive-deps
   const cols = (offset != null ? 1 : 0) + 5;
+  // labelled buttons (QA Q27): 依存 / 术语 / 钉住 ≈ 52 px each; the compact card keeps icons only
   const actionCount = 1 + (renderExpanded ? 1 : 0) + (extraActions ? 1 : 0);
+  const actionWidth = 8 + (compact ? 28 : 54) * actionCount;
   return (
-    <table className={`tbl kwic ${posColor ? "poscolor" : ""}`}>
+    <table className={`tbl kwic ${posColor ? "poscolor" : ""} ${wrap ? "wrap" : ""} ${compact ? "compact" : ""}`}>
       <colgroup>
         {offset != null && <col style={{ width: 52 }} />}
-        <col style={{ width: compact ? "34%" : "34%" }} />
+        {/* left and right context share the free width equally */}
+        <col />
         <col style={{ width: compact ? 72 : 110 }} />
         <col />
         <col style={{ width: compact ? 96 : 150 }} />
-        <col style={{ width: 8 + 28 * actionCount }} />
+        <col style={{ width: actionWidth }} />
       </colgroup>
       {!compact && (
         <thead>
@@ -205,9 +234,13 @@ export function KwicTable({
             >
               {offset != null && <td className="mono muted small">{offset + i + 1}</td>}
               <td className="lc">
-                <div className="lcw">
-                  <span>{pos ? <PosText tokens={r.tokens!} part="left" /> : mk?.length ? markSpans(r.left, 0, mk, terms) : markTerms(r.left, terms)}</span>
-                </div>
+                {!pos && !mk?.length && !wrap && spaced(r.left) ? (
+                  <LeftWords text={r.left} terms={terms} />
+                ) : (
+                  <div className="lcw">
+                    <span>{pos ? <PosText tokens={r.tokens!} part="left" /> : mk?.length ? markSpans(r.left, 0, mk, terms) : markTerms(r.left, terms)}</span>
+                  </div>
+                )}
               </td>
               <td className="kw">
                 <span className="hit" data-testid="kwic-match">
@@ -218,12 +251,15 @@ export function KwicTable({
                 <div className="rt">{pos ? <PosText tokens={r.tokens!} part="right" /> : mk?.length ? markSpans(r.right, lLen + mLen, mk, terms) : markTerms(r.right, terms)}</div>
                 {r.aligned?.map((a, k) => (
                   <div className="al" key={k} title={a.text}>
-                    <b>{a.language.toUpperCase()}</b> · {a.text}
+                    {a.language && <b>{a.language.toUpperCase()} · </b>}
+                    {a.text}
                   </div>
                 ))}
+                {r.noAligned && !r.aligned?.length && <div className="al none">无对齐译文</div>}
               </td>
-              <td className="src" title={r.source}>
+              <td className="src" title={r.locator ? `${r.source} · ${r.locator}` : r.source}>
                 {r.source}
+                {r.locator && <span className="loc">{r.locator}</span>}
               </td>
               <td className="row-acts">
                 {renderExpanded && (
@@ -239,10 +275,11 @@ export function KwicTable({
                     }}
                   >
                     <Icon name="tree" size={14} />
+                    {!compact && <span className="act-l">{expandLabel.slice(0, 2)}</span>}
                   </button>
                 )}
                 {extraActions?.(r)}
-                {r.evidence && <PinButton input={r.evidence} />}
+                {r.evidence && <PinButton input={r.evidence} label={!compact} />}
               </td>
             </tr>
             {open && (

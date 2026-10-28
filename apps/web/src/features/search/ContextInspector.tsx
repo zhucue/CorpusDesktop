@@ -9,7 +9,8 @@ import { Icon } from "../../components/Icon";
 import { markTerms } from "../../components/results/Kwic";
 import { useAlignPair } from "../annotate/spanData";
 import { tokenForms } from "../annotate/spanModel";
-import { fmtVersion, metadataText } from "../../lib/format";
+import { metadataText } from "../../lib/format";
+import { fieldLabel, internalField } from "./fields";
 
 function Sentence({ text, highlight, terms }: { text: string; highlight: [number, number] | null; terms: string[] }) {
   if (!highlight) return <>{markTerms(text, terms)}</>;
@@ -25,12 +26,22 @@ function Sentence({ text, highlight, terms }: { text: string; highlight: [number
   );
 }
 
+function readableUrl(u: string): string {
+  try {
+    return decodeURI(u);
+  } catch {
+    return u;
+  }
+}
+
+/** The server stores a pinned hit as its own sentence with the aligned translation (services/api/evidence.py);
+ * text and source here are what the basket shows until it answers. */
 export function hitEvidence(hit: Hit, query: string, scope: EvidenceInput["ref"]["scope"], corpusName: string): EvidenceInput {
   return {
     kind: "hit",
-    ref: { hit_id: hit.hit_id, document_id: hit.document_id, start_cp: hit.start_cp, end_cp: hit.end_cp, search_query: query, scope },
+    ref: { hit_id: hit.hit_id, document_id: hit.document_id, start_cp: hit.start_cp, end_cp: hit.end_cp, sentence_index: hit.sentence_index, search_query: query, scope },
     text: `${hit.left}${hit.match}${hit.right}`.replace(/\s+/g, " ").trim(),
-    source: `${hit.document_title} · ${corpusName}`,
+    source: `${hit.document_title} · 句 ${hit.sentence_index + 1} · ${corpusName}`,
   };
 }
 
@@ -76,27 +87,29 @@ function Bilingual({ hit, layer, projectId }: { hit: Hit; layer: Layer | null; p
 export default function ContextInspector({
   hit,
   terms,
-  indexVersion,
   evidence,
   alignLayer = null,
   projectId,
+  parallel = false,
   onClose,
 }: {
   hit: Hit | null;
   terms: string[];
-  indexVersion: string | number | null | undefined;
   evidence: EvidenceInput | null;
   /** Ready word alignment layer whose source is the hit's corpus. */
   alignLayer?: Layer | null;
   projectId?: string;
+  /** Parallel corpus: neighbouring sentences are usually unrelated pairs, so only the hit's sentence at first. */
+  parallel?: boolean;
   onClose?: () => void;
 }) {
-  const [before, setBefore] = useState(1);
-  const [after, setAfter] = useState(1);
+  const around = parallel ? 0 : 1;
+  const [before, setBefore] = useState(around);
+  const [after, setAfter] = useState(around);
   useEffect(() => {
-    setBefore(1);
-    setAfter(1);
-  }, [hit?.hit_id]);
+    setBefore(around);
+    setAfter(around);
+  }, [hit?.hit_id, around]);
   const ctx = useQuery({
     queryKey: ["context", hit?.hit_id, before, after],
     queryFn: () =>
@@ -117,9 +130,7 @@ export default function ContextInspector({
       <div className="card-head">
         <h2 className="sec-title grow">上下文</h2>
         {hit && (
-          <span className="mono small muted ellipsis" style={{ maxWidth: 200 }}>
-            句 {hit.sentence_index + 1} · {hit.start_cp}:{hit.end_cp}
-          </span>
+          <span className="small muted">句 {hit.sentence_index + 1}</span>
         )}
         {hit && onClose && (
           <button className="btn ghost icon xs" type="button" aria-label="关闭上下文" onClick={onClose}>
@@ -159,18 +170,25 @@ export default function ContextInspector({
               <dd>{hit.document_title}</dd>
               <dt>句序号</dt>
               <dd className="mono">{hit.sentence_index + 1}</dd>
-              <dt>码点</dt>
-              <dd className="mono">
-                {hit.start_cp}–{hit.end_cp}
-              </dd>
-              {Object.entries(ctx.data?.document.metadata ?? hit.metadata).map(([k, v]) => (
-                <span key={k} style={{ display: "contents" }}>
-                  <dt>{k}</dt>
-                  <dd className="mono">{typeof v === "object" ? metadataText(v as Record<string, unknown>) : String(v)}</dd>
-                </span>
-              ))}
-              <dt>索引版本</dt>
-              <dd className="mono">{fmtVersion(indexVersion)}</dd>
+              {/* research metadata only: ids, keys and import bookkeeping stay out (QA Q34) */}
+              {Object.entries(ctx.data?.document.metadata ?? hit.metadata)
+                .filter(([k, v]) => !internalField(k) && v !== null && v !== "")
+                .map(([k, v]) => (
+                  <span key={k} style={{ display: "contents" }}>
+                    <dt>{fieldLabel(k)}</dt>
+                    <dd className="ellipsis" title={String(v)}>
+                      {k === "url" && typeof v === "string" && /^https?:\/\//.test(v) ? (
+                        <a href={v} target="_blank" rel="noreferrer">
+                          {readableUrl(v)}
+                        </a>
+                      ) : typeof v === "object" ? (
+                        metadataText(v as Record<string, unknown>)
+                      ) : (
+                        String(v)
+                      )}
+                    </dd>
+                  </span>
+                ))}
             </dl>
           </div>
           {evidence && (
