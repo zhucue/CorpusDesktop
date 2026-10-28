@@ -22,13 +22,36 @@ export const jobKindLabels: Record<string, string> = {
 /** Jobs with a file to download (exports; knowledge-base exports may use their own kind). */
 export const hasDownload = (j: Job) => j.state === "succeeded" && (j.kind === "export" || typeof j.result?.filename === "string");
 
+/** What the job works on: "频次 · 语料名" for statistics, "导入 · 语料：文件" etc.; the step when there is no summary. */
 export function jobTitle(j: Job): string {
-  return `${jobKindLabels[j.kind] ?? j.kind}${j.progress.message ? ` · ${j.progress.message}` : ""}`;
+  const label = jobKindLabels[j.kind] ?? j.kind;
+  if (j.summary && j.summary !== j.kind) return j.kind === "stats" ? j.summary : `${label} · ${j.summary}`;
+  return `${label}${j.progress.message ? ` · ${j.progress.message}` : ""}`;
+}
+
+/** Unit of done/total: reported by the job, or the "（字符）" suffix older jobs put in the message. */
+export function progressUnit(j: Job): string {
+  return j.progress.unit ?? /（(.+?)）$/.exec(j.progress.message)?.[1] ?? "";
 }
 
 export function progressText(j: Job): string {
+  if (j.state === "queued") {
+    if (j.queue_ahead == null) return "排队中";
+    return j.queue_ahead > 0 ? `排队中 · 前面还有 ${fmt(j.queue_ahead)} 个任务` : "排队中 · 下一个执行";
+  }
+  if (j.state === "succeeded") return "已完成";
+  if (j.state === "cancelled") return "已取消";
   const { done, total } = j.progress;
-  return total ? `${fmt(done)} / ${fmt(total)}` : `已处理 ${fmt(done)}`;
+  const unit = progressUnit(j);
+  const u = unit ? ` ${unit}` : "";
+  return total ? `${fmt(done)} / ${fmt(total)}${u}` : `已处理 ${fmt(done)}${u}`;
+}
+
+/** Where a finished job's result opens: statistics result, download, or the job's detail. */
+export function jobLink(j: Job, projectId: string): { to?: string; href?: string } {
+  if (hasDownload(j)) return { href: `/api/jobs/${j.id}/download` };
+  if (j.kind === "stats" && j.result?.stat_id) return { to: `/p/${projectId}/stats?stat=${j.result.stat_id}` };
+  return { to: `/p/${projectId}/jobs?job=${j.id}` };
 }
 
 export function TaskTray({ projectId, open, onToggle }: { projectId: string; open: boolean; onToggle: () => void }) {
@@ -107,13 +130,27 @@ export function TaskTray({ projectId, open, onToggle }: { projectId: string; ope
               <div className="job-mini" key={j.id}>
                 <div className="row">
                   <Icon name={jobKindIcon[j.kind] ?? "clock"} size={14} className="muted" />
-                  <span className="grow ellipsis">{jobTitle(j)}</span>
+                  {(() => {
+                    const l = jobLink(j, projectId);
+                    const t = jobTitle(j);
+                    return l.href ? (
+                      <a className="grow ellipsis" href={l.href} title={t}>
+                        {t}
+                      </a>
+                    ) : (
+                      <Link className="grow ellipsis" to={l.to!} title={t}>
+                        {t}
+                      </Link>
+                    );
+                  })()}
                   {j.project_id === null && <span className="tag t-gray">内置</span>}
                   <span className="mono small muted">#{j.id.slice(0, 8)}</span>
                 </div>
                 <Progress done={j.progress.done} total={j.progress.total} state={j.state} thin />
                 <div className="row small muted">
-                  <span className="num grow">{j.state === "failed" ? (j.error?.message ?? "失败") : progressText(j)}</span>
+                  <span className="num grow ellipsis">
+                    {j.state === "failed" ? (j.error?.message ?? "失败") : j.state === "running" && j.progress.message ? `${j.progress.message} · ${progressText(j)}` : progressText(j)}
+                  </span>
                   {isActiveJob(j) && deltas.length > 1 && <Sparkline values={deltas} w={48} h={14} label="处理速度" />}
                   {j.progress.total ? <span className="num">{Math.round((j.progress.done / j.progress.total) * 100)}%</span> : null}
                 </div>

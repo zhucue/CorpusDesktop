@@ -9,6 +9,9 @@ x-python-env: &python-env
   PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
   # 检索命中计数超时（秒），超时后返回不完整计数
   SEARCH_COUNT_TIMEOUT: ${SEARCH_COUNT_TIMEOUT:-20}
+  # 短任务门槛：上传小于此字节数的导入、词数小于此值的建索引算短任务（worker-light 也处理，各 worker 优先取短任务）
+  LIGHT_IMPORT_BYTES: ${LIGHT_IMPORT_BYTES:-5242880}
+  LIGHT_INDEX_TOKENS: ${LIGHT_INDEX_TOKENS:-1000000}
   # 知识库向量模型：本地 sentence-transformers 缓存在 models 卷；EMBED_PROVIDER=openai 时走远程 /embeddings
   MODELS_DIR: /models
   HF_HOME: /models
@@ -65,12 +68,13 @@ services:
     depends_on:
       api: { condition: service_healthy }
 
-  # 只处理短任务，长时间导入/索引运行时统计、导出、预标注和知识库任务不排队
+  # 只处理短任务：统计、导出、预标注、知识库，以及小文件导入和小语料建索引；大导入运行时它们不排队
   worker-light:
     <<: *worker
     environment:
       <<: *worker-env
       WORKER_KINDS: export,stats,preannotate,kb_import,kb_summarize,kb_extract
+      WORKER_SMALL_IMPORTS: "1"
 
   agent:
     build: { context: .., dockerfile: deploy/Dockerfile.agent }

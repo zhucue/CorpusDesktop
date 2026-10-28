@@ -1,7 +1,9 @@
 """Worker process: polls `jobs` with FOR UPDATE SKIP LOCKED and runs one job at a time.
 
 Several workers may run side by side. WORKER_KINDS limits the job kinds one takes (empty = all);
-a running job's heartbeat_at is refreshed every HEARTBEAT_SECONDS, and jobs whose heartbeat went
+WORKER_SMALL_IMPORTS=1 lets a worker limited by WORKER_KINDS also take small import/index jobs
+(services.api.jobs.small_heavy). Every worker takes short-lane jobs first, then the oldest; an index
+job waits while another index build of the same corpus runs. A running job's heartbeat_at is refreshed every HEARTBEAT_SECONDS, and jobs whose heartbeat went
 stale (their worker died) are failed at startup and by a periodic reaper."""
 
 import logging
@@ -11,14 +13,22 @@ import threading
 import time
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, exists, func, or_, select, update
+from sqlalchemy.orm import aliased
 
 from services.api.db import transaction
 from services.api.errors import ApiError
-from services.api.jobs import settle_corpus, settle_kb_document, settle_layer
+from services.api.jobs import (
+    HEAVY_KINDS,
+    claim_order,
+    live_index,
+    settle_corpus,
+    settle_kb_document,
+    settle_layer,
+    small_heavy,
+)
 from services.api.models import JOB_KINDS, Corpus, Job
 
-HEAVY_KINDS = ("import", "index")
 log = logging.getLogger("worker")
 POLL_SECONDS = 1.0
 HEARTBEAT_SECONDS = 30
@@ -45,12 +55,16 @@ class Run:
         self.id, self.kind, self.params = job.id, job.kind, job.params
         self.owner_id, self.project_id = job.owner_id, job.project_id
 
-    def progress(self, done, total=None, message=""):
+    def progress(self, done, total=None, message="", unit=None):
+        """unit: what done/total count (字 / 个文件 / 篇), shown next to the numbers."""
+        value = {"done": done, "total": total, "message": message}
+        if unit:
+            value["unit"] = unit
         with transaction() as db:
             state = db.scalar(
                 update(Job)
                 .where(Job.id == self.id)
-                .values(progress={"done": done, "total": total, "message": message})
+                .values(progress=value)
                 .returning(Job.state)
             )
         if state != "running":
@@ -88,14 +102,28 @@ def worker_kinds():
     return kinds
 
 
-def claim(kinds=None):
+def claim(kinds=None, small_imports=None):
     kinds = worker_kinds() if kinds is None else kinds
+    if small_imports is None:
+        small_imports = os.environ.get("WORKER_SMALL_IMPORTS", "0") == "1"
+    other = aliased(Job)
     with transaction() as db:
-        q = select(Job).where(Job.state == "queued")
+        q = select(Job).where(
+            Job.state == "queued",
+            ~and_(
+                Job.kind == "index",
+                exists().where(
+                    other.kind == "index",
+                    other.state == "running",
+                    other.params["corpus_id"].astext == Job.params["corpus_id"].astext,
+                ),
+            ),
+        )
         if kinds:
-            q = q.where(Job.kind.in_(kinds))
+            allowed = Job.kind.in_(kinds)
+            q = q.where(or_(allowed, small_heavy()) if small_imports else allowed)
         job = db.scalar(
-            q.order_by(Job.created_at).limit(1).with_for_update(skip_locked=True)
+            q.order_by(*claim_order()).limit(1).with_for_update(skip_locked=True)
         )
         if job is None:
             return None
@@ -147,17 +175,24 @@ def recover():
             job.state, job.finished_at = "failed", now()
             job.error = {"code": "WORKER_RESTARTED", "message": "执行中断，请重试"}
             if job.kind in ("import", "index"):
-                _corpus_failed(db, job.params["corpus_id"], job.error["message"])
+                _corpus_failed(db, job, job.error["message"])
             if job.kind == "preannotate":
                 settle_layer(db, job, job.error["message"])
             if job.kind == "kb_import":
                 settle_kb_document(db, job, job.error["message"])
 
 
-def _corpus_failed(db, corpus_id, message):
-    corpus = db.get(Corpus, corpus_id)
-    if corpus:
-        corpus.status, corpus.error = "failed", message
+def _corpus_failed(db, job, message):
+    """A corpus with a live index keeps serving it: a failed import changed nothing, a failed index
+    build leaves it stale."""
+    corpus = db.get(Corpus, job.params["corpus_id"])
+    if not corpus:
+        return
+    corpus.error = message
+    if not live_index(corpus):
+        corpus.status = "failed"
+    elif job.kind == "index":
+        corpus.status = "stale"
 
 
 def _fail(run, error):
@@ -168,7 +203,7 @@ def _fail(run, error):
             .values(state="failed", error=error, finished_at=now())
         ).rowcount
         if updated and run.kind in ("import", "index"):
-            _corpus_failed(db, run.params["corpus_id"], error["message"])
+            _corpus_failed(db, run, error["message"])
         if updated and run.kind == "kb_import":
             settle_kb_document(db, run, error["message"])
 

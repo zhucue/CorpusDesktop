@@ -1,10 +1,11 @@
+import os
 import uuid
 from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
-from sqlalchemy import exists, select
+from sqlalchemy import and_, case, exists, func, not_, or_, select
 
 from services.api.access import (
     WRITE,
@@ -24,6 +25,87 @@ router = APIRouter(prefix="/api")
 
 ACTIVE = ("queued", "running")
 CORPUS_STATUS_FOR_KIND = {"import": "importing", "index": "indexing"}
+HEAVY_KINDS = ("import", "index")
+_HUGE = 2**62
+
+
+def light_limits() -> tuple[int, int]:
+    """(LIGHT_IMPORT_BYTES, LIGHT_INDEX_TOKENS): imports with a smaller upload and index builds of
+    corpora with fewer tokens are short jobs (worker-light takes them too; every worker takes short
+    jobs first)."""
+    return (
+        int(os.environ.get("LIGHT_IMPORT_BYTES") or 5 * 1024 * 1024),
+        int(os.environ.get("LIGHT_INDEX_TOKENS") or 1_000_000),
+    )
+
+
+def small_heavy():
+    """SQL condition: an import/index job small enough to be a short job. Jobs without a recorded
+    size (older jobs, admin scripts) are long."""
+    max_bytes, max_tokens = light_limits()
+    return or_(
+        and_(
+            Job.kind == "import",
+            func.coalesce(Job.params["bytes"].as_integer(), _HUGE) < max_bytes,
+        ),
+        and_(
+            Job.kind == "index",
+            func.coalesce(Job.params["tokens"].as_integer(), _HUGE) < max_tokens,
+        ),
+    )
+
+
+def short_lane():
+    """SQL condition: the job is in the short lane (anything but a long import/index)."""
+    return or_(not_(Job.kind.in_(HEAVY_KINDS)), small_heavy())
+
+
+def claim_order():
+    """Order in which workers take queued jobs: short lane first, then oldest first."""
+    return case((short_lane(), 0), else_=1), Job.created_at, Job.id
+
+
+def queue_ahead(db, job) -> int | None:
+    """Queued job: jobs of its lane that run before it (running, or queued earlier). None otherwise."""
+    if job.state != "queued":
+        return None
+    lane = short_lane()
+    same = lane if db.scalar(select(lane).where(Job.id == job.id)) else not_(lane)
+    return db.scalar(
+        select(func.count())
+        .select_from(Job)
+        .where(
+            same,
+            or_(
+                Job.state == "running",
+                and_(
+                    Job.state == "queued",
+                    or_(
+                        Job.created_at < job.created_at,
+                        and_(Job.created_at == job.created_at, Job.id < job.id),
+                    ),
+                ),
+            ),
+        )
+    )
+
+
+def live_index(corpus) -> bool:
+    """The corpus has a searchable index: imports and rebuilds keep it serving (status stays
+    ready/stale, the corpus view shows `updating`) until the new index replaces it."""
+    return bool(corpus.index_version) and corpus.status in ("ready", "stale")
+
+
+def corpus_tokens(db, corpus_id) -> int:
+    return int(
+        db.scalar(
+            select(func.coalesce(func.sum(Document.token_count), 0)).where(
+                Document.corpus_id == corpus_id
+            )
+        )
+    )
+
+
 EXPORT_TYPES = {
     "csv": "text/csv",
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -67,6 +149,11 @@ def settle_corpus(db, corpus_id, stopped_job_id):
     """Corpus status after an import/index job stops without success."""
     corpus = db.get(Corpus, corpus_id)
     if not corpus:
+        return
+    if live_index(corpus):  # the old index keeps serving
+        stopped = db.get(Job, stopped_job_id)
+        if stopped is not None and stopped.kind == "index":
+            corpus.status = "stale"  # documents may have changed since it was built
         return
     if has_active_job(db, corpus_id, ["import"], stopped_job_id):
         corpus.status = "importing"
@@ -180,7 +267,8 @@ def retry_job(job_id: UUID, user: CurrentUser, db: Db):
         corpus = db.get(Corpus, job.params["corpus_id"])
         if not corpus:
             raise not_found("语料库")
-        corpus.status = CORPUS_STATUS_FOR_KIND[job.kind]
+        if not live_index(corpus):
+            corpus.status = CORPUS_STATUS_FOR_KIND[job.kind]
         corpus.error = None
     if job.kind == "kb_import":
         doc = db.get(KbDocument, job.params["document_id"])

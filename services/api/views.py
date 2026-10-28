@@ -16,7 +16,21 @@ def project_view(p, role):
     return {"id": p.id, "name": p.name, "role": role, "created_at": p.created_at}
 
 
+def _corpus_updating(c) -> bool:
+    """Searchable corpus with an import/index job queued or running (its old index still serves)."""
+    if c.status not in ("ready", "stale") or not c.index_version:
+        return False
+    db = object_session(c)
+    if db is None:
+        return False
+    from services.api.jobs import has_active_job
+
+    return has_active_job(db, c.id, ["import", "index"])
+
+
 def corpus_view(c):
+    """meta: source/license fields plus, after indexing, tagset (upos | jieba | mixed), script
+    (simplified | traditional | mixed, Chinese text only), languages (by text share) and indexed_at."""
     return {
         "id": c.id,
         "project_id": c.project_id,
@@ -29,6 +43,7 @@ def corpus_view(c):
         "stats": c.stats,
         "index_version": c.index_version,
         "meta": c.meta or {},
+        "updating": _corpus_updating(c),
         "created_at": c.created_at,
     }
 
@@ -48,7 +63,7 @@ def document_view(d):
 
 METHOD_NAMES = {
     "frequency": "频次",
-    "ngrams": "N 元组",
+    "ngrams": "n-gram",
     "collocations": "搭配",
     "keywords": "关键词",
     "distribution": "分布",
@@ -123,6 +138,14 @@ def job_summary(db, j) -> str:
     return j.kind
 
 
+def _queue_ahead(db, j):
+    if db is None or j.state != "queued":
+        return None
+    from services.api.jobs import queue_ahead
+
+    return queue_ahead(db, j)
+
+
 def job_view(j):
     from services.api.models import User
 
@@ -134,6 +157,7 @@ def job_view(j):
         "owner_id": j.owner_id,
         "owner_email": owner.email if owner else None,
         "summary": job_summary(db, j) if db else j.kind,
+        "queue_ahead": _queue_ahead(db, j),
         "kind": j.kind,
         "state": j.state,
         "progress": j.progress,

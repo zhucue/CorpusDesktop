@@ -145,8 +145,25 @@ def test_txt_encodings():
 
 def test_docx_tables_headings_images():
     [doc], _ = parse(IMP / "table.docx", language="zh", metadata={})
-    assert doc.title == "table"
+    assert doc.title == "气候报告"  # first heading; no Title paragraph, no core title
     assert doc.text == "气候报告\n第一段正文。\n年份\n排放\n合并单元格\n结尾段落。"
+
+
+def test_docx_title_style_wins(tmp_path):
+    import docx
+
+    d = docx.Document()
+    d.add_heading("第一章", level=1)
+    d.add_paragraph("翻译策略研究", style="Title")
+    d.add_paragraph("正文。")
+    d.core_properties.title = "模板标题"
+    d.save(tmp_path / "file-name.docx")
+    [doc], _ = parse(tmp_path / "file-name.docx", language="zh", metadata={})
+    assert doc.title == "翻译策略研究"
+    d.paragraphs[1].style = "Normal"
+    d.save(tmp_path / "file-name.docx")
+    [doc], _ = parse(tmp_path / "file-name.docx", language="zh", metadata={})
+    assert doc.title == "模板标题"
 
 
 def test_tmx_lang_attribute_and_inline_codes():

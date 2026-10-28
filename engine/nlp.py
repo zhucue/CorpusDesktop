@@ -47,9 +47,35 @@ def detect_language(text: str) -> str:
     )
 
 
-def _lang(language: str) -> str:
+def lang_code(language: str | None) -> str:
+    """Primary language code: zh-Hans / cmn / zho → zh, eng → en; other codes lower-cased as given."""
     code = (language or "").lower().replace("_", "-").split("-")[0]
-    code = {"cmn": "zh", "eng": "en", "zho": "zh", "chi": "zh"}.get(code, code)
+    return {"cmn": "zh", "eng": "en", "zho": "zh", "chi": "zh"}.get(code, code)
+
+
+# Frequent characters written differently in simplified and traditional Chinese, pairwise.
+_HANS = "为与并后时说个们这国会来对过还发经学问门见让间长开关东车马鱼书图画点电话听写读语认记级华业体区实现动种应无进头产从将两当机气万处义乐历网员"
+_HANT = "為與並後時說個們這國會來對過還發經學問門見讓間長開關東車馬魚書圖畫點電話聽寫讀語認記級華業體區實現動種應無進頭產從將兩當機氣萬處義樂歷網員"
+SCRIPT_MIN_HITS = 5
+
+
+def detect_script(text: str) -> str | None:
+    """Chinese script of a text sample: "simplified", "traditional" or "mixed" (from the share of
+    traditional forms among SCRIPT_MIN_HITS+ telling characters); None when the sample has too few."""
+    hans = sum(text.count(c) for c in _HANS)
+    hant = sum(text.count(c) for c in _HANT)
+    if hans + hant < SCRIPT_MIN_HITS:
+        return None
+    share = hant / (hans + hant)
+    if share >= 0.85:
+        return "traditional"
+    if share <= 0.15:
+        return "simplified"
+    return "mixed"
+
+
+def _lang(language: str) -> str:
+    code = lang_code(language)
     if code not in LANGUAGES:
         raise ValueError(f"暂不支持该语言的自动标注：{language}")
     return code

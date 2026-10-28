@@ -1,4 +1,7 @@
-import type { CorpusMeta } from "../../api";
+import type { Corpus, CorpusMeta as FullMeta } from "../../api";
+
+/** The source and license fields (the index profile in `meta` is shown elsewhere). */
+type CorpusMeta = Pick<FullMeta, "license" | "attribution" | "source_url" | "version">;
 
 export const metaLabels: [keyof CorpusMeta, string][] = [
   ["license", "许可"],
@@ -68,4 +71,23 @@ export function metaFromForm(
     if (s) out[k] = s;
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+export const tagsetLabels: Record<string, string> = { jieba: "jieba 词性", upos: "UPOS", mixed: "jieba + UPOS" };
+export const scriptLabels: Record<string, string> = { simplified: "简体", traditional: "繁体", mixed: "简繁混合" };
+
+/** "zh-en" for corpora whose documents are in several languages (parallel), else the corpus language. */
+export function corpusLanguages(c: Corpus): string {
+  const langs = c.meta?.languages ?? [];
+  if (langs.length > 1) return [c.language, ...langs.filter((l) => l !== c.language)].filter((l) => l && l !== "auto").join("-");
+  if (c.language === "auto") return langs[0] ?? "待识别";
+  return c.language;
+}
+
+/** "zh · 繁体 · UPOS": languages, Chinese script and POS tag set as detected at indexing. */
+export function corpusProfile(c: Corpus): string[] {
+  const out = [corpusLanguages(c)];
+  if (c.meta?.script) out.push(scriptLabels[c.meta.script] ?? c.meta.script);
+  if (c.meta?.tagset) out.push(tagsetLabels[c.meta.tagset] ?? c.meta.tagset);
+  return out;
 }

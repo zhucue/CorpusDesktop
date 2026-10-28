@@ -2,7 +2,8 @@
 
 TXT: encoding detected by `read_text`; CRLF/CR become "\n". Word: body paragraphs (headings included)
 and table cells in document order, one line per cell paragraph (merged cells once); text boxes,
-footnotes, headers/footers and images are not read.
+footnotes, headers/footers and images are not read. Word title: the first non-empty paragraph styled
+Title, else the core-properties title, else the first heading (Heading 1–9), else the file name.
 """
 
 from pathlib import Path
@@ -45,12 +46,27 @@ def _docx_lines(container):
             yield item.text
 
 
+def _docx_title(d) -> str:
+    title = heading = ""
+    for p in d.paragraphs:
+        style = (p.style.name if p.style is not None else "") or ""
+        text = p.text.strip()
+        if not text:
+            continue
+        if style == "Title":
+            title = text
+            break
+        if not heading and style.startswith("Heading"):
+            heading = text
+    return (title or (d.core_properties.title or "").strip() or heading)[:500]
+
+
 def parse_docx(path: Path, language: str, metadata: dict) -> Document:
     import docx
 
     try:
         d = docx.Document(str(path))
-        title = (d.core_properties.title or "").strip() or path.stem
+        title = _docx_title(d) or path.stem
         lines = list(_docx_lines(d))
     except Exception as e:  # python-docx raises several zip/xml errors
         raise ParseError(f"{path.name} 无法读取：{e}") from e

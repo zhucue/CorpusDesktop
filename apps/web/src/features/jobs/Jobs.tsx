@@ -61,6 +61,8 @@ function Actions({ job, manage, onAct, pending }: { job: Job; manage: boolean; o
 function resultText(j: Job): React.ReactNode {
   if (!j.result) return null;
   if (j.kind === "export" || typeof j.result.filename === "string") return j.result.rows != null ? `${j.result.filename ?? ""} · ${fmt(j.result.rows)} 行` : (j.result.filename ?? "");
+  if (j.kind === "import" && j.result.documents != null) return `${fmt(Number(j.result.documents))} 篇 · ${fmt(Number(j.result.sentences ?? 0))} 句 · ${fmt(Number(j.result.tokens ?? 0))} 词`;
+  if (j.kind === "index" && j.result.documents != null) return `${fmt(Number(j.result.documents))} 篇 · ${fmt(Number(j.result.tokens ?? 0))} 词`;
   if (j.kind === "kb_extract") return `新增 ${fmt(Number(j.result.created ?? 0))} 条草稿，跳过 ${fmt(Number(j.result.skipped ?? 0))} 条`;
   if (j.kind === "stats" && j.result.stat_id) return <Link to={`/p/${j.project_id}/stats?stat=${j.result.stat_id}`} onClick={(e) => e.stopPropagation()}>查看结果</Link>;
   return null;
@@ -280,7 +282,7 @@ export default function Jobs() {
             <Table<Job>
               className="jobs"
               rowKey="id"
-              scroll={{ x: 1100 }}
+              scroll={{ x: 1040 }}
               loading={jobs.isPending}
               dataSource={shown}
               locale={{ emptyText: <Empty icon="inbox" text={builtin ? "暂无内置语料任务" : "暂无任务"} /> }}
@@ -333,7 +335,9 @@ export default function Jobs() {
                     <div className="jprog">
                       <Progress done={j.progress.done} total={j.progress.total} state={j.state} />
                       <div className="row">
-                        <span className="num ellipsis">{j.state === "succeeded" && resultText(j) ? resultText(j) : progressText(j)}</span>
+                        <span className="num ellipsis">
+                          {j.state === "succeeded" && resultText(j) ? resultText(j) : j.state === "running" && j.progress.message ? `${j.progress.message} · ${progressText(j)}` : progressText(j)}
+                        </span>
                         {j.progress.total ? <span className="num">{Math.round((j.progress.done / j.progress.total) * 100)}%</span> : null}
                       </div>
                     </div>
@@ -341,7 +345,7 @@ export default function Jobs() {
                 },
                 {
                   title: "发起人",
-                  width: 140,
+                  width: 120,
                   ellipsis: { showTitle: false },
                   render: (_, j) =>
                     j.owner_email ? (
@@ -351,7 +355,7 @@ export default function Jobs() {
                     ) : null,
                 },
                 { title: "开始", width: 96, render: (_, j) => <RelTime at={j.created_at} /> },
-                { title: "", width: 150, render: (_, j) => <Actions job={j} manage={manage(j)} pending={act.isPending} onAct={(a) => act.mutate({ id: j.id, action: a })} /> },
+                { title: "", width: 128, fixed: "right", render: (_, j) => <Actions job={j} manage={manage(j)} pending={act.isPending} onAct={(a) => act.mutate({ id: j.id, action: a })} /> },
               ]}
             />
           </section>

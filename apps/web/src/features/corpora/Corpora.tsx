@@ -8,10 +8,10 @@ import { Icon } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
 import { canEdit, useCorpora, useJobCreated, useMe, useProject, useProjectId } from "../../lib/data";
-import { fmt, fmtVersion } from "../../lib/format";
+import { fmt } from "../../lib/format";
 import "./corpora.css";
 import CorpusDrawer from "./CorpusDrawer";
-import { metaEntries, metaFromForm } from "./CorpusMeta";
+import { corpusLanguages, metaEntries, metaFromForm, scriptLabels, tagsetLabels } from "./CorpusMeta";
 import { StatusCell } from "./StatusCell";
 import Subcorpora from "./Subcorpora";
 import UploadDialog, { languageOptions } from "./UploadDialog";
@@ -115,7 +115,7 @@ export default function Corpora() {
         }
       />
       <div className="content">
-        {corpora.isSuccess && own.length === 0 && filter !== "builtin" && (
+        {corpora.isSuccess && items.length === 0 && (
           <section className="card empty-hero dotgrid" aria-label="新项目">
             <span className="eh-ic">
               <Icon name="db" />
@@ -156,7 +156,7 @@ export default function Corpora() {
                       <span className="tag t-gray">内置</span>
                     </span>
                     <span className="small muted num">
-                      {fmt(c.stats.sentences)} 句 · {fmt(c.stats.tokens)} 词 · {c.language}
+                      {fmt(c.stats.sentences)} 句 · {fmt(c.stats.tokens)} 词 · {corpusLanguages(c)}
                     </span>
                   </button>
                 ))}
@@ -169,6 +169,7 @@ export default function Corpora() {
           <ErrorAlert error={corpora.error} style={{ margin: 16 }} />
           <Table<Corpus>
             className="corp"
+            scroll={{ x: 1120 }}
             rowKey="id"
             loading={corpora.isPending}
             dataSource={shown}
@@ -178,6 +179,7 @@ export default function Corpora() {
             columns={[
               {
                 title: "名称",
+                width: 220,
                 render: (_, c) => (
                   <div className="cname">
                     <span>{c.name}</span>
@@ -188,7 +190,7 @@ export default function Corpora() {
               },
               {
                 title: "许可",
-                width: 120,
+                width: 110,
                 ellipsis: true,
                 render: (_, c) => {
                   const rows = metaEntries(c.meta);
@@ -206,16 +208,51 @@ export default function Corpora() {
                   );
                 },
               },
-              { title: "语言", dataIndex: "language", width: 70, render: (l: string) => <span className="mono">{l}</span> },
-              { title: "文档", width: 80, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.documents) },
-              { title: "句", width: 90, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.sentences) },
-              { title: "词", width: 100, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.tokens) },
-              { title: "状态", width: 160, render: (_, c) => <StatusCell c={c} /> },
-              { title: "索引", width: 80, className: "num-col", render: (_, c) => <span title={c.index_version != null ? String(c.index_version) : undefined}>{fmtVersion(c.index_version)}</span> },
-              { title: "创建", width: 110, render: (_, c) => <RelTime at={c.created_at} /> },
+              {
+                title: "语言 · 词性",
+                width: 120,
+                render: (_, c) => (
+                  <span className="col" style={{ gap: 2 }}>
+                    <span className="mono">{corpusLanguages(c)}</span>
+                    {(c.meta?.script || c.meta?.tagset) && (
+                      <span className="small muted">{[c.meta.script && (scriptLabels[c.meta.script] ?? c.meta.script), c.meta.tagset && (tagsetLabels[c.meta.tagset] ?? c.meta.tagset)].filter(Boolean).join(" · ")}</span>
+                    )}
+                  </span>
+                ),
+              },
+              {
+                title: "文档",
+                width: 96,
+                align: "right",
+                className: "num-col",
+                render: (_, c) =>
+                  c.parallel && c.stats.pairs != null ? (
+                    <Tip title={`${fmt(c.stats.documents)} 个文档（每种语言一个）`}>
+                      <span>{fmt(c.stats.pairs)} 句对</span>
+                    </Tip>
+                  ) : (
+                    fmt(c.stats.documents)
+                  ),
+              },
+              { title: "句", width: 84, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.sentences) },
+              { title: "词", width: 96, align: "right", className: "num-col", render: (_, c) => fmt(c.stats.tokens) },
+              { title: "状态", width: 130, render: (_, c) => <StatusCell c={c} /> },
+              {
+                title: "索引更新",
+                width: 96,
+                render: (_, c) =>
+                  c.index_version == null ? (
+                    <span className="muted">—</span>
+                  ) : c.meta?.indexed_at ? (
+                    <RelTime at={c.meta.indexed_at} />
+                  ) : (
+                    <span>已建</span>
+                  ),
+              },
+              { title: "创建", width: 90, render: (_, c) => <RelTime at={c.created_at} /> },
               {
                 title: "",
-                width: 90,
+                width: 80,
                 align: "right",
                 render: (_, c) => {
                   const mine = c.project_id !== null ? editable : isAdmin;
@@ -227,15 +264,15 @@ export default function Corpora() {
                           重建
                         </button>
                       )}
-                      {c.status === "failed" && (
+                      {(c.status === "failed" || (!c.updating && !!c.error)) && (
                         <button className="btn xs" type="button" onClick={() => retry.mutate(c.id)} disabled={retry.isPending}>
                           重试
                         </button>
                       )}
                       {c.project_id !== null && (
                         <Popconfirm title={`删除语料库「${c.name}」？`} okText="删除" cancelText="取消" onConfirm={() => remove.mutate(c.id)}>
-                          <Tip title="删除">
-                            <button className="btn ghost icon danger" type="button" aria-label="删除">
+                          <Tip title="删除语料库">
+                            <button className="btn ghost icon danger" type="button" aria-label={`删除语料库「${c.name}」`}>
                               <Icon name="trash" size={14} />
                             </button>
                           </Tip>
@@ -252,7 +289,7 @@ export default function Corpora() {
         <Subcorpora corpora={items} editable={editable} creating={creatingSub} setCreating={setCreatingSub} />
       </div>
 
-      <UploadDialog open={uploading} projectId={projectId} corpora={items} isAdmin={isAdmin} onClose={() => setUploading(false)} />
+      <UploadDialog open={uploading} projectId={projectId} corpora={items} corpusId={corpusId} isAdmin={isAdmin} onClose={() => setUploading(false)} />
       <CorpusDrawer corpusId={corpusId ?? null} onClose={() => navigate(`/p/${projectId}/corpora`)} />
       <Modal title="新建内置语料" open={creatingBuiltin} onCancel={() => setCreatingBuiltin(false)} footer={null} destroyOnHidden>
         <Form layout="vertical" onFinish={(v) => createBuiltin.mutate(v)} initialValues={{ language: "zh" }} requiredMark={false}>

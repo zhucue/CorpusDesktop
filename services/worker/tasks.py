@@ -6,7 +6,8 @@ import json
 import shutil
 import time
 import uuid
-from datetime import datetime
+from collections import Counter
+from datetime import UTC, datetime
 from pathlib import Path
 
 from docx import Document as DocxDocument
@@ -15,7 +16,7 @@ from docx.shared import Pt
 from openpyxl import Workbook
 from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Font
-from sqlalchemy import bindparam, exists, func, insert, select, update
+from sqlalchemy import bindparam, func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from engine import cwb, nlp, parsers, query, stats
@@ -28,7 +29,7 @@ from services.api.annotations import (
 )
 from services.api.annotators import layer_annotators
 from services.api.db import session, transaction
-from services.api.jobs import enqueue
+from services.api.jobs import corpus_tokens, enqueue, live_index
 from services.api.metadata import field_types
 from services.api.models import (
     Annotation,
@@ -98,7 +99,7 @@ def _parse_batch(run):
     )
     documents, alignments = [], []
     for i, path in enumerate(targets):
-        run.progress(i, len(targets), f"解析 {path.name}")
+        run.progress(i, len(targets), f"解析 {path.name}", "个文件")
         try:
             docs, links = parsers.parse(
                 path,
@@ -192,7 +193,12 @@ def run_import(run):
         nonlocal last
         if time.monotonic() - last >= PROGRESS_SECONDS:
             last = time.monotonic()
-            run.progress(done + offset, chars, "标注（字符）")
+            run.progress(done + offset, chars, "分句与标注", "字")
+
+    # language "auto" (or a CSV row without one): detect from the text
+    for d in documents:
+        if not d.language:
+            d.language = nlp.detect_language(d.text)
 
     # CoNLL-U arrives tokenized and is stored as is, whatever its language
     todo = [
@@ -204,7 +210,7 @@ def run_import(run):
         nlp.annotate_many(todo, report)
     except ValueError as e:  # e.g. a language without an annotation model
         raise JobFailed("ANNOTATE_ERROR", str(e)[:500]) from e
-    run.progress(chars, chars, "写入")
+    run.progress(chars, chars, "写入", "字")
     written = []
     try:
         with transaction() as db:
@@ -222,24 +228,33 @@ def run_import(run):
                     [{"src_sentence_id": s, "tgt_sentence_id": t} for s, t in pairs],
                 )
                 corpus.parallel = True
-            index_queued = db.scalar(
-                select(
-                    exists().where(
-                        Job.kind == "index",
-                        Job.state == "queued",
-                        Job.params["corpus_id"].astext == str(corpus_id),
-                    )
+            if corpus.language in ("auto", ""):
+                shares = Counter()
+                for d in documents:
+                    shares[nlp.lang_code(d.language)] += len(d.text)
+                corpus.language = shares.most_common(1)[0][0] or corpus.language
+            index_job = db.scalar(
+                select(Job).where(
+                    Job.kind == "index",
+                    Job.state == "queued",
+                    Job.params["corpus_id"].astext == str(corpus_id),
                 )
             )
-            if not index_queued:
+            tokens = corpus_tokens(db, corpus_id)
+            if index_job is None:
                 enqueue(
                     db,
                     "index",
-                    {"corpus_id": str(corpus_id)},
+                    {"corpus_id": str(corpus_id), "tokens": tokens},
                     run.owner_id,
                     run.project_id,
                 )
-            corpus.status, corpus.error = "indexing", None
+            else:
+                index_job.params = {**index_job.params, "tokens": tokens}
+            # a searchable corpus keeps serving its old index until the new one is in
+            if not live_index(corpus):
+                corpus.status = "indexing"
+            corpus.error = None
             run.succeed(
                 db,
                 {
@@ -281,7 +296,7 @@ def _load_documents(docs, run):
     total = len(docs)
     done = 0
     for batch in _load_batches(docs):
-        run.progress(done, total, "建索引（文档）")
+        run.progress(done, total, "建索引", "篇")
         with session() as db:
             rows = {
                 r.id: r
@@ -348,7 +363,9 @@ def _load_documents(docs, run):
 def run_index(run):
     corpus_id = uuid.UUID(run.params["corpus_id"])
     with transaction() as db:
-        _corpus(db, corpus_id).status = "indexing"
+        corpus = _corpus(db, corpus_id)
+        if not live_index(corpus):
+            corpus.status = "indexing"
         docs = db.execute(
             select(Document.id, Document.token_count)
             .where(Document.corpus_id == corpus_id)
@@ -372,15 +389,67 @@ def run_index(run):
                 func.coalesce(func.sum(Document.token_count), 0),
             ).where(Document.corpus_id == corpus_id)
         ).one()
-        corpus.stats = {
-            "documents": docs,
-            "sentences": int(sentences),
-            "tokens": int(tokens),
-        }
+        stats = {"documents": docs, "sentences": int(sentences), "tokens": int(tokens)}
+        if corpus.parallel:
+            stats["pairs"] = _pair_count(db, corpus_id)
+        corpus.stats = stats
+        corpus.meta = corpus_profile(db, corpus, info.tagset if info else None)
         corpus.index_version = info.index_version if info else None
         corpus.status = "ready" if info else "empty"
         corpus.error = None
         run.succeed(db, {**corpus.stats, "index_version": corpus.index_version})
+
+
+def _pair_count(db, corpus_id):
+    """Sentence pairs whose source sentence is in the corpus (parallel corpora)."""
+    return db.scalar(
+        select(func.count())
+        .select_from(SentenceAlignment)
+        .join(Sentence, Sentence.id == SentenceAlignment.src_sentence_id)
+        .join(Document, Document.id == Sentence.document_id)
+        .where(Document.corpus_id == corpus_id)
+    )
+
+
+PROFILE_SENTENCES = 3000
+
+
+def corpus_profile(db, corpus, tagset):
+    """corpus.meta with the index profile filled in: tagset (upos | jieba | mixed, as the query engine
+    resolves POS), languages (document language codes by text share), script of the Chinese text
+    (simplified | traditional | mixed; absent without enough Chinese) and indexed_at."""
+    meta = {
+        k: v
+        for k, v in (corpus.meta or {}).items()
+        if k not in ("tagset", "script", "languages", "indexed_at")
+    }
+    shares, raw_zh = Counter(), []
+    for raw, chars in db.execute(
+        select(Document.language, func.sum(Document.char_count))
+        .where(Document.corpus_id == corpus.id)
+        .group_by(Document.language)
+    ):
+        code = nlp.lang_code(raw)
+        shares[code] += int(chars or 0)
+        if code == "zh":
+            raw_zh.append(raw)
+    if not shares:
+        return meta
+    meta["languages"] = [c for c, _ in shares.most_common() if c]
+    if tagset:
+        meta["tagset"] = tagset
+    if raw_zh:
+        sample = db.scalars(
+            select(Sentence.text)
+            .join(Document, Document.id == Sentence.document_id)
+            .where(Document.corpus_id == corpus.id, Document.language.in_(raw_zh))
+            .limit(PROFILE_SENTENCES)
+        ).all()
+        script = nlp.detect_script("".join(sample))
+        if script:
+            meta["script"] = script
+    meta["indexed_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+    return meta
 
 
 # ---- export ----
@@ -546,22 +615,94 @@ def _write_docx(path, title, header, rows, notice=()):
 
 
 def run_export_stats(run):
+    """Rows of a StatResult; the file opens with the method, parameters, scope and token totals (punctuation
+    included), then the source / license lines. Decimal values are rounded to 2 places."""
+    methods = {
+        "frequency": "频次",
+        "ngrams": "n-gram",
+        "collocations": "搭配",
+        "keywords": "关键词",
+        "distribution": "分布",
+    }
+    units = {
+        "word": "词形",
+        "lemma": "词元",
+        "pos": "词性",
+        "deprel": "依存关系",
+        "span_label": "片段标签",
+        "relation_label": "关系标签",
+    }
+    measures = {
+        "logdice": "logDice",
+        "mi": "MI",
+        "t": "t 值",
+        "ll": "LL",
+        "log_ratio": "Log Ratio",
+    }
     with session() as db:
         stat = db.get(StatResult, uuid.UUID(run.params["stat_id"]))
         if not stat:
             raise JobFailed("STAT_DELETED", "统计结果已删除")
         columns, path = stat.columns, Path(stat.rows_path)
-        reference = (stat.params or {}).get("reference") or {}
+        p, method, totals = stat.params or {}, stat.method, stat.totals or {}
+        reference = p.get("reference") or {}
+        scope_name, created = stat.scope.get("name", ""), stat.created_at
+        index_version = stat.index_version
         notice = source_notice(
             db, [stat.scope.get("corpus_id"), reference.get("corpus_id")]
         )
+    label = methods.get(method, method)
+    parts = []
+    if method == "ngrams":
+        parts.append(f"n={p.get('n')}")
+    if p.get("unit"):
+        parts.append(f"单位 {units.get(p['unit'], p['unit'])}")
+    if p.get("node"):
+        parts.append(f"节点词 {p['node']}")
+    if p.get("window"):
+        parts.append(f"窗口 ±{p['window']}")
+    if p.get("query"):
+        parts.append(f"查询式 {p['query']}")
+    if p.get("pos"):
+        parts.append(f"词性 {p['pos']}")
+    if p.get("pos_pattern"):
+        parts.append("词性模式 " + " ".join(t or "*" for t in p["pos_pattern"]))
+    if p.get("contains"):
+        parts.append(f"包含词 {p['contains']}")
+    if method == "collocations" and p.get("measures"):
+        parts.append(f"排序指标 {measures.get(p['measures'][0], p['measures'][0])}")
+    if method == "keywords" and p.get("measure"):
+        parts.append(f"指标 {measures.get(p['measure'], p['measure'])}")
+    if method == "distribution":
+        field = p.get("field")
+        parts.append("按 文档位置" if field == "position" else f"按 {field}")
+        if field == "position" and p.get("bins"):
+            parts.append(f"区间 {p['bins']}")
+    if p.get("min_freq") is not None:
+        parts.append(f"最低频次 {p['min_freq']}")
+    if p.get("top"):
+        parts.append(f"显示前 {p['top']}")
+    if p.get("exclude_punct"):
+        parts.append("排除标点和数字")
+    head = [f"统计：{label}（{'；'.join(parts)}）"]
+    head.append(f"范围：{scope_name}，{totals.get('tokens', 0):,} 词（含标点）")
+    if reference:
+        ref_tokens = (totals.get("reference") or {}).get("tokens", 0)
+        head.append(f"参照：{reference.get('name', '')}，{ref_tokens:,} 词（含标点）")
+    at = created.astimezone(UTC)
+    head.append(f"索引版本：{index_version or '—'}；计算时间：{at:%Y-%m-%d %H:%M} UTC")
     data = json.loads(path.read_text(encoding="utf-8"))["rows"]
     header = [c["label"] for c in columns] + ["查询式"]
+
+    def value(v):
+        v = _cell(v)
+        return round(v, 2) if isinstance(v, float) else v
+
     rows = [
-        [_cell(r["values"].get(c["key"])) for c in columns] + [r["search_query"]]
+        [value(r["values"].get(c["key"])) for c in columns] + [r["search_query"]]
         for r in data
     ]
-    _finish_export(run, "统计结果", header, rows, notice=notice)
+    _finish_export(run, f"统计-{label}", header, rows, notice=[*head, *notice])
 
 
 def run_export_evidence(run):
@@ -586,9 +727,75 @@ def run_export_evidence(run):
                         reference.get("corpus_id"),
                     ]
         notice = source_notice(db, corpus_ids)
-    header = ["原文", "出处", "查询式", "备注"]
-    rows = [[e.text, e.source, e.ref.get("search_query"), e.note] for e in items]
-    _finish_export(run, "证据篮", header, rows, notice=notice)
+    # hits pinned with their sentence (services.api.evidence.sentence_evidence): 原文 is that sentence alone,
+    # 命中 the matched text, 译文 the aligned sentences; older items and other kinds keep their text
+    header = ["原文", "命中", "译文", "出处", "查询式", "备注"]
+    rows = []
+    for e in items:
+        sentence, (a, b) = e.ref.get("sentence"), e.ref.get("match") or (0, 0)
+        aligned = "\n".join(
+            f"[{x['language']}] {x['text']}" for x in e.ref.get("aligned") or []
+        )
+        rows.append(
+            [
+                sentence or e.text,
+                sentence[a:b] if sentence else None,
+                aligned or None,
+                e.source,
+                e.ref.get("search_query"),
+                e.note,
+            ]
+        )
+    if run.params["format"] != "docx":
+        _finish_export(run, "证据篮", header, rows, notice=notice)
+        return
+    path = export_path(run.id, "docx")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write_evidence_docx(path, items, header, rows, notice)
+    with transaction() as db:
+        run.lock(db)
+        run.succeed(
+            db,
+            {"rows": len(rows), "filename": f"证据篮-{datetime.now():%Y%m%d-%H%M}.docx"},
+        )
+
+
+def _write_evidence_docx(path, items, header, rows, notice):
+    """Like _write_docx, with the hit in bold inside its sentence and no separate 命中 line."""
+    doc = DocxDocument()
+    normal = doc.styles["Normal"]
+    normal.font.name = "宋体"
+    normal.element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+    heading = doc.add_paragraph().add_run("证据篮")
+    heading.bold, heading.font.size = True, Pt(16)
+    for line in notice:
+        doc.add_paragraph(line)
+    for i, (e, row) in enumerate(zip(items, rows), 1):
+        p = doc.add_paragraph(f"{i}. ")
+        sentence, span = e.ref.get("sentence"), e.ref.get("match")
+        if sentence and span:
+            a, b = span
+            p.add_run(sentence[:a])
+            p.add_run(sentence[a:b]).bold = True
+            p.add_run(sentence[b:])
+        else:
+            p.add_run(row[0])
+        for label, value in zip(header[2:], row[2:]):
+            if value not in (None, ""):
+                doc.add_paragraph(f"{label}：{value}")
+    doc.save(path)
+
+
+def _conllu_doc_id(doc, used):
+    """`# newdoc id` / sent_id prefix: the document's external id (UD sources) or its title, whitespace as
+    `_`; a repeated title gets -2, -3…"""
+    base = "_".join((doc.external_id or doc.title or "doc").split()) or "doc"
+    out, n = base, 1
+    while out in used:
+        n += 1
+        out = f"{base}-{n}"
+    used.add(out)
+    return out
 
 
 def run_export_layer(run):
@@ -608,9 +815,11 @@ def run_export_layer(run):
             stmt = stmt.where(Document.id.in_(ids))
         docs = db.scalars(stmt.order_by(Document.created_at, Document.id)).all()
         layers = {"pos": None, "dep": None, layer.kind: effective.eff_layer(layer)}
-        name = layer.name
+        name, kind = layer.name, layer.kind
         notice = source_notice(db, [layer.corpus_id])
     parts, sentences, tokens = [f"# {line}\n" for line in notice], 0, 0
+    parts.append(f"# 导出口径：{annot_tasks.EXPORT_SCOPE[kind]}\n")
+    used = set()
     for i in range(0, len(docs), LOAD_BATCH):
         batch = docs[i : i + LOAD_BATCH]
         run.progress(i, len(docs), "导出")
@@ -642,7 +851,7 @@ def run_export_layer(run):
                     Path(d.text_path).read_text(encoding="utf-8"),
                     {},
                     sents,
-                    d.external_id or str(d.id),
+                    _conllu_doc_id(d, used),
                 )
             )
         parts.append(write_conllu(out))
@@ -687,11 +896,21 @@ def _scope_info(db, scope: Scope, corpus):
 
 def _compute(p, target, reference, numeric, positions=None):
     method, top = p["method"], p["top"]
+    punct = p.get("exclude_punct", False)  # jobs queued before the option: kept
     if method == "frequency":
-        return stats.frequency(target, p["unit"], p["pos"], top, p["min_freq"])
+        return stats.frequency(
+            target, p["unit"], p["pos"], top, p["min_freq"], exclude_punct=punct
+        )
     if method == "ngrams":
         return stats.ngrams(
-            target, p["n"], p["unit"], p["pos_pattern"], top, p["min_freq"]
+            target,
+            p["n"],
+            p["unit"],
+            p["pos_pattern"],
+            top,
+            p["min_freq"],
+            contains=p.get("contains"),
+            exclude_punct=punct,
         )
     if method == "collocations":
         return stats.collocations(
@@ -703,10 +922,17 @@ def _compute(p, target, reference, numeric, positions=None):
             p["measures"],
             p["min_freq"],
             top,
+            exclude_punct=punct,
         )
     if method == "keywords":
         return stats.keywords(
-            target, reference, p["unit"], p["measure"], p["min_freq"], top
+            target,
+            reference,
+            p["unit"],
+            p["measure"],
+            p["min_freq"],
+            top,
+            exclude_punct=punct,
         )
     return stats.distribution(
         target,

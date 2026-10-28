@@ -1,5 +1,5 @@
 .corp .ant-table-tbody > tr > td { padding: 13px 14px; }
-.cname { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.cname { font-weight: 600; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
 .state { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .state-msg { font-size: 12px; color: var(--text-3); }
 .state-msg.err-text { color: var(--error); }
@@ -23,3 +23,13 @@
 .table-map-preview { max-width: 100%; }
 .table-map-preview .cell-clip { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .table-map-preview th.map-text, .table-map-preview td.map-text { background: var(--accent-tint); }
+.upload-target { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin: -8px 0 16px; border-radius: var(--radius); background: var(--accent-tint); color: var(--text); font-size: 13px; }
+.meta-rows { display: flex; flex-direction: column; gap: 6px; }
+.meta-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 6px; align-items: center; }
+.doc-kv { grid-template-columns: 96px 1fr; }
+.doc-sents { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line-soft); max-height: 56vh; overflow: auto; }
+.doc-sents li { display: grid; grid-template-columns: 44px 1fr; gap: 8px; padding: 7px 4px; border-bottom: 1px solid var(--line-soft); line-height: 1.6; }
+.ds-n { color: var(--text-3); font-size: 12px; text-align: right; padding-top: 2px; }
+.ds-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.ds-a { color: var(--text-2); font-size: 13px; }
+.ds-a b { color: var(--text-3); font-weight: 500; margin-right: 4px; }

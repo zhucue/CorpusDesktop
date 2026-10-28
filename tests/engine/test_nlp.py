@@ -50,6 +50,21 @@ def test_detect_language():
     assert nlp.detect_language("Language and society, 语言") == "en"
 
 
+def test_lang_code_and_script():
+    assert [nlp.lang_code(x) for x in ("zh-Hans", "cmn", "eng", "EN", "", None)] == [
+        "zh",
+        "zh",
+        "en",
+        "en",
+        "",
+        "",
+    ]
+    assert nlp.detect_script("他說這個國家為我們與後來的時候學習") == "traditional"
+    assert nlp.detect_script("他说这个国家为我们与后来的时候学习") == "simplified"
+    assert nlp.detect_script("他说这个国家为我们與後來的時候學習") == "mixed"
+    assert nlp.detect_script("语言 language") is None  # too few telling characters
+
+
 def test_chinese_jieba_offsets_and_pos():
     text = "  他说：“语言是文化交流的桥梁。”你呢？！Hello world. 3.14 和 2020年……\n\n第二段；结束"
     doc = Document("t", "zh", text, {}, [])

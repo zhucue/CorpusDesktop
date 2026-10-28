@@ -19,9 +19,16 @@ from services.api.access import (
 )
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
-from services.api.jobs import ACTIVE, enqueue, has_active_job, retry_job
+from services.api.jobs import (
+    ACTIVE,
+    corpus_tokens,
+    enqueue,
+    has_active_job,
+    live_index,
+    retry_job,
+)
 from services.api.metadata import metadata_fields
-from services.api.models import Corpus, Document, Job
+from services.api.models import Corpus, Document, Job, Sentence, SentenceAlignment
 from services.api.storage import corpus_dir, upload_dir
 from services.api.views import corpus_view, document_view, job_view
 
@@ -33,6 +40,7 @@ MAX_UPLOAD = 500 * 1024 * 1024
 PREVIEW_BYTES = (
     256 * 1024
 )  # the web client sends at most this much of a table for preview
+AUTO = "auto"  # upload/corpus language: detected per document from its text
 
 
 class TableMapping(BaseModel):
@@ -136,14 +144,16 @@ def _save_upload(db, corpus, user, files, language, metadata, mapping):
     job_id = uuid.uuid4()
     target = upload_dir(job_id)
     target.mkdir(parents=True)
-    names = []
+    names, size = [], 0
     for i, f in enumerate(files):
         name = PurePath(f.filename.replace("\\", "/")).name
         if name in names:
             name = f"{i}_{name}"
         with open(target / name, "wb") as out:
             shutil.copyfileobj(f.file, out)
+            size += out.tell()
         names.append(name)
+    language = language or corpus.language
     job = enqueue(
         db,
         "import",
@@ -151,15 +161,18 @@ def _save_upload(db, corpus, user, files, language, metadata, mapping):
             "corpus_id": str(corpus.id),
             "dir": str(target),
             "files": names,
-            "language": language or corpus.language,
+            # None: detect per document (engine.nlp.detect_language)
+            "language": None if language == AUTO else language,
             "metadata": metadata,
+            "bytes": size,  # short-lane rule, services.api.jobs.small_heavy
             **({"mapping": mapping} if mapping else {}),
         },
         user.id,
         corpus.project_id,
         job_id,
     )
-    corpus.status = "importing"
+    if not live_index(corpus):  # a searchable corpus keeps serving its index meanwhile
+        corpus.status = "importing"
     corpus.error = None
     db.commit()
     return job_view(job)
@@ -251,6 +264,43 @@ def _document(db, corpus_id, document_id):
     return doc
 
 
+@router.get("/corpora/{corpus_id}/documents/{document_id}")
+def get_document(corpus_id: UUID, document_id: UUID, user: CurrentUser, db: Db):
+    load_corpus(db, corpus_id, user)
+    return document_view(_document(db, corpus_id, document_id))
+
+
+@router.get("/corpora/{corpus_id}/documents/{document_id}/sentences")
+def list_sentences(
+    corpus_id: UUID, document_id: UUID, user: CurrentUser, db: Db, paging: Paging
+):
+    """Stored sentences of one document in order, with aligned sentences of parallel corpora."""
+    corpus = load_corpus(db, corpus_id, user)
+    _document(db, corpus_id, document_id)
+    stmt = (
+        select(Sentence)
+        .where(Sentence.document_id == document_id)
+        .order_by(Sentence.idx)
+    )
+    page = paging.run(
+        db, stmt, lambda s: {"id": s.id, "idx": s.idx, "text": s.text, "aligned": []}
+    )
+    if corpus.parallel and page["items"]:
+        by_id = {s["id"]: s for s in page["items"]}
+        for mine, other in (
+            (SentenceAlignment.src_sentence_id, SentenceAlignment.tgt_sentence_id),
+            (SentenceAlignment.tgt_sentence_id, SentenceAlignment.src_sentence_id),
+        ):
+            for sid, text, language in db.execute(
+                select(mine, Sentence.text, Document.language)
+                .join(Sentence, Sentence.id == other)
+                .join(Document, Document.id == Sentence.document_id)
+                .where(mine.in_(list(by_id)))
+            ):
+                by_id[sid]["aligned"].append({"language": language, "text": text})
+    return page
+
+
 @router.patch("/corpora/{corpus_id}/documents/{document_id}")
 def patch_document(
     corpus_id: UUID, document_id: UUID, body: DocumentPatch, user: CurrentUser, db: Db
@@ -285,9 +335,14 @@ def reindex(corpus_id: UUID, user: CurrentUser, db: Db):
     if has_active_job(db, corpus_id, ["import", "index"]):
         raise ApiError(409, "JOB_IN_PROGRESS", "语料库正在导入或索引")
     job = enqueue(
-        db, "index", {"corpus_id": str(corpus_id)}, user.id, corpus.project_id
+        db,
+        "index",
+        {"corpus_id": str(corpus_id), "tokens": corpus_tokens(db, corpus_id)},
+        user.id,
+        corpus.project_id,
     )
-    corpus.status = "indexing"
+    if not live_index(corpus):
+        corpus.status = "indexing"
     corpus.error = None
     db.commit()
     return job_view(job)

@@ -389,7 +389,8 @@ def test_table_mapping_import_and_retry(owner, corpus):
     assert _params(retry["id"])["mapping"] == _params(job["id"])["mapping"]
     drain()  # fails again; the corpus page retries its latest failed import
     c = owner.get(f"/api/corpora/{corpus['id']}").json()
-    assert c["status"] == "failed" and c["error"] == "x.csv 缺少列：body"
+    # the corpus already had an index: it stays searchable and shows the error
+    assert c["status"] == "ready" and c["error"] == "x.csv 缺少列：body"
     again = owner.post(f"/api/corpora/{corpus['id']}/retry")
     assert again.status_code == 200, again.text
     assert _params(again.json()["id"])["files"] == ["x.csv"]

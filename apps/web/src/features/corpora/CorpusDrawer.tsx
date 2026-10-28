@@ -1,18 +1,20 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { App, Drawer, Form, Input, Modal, Popconfirm, Select, Table, Tabs, Upload, type UploadFile } from "antd";
+import { App, Drawer, Form, Input, Modal, Popconfirm, Select, Table, Tabs, type UploadFile } from "antd";
 import { useState } from "react";
 import { Link } from "react-router";
-import { api, errorText, type Doc, type Job, type MetadataField, type Page } from "../../api";
-import { ErrorAlert, Skeleton } from "../../components/common";
+import { api, errorText, type Doc, type DocSentence, type Job, type MetadataField, type Page } from "../../api";
+import { Empty, ErrorAlert, Skeleton, Tip } from "../../components/common";
 import { Icon } from "../../components/Icon";
 import { canEdit, useCorpus, useJobCreated, useMe, useProject, useProjectId } from "../../lib/data";
-import { fmt, fmtTime, fmtVersion, metadataText } from "../../lib/format";
-import { CorpusMetaList } from "./CorpusMeta";
+import { fmt, fmtRelative, fmtTime, fmtVersion, metadataText } from "../../lib/format";
+import { CorpusMetaList, corpusProfile } from "./CorpusMeta";
+import { draftFrom, emptyMeta, MetadataInput, metadataFromDraft, metaDraftRule, type MetaDraft } from "./MetadataInput";
 import { StatusCell } from "./StatusCell";
 import { TableMappingFields, useTableMapping } from "./TableMapping";
-import { ACCEPT, languageOptions, metadataRule, parseMetadata, uploadFiles } from "./UploadDialog";
+import { AUTO_LANGUAGE, FilePicker, uploadFiles, uploadLanguageOptions } from "./UploadDialog";
 
 const PAGE_SIZE = 50;
+const SENTENCE_PAGE = 50;
 
 export default function CorpusDrawer({ corpusId, onClose }: { corpusId: string | null; onClose: () => void }) {
   const corpus = useCorpus(corpusId ?? undefined);
@@ -42,13 +44,23 @@ export default function CorpusDrawer({ corpusId, onClose }: { corpusId: string |
       {c && (
         <div className="col gap-20">
           <div className="counts-row">
-            <div>
-              <div className="stat-label">文档</div>
-              <div className="count">
-                {fmt(c.stats.documents)}
-                <span className="unit">篇</span>
+            {c.parallel && c.stats.pairs != null ? (
+              <div title={`${fmt(c.stats.documents)} 个文档（每种语言一个）`}>
+                <div className="stat-label">句对</div>
+                <div className="count">
+                  {fmt(c.stats.pairs)}
+                  <span className="unit">对</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div>
+                <div className="stat-label">文档</div>
+                <div className="count">
+                  {fmt(c.stats.documents)}
+                  <span className="unit">篇</span>
+                </div>
+              </div>
+            )}
             <div>
               <div className="stat-label">句</div>
               <div className="count">
@@ -63,16 +75,16 @@ export default function CorpusDrawer({ corpusId, onClose }: { corpusId: string |
                 <span className="unit">词</span>
               </div>
             </div>
-            <div>
-              <div className="stat-label">索引版本</div>
-              <div className="count">{fmtVersion(c.index_version)}</div>
+            <div title={c.index_version != null ? `版本 ${fmtVersion(c.index_version)}` : undefined}>
+              <div className="stat-label">索引更新</div>
+              <div className="count">{c.index_version == null ? "—" : c.meta?.indexed_at ? fmtRelative(c.meta.indexed_at) : "已建"}</div>
             </div>
           </div>
           <div className="row">
             <StatusCell c={c} />
             <div className="grow" />
             <span className="small muted">
-              {c.language} · 创建于 {fmtTime(c.created_at)}
+              {corpusProfile(c).join(" · ")} · 创建于 {fmtTime(c.created_at)}
             </span>
           </div>
           {c.description && <p className="sm sub">{c.description}</p>}
@@ -80,9 +92,7 @@ export default function CorpusDrawer({ corpusId, onClose }: { corpusId: string |
           <Tabs
             items={[
               { key: "docs", label: "文档", children: <Documents corpusId={c.id} editable={editable} /> },
-              ...(editable
-                ? [{ key: "upload", label: "上传", children: <UploadTab corpusId={c.id} defaultLanguage={c.language} /> }]
-                : []),
+              ...(editable ? [{ key: "upload", label: "上传", children: <UploadTab corpusId={c.id} /> }] : []),
               { key: "meta", label: "元数据", children: <MetadataFields corpusId={c.id} /> },
             ]}
           />
@@ -99,6 +109,7 @@ function Documents({ corpusId, editable }: { corpusId: string; editable: boolean
   const [page, setPage] = useState(1);
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<Doc | null>(null);
+  const [viewing, setViewing] = useState<Doc | null>(null);
   const docs = useQuery({
     queryKey: ["documents", corpusId, q, page],
     queryFn: () => api.get<Page<Doc>>(`/corpora/${corpusId}/documents`, { q, page, page_size: PAGE_SIZE }),
@@ -138,6 +149,7 @@ function Documents({ corpusId, editable }: { corpusId: string; editable: boolean
         loading={docs.isFetching}
         dataSource={docs.data?.items}
         locale={{ emptyText: "暂无文档" }}
+        onRow={(d) => ({ onClick: () => setViewing(d), style: { cursor: "pointer" } })}
         pagination={{ current: page, pageSize: PAGE_SIZE, total: docs.data?.total ?? 0, showSizeChanger: false, onChange: setPage, size: "small" }}
         columns={[
           { title: "标题", dataIndex: "title", ellipsis: true },
@@ -149,20 +161,27 @@ function Documents({ corpusId, editable }: { corpusId: string; editable: boolean
             width: 76,
             render: (_, d) =>
               editable && (
-                <span className="row" style={{ gap: 2 }}>
-                  <button className="btn ghost icon" type="button" aria-label="编辑" onClick={() => setEditing(d)}>
-                    <Icon name="edit" size={14} />
-                  </button>
-                  <Popconfirm title={`删除「${d.title}」？删除后需重建索引。`} okText="删除" cancelText="取消" onConfirm={() => remove.mutate(d.id)}>
-                    <button className="btn ghost icon danger" type="button" aria-label="删除">
-                      <Icon name="trash" size={14} />
+                <span className="row" style={{ gap: 2 }} onClick={(e) => e.stopPropagation()}>
+                  <Tip title="编辑文档">
+                    <button className="btn ghost icon" type="button" aria-label={`编辑文档「${d.title}」`} onClick={() => setEditing(d)}>
+                      <Icon name="edit" size={14} />
                     </button>
+                  </Tip>
+                  <Popconfirm title={`删除「${d.title}」？删除后需重建索引。`} okText="删除" cancelText="取消" onConfirm={() => remove.mutate(d.id)}>
+                    <Tip title="删除文档">
+                      <button className="btn ghost icon danger" type="button" aria-label={`删除文档「${d.title}」`}>
+                        <Icon name="trash" size={14} />
+                      </button>
+                    </Tip>
                   </Popconfirm>
                 </span>
               ),
           },
         ]}
       />
+      <Modal title={viewing?.title} open={!!viewing} footer={null} onCancel={() => setViewing(null)} width={760} destroyOnHidden>
+        {viewing && <DocumentView doc={viewing} />}
+      </Modal>
       <Modal title="编辑文档" open={!!editing} footer={null} onCancel={() => setEditing(null)} destroyOnHidden>
         {editing && (
           <EditDocument
@@ -178,19 +197,84 @@ function Documents({ corpusId, editable }: { corpusId: string; editable: boolean
   );
 }
 
+/** One document: its metadata and stored sentences (the import's sentence split); aligned sentences in parallel corpora. */
+function DocumentView({ doc }: { doc: Doc }) {
+  const [page, setPage] = useState(1);
+  const sentences = useQuery({
+    queryKey: ["doc-sentences", doc.id, page],
+    queryFn: () => api.get<Page<DocSentence>>(`/corpora/${doc.corpus_id}/documents/${doc.id}/sentences`, { page, page_size: SENTENCE_PAGE }),
+    placeholderData: keepPreviousData,
+  });
+  const meta = Object.entries(doc.metadata ?? {});
+  const total = sentences.data?.total ?? 0;
+  return (
+    <div className="col gap-12">
+      <dl className="kv doc-kv">
+        <dt>语言</dt>
+        <dd className="mono">{doc.language || "—"}</dd>
+        <dt>规模</dt>
+        <dd className="num">
+          {fmt(doc.sentences)} 句 · {fmt(doc.tokens)} 词
+        </dd>
+        {meta.map(([k, v]) => (
+          <div key={k} style={{ display: "contents" }}>
+            <dt className="mono">{k}</dt>
+            <dd>{typeof v === "object" ? JSON.stringify(v) : String(v)}</dd>
+          </div>
+        ))}
+      </dl>
+      <ErrorAlert error={sentences.error} />
+      {sentences.isPending && <Skeleton rows={4} />}
+      {sentences.data && total === 0 && <Empty icon="filetext" text="没有句子" />}
+      {sentences.data && total > 0 && (
+        <>
+          <ol className="doc-sents" aria-label="句子">
+            {sentences.data.items.map((s) => (
+              <li key={s.idx}>
+                <span className="ds-n num">{s.idx + 1}</span>
+                <span className="ds-t">
+                  {s.text}
+                  {s.aligned.map((a, i) => (
+                    <span className="ds-a" key={i}>
+                      <b className="mono">{a.language}</b> {a.text}
+                    </span>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ol>
+          {total > SENTENCE_PAGE && (
+            <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+              <span className="small muted num">
+                第 {fmt((page - 1) * SENTENCE_PAGE + 1)}–{fmt(Math.min(page * SENTENCE_PAGE, total))} 句，共 {fmt(total)} 句
+              </span>
+              <button className="btn xs" type="button" disabled={page === 1} onClick={() => setPage(page - 1)}>
+                上一页
+              </button>
+              <button className="btn xs" type="button" disabled={page * SENTENCE_PAGE >= total} onClick={() => setPage(page + 1)}>
+                下一页
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function EditDocument({ doc, onDone }: { doc: Doc; onDone: () => void }) {
   const save = useMutation({
-    mutationFn: (v: { title: string; metadata?: string }) =>
-      api.patch<Doc>(`/corpora/${doc.corpus_id}/documents/${doc.id}`, { title: v.title.trim(), metadata: parseMetadata(v.metadata) }),
+    mutationFn: (v: { title: string; metadata?: MetaDraft }) =>
+      api.patch<Doc>(`/corpora/${doc.corpus_id}/documents/${doc.id}`, { title: v.title.trim(), metadata: metadataFromDraft(v.metadata) }),
     onSuccess: onDone,
   });
   return (
-    <Form layout="vertical" onFinish={save.mutate} initialValues={{ title: doc.title, metadata: JSON.stringify(doc.metadata, null, 2) }} requiredMark={false}>
+    <Form layout="vertical" onFinish={save.mutate} initialValues={{ title: doc.title, metadata: draftFrom(doc.metadata) }} requiredMark={false}>
       <Form.Item name="title" label="标题" rules={[{ required: true, whitespace: true, message: "请输入标题" }]}>
         <Input />
       </Form.Item>
-      <Form.Item name="metadata" label="元数据（JSON）" rules={[metadataRule]}>
-        <Input.TextArea rows={8} style={{ fontFamily: "var(--mono)" }} />
+      <Form.Item name="metadata" label="元数据" rules={[metaDraftRule]}>
+        <MetadataInput />
       </Form.Item>
       <ErrorAlert error={save.error} style={{ marginBottom: 12 }} />
       <button className="btn p" type="submit" disabled={save.isPending}>
@@ -200,7 +284,7 @@ function EditDocument({ doc, onDone }: { doc: Doc; onDone: () => void }) {
   );
 }
 
-function UploadTab({ corpusId, defaultLanguage }: { corpusId: string; defaultLanguage: string }) {
+function UploadTab({ corpusId }: { corpusId: string }) {
   const projectId = useProjectId();
   const qc = useQueryClient();
   const { message } = App.useApp();
@@ -208,12 +292,12 @@ function UploadTab({ corpusId, defaultLanguage }: { corpusId: string; defaultLan
   const [files, setFiles] = useState<UploadFile[]>([]);
   const table = useTableMapping(files.map((f) => f.originFileObj as File));
   const upload = useMutation({
-    mutationFn: (v: { language?: string; metadata?: string }) =>
+    mutationFn: (v: { language?: string; metadata?: MetaDraft }) =>
       uploadFiles(
         corpusId,
         files.map((f) => f.originFileObj as File),
         v.language,
-        parseMetadata(v.metadata),
+        metadataFromDraft(v.metadata),
         table.mapping,
       ),
     onSuccess: (job: Job) => {
@@ -229,22 +313,16 @@ function UploadTab({ corpusId, defaultLanguage }: { corpusId: string; defaultLan
     },
   });
   return (
-    <Form layout="vertical" onFinish={upload.mutate} initialValues={{ language: defaultLanguage }}>
+    <Form layout="vertical" onFinish={upload.mutate} initialValues={{ language: AUTO_LANGUAGE, metadata: emptyMeta() }}>
       <Form.Item>
-        <Upload.Dragger multiple fileList={files} beforeUpload={() => false} onChange={(i) => setFiles(i.fileList)} accept={ACCEPT}>
-          <div className="col" style={{ alignItems: "center", gap: 6, padding: "6px 0" }}>
-            <Icon name="upload" size={20} />
-            <span>拖入文件或点击选择</span>
-            <span className="small muted">TXT · DOCX · CSV/TSV · CoNLL-U · TMX</span>
-          </div>
-        </Upload.Dragger>
+        <FilePicker files={files} setFiles={setFiles} hint="TXT · DOCX · CSV/TSV · CoNLL-U · TMX" />
       </Form.Item>
       <TableMappingFields state={table} />
       <Form.Item name="language" label="语言">
-        <Select allowClear options={languageOptions} />
+        <Select options={uploadLanguageOptions} aria-label="语言" />
       </Form.Item>
-      <Form.Item name="metadata" label="元数据（JSON，应用到本批全部文档）" rules={[metadataRule]}>
-        <Input.TextArea rows={2} placeholder='{"year": 2020}' style={{ fontFamily: "var(--mono)" }} />
+      <Form.Item name="metadata" label="元数据（应用到本批全部文档）" rules={[metaDraftRule]}>
+        <MetadataInput />
       </Form.Item>
       <ErrorAlert error={upload.error} style={{ marginBottom: 12 }} />
       <button className="btn p" type="submit" disabled={upload.isPending || files.length === 0 || !table.ready}>
