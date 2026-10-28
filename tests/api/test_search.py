@@ -274,3 +274,61 @@ def test_include_tokens(owner, corpus):
         ("right", "of"),
         ("right", "science."),
     ]
+
+
+def test_parallel_context_and_evidence_stay_in_sentence(owner, project, fake_engine):
+    """QA Q20/Q60: parallel corpora search with sentence-only context; a pinned hit keeps its own
+    sentence, the aligned translation and the sentence number, with the match in bold."""
+    c = owner.post(
+        f"/api/projects/{project['id']}/corpora",
+        json={"name": "双语", "language": "en"},
+    ).json()
+    upload(
+        owner,
+        c["id"],
+        {"pair.tmx": "Hello.\t你好。\nI study language.\t我研究语言。\nBye.\t再见。"},
+    )
+    drain()
+    hit = search(owner, {"corpus_id": c["id"]}).json()["items"][0]
+    assert fake_engine.calls[-1]["context"].sentence_only is True
+    ref = {
+        "hit_id": hit["hit_id"],
+        "document_id": hit["document_id"],
+        "start_cp": hit["start_cp"],
+        "end_cp": hit["end_cp"],
+        "search_query": "language",
+    }
+    ev = owner.post(
+        f"/api/projects/{project['id']}/evidence",
+        json={"kind": "hit", "ref": ref, "text": "x", "source": "y"},
+    ).json()
+    assert ev["text"] == "I study **language**.\nZH：我研究语言。"
+    assert ev["source"] == "pair-en · 句 2 · 双语"
+    assert ev["ref"]["sentence"] == "I study language." and ev["ref"]["match"] == [
+        8,
+        16,
+    ]
+    assert ev["ref"]["aligned"] == [{"language": "zh", "text": "我研究语言。"}]
+
+
+def test_parse_with_scope_checks_layers(owner, corpus, monkeypatch):
+    """QA Q21/Q22: parse against the corpus (tagset, POS tags) and report a missing layer before searching."""
+    from engine import cwb
+
+    scope = {"corpus_id": corpus["id"]}
+    r = owner.post("/api/search/parse", json={"query": "language/n", "scope": scope})
+    body = r.json()
+    assert body["ok"] and body["corpus"]["tagset"] in ("upos", "jieba", "mixed")
+    assert body["corpus"]["layers"] == {"dep": False, "span": False}
+    monkeypatch.setattr(cwb, "has_values", lambda ix, key, attr: False)
+    bad = owner.post(
+        "/api/search/parse", json={"query": "language{dep=nsubj}", "scope": scope}
+    ).json()
+    assert bad["ok"] is False and bad["error"]["position"] == 8
+    assert "依存" in bad["error"]["message"]
+    span = owner.post(
+        "/api/search/parse", json={"query": "[时态]", "scope": scope}
+    ).json()
+    assert span["ok"] is False and "片段" in span["error"]["message"]
+    r = search(owner, scope, "{dep=nsubj}")
+    assert r.status_code == 422 and r.json()["error"]["code"] == "INVALID_LAYER"
