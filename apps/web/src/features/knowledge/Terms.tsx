@@ -398,6 +398,17 @@ function ExtractDialog({
   );
 }
 
+/** 抽取完成 message with why drafts were skipped or none came out (kb_extract result). */
+export function extractSummary(r: Record<string, unknown>): string {
+  const n = (k: string) => Number(r[k] ?? 0);
+  const parts = [`新增 ${fmt(n("created"))} 条草稿`];
+  const existing = Array.isArray(r.skipped_existing) ? (r.skipped_existing as string[]) : [];
+  if (n("skipped")) parts.push(`跳过 ${fmt(n("skipped"))} 条（术语表中已有${existing.length ? `：${existing.slice(0, 5).join("、")}${existing.length > 5 ? " 等" : ""}` : ""}）`);
+  if (r.pool === 0) parts.push(`范围内没有出现 ${fmt(n("min_freq") || 2)} 次及以上的词性模式组合`);
+  else if (r.pool != null && n("candidates") < n("pool")) parts.push(`模型从 ${fmt(n("pool"))} 条候选中保留 ${fmt(n("candidates"))} 条`);
+  return `抽取完成：${parts.join("；")}`;
+}
+
 /** Watches an extraction job; toasts the result and refreshes the term lists. */
 function ExtractWatcher({ jobId, onDone }: { jobId: string; onDone: () => void }) {
   const job = useJob(jobId, 1500);
@@ -408,7 +419,9 @@ function ExtractWatcher({ jobId, onDone }: { jobId: string; onDone: () => void }
     if (!state || state === "queued" || state === "running") return;
     if (state === "succeeded") {
       const r = job.data?.result ?? {};
-      message.success(`抽取完成：新增 ${fmt(Number(r.created ?? 0))} 条草稿，跳过 ${fmt(Number(r.skipped ?? 0))} 条`);
+      const text = extractSummary(r);
+      if (Number(r.created ?? 0) > 0) message.success(text, 6);
+      else message.warning(text, 8);
       void qc.invalidateQueries({ queryKey: ["kb-terms"] });
     } else if (state === "failed") message.error(`抽取失败：${job.data?.error?.message ?? ""}`);
     onDone();

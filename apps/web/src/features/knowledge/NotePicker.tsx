@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Input, Modal, Radio, Select } from "antd";
 import { useEffect, useState } from "react";
-import type { KbDocument } from "../../api";
+import { api, type Evidence, type KbDocument } from "../../api";
 import { ErrorAlert } from "../../components/common";
 import { appendToNote, createNote, useKbDocuments } from "./data";
 
@@ -10,6 +10,25 @@ export type NoteTarget = { noteId: string } | { newTitle: string };
 /** Append to an existing note or create one with `markdown` as its body. */
 export async function writeToNote(projectId: string, target: NoteTarget, markdown: string): Promise<KbDocument> {
   return "noteId" in target ? appendToNote(target.noteId, markdown) : createNote(projectId, target.newTitle, markdown);
+}
+
+type EvidenceItem = Pick<Evidence, "id" | "text" | "source" | "ref">;
+
+/** Body of an evidence ref: the server fills text / source / query from evidence_id. */
+export const evidenceRef = (it: EvidenceItem, append = true) => ({
+  kind: "evidence" as const,
+  ref: { evidence_id: it.id, ...it.ref, text: it.text, source: it.source },
+  append,
+});
+
+/**
+ * Evidence basket → note: an empty new note (or the existing one), then one ref per item. The API appends
+ * each quote block itself, so the body holds every item once and matches the 引用 list.
+ */
+export async function writeEvidenceToNote(projectId: string, target: NoteTarget, items: EvidenceItem[]): Promise<KbDocument> {
+  const note = "noteId" in target ? await api.get<KbDocument>(`/kb/documents/${target.noteId}`) : await createNote(projectId, target.newTitle, "");
+  for (const it of items) await api.post(`/kb/documents/${note.id}/refs`, evidenceRef(it));
+  return note;
 }
 
 /** Pick an existing note or name a new one; `onPick` does the write and the dialog shows its error. */
@@ -93,12 +112,17 @@ export function NotePicker({
   );
 }
 
-/** One evidence item as a Markdown quote with its source (and query). */
+/** One evidence item as a Markdown quote with its source and query — the same block the API appends (kb._evidence_block). */
 export function evidenceMarkdown(e: { text: string; source: string; ref: { search_query?: string } }): string {
   const quote = e.text
+    .trim()
     .split("\n")
-    .map((l) => `> ${l}`)
+    .map((l) => (l.trim() ? `> ${l}` : ">"))
     .join("\n");
-  const q = e.ref?.search_query ? ` · \`${e.ref.search_query}\`` : "";
-  return `${quote}\n>\n> —— ${e.source}${q}`;
+  let tail = e.source ? `> —— ${e.source}` : "";
+  if (e.ref?.search_query) tail += `${tail ? "；" : "> —— "}查询式：\`${e.ref.search_query}\``;
+  return tail ? `${quote}\n>\n${tail}` : quote;
 }
+
+/** dataTransfer type of an evidence item dragged from the basket (JSON of id, text, source, ref). */
+export const EVIDENCE_MIME = "application/x-corpus-evidence";

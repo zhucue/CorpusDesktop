@@ -14,6 +14,8 @@ export default function Login() {
   const [show, setShow] = useState(false);
   const [shake, setShake] = useState(0);
   const pwRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const [missing, setMissing] = useState(false);
   const login = useMutation({
     mutationFn: () => api.post<User>("/auth/login", { email: email.trim(), password }),
     onSuccess: (user) => {
@@ -28,10 +30,13 @@ export default function Login() {
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim() || !password) {
+      login.reset();
+      setMissing(true);
       setShake((n) => n + 1);
-      pwRef.current?.focus();
+      (email.trim() ? pwRef : emailRef).current?.focus();
       return;
     }
+    setMissing(false);
     login.mutate();
   }
 
@@ -49,7 +54,17 @@ export default function Login() {
         <form className="col gap-16" style={{ ["--i" as string]: 2, marginTop: 24 }} onSubmit={submit} noValidate>
           <div className="field">
             <label htmlFor="email">邮箱</label>
-            <input className="input" id="email" type="email" autoComplete="username" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input
+              ref={emailRef}
+              className="input"
+              id="email"
+              type="email"
+              autoComplete="username"
+              autoFocus
+              value={email}
+              aria-invalid={missing && !email.trim()}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
           <div className="field">
             <label htmlFor="pw">密码</label>
@@ -61,6 +76,7 @@ export default function Login() {
                 type={show ? "text" : "password"}
                 autoComplete="current-password"
                 value={password}
+                aria-invalid={missing && !password}
                 onChange={(e) => setPassword(e.target.value)}
               />
               <button className="btn ghost icon" type="button" aria-label={show ? "隐藏密码" : "显示密码"} onClick={() => setShow((s) => !s)}>
@@ -68,6 +84,12 @@ export default function Login() {
               </button>
             </div>
           </div>
+          {missing && (!email.trim() || !password) && (
+            <div className="alert err" role="alert">
+              <Icon name="alert" size={14} />
+              <span>请输入邮箱和密码</span>
+            </div>
+          )}
           {err && (
             <div className="alert err" role="alert">
               <Icon name="alert" size={14} />

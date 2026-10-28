@@ -1,24 +1,92 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Select, Upload, type UploadFile } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { api, type Corpus, type Job, type Project, type SavedQuery, type SearchResult } from "../../api";
+import { api, type Corpus, type Job, type ParseResult, type Project, type SavedQuery, type SearchResult } from "../../api";
 import { Empty, Count, CorpusStatusTag, ErrorAlert, Monogram, Progress, QueryChip } from "../../components/common";
 import { Icon, type IconName } from "../../components/Icon";
 import { KwicTable } from "../../components/results/Kwic";
 import { isActiveJob, useCorpora, useCorpus, useJob, useProjectJobs, useProjects } from "../../lib/data";
-import { fmt, fmtVersion } from "../../lib/format";
+import { fmt, fmtRelative } from "../../lib/format";
 import AssistantPanel from "../assistant/AssistantPanel";
 import { useAgentHealth } from "../assistant/useAgentChat";
 import { TOOL_COUNT } from "../../components/global/tools";
 import { ACCEPT, languageOptions, uploadFiles } from "../corpora/UploadDialog";
+import { MAX_PROJECT_NAME } from "../settings/project";
 import "./onboarding.css";
 
 const STEPS = ["创建项目", "导入语料", "第一次检索", "试试助手", "完成"];
 const UPLOAD = "__upload__";
+const DEFAULT_PROJECT = "我的研究项目";
 
-function defaultQuery(language: string | undefined) {
-  return language === "en" ? "translate/v" : "翻译/v +文化";
+/** Prefill candidates, most instructive first; the last ones hit in almost any text of the language. */
+function queryCandidates(language: string | undefined): string[] {
+  return language === "en"
+    ? ["translate/v", "translation", "language", "people", "the"]
+    : ["翻译/v +文化", "翻译", "文化", "语言", "我们", "的"];
+}
+
+/** First candidate with a hit in the corpus (one-row searches), so the first search is never empty. */
+async function pickQuery(corpusId: string, language: string | undefined): Promise<string> {
+  const cands = queryCandidates(language);
+  for (const q of cands) {
+    try {
+      const r = await api.post<SearchResult>("/search", { scope: { corpus_id: corpusId }, query: q, context: { unit: "char", size: 10 }, sort: "position", page: 1, page_size: 1 });
+      if (r.items.length > 0 || r.counts.hits > 0) return q;
+    } catch {
+      /* try the next one */
+    }
+  }
+  return cands[0];
+}
+
+/** " · 索引更新 3 天前" from meta.indexed_at; nothing when unknown (the index hash means nothing to users). */
+function indexedText(c: Corpus): string {
+  const at = c.meta?.indexed_at;
+  return at ? ` · 索引更新 ${fmtRelative(at)}` : "";
+}
+
+/** Search page link carrying the onboarding corpus and its last query. */
+export function searchLanding(projectId: string, corpusId: string | null, query: string | null): string {
+  const p = new URLSearchParams();
+  if (query) p.set("q", query);
+  if (corpusId) p.set("scope", JSON.stringify({ corpus_id: corpusId }));
+  const s = p.toString();
+  return `/p/${projectId}/search${s ? `?${s}` : ""}`;
+}
+
+const POS_NAMES: Record<string, string> = { v: "动词", n: "名词", a: "形容词", d: "副词", VERB: "动词", NOUN: "名词", ADJ: "形容词", ADV: "副词" };
+
+/** The explanation line under the query: what the parser reads from it, as typed. */
+function QueryExplain({ query }: { query: string }) {
+  const [shown, setShown] = useState(query);
+  useEffect(() => {
+    const t = setTimeout(() => setShown(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+  const parse = useQuery({
+    queryKey: ["parse", shown],
+    queryFn: () => api.post<ParseResult>("/search/parse", { query: shown }),
+    enabled: !!shown,
+    staleTime: Infinity,
+    meta: { background: true },
+  });
+  const p = shown === query ? parse.data : undefined;
+  if (!query || !p) return <p className="hint" />;
+  if (!p.ok) return <p className="hint" style={{ color: "var(--err)" }}>第 {(p.error?.position ?? 0) + 1} 个字符：{p.error?.message}</p>;
+  const attrs = [...p.anchor.matchAll(/\/([A-Za-z]+)\b/g)].map((m) => POS_NAMES[m[1]] ?? m[1]);
+  return (
+    <p className="hint">
+      <QueryChip q={p.anchor} />
+      {attrs.length ? `限定${attrs.join("、")}` : "查找该词"}
+      {p.conditions.map((c, i) => (
+        <span key={i} className="row" style={{ gap: 6 }}>
+          ，<QueryChip q={c.text} />
+          {c.op === "+" ? "须同句出现" : "同句不出现"}
+        </span>
+      ))}
+    </p>
+  );
 }
 
 export default function Onboarding() {
@@ -37,7 +105,7 @@ export default function Onboarding() {
   }, [params]);
 
   const createProject = useMutation({
-    mutationFn: () => api.post<Project>("/projects", { name: name.trim() }),
+    mutationFn: (n?: string) => api.post<Project>("/projects", { name: (n ?? name).trim() }),
     onSuccess: (p) => {
       setProjectId(p.id);
       qc.invalidateQueries({ queryKey: ["projects"] });
@@ -88,12 +156,23 @@ export default function Onboarding() {
 
   /* ---------- step 3: search ---------- */
   const [query, setQuery] = useState("");
+  const [edited, setEdited] = useState(false);
+  // Prefill a query that hits in the chosen corpus; follows a corpus change until the user types.
+  const prefill = useQuery({
+    queryKey: ["onboarding-prefill", activeCorpusId],
+    queryFn: () => pickQuery(activeCorpusId!, corpus.data?.language),
+    enabled: !!activeCorpusId && ready,
+    staleTime: Infinity,
+    meta: { background: true },
+  });
   useEffect(() => {
-    if (corpus.data && !query) setQuery(defaultQuery(corpus.data.language));
-  }, [corpus.data]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (prefill.data && !edited) setQuery(prefill.data);
+  }, [prefill.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [lastQuery, setLastQuery] = useState<string | null>(null);
   const search = useMutation({
-    mutationFn: () =>
-      api.post<SearchResult>("/search", { scope: { corpus_id: activeCorpusId }, query: query.trim(), context: { unit: "char", size: 30 }, sort: "position", page: 1, page_size: 3 }),
+    mutationFn: (q: string) =>
+      api.post<SearchResult>("/search", { scope: { corpus_id: activeCorpusId }, query: q, context: { unit: "char", size: 30 }, sort: "position", page: 1, page_size: 3 }),
+    onSuccess: (_, q) => setLastQuery(q),
   });
   const saveQuery = useMutation({
     mutationFn: () => api.post<SavedQuery>(`/projects/${projectId}/queries`, { name: query.trim(), query: query.trim(), scope: { corpus_id: activeCorpusId } }),
@@ -101,10 +180,18 @@ export default function Onboarding() {
 
   /* ---------- navigation ---------- */
   const canNext = [!!projectId || name.trim().length > 0, ready, true, true, true][step];
+  // Leaving for search keeps the corpus chosen here and the last query searched (Q16).
+  const landing = projectId ? searchLanding(projectId, ready ? activeCorpusId : null, ready ? lastQuery : null) : "/";
   function next() {
-    if (step === 0 && !projectId) return createProject.mutate();
-    if (step === STEPS.length - 1) return navigate(projectId ? `/p/${projectId}/search` : "/");
+    if (step === 0 && !projectId) return createProject.mutate(undefined);
+    if (step === STEPS.length - 1) return navigate(landing);
     setStep((s) => Math.min(STEPS.length - 1, s + 1));
+  }
+  /** 跳过 in the header: out of the guide. Without a project yet, one is created (typed or default name). */
+  function skipAll() {
+    if (projectId) return navigate(landing);
+    if ((projects.data?.items.length ?? 0) > 0) return navigate("/");
+    createProject.mutate(name.trim() || DEFAULT_PROJECT, { onSuccess: (p) => navigate(`/p/${p.id}/corpora`) });
   }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -122,7 +209,7 @@ export default function Onboarding() {
     {
       icon: "library",
       title: corpus.data?.name ?? "未选择语料",
-      sub: corpus.data ? `${fmt(corpus.data.stats.sentences)} 句 · 索引 ${fmtVersion(corpus.data.index_version)}` : "",
+      sub: corpus.data ? `${fmt(corpus.data.stats.sentences)} 句${indexedText(corpus.data)}` : "",
       tag: ready ? "可检索" : "未就绪",
       cls: ready ? "t-ok" : "t-gray",
     },
@@ -152,11 +239,9 @@ export default function Onboarding() {
           语料研究平台
         </span>
         <div className="grow" />
-        {projectId && (
-          <Link className="skip" to={`/p/${projectId}/search`}>
-            跳过
-          </Link>
-        )}
+        <button className="skip linkish" type="button" disabled={createProject.isPending} onClick={skipAll}>
+          跳过引导
+        </button>
       </header>
       <main className="ob">
         <nav className="stepper" aria-label="引导步骤" style={{ ["--p" as string]: step / (STEPS.length - 1) }}>
@@ -190,15 +275,20 @@ export default function Onboarding() {
                 <div className="row" style={{ gap: 14, alignItems: "flex-end" }}>
                   <Monogram name={name.trim() || "项"} size="xl" />
                   <div className="field grow">
-                    <label htmlFor="pname">项目名称</label>
+                    <label htmlFor="pname" className="row between">
+                      项目名称
+                      <span className="small muted num">
+                        {Array.from(name).length} / {MAX_PROJECT_NAME}
+                      </span>
+                    </label>
                     <input
                       className="input"
                       id="pname"
                       value={name}
-                      maxLength={100}
+                      maxLength={MAX_PROJECT_NAME}
                       autoFocus
                       onChange={(e) => setName(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && name.trim() && createProject.mutate()}
+                      onKeyDown={(e) => e.key === "Enter" && name.trim() && createProject.mutate(undefined)}
                       style={{ height: 42, fontSize: 15 }}
                     />
                   </div>
@@ -262,7 +352,7 @@ export default function Onboarding() {
                     </>
                   ) : (
                     <div className="small muted num">
-                      {fmt(corpus.data.stats.documents)} 篇 · {fmt(corpus.data.stats.sentences)} 句 · {fmt(corpus.data.stats.tokens)} 词 · 索引 {fmtVersion(corpus.data.index_version)}
+                      {fmt(corpus.data.stats.documents)} 篇 · {fmt(corpus.data.stats.sentences)} 句 · {fmt(corpus.data.stats.tokens)} 词{indexedText(corpus.data)}
                     </div>
                   )}
                   {corpus.data.status === "failed" && corpus.data.error && <div className="alert err">{corpus.data.error}</div>}
@@ -277,26 +367,30 @@ export default function Onboarding() {
                 style={{ gap: 10 }}
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (query.trim() && activeCorpusId) search.mutate();
+                  if (query.trim() && activeCorpusId) search.mutate(query.trim());
                 }}
               >
                 <label htmlFor="oq" className="sr-only">
                   查询式
                 </label>
-                <input className="query-input" id="oq" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" spellCheck={false} />
-                <button className="btn p lg" type="submit" disabled={!query.trim() || !activeCorpusId || search.isPending}>
+                <input
+                  className="query-input"
+                  id="oq"
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setEdited(true);
+                  }}
+                  placeholder={prefill.isFetching ? "正在挑选示例查询" : undefined}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button className="btn p lg" type="submit" disabled={!query.trim() || !activeCorpusId || !ready || search.isPending}>
                   {search.isPending ? <span className="spin" /> : <Icon name="search" />}
                   检索
                 </button>
               </form>
-              {corpus.data?.language !== "en" && (
-                <p className="hint">
-                  <QueryChip q="翻译/v" />
-                  限定动词，
-                  <QueryChip q="+文化" />
-                  要求同句出现
-                </p>
-              )}
+              <QueryExplain query={query.trim()} />
               <ErrorAlert error={search.error} />
               {search.data && (
                 <div className="col" style={{ gap: 12 }}>
@@ -378,7 +472,7 @@ export default function Onboarding() {
                       ["assistant", "助手", "spark"],
                     ] as [string, string, IconName][]
                   ).map(([p, l, ic]) => (
-                    <Link key={p} className="go lift" to={`/p/${projectId}/${p}`}>
+                    <Link key={p} className="go lift" to={p === "search" ? landing : `/p/${projectId}/${p}`}>
                       <span className="gi">
                         <Icon name={ic} />
                       </span>
@@ -397,6 +491,11 @@ export default function Onboarding() {
               {step + 1} / {STEPS.length}
             </span>
             <div className="grow" />
+            {step >= 1 && step <= 3 && (
+              <button className="btn ghost" type="button" onClick={() => setStep((s) => s + 1)}>
+                跳过此步
+              </button>
+            )}
             <button className="btn" type="button" disabled={step === 0 || (step === 1 && !!projectId && !!params.get("project"))} onClick={() => setStep((s) => Math.max(0, s - 1))}>
               上一步
             </button>

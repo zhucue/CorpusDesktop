@@ -1,16 +1,20 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { App, Popconfirm } from "antd";
-import { useState } from "react";
+import { App, Dropdown, Popconfirm } from "antd";
+import { useRef, useState } from "react";
 import { Link } from "react-router";
-import { api, errorText, type Job, type KbDocument, type KbLocator, type NoteRef } from "../../api";
+import { api, errorText, type Evidence, type Job, type KbDocument, type KbLocator, type NoteRef } from "../../api";
 import { Empty, ErrorAlert, QueryChip, Skeleton } from "../../components/common";
 import { Markdown } from "../../components/common/Markdown";
 import { searchHref } from "../../components/global/CommandPalette";
+import { useEvidence } from "../../components/global/evidence";
 import { Icon, type IconName } from "../../components/Icon";
 import { useJobCreated } from "../../lib/data";
 import { fmtShortTime } from "../../lib/format";
 import { useAutosave, type SaveState } from "./autosave";
 import { createNote, knowledgeHref, locatorText, useKbDocument } from "./data";
+import { EVIDENCE_MIME, evidenceMarkdown, evidenceRef } from "./NotePicker";
+
+type EvidenceItem = Pick<Evidence, "id" | "text" | "source" | "ref">;
 
 const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : String(v));
 
@@ -58,6 +62,28 @@ export function NoteEditor({ note, editable }: { note: KbDocument; editable: boo
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body ?? "");
   const [preview, setPreview] = useState(!editable);
+  const ev = useEvidence();
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  /** The quote is already in the body (dropped or inserted here): the ref only records it. */
+  async function recordRef(it: EvidenceItem) {
+    try {
+      await api.post(`/kb/documents/${note.id}/refs`, evidenceRef(it, false));
+      void qc.invalidateQueries({ queryKey: ["kb-doc", note.id] });
+    } catch (e) {
+      message.error(errorText(e));
+    }
+  }
+  function insertEvidence(it: EvidenceItem) {
+    const el = textRef.current;
+    const at = el ? el.selectionStart : body.length;
+    const before = body.slice(0, at).replace(/\s*$/, "");
+    const after = body.slice(at).replace(/^\s*/, "");
+    const block = evidenceMarkdown(it);
+    const next = `${before}${before ? "\n\n" : ""}${block}${after ? `\n\n${after}` : "\n"}`;
+    setBody(next);
+    auto.change({ title, body: next });
+    void recordRef(it);
+  }
   const auto = useAutosave(async (v: { title: string; body: string }) => {
     const saved = await api.patch<KbDocument>(`/kb/documents/${note.id}`, { title: v.title.trim() || "未命名笔记", body: v.body });
     qc.setQueryData<KbDocument>(["kb-doc", note.id], (old) => (old ? { ...old, ...saved, body: v.body } : old));
@@ -105,6 +131,24 @@ export function NoteEditor({ note, editable }: { note: KbDocument; editable: boo
           ) : (
             <b className="grow">{title}</b>
           )}
+          {editable && !preview && ev && (
+            <Dropdown
+              trigger={["click"]}
+              disabled={ev.items.length === 0}
+              menu={{
+                items: ev.items.map((it) => ({ key: it.id, label: <span className="ellipsis" style={{ display: "block", maxWidth: 360 }}>{it.text}</span> })),
+                onClick: ({ key }) => {
+                  const it = ev.items.find((x) => x.id === key);
+                  if (it) insertEvidence(it);
+                },
+              }}
+            >
+              <button className="btn xs" type="button" title={ev.items.length ? "插入到光标处，也可从证据篮拖入" : "证据篮为空"}>
+                <Icon name="pin" size={14} />
+                插入证据
+              </button>
+            </Dropdown>
+          )}
           <div className="seg-mini" role="tablist" aria-label="视图">
             {editable && (
               <button type="button" role="tab" aria-selected={!preview} onClick={() => setPreview(false)}>
@@ -121,13 +165,23 @@ export function NoteEditor({ note, editable }: { note: KbDocument; editable: boo
             body.trim() ? <Markdown text={body} /> : <span className="muted sm">空笔记</span>
           ) : (
             <textarea
+              ref={textRef}
               className="md-input"
               aria-label="笔记正文"
+              rows={Math.max(16, body.split("\n").length + 2)}
               value={body}
               placeholder="Markdown"
               onChange={(e) => {
                 setBody(e.target.value);
                 auto.change({ title, body: e.target.value });
+              }}
+              onDragOver={(e) => {
+                if (e.dataTransfer.types.includes(EVIDENCE_MIME)) e.dataTransfer.dropEffect = "copy";
+              }}
+              onDrop={(e) => {
+                // the browser inserts the text/plain quote at the drop point (onChange); record the ref here
+                const raw = e.dataTransfer.getData(EVIDENCE_MIME);
+                if (raw) void recordRef(JSON.parse(raw) as EvidenceItem);
               }}
             />
           )}

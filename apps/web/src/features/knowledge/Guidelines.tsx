@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { App, Popconfirm, Select } from "antd";
+import { App, Input, Modal, Popconfirm, Select } from "antd";
 import { useState } from "react";
 import { api, errorText, type KbDocument } from "../../api";
 import { Empty, ErrorAlert, Skeleton } from "../../components/common";
@@ -144,20 +144,35 @@ export default function GuidelinesTab({
   const labelSets = useLabelSets(projectId);
   const guides = docs.filter((d) => d.kind === "guideline");
   const current = selected && guides.some((g) => g.id === selected) ? selected : (guides[0]?.id ?? null);
+  const [naming, setNaming] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newSet, setNewSet] = useState<string | undefined>();
   const create = useMutation({
-    mutationFn: () => api.post<KbDocument>(`/projects/${projectId}/kb/documents`, { kind: "guideline", title: "未命名规范", body: "" }),
+    mutationFn: () =>
+      api.post<KbDocument>(`/projects/${projectId}/kb/documents`, {
+        kind: "guideline",
+        title: newName.trim(),
+        body: "",
+        meta: newSet ? { label_set_id: newSet } : {},
+      }),
     onSuccess: (d) => {
       qc.setQueryData<KbDocument[]>(["kb-docs", projectId], (old) => (old ? [d, ...old] : old));
       void qc.invalidateQueries({ queryKey: ["kb-docs", projectId] });
       onSelect(d.id);
+      setNaming(false);
     },
     onError: (e) => message.error(errorText(e)),
   });
+  function openNaming() {
+    setNewName("");
+    setNewSet(undefined);
+    setNaming(true);
+  }
   return (
     <section className="kb-split">
       <div className="card" style={{ padding: 10 }}>
         {editable && (
-          <button className="btn s p" type="button" style={{ width: "100%", marginBottom: 6 }} disabled={create.isPending} onClick={() => create.mutate()}>
+          <button className="btn s p" type="button" style={{ width: "100%", marginBottom: 6 }} onClick={openNaming}>
             <Icon name="plus" size={14} />
             新建规范
           </button>
@@ -177,7 +192,37 @@ export default function GuidelinesTab({
           );
         })}
       </div>
-      {current ? <GuidePane key={current} id={current} editable={editable} /> : <Empty icon="scrolltext" text="新建一份标注规范，关联到标签集" />}
+      {current ? <GuidePane key={current} id={current} editable={editable} /> : <Empty icon="scrolltext" text="新建一份标注规范，或在文献详情中把导入的 Markdown 设为规范" />}
+      <Modal
+        title="新建规范"
+        open={naming}
+        onCancel={() => setNaming(false)}
+        okText="创建"
+        cancelText="取消"
+        onOk={() => create.mutate()}
+        okButtonProps={{ disabled: !newName.trim(), loading: create.isPending }}
+        destroyOnHidden
+        width={440}
+      >
+        <div className="col" style={{ gap: 12 }}>
+          <div className="field">
+            <label htmlFor="g-name">名称</label>
+            <Input id="g-name" value={newName} maxLength={200} autoFocus onChange={(e) => setNewName(e.target.value)} onPressEnter={() => newName.trim() && create.mutate()} />
+          </div>
+          <div className="field">
+            <label htmlFor="g-set">标签集</label>
+            <Select
+              id="g-set"
+              allowClear
+              placeholder="不关联"
+              value={newSet}
+              onChange={setNewSet}
+              loading={labelSets.isPending}
+              options={(labelSets.data ?? []).map((l) => ({ value: l.id, label: `${l.name}（${l.labels.length} 个标签）` }))}
+            />
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }

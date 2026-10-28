@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { api, type KbSearchResult, type Term } from "../../api";
+import { api, type KbSearchHit, type KbSearchResult, type Term } from "../../api";
 import { Empty, ErrorAlert } from "../../components/common";
 import { PinButton } from "../../components/global/evidence";
 import { Icon } from "../../components/Icon";
@@ -23,6 +23,12 @@ function warningOf(w: KbSearchResult["warning"]): { code: string; message: strin
   return { code, message: code === "EMBED_UNAVAILABLE" ? "向量模型未就绪，已改用关键词检索" : message || code };
 }
 
+const RELEVANCE: Record<NonNullable<KbSearchHit["relevance"]>, [string, string]> = {
+  high: ["高", "t-ok"],
+  medium: ["中", "t-info"],
+  low: ["低", "t-gray"],
+};
+
 export function termLabel(t: Pick<Term, "term" | "translations">): string {
   const tr = t.translations?.[0]?.text;
   return tr ? `${t.term} / ${tr}` : t.term;
@@ -35,7 +41,10 @@ export function KbHits({ projectId, q, result }: { projectId: string; q: string;
   const terms = result.terms ?? [];
   const items = result.items ?? [];
   const words = [...queryWords(q), ...terms.map((t) => t.term)];
-  const max = Math.max(...items.map((h) => h.score ?? 0), 1e-9);
+  const [showLow, setShowLow] = useState(false);
+  const low = items.filter((h) => h.relevance === "low");
+  // low-relevance hits fold away unless they are all there is
+  const shown = showLow || low.length === items.length ? items : items.filter((h) => h.relevance !== "low");
   return (
     <div className="col" style={{ gap: 10 }}>
       {warn && (
@@ -67,7 +76,7 @@ export function KbHits({ projectId, q, result }: { projectId: string; q: string;
         <Empty icon="searchx" text="没有匹配的片段" />
       ) : (
         <div className="hits">
-          {items.map((h, i) => {
+          {shown.map((h, i) => {
             const loc = locatorText(h.chunk.locator);
             return (
               <div className="kb-hit" key={h.chunk.id} style={{ ["--i" as string]: i }} data-testid="kb-hit">
@@ -86,13 +95,12 @@ export function KbHits({ projectId, q, result }: { projectId: string; q: string;
                   </p>
                 </div>
                 <div className="score">
-                  <div className="sbar">
-                    得分
-                    <span className="prog thin">
-                      <i style={{ ["--v" as string]: `${(((h.score ?? 0) / max) * 100).toFixed(0)}%` }} />
-                    </span>
-                    <span className="num">{(h.score ?? 0).toFixed(3)}</span>
-                  </div>
+                  {h.relevance && (
+                    <div className="sbar">
+                      相关度
+                      <span className={`tag ${RELEVANCE[h.relevance][1]}`}>{RELEVANCE[h.relevance][0]}</span>
+                    </div>
+                  )}
                   <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
                     <button
                       className="btn xs"
@@ -116,6 +124,12 @@ export function KbHits({ projectId, q, result }: { projectId: string; q: string;
               </div>
             );
           })}
+          {low.length > 0 && low.length < items.length && (
+            <button className="btn s ghost" type="button" style={{ alignSelf: "flex-start" }} onClick={() => setShowLow((v) => !v)}>
+              <Icon name={showLow ? "up" : "down"} size={14} />
+              {showLow ? "收起低相关结果" : `另有 ${low.length} 条低相关结果`}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -199,7 +213,7 @@ export default function KbSearch({ projectId }: { projectId: string }) {
       )}
       {search.data && req && (
         <div style={{ opacity: search.isFetching ? 0.55 : 1, transition: "opacity 200ms" }}>
-          <KbHits projectId={projectId} q={req.q} result={search.data} />
+          <KbHits key={`${req.q}|${req.mode}`} projectId={projectId} q={req.q} result={search.data} />
         </div>
       )}
     </section>

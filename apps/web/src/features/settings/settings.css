@@ -2,3 +2,12 @@
 .add-member { padding: 16px 18px; border-bottom: 1px solid var(--line-soft); }
 .row-new > td { animation: row-new 1.4s ease both; }
 @keyframes row-new { from { background: var(--accent-tint); } }
+.gone-page { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+.gone { width: 420px; max-width: 100%; padding: 32px; display: flex; flex-direction: column; gap: 14px; border-radius: var(--radius-xl); box-shadow: var(--shadow-3); }
+.gone h1 { font-size: 20px; font-weight: 700; }
+.gone-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--warning-soft); color: var(--warning); }
+.gone-proj { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); color: var(--text); }
+.gone-proj:hover { border-color: var(--line-strong); color: var(--text); }
+.gone .btn.p { align-self: flex-start; }
+.proj-form { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.danger-zone { border-top: 1px solid var(--line-soft); padding: 14px 18px; display: flex; align-items: center; gap: 12px; }

@@ -38,6 +38,7 @@ _BLOCKED = [
 _HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 _CJK = re.compile(r"[㐀-䶿一-鿿豈-﫿　-〿＀-￯]")
 _DOCX_HEADING = re.compile(r"^(?:Heading|标题)\s*(\d)$", re.IGNORECASE)
+_SENTENCE_END = "。！？!?.…"
 
 
 class ParseError(ValueError):
@@ -62,7 +63,8 @@ def parse(source, kind: str) -> tuple[list[dict], dict]:
     if kind == "docx":
         return _docx(Path(source))
     if kind in ("md", "txt"):
-        return markdown(_read(Path(source))), {}
+        text = _read(Path(source))
+        return markdown(text), markdown_meta(text) if kind == "md" else {}
     if kind == "url":
         return html(fetch(source), source)
     raise ParseError(f"不支持的类型：{kind}")
@@ -76,24 +78,56 @@ def _read(path: Path) -> str:
     return raw.replace("\r\n", "\n").replace("\r", "\n")
 
 
+def _width(line: str) -> int:
+    return sum(2 if _CJK.match(c) else 1 for c in line)
+
+
 def _join_lines(text: str) -> str:
     """PDF line breaks inside a paragraph: dropped between CJK characters, a space otherwise (a hyphen
-    before a lower-case continuation is removed); blank lines separate paragraphs."""
-    paras = []
-    for para in re.split(r"\n\s*\n", text):
-        out = ""
-        for line in (x.strip() for x in para.split("\n")):
-            if not line:
-                continue
-            if out and not (_CJK.match(out[-1]) and _CJK.match(line[0])):
-                if out.endswith("-") and line[0].islower():
-                    out = out[:-1]
-                else:
-                    out += " "
-            out += line
+    before a lower-case continuation is removed). A paragraph ends at a blank line, after a short line
+    (title, heading: under half the widest line) or after a sentence end on a line clearly shorter than
+    the widest one."""
+    lines = [x.strip() for x in text.split("\n")]
+    widest = max((_width(x) for x in lines), default=0)
+    paras, out, prev = [], "", ""
+    for line in lines:
+        if not line:
+            if out:
+                paras.append(out)
+            out = ""
+            continue
         if out:
-            paras.append(out)
+            w = _width(prev)
+            if w < widest * 0.5 or (prev[-1] in _SENTENCE_END and w < widest * 0.8):
+                paras.append(out)
+                out = ""
+        if out and not (_CJK.match(out[-1]) and _CJK.match(line[0])):
+            if out.endswith("-") and line[0].islower():
+                out = out[:-1]
+            else:
+                out += " "
+        out += line
+        prev = line
+    if out:
+        paras.append(out)
     return "\n".join(paras)
+
+
+def _title_line(text: str) -> str | None:
+    """First paragraph of a page when it reads as a title: short, no sentence end, more text after it."""
+    first, _, rest = text.partition("\n")
+    first = first.strip()
+    if rest.strip() and 0 < len(first) <= 60 and first[-1] not in _SENTENCE_END + "，,；;：:":
+        return first
+    return None
+
+
+def _usable_title(value: str) -> bool:
+    """Metadata titles that name nothing (about:blank from browsers, Word's default) are ignored."""
+    v = value.strip().lower()
+    return bool(v) and v not in ("about:blank", "untitled", "无标题") and not re.search(
+        r"\.(docx?|pdf|txt|md)$|^microsoft word -", v
+    )
 
 
 def _pdf(path: Path):
@@ -113,10 +147,14 @@ def _pdf(path: Path):
         raise ParseError(f"{path.name} 无法解析：{e}") from e
     for key, name in (("/Title", "title"), ("/Author", "author")):
         value = str(info.get(key) or "").strip()
-        if value:
+        if value and (name != "title" or _usable_title(value)):
             meta[name] = value
     if not blocks:
         raise ParseError(f"{path.name} 没有可提取的文字（可能是扫描件）")
+    if "title" not in meta and blocks[0]["locator"]["page"] == 1:
+        title = _title_line(blocks[0]["text"])
+        if title:
+            meta["title"] = title
     return blocks, meta
 
 
@@ -132,7 +170,7 @@ def _docx(path: Path):
         doc = Document(str(path))
     except (PackageNotFoundError, BadZipFile, KeyError, ValueError) as e:
         raise ParseError(f"{path.name} 不是有效的 DOCX") from e
-    path_, blocks = [], []
+    path_, blocks, first_heading = [], [], None
     for p in doc.paragraphs:
         text = p.text.strip()
         if not text:
@@ -141,14 +179,18 @@ def _docx(path: Path):
         m = _DOCX_HEADING.match(style)
         level = int(m.group(1)) if m else (1 if style == "Title" else 0)
         if level:
+            if first_heading is None and not blocks:
+                first_heading = text  # a Title / heading before any body text names the document
             path_ = path_[: level - 1] + [text]
             continue
         blocks.append({"text": text, "locator": _heading_locator(path_)})
     meta = {}
     props = doc.core_properties
-    if (props.title or "").strip():
+    if _usable_title(props.title or ""):
         meta["title"] = props.title.strip()
-    if (props.author or "").strip():
+    elif first_heading:
+        meta["title"] = first_heading[:500]
+    if (props.author or "").strip() not in ("", "python-docx"):  # python-docx's template default
         meta["author"] = props.author.strip()
     return blocks, meta
 
@@ -182,6 +224,15 @@ def markdown(text: str) -> list[dict]:
         buf.append(line)
     flush()
     return blocks
+
+
+def markdown_meta(text: str) -> dict:
+    """{title} from a heading on the first non-blank line."""
+    for line in text.split("\n"):
+        if line.strip():
+            m = _HEADING.match(line)
+            return {"title": m.group(2)[:500]} if m else {}
+    return {}
 
 
 # ---------------------------------------------------------------- url
@@ -246,20 +297,32 @@ def normalize_url(url: str) -> str:
     return f"{scheme}://{host}{path}{query}"
 
 
+# A bot User-Agent with a contact URL first (Wikimedia and others answer 403 without one), then a browser one.
+USER_AGENTS = (
+    "Mozilla/5.0 (compatible; CorpusWorkbench/1.0; +https://github.com/zhucue/CorpusDesktop)",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+)
+FETCH_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+}
+
+
 def fetch(url: str) -> bytes:
     import httpx
 
     url = check_url(url)
-    headers = {
-        "User-Agent": "CorpusWorkbench/1.0 (knowledge base URL import) python-httpx"
-    }
+    agents = list(USER_AGENTS)
     try:
-        with httpx.Client(timeout=30, headers=headers) as client:
-            for _ in range(6):
+        with httpx.Client(timeout=30, headers=FETCH_HEADERS) as client:
+            for _ in range(7):
                 _check_public(urlsplit(url).hostname)
-                with client.stream("GET", url) as r:
+                with client.stream("GET", url, headers={"User-Agent": agents[0]}) as r:
                     if r.is_redirect:
                         url = check_url(urljoin(url, r.headers.get("location", "")))
+                        continue
+                    if r.status_code == 403 and len(agents) > 1:
+                        agents.pop(0)  # some sites serve only a browser User-Agent: one more try
                         continue
                     if r.status_code >= 400:
                         raise ParseError(f"网页返回 HTTP {r.status_code}")
@@ -292,6 +355,7 @@ def html(page: str | bytes, url: str | None = None) -> tuple[list[dict], dict]:
     if info is not None:
         for key in ("title", "author", "sitename", "date"):
             value = getattr(info, key, None)
-            if value:
+            # trafilatura sometimes reads navigation text as the author (Wikipedia: "Authority control …")
+            if value and (key != "author" or (len(str(value)) <= 80 and len(str(value).split()) <= 8)):
                 meta[key] = str(value)
     return markdown(text), meta

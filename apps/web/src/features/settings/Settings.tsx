@@ -1,12 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { App, Form, Input, Popconfirm, Select, Table } from "antd";
+import { App, Form, Input, Modal, Popconfirm, Select, Spin, Table } from "antd";
 import { useState } from "react";
-import { ApiError, MAX_PAGE_SIZE, api, errorText, roleLabels, type Member, type Page, type Role, type User } from "../../api";
+import { Link, useNavigate } from "react-router";
+import { ApiError, MAX_PAGE_SIZE, api, errorText, roleLabels, type Member, type Page, type Project, type Role, type User } from "../../api";
 import { Avatar, ErrorAlert } from "../../components/common";
 import { Icon } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useMe, useProject, useProjectId } from "../../lib/data";
+import { fmt } from "../../lib/format";
+import { MAX_PROJECT_NAME } from "./project";
 import "./settings.css";
+
+/** GET /projects/{id}/usage: what deleting the project removes. */
+interface ProjectUsage {
+  corpora: number;
+  layers: number;
+  notes: number;
+  kb_documents: number;
+  terms: number;
+  members: number;
+}
 
 const roleOptions = (Object.keys(roleLabels) as Role[]).map((r) => ({ value: r, label: roleLabels[r] }));
 
@@ -20,6 +33,132 @@ const MATRIX: [string, boolean[]][] = [
   ["建标注层、仲裁", [true, true, false, false]],
   ["管理成员", [true, false, false, false]],
 ];
+
+const USAGE_LABELS: [keyof ProjectUsage, string, string][] = [
+  ["corpora", "语料库", "个"],
+  ["layers", "标注层", "个"],
+  ["notes", "笔记", "篇"],
+  ["kb_documents", "文献与规范", "篇"],
+  ["terms", "术语", "条"],
+  ["members", "成员", "人"],
+];
+
+/** Name (owner renames), 新建项目, and delete with the counts of what goes with the project. */
+function ProjectCard({ project, isOwner }: { project: Project; isOwner: boolean }) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { message } = App.useApp();
+  const [name, setName] = useState(project.name);
+  const [deleting, setDeleting] = useState(false);
+  const usage = useQuery({
+    queryKey: ["project-usage", project.id],
+    queryFn: () => api.get<ProjectUsage>(`/projects/${project.id}/usage`),
+    enabled: deleting,
+  });
+  const rename = useMutation({
+    mutationFn: () => api.patch<Project>(`/projects/${project.id}`, { name: name.trim() }),
+    onSuccess: (p) => {
+      qc.setQueryData(["project", project.id], p);
+      void qc.invalidateQueries({ queryKey: ["projects"] });
+      message.success("已改名");
+    },
+    onError: (e) => message.error(errorText(e)),
+  });
+  const remove = useMutation({
+    mutationFn: () => api.del(`/projects/${project.id}`),
+    onSuccess: () => {
+      try {
+        localStorage.removeItem("last-project");
+      } catch {
+        /* storage unavailable */
+      }
+      qc.clear();
+      message.success(`已删除项目「${project.name}」`);
+      navigate("/", { replace: true });
+    },
+  });
+  const changed = name.trim() !== project.name && name.trim().length > 0;
+  return (
+    <section className="card" aria-label="项目">
+      <div className="card-head">
+        <h2 className="grow">项目</h2>
+        <Link className="btn s" to="/onboarding">
+          <Icon name="plus" size={14} />
+          新建项目
+        </Link>
+      </div>
+      <form
+        className="proj-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (changed) rename.mutate();
+        }}
+      >
+        <div className="field">
+          <label htmlFor="proj-name" className="row between">
+            项目名称
+            {isOwner && (
+              <span className="small muted num">
+                {Array.from(name).length} / {MAX_PROJECT_NAME}
+              </span>
+            )}
+          </label>
+          <div className="row">
+            <Input id="proj-name" value={name} maxLength={MAX_PROJECT_NAME} disabled={!isOwner} onChange={(e) => setName(e.target.value)} />
+            {isOwner && (
+              <button className="btn p" type="submit" disabled={!changed || rename.isPending}>
+                保存
+              </button>
+            )}
+          </div>
+        </div>
+      </form>
+      {isOwner && (
+        <div className="danger-zone">
+          <div className="grow" />
+          <button className="btn s danger" type="button" onClick={() => setDeleting(true)}>
+            <Icon name="trash" size={14} />
+            删除项目
+          </button>
+        </div>
+      )}
+      <Modal
+        title={`删除项目「${project.name}」？`}
+        open={deleting}
+        onCancel={() => setDeleting(false)}
+        okText="删除"
+        cancelText="取消"
+        okButtonProps={{ danger: true, loading: remove.isPending, disabled: !usage.data }}
+        onOk={() => remove.mutate()}
+        destroyOnHidden
+        width={440}
+      >
+        <div className="col" style={{ gap: 12 }}>
+          <span className="sm">以下内容会一并删除，不可恢复：</span>
+          {usage.isPending ? (
+            <Spin />
+          ) : (
+            usage.data && (
+              <table className="tbl mid">
+                <tbody>
+                  {USAGE_LABELS.map(([k, label, unit]) => (
+                    <tr key={k}>
+                      <td className="sm">{label}</td>
+                      <td className="r num">
+                        {fmt(usage.data[k])} {unit}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          )}
+          <ErrorAlert error={usage.error ?? remove.error} />
+        </div>
+      </Modal>
+    </section>
+  );
+}
 
 export default function Settings() {
   const projectId = useProjectId();
@@ -70,6 +209,8 @@ export default function Settings() {
       <PageHeader title="项目设置" crumbs={1} />
       <div className="content">
         <div className="settings-grid">
+          {project.data && <ProjectCard key={project.data.id} project={project.data} isOwner={isOwner} />}
+          <div />
           <section className="card">
             <div className="card-head">
               <h2 className="grow">成员</h2>

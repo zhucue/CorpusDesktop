@@ -144,6 +144,24 @@ class DocumentPatch(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=500)
     body: str | None = Field(default=None, max_length=1_000_000)
     meta: dict | None = None  # merged into meta; a null value removes the key
+    kind: Literal["guideline"] | None = None  # an imported Markdown / TXT literature file becomes a guideline
+
+
+def _file_body(path, name):
+    """Text of an uploaded Markdown / TXT file as a guideline body (UTF-8, else GB18030)."""
+    raw = open(path, "rb").read()
+    for enc in ("utf-8-sig", "gb18030"):
+        try:
+            text_ = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        raise ApiError(422, "UNSUPPORTED_ENCODING", f"{name} 不是 UTF-8 或 GB18030 编码")
+    text_ = text_.replace("\r\n", "\n").replace("\r", "\n")
+    if len(text_) > 1_000_000:
+        raise ApiError(413, "TOO_LARGE", f"{name} 超过 100 万字，不能作为规范")
+    return text_
 
 
 def _check_meta(db, project_id, meta):
@@ -199,6 +217,8 @@ def _upload(db, project_id, user, files, kind):
     for f in files:
         if not kbparse.kind_of(f.filename):
             raise ApiError(422, "UNSUPPORTED_FORMAT", f"不支持的文件格式：{f.filename}")
+        if kind == "guideline" and kbparse.kind_of(f.filename) not in ("md", "txt"):
+            raise ApiError(422, "UNSUPPORTED_FORMAT", f"规范只能从 Markdown 或 TXT 导入：{f.filename}")
         if (f.size or 0) > MAX_FILE:
             raise ApiError(413, "TOO_LARGE", f"{f.filename} 超过 50 MB")
     items, written = [], []
@@ -222,6 +242,8 @@ def _upload(db, project_id, user, files, kind):
             with open(path, "wb") as out:
                 shutil.copyfileobj(f.file, out)
             doc.file_path = str(path)
+            if kind == "guideline":  # guidelines are indexed from their body
+                doc.body = _file_body(path, name)
             db.add(doc)
             db.flush()
             job = enqueue_import(db, doc, user.id)
@@ -368,6 +390,14 @@ def patch_document(document_id: UUID, body: DocumentPatch, user: CurrentUser, db
     doc, _ = load_document(db, document_id, user, EDIT, lock=True)
     if is_bearer(user) and doc.kind != "note":
         raise forbidden()
+    if body.kind is not None and body.kind != doc.kind:
+        if doc.kind != "literature" or kbparse.kind_of(doc.source or "") not in ("md", "txt") or not doc.file_path:
+            raise ApiError(422, "VALIDATION_ERROR", "只有导入的 Markdown / TXT 文献可以设为规范")
+        if active_job(db, doc.id, ["kb_import"]):
+            raise ApiError(409, "JOB_IN_PROGRESS", "文档正在导入")
+        # same text, same chunks: the body comes from the file and the document keeps its index
+        doc.body = _file_body(doc.file_path, doc.source)
+        doc.kind, doc.text_path = body.kind, None
     if body.body is not None and doc.kind not in TEXT_KINDS:
         raise ApiError(422, "VALIDATION_ERROR", "只有笔记和规范有正文")
     if body.title is not None:
@@ -445,6 +475,9 @@ def summarize(document_id: UUID, user: CurrentUser, db: Db):
 class RefInput(BaseModel):
     kind: Literal["search", "stat", "evidence", "chunk", "term"]
     ref: dict = {}
+    # evidence: append its quote block to the body; false when the caller already placed the quote
+    # (dropped or inserted at the caret in the editor)
+    append: bool = True
 
 
 def _evidence_block(text_, source, search_query=None):
@@ -509,14 +542,15 @@ def _resolve_ref(db, note, kind, ref):
 
 @router.post("/kb/documents/{note_id}/refs")
 def add_ref(note_id: UUID, body: RefInput, user: CurrentUser, db: Db):
-    """Store a ref; an evidence ref also appends the evidence text and its source to the note body."""
+    """Store a ref; an evidence ref also appends the evidence text and its source to the note body (the only
+    writer of that block, unless append is false)."""
     note, _ = load_document(db, note_id, user, EDIT, lock=True)
     if note.kind != "note":
         raise ApiError(422, "NOT_A_NOTE", "只能向笔记添加引用")
     ref = _resolve_ref(db, note, body.kind, body.ref)
     item = NoteRef(note_id=note.id, kind=body.kind, ref=ref)
     db.add(item)
-    if body.kind == "evidence":
+    if body.kind == "evidence" and body.append:
         block = _evidence_block(ref["text"], ref.get("source"), ref.get("search_query"))
         current = (note.body or "").rstrip()
         note.body = (current + "\n\n" if current else "") + block + "\n"
@@ -620,6 +654,22 @@ def match_terms(db, project_id, q, limit=5):
     return db.scalars(stmt).all()
 
 
+REL_HIGH, REL_MEDIUM = 0.6, 0.45  # cosine similarity of the default multilingual MiniLM model
+
+
+def relevance(text_, words, similarity=None):
+    """high / medium / low for the reader: share of query words in the chunk, and the cosine similarity
+    when the chunk came from the vector search. Raw scores (RRF, ts_rank) are not comparable across modes."""
+    low = text_.lower()
+    share = sum(w in low for w in words) / len(words) if words else 0
+    sim = similarity if similarity is not None else 0
+    if share == 1 or sim >= REL_HIGH:
+        return "high"
+    if share > 0 or sim >= REL_MEDIUM:
+        return "medium"
+    return "low"
+
+
 def search_kb(db, project_id, body: SearchInput):
     where = [KbDocument.project_id == project_id]
     if body.kinds:
@@ -653,6 +703,7 @@ def search_kb(db, project_id, body: SearchInput):
             )
         )
     }
+    similarity = dict(vector)
     items = []
     for cid in top:
         c = chunks[cid]
@@ -667,6 +718,7 @@ def search_kb(db, project_id, body: SearchInput):
                     "source": d.source,
                 },
                 "score": scores[cid],
+                "relevance": relevance(c.text, words, similarity.get(cid)),
                 "highlight": kbtext.highlight(c.text, words),
             }
         )

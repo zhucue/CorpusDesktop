@@ -5,7 +5,7 @@ import re
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePath
 
 from docx import Document as DocxDocument
 from docx.oxml.ns import qn
@@ -46,6 +46,7 @@ SUMMARY_PART = 12000
 SUMMARY_PARTS = 8
 LITERATURE_CHARS = 15000
 ALIGN_BATCH = 5000
+EXAMPLE_LOOKUPS = 100
 
 
 def _kb_doc(db, document_id, lock=False) -> KbDocument:
@@ -147,7 +148,9 @@ def run_kb_import(run):
             ]
             for i in range(0, len(rows), INSERT_BATCH):
                 db.execute(insert(KbChunk).values(rows[i : i + INSERT_BATCH]))
-            if kind == "url" and meta.get("title") and doc.title == doc.source:
+            # the title is still the default (URL, file name): take the document's own title
+            default_title = doc.source if kind == "url" else PurePath(doc.source or "").stem
+            if kind in ("url", "literature") and meta.get("title") and doc.title == default_title:
                 doc.title = meta["title"][:500]
             doc.meta = {
                 **doc.meta,
@@ -248,7 +251,8 @@ TERMS_SYSTEM = (
 )
 CANDIDATES_PROMPT = (
     "下面是从语料中按词性模式统计出的候选术语（含频次与对齐语料中的候选译名）。"
-    "请挑出其中真正的领域术语（不超过 {top} 条），给出规范的译名、简短定义和领域，剔除普通搭配。\n\n{items}"
+    "请挑出其中真正的领域术语（不超过 {top} 条），给出规范的译名、简短定义和领域，剔除普通搭配。"
+    "term 照抄候选原文，优先选语料主语言（{language}）的候选；另一种语言的写法放在 translations 中。\n\n{items}"
 )
 LITERATURE_PROMPT = "请从下面的文献中抽取不超过 {top} 条领域术语，给出另一种语言（中文或英文）的译名、简短定义和领域。\n\n标题：{title}\n\n{text}"
 
@@ -362,22 +366,42 @@ def _corpus_candidates(run, p):
             corpus = db.get(Corpus, corpus.id)
             aligned, info = _aligned_pairs(db, corpus, filt, fields)
         kbterms.translate(cands, aligned)
-    return cands, info, name
+    where = {"corpus_id": corpus.id, "filt": filt, "fields": fields, "name": name, "language": language}
+    return cands, info, where
+
+
+def _find_examples(run, where, drafts):
+    """One sentence of the scope holding the term, for drafts that have no example yet (first EXAMPLE_LOOKUPS)."""
+    todo = [d for d in drafts if not d["examples"]][:EXAMPLE_LOOKUPS]
+    if not todo:
+        return
+    run.progress(0, len(todo), "查找例句")
+    with session() as db:
+        corpus = db.get(Corpus, where["corpus_id"])
+        clauses = scope_clauses(corpus, where["filt"], where["fields"])
+        for i, d in enumerate(todo):
+            like = "%" + d["term"].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            row = db.execute(
+                select(Sentence.text, Sentence.document_id, Sentence.start_cp, Sentence.end_cp, Document.title)
+                .join(Document, Document.id == Sentence.document_id)
+                .where(*clauses, Sentence.text.ilike(like))
+                .limit(1)
+            ).first()
+            if row:
+                d["examples"] = [_example(row, where["name"])]
+            run.progress(i + 1, len(todo), "查找例句")
+
+
+def _example(row, name):
+    text, doc_id, a, b, title = row
+    return {"text": text, "source": f"{name}《{title}》", "document_id": str(doc_id), "start_cp": a, "end_cp": b}
 
 
 def _candidate_draft(c, info, name):
     examples = []
     if c.example in info:
         text, doc_id, a, b, _, title = info[c.example]
-        examples.append(
-            {
-                "text": text,
-                "source": f"{name}《{title}》",
-                "document_id": str(doc_id),
-                "start_cp": a,
-                "end_cp": b,
-            }
-        )
+        examples.append(_example((text, doc_id, a, b, title), name))
     return {
         "term": c.term,
         "language": c.language,
@@ -415,10 +439,12 @@ def _literature_drafts(run, p):
 def run_kb_extract(run):
     p = run.params
     project_id = uuid.UUID(p["project_id"])
+    pool = None  # corpus candidates before the model picks
     if p["source"] == "literature":
         drafts = _literature_drafts(run, p)
     else:
-        cands, info, name = _corpus_candidates(run, p)
+        cands, info, where = _corpus_candidates(run, p)
+        pool = len(cands)
         if p["method"] == "model" and cands:
             run.progress(0, None, "模型整理")
             items = "\n".join(
@@ -428,12 +454,19 @@ def run_kb_extract(run):
                 for c in cands
             )
             answer = llm.chat(
-                TERMS_SYSTEM, CANDIDATES_PROMPT.format(top=p["top"], items=items)
+                TERMS_SYSTEM,
+                CANDIDATES_PROMPT.format(top=p["top"], items=items, language=where["language"]),
             )
             drafts = _clean_drafts(llm.json_array(answer), "model")
+            by_term = {(c.term.lower(), c.language): _candidate_draft(c, info, where["name"]) for c in cands}
+            for d in drafts:  # the model keeps candidate texts: reuse their aligned example
+                same = by_term.get((d["term"].lower(), d["language"]))
+                if same:
+                    d["examples"] = same["examples"]
         else:
-            drafts = [_candidate_draft(c, info, name) for c in cands]
-    created = 0
+            drafts = [_candidate_draft(c, info, where["name"]) for c in cands]
+        _find_examples(run, where, drafts)
+    created, existing = 0, []
     with transaction() as db:
         run.lock(db)
         base = datetime.now(UTC)
@@ -454,15 +487,19 @@ def run_kb_extract(run):
                 .on_conflict_do_nothing(constraint="uq_kb_terms_term")
                 .returning(KbTerm.id)
             )
-            created += db.execute(stmt).scalar() is not None
-        run.succeed(
-            db,
-            {
-                "created": created,
-                "skipped": len(drafts) - created,
-                "candidates": len(drafts),
-            },
-        )
+            if db.execute(stmt).scalar() is not None:
+                created += 1
+            else:
+                existing.append(d["term"])
+        result = {
+            "created": created,
+            "skipped": len(existing),
+            "candidates": len(drafts),
+            # why nothing or less came out: terms already in the term base, the candidate pool
+            "skipped_existing": existing[:20],
+            **({"pool": pool, "min_freq": p.get("min_freq")} if pool is not None else {}),
+        }
+        run.succeed(db, result)
 
 
 # ---- exports ----
@@ -482,6 +519,20 @@ TBX_NS = "urn:iso:std:iso:30042:ed-2"
 XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
 
 
+def _text_lang(text, default):
+    """zh when the text is mostly CJK, en when mostly Latin letters, else the default."""
+    cjk = len(re.findall(r"[一-鿿]", text))
+    latin = len(re.findall(r"[A-Za-z]", text))
+    if cjk and cjk * 2 >= latin:
+        return "zh"
+    if latin and not cjk:
+        return "en"
+    return default
+
+
+TERM_SOURCE_LABELS = {"manual": "手工", "corpus": "语料", "literature": "文献", "model": "模型"}
+
+
 def write_tbx(path, terms):
     """TBX-Basic (TBX v3 DCA): one conceptEntry per term, a langSec for the term and one per translation
     language; definition and domain on the entry's language / concept level, examples as context."""
@@ -499,7 +550,9 @@ def write_tbx(path, terms):
         if t.domain:
             etree.SubElement(entry, "descrip", type="subjectField").text = t.domain
         sec = etree.SubElement(entry, "langSec", {XML_LANG: t.language})
-        if t.definition:
+        # the definition goes into the langSec of the language it is written in (models write Chinese ones)
+        def_lang = _text_lang(t.definition, t.language) if t.definition else None
+        if t.definition and def_lang == t.language:
             etree.SubElement(sec, "descrip", type="definition").text = t.definition
         term_sec = etree.SubElement(sec, "termSec")
         etree.SubElement(term_sec, "term").text = t.term
@@ -514,8 +567,12 @@ def write_tbx(path, terms):
         by_lang = {}
         for tr in t.translations:
             by_lang.setdefault(tr["language"], []).append(tr["text"])
+        if def_lang and def_lang != t.language:
+            by_lang.setdefault(def_lang, [])
         for lang, texts in by_lang.items():
             tsec = etree.SubElement(entry, "langSec", {XML_LANG: lang})
+            if lang == def_lang and def_lang != t.language:
+                etree.SubElement(tsec, "descrip", type="definition").text = t.definition
             for text in texts:
                 etree.SubElement(etree.SubElement(tsec, "termSec"), "term").text = text
     etree.ElementTree(root).write(
@@ -538,18 +595,20 @@ def run_export_terms(run):
     if fmt == "tbx":
         write_tbx(path, terms)
     else:
-        header = ["术语", "语言", "译名", "定义", "领域", "例句", "来源", "状态"]
+        # columns and values as the term table and card show them
+        header = ["术语", "语言", "译名", "译名语言", "定义", "领域", "例句", "来源", "状态"]
         rows = [
             [
                 t.term,
                 t.language,
-                "；".join(f"{x['language']}: {x['text']}" for x in t.translations),
+                "；".join(x["text"] for x in t.translations),
+                "；".join(dict.fromkeys(x["language"] for x in t.translations)),
                 t.definition,
                 t.domain,
                 "\n".join(
                     f"{e.get('text', '')}（{e.get('source', '')}）" for e in t.examples
                 ),
-                t.source,
+                TERM_SOURCE_LABELS.get(t.source, t.source),
                 {"draft": "草稿", "confirmed": "已确认"}[t.status],
             ]
             for t in terms

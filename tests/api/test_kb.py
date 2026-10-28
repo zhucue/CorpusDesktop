@@ -130,6 +130,12 @@ def test_document_lifecycle(owner, project, fake_llm):
     listed = owner.get(f"/api/projects/{pid}/kb/documents").json()
     assert listed["total"] == 3
     assert {d["status"] for d in listed["items"]} == {"ready"}
+    # titles from the documents (PDF / DOCX metadata, the Markdown heading) replace the file name
+    assert {d["title"] for d in listed["items"]} == {
+        "Corpus sample",
+        "标注规范样例",
+        "Corpus methods",
+    }
     pdf = owner.get(f"/api/kb/documents/{items[0]['id']}").json()
     assert pdf["meta"]["pages"] == 2 and pdf["meta"]["title"] == "Corpus sample"
     assert pdf["text_preview"].startswith("Corpus linguistics") and pdf["error"] is None
@@ -525,7 +531,14 @@ def test_extract_pos_pattern_with_translations(owner, project, parallel):
     drain()
     job = owner.get(f"/api/jobs/{job['id']}").json()
     assert job["state"] == "succeeded", job["error"]
-    assert job["result"] == {"created": 4, "skipped": 0, "candidates": 4}
+    assert job["result"] == {
+        "created": 4,
+        "skipped": 0,
+        "candidates": 4,
+        "skipped_existing": [],
+        "pool": 4,
+        "min_freq": 2,
+    }
     items = owner.get(f"/api/projects/{pid}/kb/terms").json()["items"]
     got = {(t["term"], t["language"]): t for t in items}
     assert set(got) == {
@@ -549,11 +562,10 @@ def test_extract_pos_pattern_with_translations(owner, project, parallel):
         f"/api/projects/{pid}/kb/terms/extract", json={**body, "language": "zh"}
     ).json()
     drain()
-    assert owner.get(f"/api/jobs/{again['id']}").json()["result"] == {
-        "created": 0,
-        "skipped": 2,
-        "candidates": 2,
-    }
+    result = owner.get(f"/api/jobs/{again['id']}").json()["result"]
+    assert (result["created"], result["skipped"], result["candidates"]) == (0, 2, 2)
+    # the reason shown for skipped drafts: they are already in the term base
+    assert sorted(result["skipped_existing"]) == ["机器翻译", "翻译质量"]
 
 
 def test_extract_model_methods(owner, project, parallel, fake_llm):
@@ -596,6 +608,9 @@ def test_extract_model_methods(owner, project, parallel, fake_llm):
         "由计算机完成的翻译",
         "翻译学",
     )
+    assert (
+        t["examples"][0]["text"] == "机器 翻译 质量"
+    )  # the candidate's corpus sentence
 
     note = create_note(owner, project, "Term extraction finds candidate terms.")
     drain()
@@ -632,6 +647,15 @@ def test_term_exports(owner, project, member):
         },
     )
     owner.post(f"/api/projects/{pid}/kb/terms", json={"term": "搭配 & <强度>"})
+    owner.post(
+        f"/api/projects/{pid}/kb/terms",
+        json={
+            "term": "cultural difference",
+            "language": "en",
+            "translations": [{"language": "zh", "text": "文化差异"}],
+            "definition": "不同文化之间的差别",
+        },
+    )
     viewer = member("viewer")
     out = {}
     for fmt in ("csv", "xlsx", "tbx"):
@@ -643,15 +667,26 @@ def test_term_exports(owner, project, member):
         assert r.status_code == 200, r.text
         out[fmt] = r
     rows = list(csv.reader(io.StringIO(out["csv"].content.decode("utf-8-sig"))))
-    assert rows[0] == ["术语", "语言", "译名", "定义", "领域", "例句", "来源", "状态"]
+    assert rows[0] == [
+        "术语",
+        "语言",
+        "译名",
+        "译名语言",
+        "定义",
+        "领域",
+        "例句",
+        "来源",
+        "状态",
+    ]
     assert [
         "语料库",
         "zh",
-        "en: corpus",
+        "corpus",
+        "en",
         "真实文本集合",
         "语言学",
         "建设语料库。（笔记）",
-        "manual",
+        "手工",
         "已确认",
     ] in rows
     ws = load_workbook(io.BytesIO(out["xlsx"].content)).active
@@ -661,9 +696,17 @@ def test_term_exports(owner, project, member):
     ns = {"t": "urn:iso:std:iso:30042:ed-2"}
     assert root.get("type") == "TBX-Basic"
     entries = root.findall(".//t:conceptEntry", ns)
-    assert len(entries) == 2
+    assert len(entries) == 3
     terms = [e.findtext(".//t:term", namespaces=ns) for e in entries]
-    assert set(terms) == {"语料库", "搭配 & <强度>"}
+    assert set(terms) == {"语料库", "搭配 & <强度>", "cultural difference"}
+    # a Chinese definition of an English term sits in the zh langSec
+    en_entry = entries[terms.index("cultural difference")]
+    xml_lang = "{http://www.w3.org/XML/1998/namespace}lang"
+    defs = {
+        s.get(xml_lang): s.findtext("t:descrip[@type='definition']", namespaces=ns)
+        for s in en_entry.findall("t:langSec", ns)
+    }
+    assert defs == {"en": None, "zh": "不同文化之间的差别"}
     entry = entries[terms.index("语料库")]
     assert entry.findtext("t:descrip[@type='subjectField']", namespaces=ns) == "语言学"
     langs = [
@@ -866,3 +909,83 @@ def test_bearer_token(owner, project, fake_llm):
     assert agent.delete(f"/api/kb/documents/{note['id']}").status_code == 403
     other = owner.post("/api/projects", json={"name": "另一个"}).json()
     assert agent.get(f"/api/projects/{other['id']}/kb/documents").status_code == 403
+
+
+def test_evidence_basket_to_new_note_writes_each_block_once(owner, project):
+    """Q58: the basket creates an empty note and adds one evidence ref per item; the API is the only writer
+    of the quote blocks, so the body holds each item once and matches the refs."""
+    pid = project["id"]
+    evs = [
+        owner.post(
+            f"/api/projects/{pid}/evidence",
+            json={
+                "kind": "text",
+                "ref": {"search_query": "翻译"},
+                "text": f"第 {i} 句翻译例句。",
+                "source": "QA 平行",
+            },
+        ).json()
+        for i in range(3)
+    ]
+    note = create_note(owner, project, "", "证据摘录")
+    for ev in evs:
+        r = owner.post(
+            f"/api/kb/documents/{note['id']}/refs",
+            json={"kind": "evidence", "ref": {"evidence_id": ev["id"]}},
+        )
+        assert r.status_code == 200, r.text
+    got = owner.get(f"/api/kb/documents/{note['id']}").json()
+    assert got["body"].count("> —— QA 平行；查询式：`翻译`") == 3
+    for i in range(3):
+        assert got["body"].count(f"第 {i} 句翻译例句。") == 1
+    assert len(got["refs"]) == 3
+    # dropped into the editor: the page placed the quote itself, the ref only records it
+    r = owner.post(
+        f"/api/kb/documents/{note['id']}/refs",
+        json={"kind": "evidence", "ref": {"evidence_id": evs[0]["id"]}, "append": False},
+    )
+    assert r.status_code == 200
+    again = owner.get(f"/api/kb/documents/{note['id']}").json()
+    assert again["body"] == got["body"] and len(again["refs"]) == 4
+
+
+def test_literature_markdown_becomes_guideline(owner, project, member):
+    pid = project["id"]
+    md, pdf = owner.post(
+        f"/api/projects/{pid}/kb/documents",
+        files=files_payload("kb-sample.md", "kb-sample.pdf"),
+    ).json()["items"]
+    drain()
+    annotator = member("annotator")
+    r = annotator.patch(f"/api/kb/documents/{md['id']}", json={"kind": "guideline"})
+    assert r.status_code == 200, r.text
+    doc = owner.get(f"/api/kb/documents/{md['id']}").json()
+    assert doc["kind"] == "guideline" and doc["body"].startswith("# Corpus methods")
+    assert doc["status"] == "ready" and doc["chunk_count"] > 0
+    bad = owner.patch(f"/api/kb/documents/{pdf['id']}", json={"kind": "guideline"})
+    assert bad.status_code == 422
+    # a Markdown file uploaded as a guideline is indexed from its text
+    up = owner.post(
+        f"/api/projects/{pid}/kb/documents",
+        files=files_payload("kb-sample.md"),
+        data={"kind": "guideline"},
+    ).json()["items"][0]
+    drain()
+    g = owner.get(f"/api/kb/documents/{up['id']}").json()
+    assert g["kind"] == "guideline" and g["chunk_count"] > 0
+    r = owner.post(
+        f"/api/projects/{pid}/kb/documents",
+        files=files_payload("kb-sample.pdf"),
+        data={"kind": "guideline"},
+    )
+    assert r.status_code == 422
+
+
+def test_search_relevance_levels():
+    from services.api.kb import relevance
+
+    assert relevance("显化是指译文比原文更加明确。", ["显化"]) == "high"
+    assert relevance("显化与简化", ["显化", "规范化"]) == "medium"
+    assert relevance("时态偏误标注。", ["显化"], 0.2) == "low"
+    assert relevance("译文更加明确", ["显化"], 0.7) == "high"
+    assert relevance("译文更加明确", ["显化"], 0.5) == "medium"

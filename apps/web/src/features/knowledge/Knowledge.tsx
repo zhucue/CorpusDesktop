@@ -145,6 +145,7 @@ export default function Knowledge() {
         chunkId={params.get("chunk")}
         editable={editable}
         onClose={() => set({ doc: null, chunk: null })}
+        onOpenGuideline={(id) => set({ tab: "guides", doc: id, chunk: null })}
       />
     </>
   );

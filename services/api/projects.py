@@ -1,15 +1,26 @@
+import shutil
 from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 
 from services.api.access import MANAGE, Paging, require_project, token_project
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
 from services.api.label_sets import human_only
-from services.api.models import Project, ProjectMember, User
+from services.api.models import (
+    AnnotationLayer,
+    Corpus,
+    Job,
+    KbDocument,
+    KbTerm,
+    Project,
+    ProjectMember,
+    User,
+)
+from services.api.storage import corpus_dir, data_dir, kb_dir, upload_dir
 from services.api.views import project_view
 
 router = APIRouter(prefix="/api/projects")
@@ -56,6 +67,58 @@ def create_project(body: ProjectInput, user: CurrentUser, db: Db):
 def get_project(project_id: UUID, user: CurrentUser, db: Db):
     role = require_project(db, project_id, user)
     return project_view(db.get(Project, project_id), role)
+
+
+@router.patch("/{project_id}")
+def rename_project(project_id: UUID, body: ProjectInput, user: CurrentUser, db: Db):
+    human_only(user)
+    role = require_project(db, project_id, user, MANAGE)
+    project = db.get(Project, project_id)
+    project.name = body.name.strip()
+    db.commit()
+    return project_view(project, role)
+
+
+def _count(db, model, *where):
+    return db.scalar(select(func.count()).select_from(model).where(*where)) or 0
+
+
+@router.get("/{project_id}/usage")
+def project_usage(project_id: UUID, user: CurrentUser, db: Db):
+    """What deleting the project removes: corpora, annotation layers, notes, other KB documents, terms, members."""
+    require_project(db, project_id, user)
+    kb = KbDocument.project_id == project_id
+    return {
+        "corpora": _count(db, Corpus, Corpus.project_id == project_id),
+        "layers": _count(db, AnnotationLayer, AnnotationLayer.project_id == project_id),
+        "notes": _count(db, KbDocument, kb, KbDocument.kind == "note"),
+        "kb_documents": _count(db, KbDocument, kb, KbDocument.kind != "note"),
+        "terms": _count(db, KbTerm, KbTerm.project_id == project_id),
+        "members": _count(db, ProjectMember, ProjectMember.project_id == project_id),
+    }
+
+
+@router.delete("/{project_id}", status_code=204)
+def delete_project(project_id: UUID, user: CurrentUser, db: Db):
+    """Owner only, cookie session only. Everything of the project goes (database rows cascade) and so do its
+    corpus, knowledge base, upload and export files."""
+    human_only(user)
+    require_project(db, project_id, user, MANAGE)
+    corpora = db.scalars(select(Corpus.id).where(Corpus.project_id == project_id)).all()
+    docs = db.scalars(select(KbDocument.id).where(KbDocument.project_id == project_id)).all()
+    jobs = db.scalars(select(Job.id).where(Job.project_id == project_id)).all()
+    # layers first: their label sets (also project rows) are referenced with ON DELETE RESTRICT
+    db.execute(delete(AnnotationLayer).where(AnnotationLayer.project_id == project_id))
+    db.delete(db.get(Project, project_id))
+    db.commit()
+    for cid in corpora:
+        shutil.rmtree(corpus_dir(cid), ignore_errors=True)
+    for did in docs:
+        shutil.rmtree(kb_dir(did), ignore_errors=True)
+    for jid in jobs:
+        shutil.rmtree(upload_dir(jid), ignore_errors=True)
+        for f in (data_dir() / "exports").glob(f"{jid}.*"):
+            f.unlink(missing_ok=True)
 
 
 @router.get("/{project_id}/members")

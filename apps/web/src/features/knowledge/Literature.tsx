@@ -356,7 +356,7 @@ function Summary({ doc, editable }: { doc: KbDocument; editable: boolean }) {
         {editable && doc.status === "ready" && (
           <button className="btn xs" type="button" disabled={running} onClick={() => start.mutate()}>
             {running ? <span className="spin" style={{ width: 10, height: 10 }} /> : <Icon name="spark" size={14} />}
-            {running ? "生成中" : summary ? "重新摘要" : "摘要"}
+            {running ? "生成中" : summary ? "重新生成" : "生成摘要"}
           </button>
         )}
       </div>
@@ -367,16 +367,83 @@ function Summary({ doc, editable }: { doc: KbDocument; editable: boolean }) {
   );
 }
 
+/** 标题 / 作者 / 年份 for citing: shown in the details list, edited in place (title and meta.author / meta.year). */
+function CiteFields({ doc, editable }: { doc: KbDocument; editable: boolean }) {
+  const qc = useQueryClient();
+  const { message } = App.useApp();
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(doc.title);
+  const [author, setAuthor] = useState(String(doc.meta?.author ?? ""));
+  const [year, setYear] = useState(doc.meta?.year != null ? String(doc.meta.year) : "");
+  const badYear = !!year.trim() && !/^\d{4}$/.test(year.trim());
+  const save = useMutation({
+    mutationFn: () =>
+      api.patch<KbDocument>(`/kb/documents/${doc.id}`, {
+        title: title.trim() || doc.title,
+        meta: { author: author.trim() || null, year: year.trim() ? Number(year.trim()) : null },
+      }),
+    onSuccess: (d) => {
+      qc.setQueryData<KbDocument>(["kb-doc", doc.id], (old) => (old ? { ...old, ...d } : d));
+      void qc.invalidateQueries({ queryKey: ["kb-docs", doc.project_id] });
+      setEditing(false);
+    },
+    onError: (e) => message.error(errorText(e)),
+  });
+  if (editing)
+    return (
+      <>
+        <dt>标题</dt>
+        <dd>
+          <input className="input s" aria-label="标题" value={title} maxLength={500} onChange={(e) => setTitle(e.target.value)} />
+        </dd>
+        <dt>作者</dt>
+        <dd>
+          <input className="input s" aria-label="作者" value={author} maxLength={200} onChange={(e) => setAuthor(e.target.value)} />
+        </dd>
+        <dt>年份</dt>
+        <dd className="row" style={{ gap: 8 }}>
+          <input className="input s" aria-label="年份" style={{ width: 90 }} value={year} inputMode="numeric" onChange={(e) => setYear(e.target.value)} />
+          {badYear && <span className="small" style={{ color: "var(--err)" }}>四位数年份</span>}
+          <div className="grow" />
+          <button className="btn xs" type="button" onClick={() => setEditing(false)}>
+            取消
+          </button>
+          <button className="btn xs p" type="button" disabled={badYear || save.isPending} onClick={() => save.mutate()}>
+            保存
+          </button>
+        </dd>
+      </>
+    );
+  return (
+    <>
+      <dt>作者</dt>
+      <dd className="row" style={{ gap: 8 }}>
+        <span className="grow">{doc.meta?.author ? String(doc.meta.author) : <span className="muted">—</span>}</span>
+        {editable && (
+          <button className="btn xs ghost" type="button" onClick={() => setEditing(true)}>
+            <Icon name="edit" size={14} />
+            编辑标题、作者、年份
+          </button>
+        )}
+      </dd>
+      <dt>年份</dt>
+      <dd className="num">{doc.meta?.year != null ? String(doc.meta.year) : <span className="muted">—</span>}</dd>
+    </>
+  );
+}
+
 export function DocDrawer({
   docId,
   chunkId,
   editable,
   onClose,
+  onOpenGuideline,
 }: {
   docId: string | null;
   chunkId?: string | null;
   editable: boolean;
   onClose: () => void;
+  onOpenGuideline?: (id: string) => void;
 }) {
   const qc = useQueryClient();
   const { message } = App.useApp();
@@ -390,6 +457,17 @@ export function DocDrawer({
       void qc.invalidateQueries({ queryKey: ["kb-docs"] });
       message.success("已删除");
       onClose();
+    },
+    onError: (e) => message.error(errorText(e)),
+  });
+  const asGuideline = useMutation({
+    mutationFn: () => api.patch<KbDocument>(`/kb/documents/${docId}`, { kind: "guideline" }),
+    onSuccess: (g) => {
+      qc.setQueryData<KbDocument[]>(["kb-docs", g.project_id], (old) => old?.map((x) => (x.id === g.id ? { ...x, ...g } : x)));
+      void qc.invalidateQueries({ queryKey: ["kb-docs"] });
+      qc.removeQueries({ queryKey: ["kb-doc", g.id] });
+      message.success("已设为规范");
+      onOpenGuideline?.(g.id);
     },
     onError: (e) => message.error(errorText(e)),
   });
@@ -429,6 +507,20 @@ export function DocDrawer({
         d &&
         editable && (
           <span className="row" style={{ gap: 6 }}>
+            {d.kind === "literature" && /\.(md|markdown|txt)$/i.test(d.source) && (
+              <Popconfirm
+                title="把这篇文档设为标注规范？"
+                description="移到“规范”分区，可编辑正文并关联标签集"
+                okText="设为规范"
+                cancelText="取消"
+                onConfirm={() => asGuideline.mutate()}
+              >
+                <button className="btn s" type="button" disabled={asGuideline.isPending || isBusyDoc(d)}>
+                  <Icon name="scrolltext" size={14} />
+                  设为规范
+                </button>
+              </Popconfirm>
+            )}
             {(d.kind === "literature" || d.kind === "url") && (
               <button className="btn s" type="button" disabled={reimport.isPending || isBusyDoc(d)} onClick={() => reimport.mutate(d.id)}>
                 <Icon name="retry" size={14} />
@@ -452,18 +544,7 @@ export function DocDrawer({
           <dl className="kv">
             <dt>来源</dt>
             <dd className="mono small">{/^https?:\/\//i.test(d.source) ? <a href={d.source} target="_blank" rel="noreferrer">{d.source}</a> : d.source}</dd>
-            {d.meta?.author && (
-              <>
-                <dt>作者</dt>
-                <dd>{String(d.meta.author)}</dd>
-              </>
-            )}
-            {d.meta?.year != null && (
-              <>
-                <dt>年份</dt>
-                <dd className="num">{String(d.meta.year)}</dd>
-              </>
-            )}
+            <CiteFields doc={d} editable={editable} />
             {d.meta?.pages != null && (
               <>
                 <dt>页数</dt>

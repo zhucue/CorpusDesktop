@@ -6,6 +6,7 @@ import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import AppShell from "./components/shell/AppShell";
 import Login from "./features/auth/Login";
 import Projects from "./features/projects/Projects";
+import ProjectGate from "./features/settings/ProjectGate";
 import { useMe } from "./lib/data";
 
 const Corpora = lazy(() => import("./features/corpora/Corpora"));
@@ -81,7 +82,9 @@ function AppRoutes() {
         path="/p/:projectId"
         element={
           <RequireAuth>
-            <AppShell />
+            <ProjectGate>
+              <AppShell />
+            </ProjectGate>
           </RequireAuth>
         }
       >

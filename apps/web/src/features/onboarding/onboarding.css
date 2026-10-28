@@ -1,6 +1,6 @@
 .ob-page { min-height: 100vh; }
 .ob-top { height: 64px; display: flex; align-items: center; padding: 0 32px; gap: 12px; }
-.ob-top .skip { margin-right: 20px; font-size: 13px; color: var(--text-2); }
+.ob-top .skip { margin-right: 20px; font-size: 13px; color: var(--text-2); border: 0; background: none; padding: 0; cursor: pointer; font-family: inherit; }
 .ob-top .skip:hover { color: var(--text); }
 .ob { width: 760px; margin: 8px auto 48px; display: flex; flex-direction: column; gap: 22px; }
 .stepper { display: grid; grid-template-columns: repeat(5, 1fr); position: relative; }
