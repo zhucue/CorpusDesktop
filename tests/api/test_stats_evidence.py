@@ -514,3 +514,65 @@ def test_job_creator_manages_own_job(owner, project, corpus, member, fake_stats)
     )
     export = owner.post(f"/api/stats/{stat_id}/export", json={"format": "csv"}).json()
     assert export["summary"] == "关键词 · 作文 · CSV"
+
+
+def test_evidence_same_hit_is_not_added_twice(owner, project, corpus):
+    """Manual pin and the assistant's evidence.add of the same hit share one basket item."""
+    h = owner.post(
+        "/api/search", json={"scope": {"corpus_id": corpus["id"]}, "query": "language"}
+    ).json()["items"][0]
+    url = f"/api/projects/{project['id']}/evidence"
+    manual = owner.post(
+        url,
+        json={
+            "kind": "hit",
+            "ref": {
+                "hit_id": h["hit_id"],
+                "document_id": h["document_id"],
+                "start_cp": h["start_cp"],
+                "end_cp": h["end_cp"],
+            },
+            "text": "KWIC",
+            "source": "a",
+        },
+    ).json()
+    assert manual["existing"] is False
+    by_hit_id = owner.post(
+        url,
+        json={
+            "kind": "hit",
+            "ref": {"hit_id": h["hit_id"]},
+            "text": "助手",
+            "source": "a",
+        },
+    ).json()
+    by_offsets = owner.post(
+        url,
+        json={
+            "kind": "hit",
+            "ref": {
+                "document_id": h["document_id"],
+                "start_cp": h["start_cp"],
+                "end_cp": h["end_cp"],
+            },
+            "text": "助手",
+            "source": "a",
+        },
+    ).json()
+    assert by_hit_id["id"] == by_offsets["id"] == manual["id"]
+    assert by_hit_id["existing"] is True and by_offsets["existing"] is True
+    other = owner.post(
+        url,
+        json={
+            "kind": "hit",
+            "ref": {
+                "document_id": h["document_id"],
+                "start_cp": h["start_cp"] + 1,
+                "end_cp": h["end_cp"],
+            },
+            "text": "另一条",
+            "source": "a",
+        },
+    ).json()
+    assert other["id"] != manual["id"] and other["ref"]["hit_id"]
+    assert owner.get(url).json()["total"] == 2

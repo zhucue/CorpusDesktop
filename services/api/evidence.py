@@ -151,6 +151,18 @@ def create_evidence(project_id: UUID, body: EvidenceInput, user: CurrentUser, db
         stat = db.get(StatResult, ref.stat_id)
         if not stat or stat.project_id != project_id:
             raise not_found("统计结果")
+    if (
+        body.kind == "hit"
+        and ref.document_id
+        and ref.start_cp is not None
+        and ref.end_cp is not None
+        and not ref.hit_id
+    ):  # one key for the same hit, however it was sent (the basket matches pins by hit_id)
+        ref = ref.model_copy(
+            update={"hit_id": f"{ref.document_id}:{ref.start_cp}-{ref.end_cp}"}
+        )
+    if existing := _existing(db, project_id, body.kind, ref):
+        return evidence_view(existing) | {"existing": True}
     item = Evidence(
         project_id=project_id,
         kind=body.kind,
@@ -162,7 +174,32 @@ def create_evidence(project_id: UUID, body: EvidenceInput, user: CurrentUser, db
     )
     db.add(item)
     db.commit()
-    return evidence_view(item)
+    return evidence_view(item) | {"existing": False}
+
+
+def _existing(db, project_id, kind, ref):
+    """The basket keeps one item per hit (document + match offsets) and per stat row: pinning it again from the
+    search page or the assistant returns that item instead of adding a duplicate."""
+    if kind == "hit" and ref.document_id and None not in (ref.start_cp, ref.end_cp):
+        key = {
+            "document_id": str(ref.document_id),
+            "start_cp": ref.start_cp,
+            "end_cp": ref.end_cp,
+        }
+    elif kind == "stat_row" and ref.stat_id and ref.row_key is not None:
+        key = {"stat_id": str(ref.stat_id), "row_key": ref.row_key}
+    else:
+        return None
+    return db.scalar(
+        select(Evidence)
+        .where(
+            Evidence.project_id == project_id,
+            Evidence.kind == kind,
+            Evidence.ref.contains(key),
+        )
+        .order_by(Evidence.created_at)
+        .limit(1)
+    )
 
 
 @router.delete("/evidence/{evidence_id}", status_code=204)
