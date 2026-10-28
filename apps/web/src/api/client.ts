@@ -45,7 +45,13 @@ function withQuery(path: string, query?: Query): string {
   return s ? `${path}?${s}` : path;
 }
 
-export async function errorFromResponse(res: Response): Promise<ApiError> {
+/** Gateway errors and failed connections (backend restarting): one Chinese message saying whether a write was lost. */
+const UNAVAILABLE_STATUS = new Set([502, 503, 504]);
+export function unavailableText(method = "GET"): string {
+  return method === "GET" ? "服务暂时不可用，请稍后重试" : "服务暂时不可用，本次修改未保存，请重试";
+}
+
+export async function errorFromResponse(res: Response, method?: string): Promise<ApiError> {
   let code = "http_error";
   let message = `${res.status} ${res.statusText}`;
   try {
@@ -58,6 +64,7 @@ export async function errorFromResponse(res: Response): Promise<ApiError> {
     /* non-JSON body */
   }
   if (res.status === 413) code = "TOO_LARGE";
+  if (code === "http_error" && UNAVAILABLE_STATUS.has(res.status)) return new ApiError(res.status, "UNAVAILABLE", unavailableText(method));
   return new ApiError(res.status, code, message);
 }
 
@@ -79,9 +86,15 @@ function redirectToLogin() {
 }
 
 export async function request<T>(method: string, path: string, body?: unknown, query?: Query, base = "/api"): Promise<T> {
-  const res = await fetch(withQuery(`${base}${path}`, query), buildInit(method, body));
+  let res: Response;
+  try {
+    res = await fetch(withQuery(`${base}${path}`, query), buildInit(method, body));
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    throw new ApiError(0, "UNAVAILABLE", unavailableText(method));
+  }
   if (res.status === 401 && path !== "/auth/login" && path !== "/auth/me") redirectToLogin();
-  if (!res.ok) throw await errorFromResponse(res);
+  if (!res.ok) throw await errorFromResponse(res, method);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }

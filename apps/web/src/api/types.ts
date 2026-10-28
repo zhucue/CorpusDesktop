@@ -26,6 +26,8 @@ export interface Stats {
   documents: number;
   sentences: number;
   tokens: number;
+  /** Parallel corpora: aligned sentence pairs. */
+  pairs?: number;
 }
 
 export interface Corpus {
@@ -41,6 +43,8 @@ export interface Corpus {
   index_version: number | string | null;
   /** Source and license; empty object when none. */
   meta?: CorpusMeta;
+  /** Searchable corpus with an import/index job running; the old index serves until it is replaced. */
+  updating?: boolean;
   created_at: string;
 }
 
@@ -49,6 +53,21 @@ export interface CorpusMeta {
   attribution?: string;
   source_url?: string;
   version?: string;
+  /** Set when the index is built: POS tag set the query engine resolves against. */
+  tagset?: "upos" | "jieba" | "mixed";
+  /** Chinese script of the corpus text; absent without enough Chinese text. */
+  script?: "simplified" | "traditional" | "mixed";
+  /** Document language codes, largest text share first. */
+  languages?: string[];
+  /** ISO time of the last index build. */
+  indexed_at?: string;
+}
+
+/** GET /corpora/{id}/documents/{doc}/sentences item. */
+export interface DocSentence {
+  idx: number;
+  text: string;
+  aligned: { language: string; text: string }[];
 }
 
 export type Metadata = Record<string, unknown>;
@@ -107,6 +126,19 @@ export interface ParseResult {
   conditions: { op: "+" | "-"; text: string }[];
   tokens: { kind: string; text: string }[];
   error: { position: number; message: string } | null;
+  /** Present when parsed with a scope: what the searched corpus offers. */
+  corpus?: ParseCorpus;
+}
+
+export interface ParseCorpus {
+  tagset: "upos" | "jieba" | "mixed";
+  tagset_name: string;
+  /** POS tags present in the index. */
+  pos_tags: string[];
+  /** Corpus.meta.script when import recorded it. */
+  script: "simplified" | "traditional" | "mixed" | null;
+  parallel: boolean;
+  layers: { dep: boolean; span: boolean };
 }
 
 /** Token layer returned when SearchRequest.include_tokens is true (contracts/p2.md §十一). */
@@ -174,7 +206,10 @@ export interface Job {
   summary?: string | null;
   kind: JobKind;
   state: JobState;
-  progress: { done: number; total: number | null; message: string };
+  /** unit: what done/total count (字 / 个文件 / 篇), when the job reports it. */
+  progress: { done: number; total: number | null; message: string; unit?: string };
+  /** Queued jobs: jobs of the same lane ahead of it (running or queued earlier). */
+  queue_ahead?: number | null;
   /** export: {rows, hits, filename}; stats: {stat_id} */
   result: { rows?: number; hits?: number; filename?: string; stat_id?: string; [k: string]: unknown } | null;
   error: { code: string; message: string } | null;
@@ -229,7 +264,8 @@ export interface StatResult {
   params: Record<string, unknown>;
   scope: { corpus_id: string; subcorpus_id: string | null; name: string };
   index_version: number | string | null;
-  totals: Stats & { node_hits?: number; window_tokens?: number; hits?: number | null; reference?: Stats };
+  /** tokens count every token, punctuation included; excluded_tokens = punctuation / digits left out (frequency). */
+  totals: Stats & { node_hits?: number; window_tokens?: number; hits?: number | null; reference?: Stats; excluded_tokens?: number };
   created_at: string;
   columns: StatColumn[];
   rows: StatRow[];
@@ -249,6 +285,12 @@ export interface EvidenceRef {
   end_cp?: number;
   stat_id?: string;
   row_key?: string;
+  /** Pinned hits (filled by the server): the hit's own sentence, the match [start, end) in code points, aligned translations. */
+  sentence_index?: number;
+  sentence?: string;
+  match?: [number, number];
+  aligned?: { language: string; text: string }[];
+  document_title?: string;
 }
 
 export interface Evidence {
@@ -285,7 +327,8 @@ export interface AgentSession {
   message_count: number;
 }
 
-export type ToolState = "running" | "succeeded" | "failed" | "cancelled";
+/** needs_confirmation: a write tool proposed, waiting for 执行 / 取消; confirmed / declined: the user's answer. */
+export type ToolState = "running" | "succeeded" | "failed" | "cancelled" | "needs_confirmation" | "confirmed" | "declined";
 
 export interface ToolCall {
   id: string;
@@ -295,6 +338,8 @@ export interface ToolCall {
   result_summary: string;
   result_ref?: { kind: string; id: string };
   duration_ms?: number;
+  /** Confirm card text of a proposed write tool. */
+  confirm?: { title: string; lines: string[] };
 }
 
 export type MessagePart = { type: "text"; text: string } | { type: "ui"; lang: string } | { type: "thinking"; text: string };
@@ -307,6 +352,8 @@ export interface AgentMessage {
   tool_calls: ToolCall[];
   created_at: string;
   duration_ms?: number;
+  /** The user stopped the run. */
+  stopped?: boolean;
 }
 
 export type AgentSessionDetail = AgentSession & { messages: AgentMessage[] };
@@ -519,7 +566,8 @@ export interface Agreement {
   annotators: { user_id: string; email: string; done: number }[];
   pairwise: { a: string; b: string; kappa: number | null; n: number }[];
   alpha: number | null;
-  per_label: { label: string; kappa: number | null }[];
+  /** n: units where at least one annotator gave the label. */
+  per_label: { label: string; kappa: number | null; n?: number }[];
   /** Span layers: overlap-tolerant version. */
   lenient?: { pairwise: { a: string; b: string; kappa: number | null; n: number }[]; alpha: number | null; n?: number };
 }
@@ -542,6 +590,9 @@ export interface Disagreement {
   document_id?: string;
   sentence_index?: number;
   text?: string;
+  /** The disputed words and their [start, end) code points in `text`. */
+  target_text?: string | null;
+  marks?: [number, number][];
   values: { annotator_id: string; email?: string; value: unknown }[];
   adjudicated?: boolean | Adjudication | null;
   final?: unknown;
@@ -654,6 +705,8 @@ export interface KbSearchHit {
   chunk: KbChunk;
   document: { id: string; title: string; kind: KbKind; source: string };
   score: number;
+  /** 相关度 for display: share of query words in the chunk and the vector similarity. */
+  relevance?: "high" | "medium" | "low";
   /** Keyword-matched fragment; `<mark>` / `<b>` delimit the matches when present. */
   highlight?: string | null;
 }
