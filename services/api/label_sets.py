@@ -14,7 +14,7 @@ from sqlalchemy import case, exists, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
 from engine.query import JIEBA_TAGS
-from services.api.access import READ, WRITE, require_project, token_project
+from services.api.access import READ, WRITE, human_only, require_project
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
 from services.api.models import AnnotationLayer, LabelSet
@@ -320,12 +320,6 @@ class LabelSetInput(BaseModel):
 class LabelSetPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     labels: Labels | None = None
-
-
-def human_only(user):
-    """Agent tokens may read and suggest but not change annotation data (contracts/p3.md §三)."""
-    if token_project(user) is not None:
-        raise forbidden()
 
 
 def load_label_set(db, label_set_id, user, write=False) -> LabelSet:

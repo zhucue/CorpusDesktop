@@ -12,7 +12,13 @@ from sqlalchemy import select
 from engine import query
 from engine import stats as engine_stats
 from services.api import effective
-from services.api.access import WRITE, Paging, require_project, token_project
+from services.api.access import (
+    WRITE,
+    Paging,
+    human_only,
+    require_project,
+    token_project,
+)
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
 from services.api.jobs import enqueue
@@ -245,6 +251,7 @@ def export_stat(stat_id: UUID, body: ExportInput, user: CurrentUser, db: Db):
 
 @router.delete("/stats/{stat_id}", status_code=204)
 def delete_stat(stat_id: UUID, user: CurrentUser, db: Db):
+    human_only(user)
     stat = _load(db, stat_id, user, write=True)
     path = Path(stat.rows_path)
     db.delete(stat)

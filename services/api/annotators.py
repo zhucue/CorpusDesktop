@@ -1,6 +1,7 @@
 """Whose annotations a request reads and writes (contracts/p5.md §三 多人与一致性).
 
-single mode: one shared set; every row has annotator_id = layer creator, any owner / editor / annotator edits it.
+single mode: one shared set; every row has annotator_id = layer creator. Only the creator or a listed annotator
+writes it; other members read it (owner / editor also adjudicate).
 multi mode: each listed annotator has an own set. Annotators read and write only their own rows; owner / editor
 read everyone's (or one annotator's with `annotator_id`) and adjudicate, and write only if they are listed.
 """
@@ -16,12 +17,14 @@ def layer_annotators(layer) -> list:
 
 
 def writer(layer, user):
-    """annotator_id written for this user's annotations."""
-    if layer.mode != "multi":
-        return layer.created_by
-    if user.id not in layer_annotators(layer):
+    """annotator_id written for this user's annotations; only the creator or listed annotators write."""
+    if layer.mode == "multi":
+        allowed = layer_annotators(layer)
+    else:
+        allowed = [layer.created_by, *(layer.annotators or [])]
+    if user.id not in allowed:
         raise ApiError(403, "NOT_ANNOTATOR", "你不是该层的标注者")
-    return user.id
+    return user.id if layer.mode == "multi" else layer.created_by
 
 
 def visible(db, layer, user, annotator_id=None) -> list | None:

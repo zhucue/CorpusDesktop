@@ -477,10 +477,16 @@ def test_permissions(owner, project, corpus, member, make_user):
     assert act(agent, pos, 0, 1, "confirm").status_code == 403
     assert agent.post(f"{url}/sentences/{doc}/0/confirm", json={}).status_code == 403
     assert agent.delete(url).status_code == 403
-    assert act(annotator, pos, 0, 1, "confirm").status_code == 200
-    assert (
-        annotator.post(f"{url}/sentences/{doc}/1/confirm", json={}).status_code == 200
-    )
+    # single mode: only the layer creator (or a listed annotator) writes; other members read
+    editor = member("editor")
+    for client in (annotator, editor):
+        r = act(client, pos, 0, 1, "confirm")
+        assert r.status_code == 403 and r.json()["error"]["code"] == "NOT_ANNOTATOR"
+        r = client.post(f"{url}/sentences/{doc}/1/confirm", json={})
+        assert r.status_code == 403
+        assert client.get(f"{url}/sentences").status_code == 200
+    assert act(owner, pos, 0, 1, "confirm").status_code == 200
+    assert owner.post(f"{url}/sentences/{doc}/1/confirm", json={}).status_code == 200
     body = {
         "corpus_id": corpus["id"],
         "kind": "pos",

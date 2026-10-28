@@ -7,7 +7,13 @@ from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
-from services.api.access import WRITE, Paging, load_corpus, require_project
+from services.api.access import (
+    WRITE,
+    Paging,
+    human_only,
+    load_corpus,
+    require_project,
+)
 from services.api.auth import CurrentUser, Db
 from services.api.errors import forbidden, not_found
 from services.api.jobs import enqueue
@@ -83,6 +89,7 @@ def create_evidence(project_id: UUID, body: EvidenceInput, user: CurrentUser, db
 
 @router.delete("/evidence/{evidence_id}", status_code=204)
 def delete_evidence(evidence_id: UUID, user: CurrentUser, db: Db):
+    human_only(user)
     item = db.get(Evidence, evidence_id)
     if not item:
         raise not_found("证据")

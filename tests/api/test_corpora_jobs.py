@@ -244,3 +244,20 @@ def test_subcorpus_rejects_other_project_corpus(owner, make_user, corpus):
         json={"name": "x", "corpus_id": corpus["id"], "filter": {}},
     )
     assert r.status_code == 404
+
+
+def test_builtin_jobs_for_admins(owner, project, corpus, make_user):
+    admin = make_user("admin@example.edu", admin=True)
+    builtin = admin.post("/api/corpora", json={"name": "Tatoeba", "language": "en"})
+    files = {f"{n}.txt": TEXT_A for n in "abcd"}
+    job = upload(admin, builtin.json()["id"], files).json()
+    assert job["owner_email"] == "admin@example.edu"
+    assert job["summary"] == "Tatoeba：a.txt、b.txt、c.txt 等 4 个文件"
+    upload(owner, corpus["id"], {"x.txt": TEXT_B})  # project job: not listed
+
+    r = admin.get("/api/jobs", params={"builtin": 1})
+    assert r.status_code == 200, r.text
+    assert r.json()["total"] == 1 and r.json()["items"][0]["id"] == job["id"]
+    assert admin.get("/api/jobs").status_code == 422
+    assert owner.get("/api/jobs", params={"builtin": 1}).status_code == 403
+    assert owner.get(f"/api/jobs/{job['id']}").status_code == 404

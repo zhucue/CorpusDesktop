@@ -389,3 +389,87 @@ def test_pos_validated_against_corpus_tagset(owner, corpus, fake_stats, monkeypa
     assert code("/api/stats/ngrams", pattern) == "VALIDATION_ERROR"
     assert code("/api/search", {"scope": scope, "query": "语言/nr"}) == 200
     assert code("/api/search", {"scope": scope, "query": "语言/zz"}) == "QUERY_INVALID"
+
+
+def test_agent_token_cannot_delete_or_change_corpora(
+    owner, project, corpus, fake_stats
+):
+    """Deletions, uploads and reindexing stay with the signed-in user (contracts/p2.md §九)."""
+    pid, cid = project["id"], corpus["id"]
+    token = owner.post("/api/auth/agent-token", json={"project_id": pid}).json()
+    agent = bearer_client(token["token"])
+    doc = owner.get(f"/api/corpora/{cid}/documents").json()["items"][0]
+    sub = owner.post(
+        f"/api/projects/{pid}/subcorpora",
+        json={
+            "name": "新闻",
+            "corpus_id": cid,
+            "filter": {"year": {"gte": 2000, "lte": 2005}},
+        },
+    ).json()
+    saved = owner.post(
+        f"/api/projects/{pid}/queries",
+        json={"name": "q", "query": "language", "scope": {"corpus_id": cid}},
+    ).json()
+    stat_id = run_stat(owner, "frequency", {"scope": {"corpus_id": cid}})
+    evidence = {"kind": "text", "text": "记录", "source": "笔记"}
+    ev = owner.post(f"/api/projects/{pid}/evidence", json=evidence).json()
+    own_ev = agent.post(f"/api/projects/{pid}/evidence", json=evidence).json()
+
+    denied = {
+        "corpus": agent.delete(f"/api/corpora/{cid}"),
+        "document": agent.delete(f"/api/corpora/{cid}/documents/{doc['id']}"),
+        "upload": upload(agent, cid, {"c.txt": "More language."}),
+        "reindex": agent.post(f"/api/corpora/{cid}/reindex"),
+        "subcorpus": agent.delete(f"/api/subcorpora/{sub['id']}"),
+        "query": agent.delete(f"/api/queries/{saved['id']}"),
+        "stat": agent.delete(f"/api/stats/{stat_id}"),
+        "evidence": agent.delete(f"/api/evidence/{ev['id']}"),
+        "own evidence": agent.delete(f"/api/evidence/{own_ev['id']}"),
+    }
+    assert {k: r.status_code for k, r in denied.items()} == dict.fromkeys(denied, 403)
+    assert owner.get(f"/api/corpora/{cid}").json()["status"] == "ready"
+
+    for path in (
+        f"/api/evidence/{ev['id']}",
+        f"/api/stats/{stat_id}",
+        f"/api/queries/{saved['id']}",
+        f"/api/subcorpora/{sub['id']}",
+        f"/api/corpora/{cid}/documents/{doc['id']}",
+    ):
+        assert owner.delete(path).status_code == 204, path
+    assert owner.post(f"/api/corpora/{cid}/reindex").status_code == 200
+    assert owner.delete(f"/api/corpora/{cid}").status_code == 204
+
+
+def test_job_creator_manages_own_job(owner, project, corpus, member, fake_stats):
+    """Any member may cancel / retry the jobs they started; owner / editor manage all."""
+    annotator, other, editor = (
+        member("annotator"),
+        member("viewer"),
+        member("editor"),
+    )
+    body = {"scope": {"corpus_id": corpus["id"]}, "unit": "word"}
+    job = annotator.post("/api/stats/frequency", json=body).json()
+    assert job["owner_id"] == annotator.user_id
+    assert job["owner_email"] == "annotator@example.edu"
+    assert job["summary"] == "频次 · 作文"
+    assert other.post(f"/api/jobs/{job['id']}/cancel").status_code == 403
+    r = annotator.post(f"/api/jobs/{job['id']}/cancel")
+    assert r.status_code == 200 and r.json()["state"] == "cancelled"
+    retry = annotator.post(f"/api/jobs/{job['id']}/retry")
+    assert retry.status_code == 200 and retry.json()["owner_id"] == annotator.user_id
+    assert other.post(f"/api/jobs/{retry.json()['id']}/cancel").status_code == 403
+    r = editor.post(f"/api/jobs/{retry.json()['id']}/cancel")
+    assert r.status_code == 200 and r.json()["state"] == "cancelled"
+
+    listed = owner.get(f"/api/projects/{project['id']}/jobs").json()["items"]
+    stats_jobs = [j for j in listed if j["kind"] == "stats"]
+    assert {j["owner_email"] for j in stats_jobs} == {"annotator@example.edu"}
+    imports = [j for j in listed if j["kind"] == "import"]
+    assert {j["summary"] for j in imports} == {"作文：a.txt", "作文：b.txt"}
+    stat_id = run_stat(
+        owner, "keywords", {"target": body["scope"], "reference": body["scope"]}
+    )
+    export = owner.post(f"/api/stats/{stat_id}/export", json={"format": "csv"}).json()
+    assert export["summary"] == "关键词 · 作文 · CSV"

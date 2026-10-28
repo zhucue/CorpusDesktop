@@ -7,6 +7,8 @@ x-python-env: &python-env
   DATA_DIR: /data
   STANZA_RESOURCES_DIR: /stanza
   PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
+  # 检索命中计数超时（秒），超时后返回不完整计数
+  SEARCH_COUNT_TIMEOUT: ${SEARCH_COUNT_TIMEOUT:-20}
   # 知识库向量模型：本地 sentence-transformers 缓存在 models 卷；EMBED_PROVIDER=openai 时走远程 /embeddings
   MODELS_DIR: /models
   HF_HOME: /models

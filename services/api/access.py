@@ -26,6 +26,12 @@ def token_project(user):
     return getattr(user, "token_project_id", None)
 
 
+def human_only(user):
+    """Agent tokens may read and suggest but not delete or change shared data (contracts/p2.md §九, p3.md §八)."""
+    if token_project(user) is not None:
+        raise forbidden()
+
+
 def check_token_project(user, project_id):
     if token_project(user) is not None and project_id != token_project(user):
         raise forbidden()

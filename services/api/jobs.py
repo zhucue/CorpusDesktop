@@ -12,6 +12,7 @@ from services.api.access import (
     check_token_project,
     project_role,
     require_project,
+    token_project,
 )
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
@@ -119,6 +120,21 @@ def list_jobs(project_id: UUID, user: CurrentUser, db: Db, paging: Paging):
     stmt = (
         select(Job)
         .where(Job.project_id == project_id)
+        .order_by(Job.created_at.desc(), Job.id)
+    )
+    return paging.run(db, stmt, job_view)
+
+
+@router.get("/jobs")
+def list_builtin_jobs(user: CurrentUser, db: Db, paging: Paging, builtin: bool = False):
+    """Jobs of built-in corpora (project_id null), for platform admins."""
+    if not user.is_admin or token_project(user):
+        raise forbidden()
+    if not builtin:
+        raise ApiError(422, "VALIDATION_ERROR", "须指定 builtin=1")
+    stmt = (
+        select(Job)
+        .where(Job.project_id.is_(None))
         .order_by(Job.created_at.desc(), Job.id)
     )
     return paging.run(db, stmt, job_view)

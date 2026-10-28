@@ -1,3 +1,8 @@
+from uuid import UUID
+
+from sqlalchemy.orm import object_session
+
+
 def user_view(u):
     return {
         "id": u.id,
@@ -41,10 +46,94 @@ def document_view(d):
     }
 
 
+METHOD_NAMES = {
+    "frequency": "频次",
+    "ngrams": "N 元组",
+    "collocations": "搭配",
+    "keywords": "关键词",
+    "distribution": "分布",
+}
+EXPORT_SOURCES = {"evidence": "证据篮", "kb_terms": "术语表"}
+
+
+def _name(db, model, oid, attr="name"):
+    obj = db.get(model, UUID(str(oid))) if oid else None
+    return getattr(obj, attr) if obj else "已删除"
+
+
+def _scope_name(db, scope):
+    from services.api.models import Corpus, Subcorpus
+
+    scope = scope or {}
+    if scope.get("subcorpus_id"):
+        return _name(db, Subcorpus, scope["subcorpus_id"])
+    name = _name(db, Corpus, scope.get("corpus_id"))
+    return f"{name}（筛选）" if scope.get("filter") else name
+
+
+def _stat_summary(db, p):
+    method = METHOD_NAMES.get(p.get("method"), p.get("method") or "")
+    if p.get("method") == "keywords":
+        target = _scope_name(db, p.get("target"))
+        return f"{method} · {target} 对 {_scope_name(db, p.get('reference'))}"
+    return f"{method} · {_scope_name(db, p.get('scope'))}"
+
+
+def job_summary(db, j) -> str:
+    """Short text naming what a job works on: corpus and files, stat method and scope, layer, document."""
+    from services.api.models import AnnotationLayer, Corpus, KbDocument, StatResult
+
+    p = j.params or {}
+    if j.kind == "import":
+        files = p.get("files") or []
+        names = "、".join(files[:3])
+        if len(files) > 3:
+            names += f" 等 {len(files)} 个文件"
+        return f"{_name(db, Corpus, p.get('corpus_id'))}：{names}"
+    if j.kind == "index":
+        return _name(db, Corpus, p.get("corpus_id"))
+    if j.kind == "stats":
+        return _stat_summary(db, p)
+    if j.kind == "preannotate":
+        return _name(db, AnnotationLayer, p.get("layer_id"))
+    if j.kind in ("kb_import", "kb_summarize"):
+        return _name(db, KbDocument, p.get("document_id"), "title")
+    if j.kind == "kb_extract":
+        if p.get("source") == "corpus":
+            return f"术语抽取 · {_scope_name(db, p.get('scope'))}"
+        return f"术语抽取 · {len(p.get('document_ids') or [])} 篇文献"
+    if j.kind == "export":
+        source = p.get("source", "search")
+        if source == "search":
+            what = f"检索 {p.get('query', '')} · {_scope_name(db, p.get('scope'))}"
+        elif source == "stats":
+            stat = db.get(StatResult, UUID(p["stat_id"])) if p.get("stat_id") else None
+            what = (
+                f"{METHOD_NAMES.get(stat.method, stat.method)} · {(stat.scope or {}).get('name', '')}"
+                if stat
+                else "统计 · 已删除"
+            )
+        elif source == "layer":
+            what = _name(db, AnnotationLayer, p.get("layer_id"))
+        elif source == "kb_note":
+            what = _name(db, KbDocument, p.get("document_id"), "title")
+        else:
+            what = EXPORT_SOURCES.get(source, source)
+        return f"{what} · {str(p.get('format', '')).upper()}"
+    return j.kind
+
+
 def job_view(j):
+    from services.api.models import User
+
+    db = object_session(j)
+    owner = db.get(User, j.owner_id) if db else None
     return {
         "id": j.id,
         "project_id": j.project_id,
+        "owner_id": j.owner_id,
+        "owner_email": owner.email if owner else None,
+        "summary": job_summary(db, j) if db else j.kind,
         "kind": j.kind,
         "state": j.state,
         "progress": j.progress,

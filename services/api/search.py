@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import secrets
 from collections import OrderedDict
 from threading import Lock
@@ -17,6 +18,7 @@ from services.api.access import (
     READ,
     WRITE,
     Paging,
+    human_only,
     load_corpus,
     load_subcorpus,
     require_project,
@@ -41,7 +43,7 @@ from services.api.views import document_view, job_view, saved_query_view
 
 router = APIRouter(prefix="/api")
 
-COUNT_TIMEOUT = 20
+COUNT_TIMEOUT = float(os.environ.get("SEARCH_COUNT_TIMEOUT") or 20)  # seconds
 
 
 class Scope(BaseModel):
@@ -554,6 +556,7 @@ def create_query(project_id: UUID, body: SavedQueryInput, user: CurrentUser, db:
 
 @router.delete("/queries/{query_id}", status_code=204)
 def delete_query(query_id: UUID, user: CurrentUser, db: Db):
+    human_only(user)
     saved = db.get(SavedQuery, query_id)
     if not saved:
         raise not_found("查询")

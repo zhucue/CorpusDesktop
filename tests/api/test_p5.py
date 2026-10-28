@@ -1313,3 +1313,92 @@ def test_alignment_candidates_without_stored_pairs(owner, project, fake_llm):
     )
     stats = owner.post("/api/stats/alignment", json={"layer_id": layer["id"]}).json()
     assert stats["pairs"] == 0  # candidates are suggestions until confirmed
+
+
+# ---- review progress, single-mode writers, export attribution ----
+
+
+def test_layer_documents_done(owner, project, essay, fake_llm, member):
+    """A sentence is done once confirmed or when its rows are all reviewed; a document is done (done = sentences)
+    when it has rows and none is suggested. Single-mode layers are written only by their creator."""
+    layer = span_layer(owner, project, essay)
+    lid, doc = layer["id"], essay["document_id"]
+
+    def progress(client=owner):
+        item = client.get(f"/api/layers/{lid}/documents").json()["items"][0]
+        return item["sentences"], item["done"], item["pending"]
+
+    owner.post(
+        f"/api/layers/{lid}/preannotate",
+        json={"sentence_range": {"start": 0, "end": 3}},
+    )
+    drain()
+    assert progress() == (5, 0, 3)  # suggestions in sentences 0–2 only
+    r = owner.post(f"/api/layers/{lid}/sentences/{doc}/4/confirm", json={})
+    assert r.status_code == 200, r.text
+    assert progress() == (5, 1, 3)
+    spans = by_text(all_spans(owner, layer))
+    patch_span(owner, layer, spans["go"], action="confirm")
+    assert progress() == (5, 2, 2)
+
+    annotator, editor = member("annotator"), member("editor")
+    for client in (annotator, editor):
+        r = client.patch(
+            f"/api/layers/{lid}/spans/{spans['have']['id']}", json={"action": "confirm"}
+        )
+        assert r.status_code == 403 and r.json()["error"]["code"] == "NOT_ANNOTATOR"
+        assert progress(client) == (5, 2, 2)
+
+    patch_span(owner, layer, spans["have"], action="confirm")
+    patch_span(owner, layer, spans["book"], action="reject")
+    patch_span(owner, layer, spans["was"], action="modify", label="时态")
+    assert progress() == (5, 5, 0)  # sentence 3 never reviewed, but no row is pending
+    assert owner.get(f"/api/layers/{lid}").json()["documents"] == {
+        "total": 1,
+        "done": 1,
+    }
+
+
+def test_layer_exports_carry_source_notice(owner, project, essay, reviewed, tmx):
+    meta = {"license": "CC BY 4.0", "attribution": "某某大学"}
+    sql(
+        "UPDATE corpora SET metadata = CAST(:m AS jsonb) WHERE id IN"
+        " (CAST(:a AS uuid), CAST(:b AS uuid)) RETURNING id",
+        m=json.dumps(meta, ensure_ascii=False),
+        a=essay["id"],
+        b=tmx["id"],
+    )
+    notice = "来源：作文；许可：CC BY 4.0；署名：某某大学"
+    layer, rel = reviewed
+
+    _, d = export(owner, layer, "brat")
+    z = zipfile.ZipFile(io.BytesIO(d.content))
+    assert "README.txt" in z.namelist()
+    assert z.read("README.txt").decode("utf-8") == notice + "\n"
+    conf = z.read("annotation.conf").decode("utf-8")
+    assert conf.startswith(f"# {notice}\n[entities]\n")
+
+    _, d = export(owner, layer, "xlsx")
+    wb = load_workbook(io.BytesIO(d.content))
+    for name, first in (("偏误分布", "标签"), ("片段", "文档")):
+        rows = list(wb[name].iter_rows(values_only=True))
+        assert rows[0][0] == notice and not any(rows[1]) and rows[2][0] == first
+
+    _, d = export(owner, rel, "json")
+    data = json.loads(d.content)
+    assert data["source"] == [notice] and next(iter(data)) == "source"
+
+    sent = make_layer(
+        owner,
+        project,
+        corpus_id=tmx["id"],
+        kind="alignment",
+        name="句对齐",
+        level="sentence",
+    )
+    _, d = export(owner, sent, "tmx")
+    root = etree.fromstring(d.content)
+    assert [n.text for n in root.find("header").findall("note")] == [
+        "来源：平行；许可：CC BY 4.0；署名：某某大学"
+    ]
+    assert len(root.findall(".//tu")) == 3

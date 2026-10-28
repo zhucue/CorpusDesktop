@@ -811,6 +811,13 @@ def _finish(run, filename, extra):
         run.succeed(db, {**extra, "filename": filename})
 
 
+def _notice(db, *corpus_ids):
+    """Source / license lines of the corpora (services.worker.tasks.source_notice); [] when none has them."""
+    from services.worker.tasks import source_notice  # tasks imports this module
+
+    return source_notice(db, corpus_ids)
+
+
 def _export_docs(db, layer, params):
     ids = params.get("document_ids") or layer.document_ids
     stmt = select(Document).where(Document.corpus_id == layer.corpus_id)
@@ -897,6 +904,7 @@ def run_export_brat(run, layer_id):
             }
         )
         name = layer.name
+        notice = _notice(db, span_layer.corpus_id)
     path = export_path(run.id, "brat")
     path.parent.mkdir(parents=True, exist_ok=True)
     total_spans = total_rel = 0
@@ -918,12 +926,15 @@ def run_export_brat(run, layer_id):
             z.writestr(f"{stem}.ann", ann_text.encode("utf-8"))
             total_spans += len(by_doc.get(d.id, []))
             total_rel += nrel
-        conf = "[entities]\n" + "".join(f"{x}\n" for x in labels)
+        conf = "".join(f"# {line}\n" for line in notice)
+        conf += "[entities]\n" + "".join(f"{x}\n" for x in labels)
         conf += "\n[relations]\n" + "".join(
             f"{x}\tArg1:<ENTITY>, Arg2:<ENTITY>\n" for x in rel_labels
         )
         conf += "\n[events]\n\n[attributes]\n"
         z.writestr("annotation.conf", conf.encode("utf-8"))
+        if notice:
+            z.writestr("README.txt", "".join(f"{x}\n" for x in notice).encode("utf-8"))
     _finish(
         run,
         f"{_safe(name)}-brat-{_stamp()}.zip",
@@ -936,8 +947,12 @@ def run_export_brat(run, layer_id):
     )
 
 
-def _xlsx_sheet(wb, title, header, rows):
+def _xlsx_sheet(wb, title, header, rows, notice=()):
     ws = wb.create_sheet(title)
+    for line in notice:
+        ws.append([line])
+    if notice:
+        ws.append([])
     font = Font(name="宋体", bold=True)
     cells = []
     for h in header:
@@ -966,6 +981,7 @@ def run_export_xlsx(run, layer_id):
             )
         }
         name = span_layer.name
+        notice = _notice(db, span_layer.corpus_id)
     counts = defaultdict(lambda: defaultdict(int))
     for s in spans:
         counts[s["label"]][s["document_id"]] += 1
@@ -994,12 +1010,13 @@ def run_export_xlsx(run, layer_id):
         for s in spans
     ]
     wb = Workbook(write_only=True)
-    _xlsx_sheet(wb, "偏误分布", header, rows)
+    _xlsx_sheet(wb, "偏误分布", header, rows, notice)
     _xlsx_sheet(
         wb,
         "片段",
         ["文档", "句序", "起始码点", "结束码点", "片段", "标签", "属性", "所在句"],
         span_rows,
+        notice,
     )
     path = export_path(run.id, "xlsx")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1110,6 +1127,11 @@ def run_export_json(run, layer_id):
             ],
             "layers": out_layers,
         }
+        notice = _notice(
+            db, layer.corpus_id, *(x.tgt_corpus_id for x in layers if x.tgt_corpus_id)
+        )
+        if notice:
+            data = {"source": notice, **data}
         name = layer.name
     path = export_path(run.id, "json")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1154,9 +1176,10 @@ def run_export_tmx(run, layer_id):
             ).all()
         )
         name = layer.name
+        notice = _notice(db, layer.corpus_id, layer.tgt_corpus_id)
     src_lang = langs.get(pairs[0]["src_document_id"], "und") if pairs else "und"
     root = etree.Element("tmx", version="1.4")
-    etree.SubElement(
+    header = etree.SubElement(
         root,
         "header",
         creationtool="corpus-workbench",
@@ -1167,6 +1190,8 @@ def run_export_tmx(run, layer_id):
         srclang=src_lang,
         **{"o-tmf": "corpus-workbench"},
     )
+    for line in notice:
+        etree.SubElement(header, "note").text = line
     body = etree.SubElement(root, "body")
     for p in pairs:
         src = (p["src_document_id"], p["src_sentence_index"])

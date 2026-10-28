@@ -17,7 +17,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, exists, func, literal, or_, select, tuple_
+from sqlalchemy import and_, exists, func, literal, or_, select, tuple_, union
 
 from services.api.annotations import (
     ANNOTATE,
@@ -824,7 +824,10 @@ def confirm_p5_sentence(db, layer, user, document_id, sentence_index):
 
 
 def p5_documents(db, layer, annotators):
-    """Documents of a span / relation / alignment layer: sentences, reviewed and pending (with suggestions)."""
+    """Documents of a span / relation / alignment layer: sentences, done and pending (with suggestions).
+
+    A sentence is done when it was confirmed (sentence_reviews) or has rows and none is suggested; a document is
+    done (done = sentences) when it has rows and none is suggested."""
     from services.api.models import AlignmentAnnotation
 
     docs = db.execute(
@@ -834,54 +837,62 @@ def p5_documents(db, layer, annotators):
     ).all()
     if layer.kind == "alignment":
         m = AlignmentAnnotation
-        pend = (
-            select(m.src_document_id, func.count(m.src_sentence_index.distinct()))
-            .where(m.layer_id == layer.id, m.status == "suggested", *_of(m, annotators))
-            .group_by(m.src_document_id)
-        )
+        doc_col, idx_col = m.src_document_id, m.src_sentence_index
+        rows = select().select_from(m)
     elif layer.kind == "span":
         m = SpanAnnotation
-        pend = (
-            select(m.document_id, func.count(m.sentence_index.distinct()))
-            .where(m.layer_id == layer.id, m.status == "suggested", *_of(m, annotators))
-            .group_by(m.document_id)
-        )
+        doc_col, idx_col = m.document_id, m.sentence_index
+        rows = select().select_from(m)
     else:
-        pend = (
-            select(
-                SpanAnnotation.document_id,
-                func.count(SpanAnnotation.sentence_index.distinct()),
-            )
-            .select_from(RelationAnnotation)  # columns come from the span; rows from the relations
-            .join(SpanAnnotation, SpanAnnotation.id == RelationAnnotation.from_span_id)
-            .where(
-                RelationAnnotation.layer_id == layer.id,
-                RelationAnnotation.status == "suggested",
-                *_of(RelationAnnotation, annotators),
-            )
-            .group_by(SpanAnnotation.document_id)
+        m = RelationAnnotation
+        doc_col, idx_col = SpanAnnotation.document_id, SpanAnnotation.sentence_index
+        rows = (  # columns come from the first span; rows from the relations
+            select()
+            .select_from(m)
+            .join(SpanAnnotation, SpanAnnotation.id == m.from_span_id)
         )
-    pending = dict(db.execute(pend).all())
-    reviewed = dict(
-        db.execute(
-            select(SentenceReview.document_id, func.count())
-            .where(
-                SentenceReview.layer_id == layer.id,
-                *_of(SentenceReview, annotators),
-            )
-            .group_by(SentenceReview.document_id)
-        ).all()
+    per_sentence = (
+        rows.add_columns(
+            doc_col.label("d"),
+            idx_col.label("i"),
+            func.bool_and(m.status != "suggested").label("ok"),
+        )
+        .where(m.layer_id == layer.id, *_of(m, annotators))
+        .group_by(doc_col, idx_col)
+        .subquery()
     )
-    items = [
-        {
-            "document_id": d,
-            "title": t,
-            "sentences": n,
-            "done": reviewed.get(d, 0),
-            "pending": pending.get(d, 0),
-        }
-        for d, t, n in docs
-    ]
+    s = per_sentence.c
+    per_doc = {
+        d: (pending, all_ok)
+        for d, pending, all_ok in db.execute(
+            select(
+                s.d,
+                func.count().filter(~s.ok, s.i.is_not(None)),
+                func.bool_and(s.ok),
+            ).group_by(s.d)
+        )
+    }
+    finished = union(
+        select(s.d, s.i).where(s.ok, s.i.is_not(None)),
+        select(SentenceReview.document_id, SentenceReview.sentence_index).where(
+            SentenceReview.layer_id == layer.id, *_of(SentenceReview, annotators)
+        ),
+    ).subquery()
+    done = dict(
+        db.execute(select(finished.c[0], func.count()).group_by(finished.c[0])).all()
+    )
+    items = []
+    for d, t, n in docs:
+        pending, all_ok = per_doc.get(d, (0, False))
+        items.append(
+            {
+                "document_id": d,
+                "title": t,
+                "sentences": n,
+                "done": n if all_ok else min(done.get(d, 0), n),
+                "pending": pending,
+            }
+        )
     return {"items": items, "total": len(items)}
 
 

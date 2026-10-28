@@ -12,6 +12,7 @@ from sqlalchemy import or_, select, update
 from services.api.access import (
     WRITE,
     Paging,
+    human_only,
     load_corpus,
     require_project,
     token_project,
@@ -106,6 +107,7 @@ def get_corpus(corpus_id: UUID, user: CurrentUser, db: Db):
 
 @router.delete("/corpora/{corpus_id}", status_code=204)
 def delete_corpus(corpus_id: UUID, user: CurrentUser, db: Db):
+    human_only(user)
     corpus = load_corpus(db, corpus_id, user, write=True)
     db.execute(
         update(Job)
@@ -159,6 +161,7 @@ def upload_documents(
     language: Annotated[str | None, Form(max_length=20)] = None,
     metadata: Annotated[str | None, Form()] = None,
 ):
+    human_only(user)
     corpus = load_corpus(db, corpus_id, user, write=True)
     if int(request.headers.get("content-length") or 0) > MAX_UPLOAD:
         raise ApiError(413, "TOO_LARGE", "单次上传不超过 500 MB")
@@ -222,6 +225,7 @@ def patch_document(
 
 @router.delete("/corpora/{corpus_id}/documents/{document_id}", status_code=204)
 def delete_document(corpus_id: UUID, document_id: UUID, user: CurrentUser, db: Db):
+    human_only(user)
     corpus = load_corpus(db, corpus_id, user, write=True)
     doc = _document(db, corpus_id, document_id)
     path = doc.text_path
@@ -233,6 +237,7 @@ def delete_document(corpus_id: UUID, document_id: UUID, user: CurrentUser, db: D
 
 @router.post("/corpora/{corpus_id}/reindex")
 def reindex(corpus_id: UUID, user: CurrentUser, db: Db):
+    human_only(user)
     corpus = load_corpus(db, corpus_id, user, write=True)
     if has_active_job(db, corpus_id, ["import", "index"]):
         raise ApiError(409, "JOB_IN_PROGRESS", "语料库正在导入或索引")
