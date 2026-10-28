@@ -307,12 +307,21 @@ export interface EvidenceCardProps {
   source: string;
 }
 
+/** Evidence text as stored: the match wrapped in **…**, aligned translations on their own lines. */
+function evidenceText(text: string) {
+  return String(text ?? "")
+    .split("\n")
+    .map((line, i) => (
+      <div key={i}>{line.split(/\*\*(.+?)\*\*/).map((piece, j) => (j % 2 ? <strong key={j}>{piece}</strong> : piece))}</div>
+    ));
+}
+
 export function EvidenceCardView(p: EvidenceCardProps) {
   return (
     <Card component="EvidenceCard" icon="basket" title="证据" right="已钉住">
       <div className="ou-body col" style={{ gap: 4 }}>
         <div className="sm" style={{ lineHeight: 1.7 }}>
-          {p.text}
+          {evidenceText(p.text)}
         </div>
         <span className="mono small muted">{p.source}</span>
       </div>

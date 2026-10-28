@@ -442,6 +442,53 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
       },
     }),
     spec({
+      name: 'corpus.sentence',
+      description: '读取语料中的一句及其系统标注（不需要标注层）：每个 token 的 index（1 起）、form、pos、lemma、head（句内 token 序号，0 为根）、deprel。内置 UD 语料自带词性和依存，用户要看某句的依存结构或词性时用它，再用 DependencyTree 呈现。文档用 document_id、document_title 或 document_ordinal（语料顺序 1 起）之一指定；都省略时用第一个文档。',
+      parameters: Type.Object({
+        corpus_id: Type.Optional(Type.String({ description: '省略则用会话范围的语料库' })),
+        ...DocArgs,
+        sentence_index: Type.Integer({ minimum: 0 }),
+      }),
+      run: async (args, signal) => {
+        const scope = resolveScope(args.corpus_id ? { corpus_id: args.corpus_id } : undefined);
+        if (!('corpus_id' in scope) || !scope.corpus_id) throw new Error('CORPUS_REQUIRED: 子库范围请传入所属语料库的 corpus_id');
+        const corpusId = scope.corpus_id;
+        let doc: { document_id: string; title: string | null; note?: string } = { document_id: args.document_id ?? '', title: null };
+        if (!args.document_id) {
+          const page = await api.get<any>(`/corpora/${seg(corpusId)}/documents${query({ q: args.document_title, page_size: MAX_LIST })}`, signal);
+          const docs = listItems(page).map((d: any) => ({ document_id: String(d.id), title: String(d.title ?? '') }));
+          if (!docs.length) throw new Error(args.document_title ? `DOCUMENT_NOT_FOUND: 没有标题包含“${args.document_title}”的文档` : 'NO_DOCUMENTS: 该语料没有文档');
+          if (args.document_title) {
+            const exact = docs.filter(d => d.title.toLowerCase() === args.document_title!.trim().toLowerCase());
+            const pick = exact.length === 1 ? exact : docs;
+            if (pick.length > 1) throw new Error(`DOCUMENT_AMBIGUOUS: 有 ${docs.length} 个文档标题包含“${args.document_title}”：${docs.slice(0, 20).map(d => d.title).join('；')}`);
+            doc = pick[0];
+          } else if (args.document_ordinal !== undefined) {
+            const found = docs[args.document_ordinal - 1];
+            if (!found) throw new Error(`DOCUMENT_NOT_FOUND: 前 ${docs.length} 个文档中没有第 ${args.document_ordinal} 个`);
+            doc = found;
+          } else {
+            doc = { ...docs[0], note: `未指定文档，使用第一个文档“${docs[0].title}”` };
+          }
+        }
+        const sentence = await api.get<any>(
+          `/corpora/${seg(corpusId)}/documents/${seg(doc.document_id)}/sentences/${seg(args.sentence_index)}`, signal);
+        const tokens = (sentence.tokens ?? []).map((t: any) => ({
+          index: t.index, form: t.form, pos: t.pos ?? null, lemma: t.lemma ?? null, head: t.head ?? null, deprel: t.deprel ?? null,
+        }));
+        const hasDep = tokens.some((t: any) => t.deprel);
+        return {
+          data: {
+            corpus_id: corpusId, document_id: doc.document_id, ...(doc.title !== null ? { document_title: doc.title } : {}),
+            ...(doc.note ? { note: doc.note } : {}), sentence_index: sentence.sentence_index, text: sentence.text, tokens,
+            ...(hasDep ? {} : { note_dep: '该句没有系统依存标注（语料未自带依存）' }),
+          },
+          summary: `第 ${args.sentence_index + 1} 句，${tokens.length} 个词${hasDep ? '' : '，无依存'}`,
+          ref: { kind: 'corpus', id: corpusId },
+        };
+      },
+    }),
+    spec({
       name: 'stats.frequency',
       description: '词频统计（后台任务，最多等待 90 秒），返回 stat_id 与前 50 行。',
       parameters: Type.Object({
@@ -546,8 +593,8 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
       run: async (args, signal) => {
         const item = await api.post<any>(`/projects/${projectId}/evidence`, args, signal);
         return {
-          data: { evidence_id: item.id, kind: item.kind, text: item.text, source: item.source },
-          summary: '已加入证据篮',
+          data: { evidence_id: item.id, kind: item.kind, text: item.text, source: item.source, ...(item.existing ? { note: '证据篮里已有这条，未重复加入' } : {}) },
+          summary: item.existing ? '证据篮里已有' : '已加入证据篮',
           ref: { kind: 'evidence', id: item.id },
         };
       },

@@ -2,7 +2,7 @@ import type { IconName } from "../Icon";
 
 /** Agent tools (contracts/p2–p5, same names as services/agent/src/tools.ts), grouped by capability as on the assistant page. */
 export const AGENT_TOOLS: { group: string; tools: string[] }[] = [
-  { group: "语料与检索", tools: ["corpora.list", "corpora.get", "corpora.documents", "subcorpora.list", "subcorpora.create", "corpus.parse", "corpus.search", "corpus.context"] },
+  { group: "语料与检索", tools: ["corpora.list", "corpora.get", "corpora.documents", "subcorpora.list", "subcorpora.create", "corpus.parse", "corpus.search", "corpus.context", "corpus.sentence"] },
   { group: "统计", tools: ["stats.frequency", "stats.ngrams", "stats.collocations", "stats.keywords", "stats.distribution"] },
   { group: "词性与依存标注", tools: ["annot.layers", "annot.create_layer", "annot.sentence", "annot.diff", "annot.stats", "annot.suggest", "annot.export"] },
   { group: "片段与对齐", tools: ["annot.spans", "annot.suggest_spans", "align.pairs", "align.suggest", "annot.agreement"] },
@@ -29,6 +29,7 @@ export const TOOL_VIEW: Record<string, { title: string; label: string; icon: Ico
   "corpus.parse": { title: "解析查询式", label: "正在解析查询式…", icon: "brackets" },
   "corpus.search": { title: "检索语料", label: "正在检索语料…", icon: "textsearch" },
   "corpus.context": { title: "读取上下文", label: "正在读取上下文…", icon: "textquote" },
+  "corpus.sentence": { title: "读取句子", label: "正在读取句子…", icon: "listtree" },
   "stats.frequency": { title: "计算频次", label: "正在计算频次…", icon: "chartbar" },
   "stats.ngrams": { title: "计算 n-gram", label: "正在计算 n-gram…", icon: "listordered" },
   "stats.collocations": { title: "计算搭配", label: "正在计算搭配…", icon: "chartnetwork" },
@@ -59,4 +60,21 @@ export const TOOL_VIEW: Record<string, { title: string; label: string; icon: Ico
   "kb.summarize": { title: "生成摘要", label: "正在生成摘要…", icon: "sparkles" },
   "kb.terms": { title: "查术语", label: "正在查术语…", icon: "booka" },
   "kb.documents": { title: "列出知识库文档", label: "正在读取知识库文档…", icon: "bookopentext" },
+};
+
+/** Query-key prefixes a succeeded write tool makes stale (manual pin and assistant share the same caches). */
+export const TOOL_INVALIDATES: Record<string, string[][]> = {
+  "evidence.add": [["evidence"]],
+  "subcorpora.create": [["subcorpora"], ["corpora"]],
+  "queries.save": [["queries"]],
+  "export.create": [["jobs"]],
+  "annot.export": [["jobs"]],
+  "jobs.cancel": [["jobs"], ["job"]],
+  "annot.create_layer": [["layers"], ["jobs"]],
+  "annot.suggest": [["layer-docs"], ["annot-sentences"], ["layer-diff"], ["layer-stats"]],
+  "annot.suggest_spans": [["layer-docs"], ["span-sentences"], ["span-window"], ["span-one"]],
+  "align.suggest": [["layer-docs"], ["align-pairs"], ["align-one"]],
+  "kb.save": [["kb-docs"], ["kb-doc"]],
+  "kb.extract_terms": [["kb-terms"], ["jobs"]],
+  "kb.summarize": [["kb-docs"], ["kb-doc"], ["jobs"]],
 };

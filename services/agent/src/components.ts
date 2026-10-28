@@ -102,7 +102,7 @@ export const Callout = defineComponent({
 
 export const DependencyTree = defineComponent({
   name: 'DependencyTree',
-  description: '一句的依存结构弧线图。用户问某句的依存结构或句法分析时，在 annot_sentence 之后使用：tokens 取 index、form、effective.pos；arcs 每个 token 一条，dep 为该 token 的 index，head 与 label 取 effective.head、effective.deprel（head 0 为根）；highlight 为要突出的 token index。',
+  description: '一句的依存结构弧线图。用户问某句的依存结构或句法分析时，在 corpus_sentence 或 annot_sentence 之后使用：tokens 取 index、form、pos（annot_sentence 取 effective.pos）；arcs 每个 token 一条，dep 为该 token 的 index，head 与 label 取 head、deprel（annot_sentence 取 effective.head、effective.deprel；head 0 为根）；highlight 为要突出的 token index。',
   props: z.object({
     document_id: z.string(),
     sentence_index: z.number(),

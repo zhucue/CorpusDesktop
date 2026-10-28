@@ -9,7 +9,7 @@ import { Icon } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
 import { describeScope, useCorpora, useProjectId, useSubcorpora } from "../../lib/data";
-import { dayGroup, fmt, fmtShortTime, fmtVersion } from "../../lib/format";
+import { dayGroup, fmt, fmtRelative, fmtShortTime } from "../../lib/format";
 import "./assistant.css";
 import AssistantPanel, { HealthNotice } from "./AssistantPanel";
 import { ToolList } from "./ToolList";
@@ -130,8 +130,12 @@ function Rail({ projectId, scope, items }: { projectId: string; scope: Scope | n
                 <dd className="num">{fmt(stats.tokens)}</dd>
               </>
             )}
-            <dt>索引</dt>
-            <dd className="num">{fmtVersion(info.corpus.index_version)}</dd>
+            {info.corpus.meta?.indexed_at && (
+              <>
+                <dt>索引更新</dt>
+                <dd>{fmtRelative(info.corpus.meta.indexed_at)}</dd>
+              </>
+            )}
           </dl>
         ) : (
           <div className="muted sm">未选择</div>

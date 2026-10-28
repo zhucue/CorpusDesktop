@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { agentApi, buildInit, errorFromResponse, type AgentHealth, type AgentSession, type AgentSessionDetail, type Page, type Scope } from "../../api";
+import { TOOL_INVALIDATES } from "../../components/global/tools";
 import { applyEvent, fromMessage, markStopped, newChain, type ChainMessage } from "./chain";
 import { readSse } from "./sse";
 
@@ -100,6 +101,20 @@ export function useAgentChat({
   }, [sessionId]);
   useEffect(() => () => active.current?.abort.abort(), []);
 
+  /** A write tool that succeeded (normal turn or confirm-execute run) refreshes what it changed: badge, lists, jobs. */
+  const invalidateFor = useCallback(
+    (raw: string) => {
+      try {
+        const call = JSON.parse(raw) as { name?: string; state?: string };
+        if (call.state !== "succeeded" || !call.name) return;
+        for (const key of TOOL_INVALIDATES[call.name] ?? []) qc.invalidateQueries({ queryKey: key });
+      } catch {
+        /* malformed event: applyEvent ignores it too */
+      }
+    },
+    [qc],
+  );
+
   /**
    * Streams one run (POST messages or confirm). `prepare` adds the placeholders; when the request is rejected
    * before streaming (409 SESSION_BUSY, 503 MODEL_NOT_CONFIGURED…) the list goes back to how it was.
@@ -131,6 +146,7 @@ export function useAgentChat({
             const prevId = chain.id;
             chain = applyEvent(chain, ev, Date.now());
             if (ev.event === "done" || ev.event === "error") finished = true;
+            if (ev.event === "tool_result") invalidateFor(ev.data);
             const next = chain;
             setItems((list) => list.map((it) => (it.kind === "ai" && it.m.id === prevId ? { kind: "ai", m: next } : it)));
           },
@@ -158,7 +174,7 @@ export function useAgentChat({
       }
       return accepted;
     },
-    [projectId, qc],
+    [projectId, qc, invalidateFor],
   );
 
   const send = useCallback(

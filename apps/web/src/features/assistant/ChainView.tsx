@@ -8,7 +8,7 @@ import { NotePicker, writeToNote, type NoteTarget } from "../knowledge/NotePicke
 import { Icon } from "../../components/Icon";
 import { TOOL_VIEW } from "../../components/global/tools";
 import { reducedMotion } from "../../theme/motion";
-import { answerParts, fmtChars, hasContent, isThinking, pendingCalls, plainText, scrubIds, thinkingChars, thinkingText, type ChainMessage } from "./chain";
+import { answerParts, fmtChars, hasContent, isThinking, pendingCalls, plainText, scrubIds, thinkingChars, thinkingText, toolNamesToTitles, type ChainMessage } from "./chain";
 import { Markdown } from "./Markdown";
 
 const UiBlock = lazy(() => import("../../openui/UiBlock"));
@@ -78,7 +78,7 @@ const ARG_LABELS: Record<string, string> = {
   label: "标签",
   head: "head",
   document_title: "文档",
-  document_ordinal: "第几个文档",
+  document_ordinal: "文档",
   sentence_index: "句",
   token_index: "词",
   sort: "排序",
@@ -86,6 +86,7 @@ const ARG_LABELS: Record<string, string> = {
 
 function argValue(k: string, v: unknown): string {
   if (k === "sentence_index" || k === "src_sentence_index") return `第 ${Number(v) + 1} 句`;
+  if (k === "document_ordinal") return `第 ${Number(v)} 篇`;
   if (Array.isArray(v) && v.every((x) => typeof x !== "object")) return v.join("、");
   return typeof v === "string" ? v : JSON.stringify(v);
 }
@@ -206,7 +207,7 @@ export function ThinkingChain({ m }: { m: ChainMessage }) {
   const now = useNow(live);
   const label = chainLabel(m, now);
   const shownThinking = useTypewriter(thinking, m.status === "running");
-  const visible = scrubIds(thinking.slice(0, shownThinking));
+  const visible = toolNamesToTitles(scrubIds(thinking.slice(0, shownThinking)));
   // Two-line ticker: the latest reasoning as one flowing line pair (blank lines would leave a line empty).
   const ticker = visible.replace(/\s+/g, " ").trim().slice(-240);
   const full = useStickToBottom<HTMLDivElement>(`${visible.length}:${m.tools.length}:${open}`, m.status === "running");

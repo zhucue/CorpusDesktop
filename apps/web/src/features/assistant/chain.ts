@@ -1,4 +1,5 @@
 import type { AgentMessage, MessagePart, ToolCall } from "../../api";
+import { TOOL_VIEW } from "../../components/global/tools";
 import type { SseEvent } from "./sse";
 
 export type ChainStatus = "running" | "done" | "stopped" | "error";
@@ -155,6 +156,14 @@ const HEX = /\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{12,}\b/gi;
  * Internal IDs never reach the reader (the model is told so; this is the safety net): drop "xxx_id: …" pairs,
  * UUIDs and long hex strings, then the brackets and separators they leave behind.
  */
+const TOOL_TITLES = new Map(Object.entries(TOOL_VIEW).flatMap(([n, v]) => [[n, v.title], [n.replace(".", "_"), v.title]] as [string, string][]));
+const TOOL_NAME = new RegExp(`(?<![A-Za-z0-9_.])(${[...TOOL_TITLES.keys()].map((n) => n.replace(".", "[.]")).join("|")})(?![A-Za-z0-9_])`, "g");
+
+/** Reasoning that still names a tool (corpora_list, stats.collocations) shows its Chinese capability name instead. */
+export function toolNamesToTitles(text: string): string {
+  return text.replace(TOOL_NAME, (n) => `“${TOOL_TITLES.get(n) ?? n}”`);
+}
+
 export function scrubIds(text: string): string {
   return text
     .replace(ID_KEY, "")

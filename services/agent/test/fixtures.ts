@@ -238,6 +238,19 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
     if (path === `/corpora/${BUILTIN_CORPUS}`) {
       return json(response, 200, { id: BUILTIN_CORPUS, project_id: null, name: 'UD 中文 GSD', language: 'zh', status: 'ready', stats: { documents: 1, sentences: 4997, tokens: 111279 } });
     }
+    // system tokens of a built-in UD sentence, no layer (corpus.sentence)
+    if (path === `/corpora/${BUILTIN_CORPUS}/documents`) return json(response, 200, { items: [{ id: 'gsd-train', title: 'zh_gsd-ud-train', sentences: 3997 }], total: 1 });
+    if (path === `/corpora/${BUILTIN_CORPUS}/documents/gsd-train/sentences/0`) {
+      return json(response, 200, {
+        document_id: 'gsd-train', sentence_index: 0, text: '他們翻譯這本書。', start_cp: 0, end_cp: 8,
+        tokens: [
+          { index: 1, form: '他們', pos: 'PRON', lemma: null, head: 2, deprel: 'nsubj' },
+          { index: 2, form: '翻譯', pos: 'VERB', lemma: null, head: 0, deprel: 'root' },
+          { index: 3, form: '這本書', pos: 'NOUN', lemma: null, head: 2, deprel: 'obj' },
+          { index: 4, form: '。', pos: 'PUNCT', lemma: null, head: 2, deprel: 'punct' },
+        ],
+      });
+    }
     if (path === '/search' && request.method === 'POST') {
       return json(response, 200, {
         search_id: 'search-1', parse: { ok: true }, counts: { hits: 2, sentences: 2, documents: 2, complete: true },

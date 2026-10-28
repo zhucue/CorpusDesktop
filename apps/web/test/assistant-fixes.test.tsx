@@ -133,3 +133,41 @@ describe("unknown OpenUI components", () => {
     warn.mockRestore();
   });
 });
+
+describe("confirm-execute run refreshes what the write tool changed (R1)", () => {
+  it("invalidates the evidence basket when evidence.add succeeds in the confirm stream", async () => {
+    const { renderHook, waitFor } = await import("@testing-library/react");
+    const { useAgentChat } = await import("../src/features/assistant/useAgentChat");
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, "invalidateQueries");
+    const call = { id: "t2", name: "evidence.add", args: {}, state: "succeeded", result_summary: "已加入证据篮", duration_ms: 5 };
+    const sse = [
+      `event: start\ndata: ${JSON.stringify({ message_id: "m2" })}\n\n`,
+      `event: tool_call\ndata: ${JSON.stringify({ ...call, state: "running" })}\n\n`,
+      `event: tool_result\ndata: ${JSON.stringify(call)}\n\n`,
+      `event: done\ndata: ${JSON.stringify({ message: { id: "m2", role: "assistant", content: "", parts: [], tool_calls: [call], created_at: "2026-10-28T00:00:00Z" } })}\n\n`,
+    ].join("");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/confirm")) return new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+      return new Response(JSON.stringify({ id: "s1", state: "idle", messages: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    const { result } = renderHook(() => useAgentChat({ projectId: "p1", sessionId: "s1", scope: null }), {
+      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    });
+    await act(async () => {
+      await result.current.confirm(["t1"], "execute");
+    });
+    await waitFor(() => expect(spy.mock.calls.some(([f]) => JSON.stringify(f?.queryKey) === '["evidence"]')).toBe(true));
+  });
+});
+
+describe("reasoning names tools by capability (Q66)", () => {
+  it("replaces Pi and contract tool names with their Chinese titles", async () => {
+    const { toolNamesToTitles } = await import("../src/features/assistant/chain");
+    expect(toolNamesToTitles("需要先调用 corpora_list，再用 corpus_sentence 和 annot.suggest_spans。")).toBe(
+      "需要先调用 “列出语料库”，再用 “读取句子” 和 “提出片段建议”。",
+    );
+    expect(toolNamesToTitles("my_corpora_list_x 不变")).toBe("my_corpora_list_x 不变");
+  });
+});

@@ -137,7 +137,7 @@ test('full run: search and collocation tools, prose and OpenUI streamed, message
   assert.match(system, /KwicTable\(search_id: string/);
   assert.match(system, /UD 中文/);
   const toolNames = model.requests[0].body.tools.map((t: any) => t.function.name);
-  assert.equal(toolNames.length, 38);
+  assert.equal(toolNames.length, 39);
   assert.ok(!toolNames.some((n: string) => ['read', 'bash', 'edit', 'write'].includes(n)));
   assert.ok(toolNames.includes('stats_collocations') && toolNames.includes('jobs_cancel') && toolNames.includes('kb_search') && toolNames.includes('align_suggest'));
 
@@ -336,6 +336,36 @@ test('annot.sentence then a DependencyTree block', async () => {
   ]);
   assert.deepEqual(tree.props.tokens.map((t: any) => t.form), ['他们', '翻译', '这本书', '。']);
   assert.deepEqual(tree.props.highlight, [3]);
+});
+
+test('corpus.sentence reads system dependencies of a built-in corpus without a layer, then a DependencyTree block', async () => {
+  const tree = [
+    'root = DependencyTree("gsd-train", 0, tokens, arcs)',
+    'tokens = [{index: 1, form: "他們", pos: "PRON"}, {index: 2, form: "翻譯", pos: "VERB"}, {index: 3, form: "這本書", pos: "NOUN"}, {index: 4, form: "。", pos: "PUNCT"}]',
+    'arcs = [{head: 2, dep: 1, label: "nsubj"}, {head: 0, dep: 2, label: "root"}, {head: 2, dep: 3, label: "obj"}, {head: 2, dep: 4, label: "punct"}]',
+  ].join('\n');
+  const { api, model, call, createSession } = await setup([
+    { tool: 'corpus_sentence', args: { corpus_id: BUILTIN_CORPUS, sentence_index: 0 } },
+    { text: `zh_gsd-ud-train 第 1 句：\n\`\`\`openui-lang\n${tree}\n\`\`\`\n` },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '用依存树展示 UD 中文 GSD 的第 1 句' })).text());
+  assert.equal(events.at(-1)!.event, 'done');
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([result.name, result.state], ['corpus.sentence', 'succeeded']);
+  // read-only: no confirm card, no layer created
+  assert.ok(!events.some(e => e.event === 'tool_result' && e.data.state === 'needs_confirmation'));
+  assert.ok(!api.requests.some(r => r.method === 'POST' && r.path.startsWith('/layers')));
+  const read = api.requests.find(r => r.path === `/corpora/${BUILTIN_CORPUS}/documents/gsd-train/sentences/0`)!;
+  assert.equal(read.headers.authorization, `Bearer ${AGENT_TOKEN}`);
+  const toolResult = JSON.parse(model.requests[1].body.messages.find((m: any) => m.role === 'tool').content);
+  assert.equal(toolResult.document_title, 'zh_gsd-ud-train');
+  assert.deepEqual(toolResult.tokens[0], { index: 1, form: '他們', pos: 'PRON', lemma: null, head: 2, deprel: 'nsubj' });
+  const message = events.at(-1)!.data.message;
+  const parsed = createParser(library.toJSONSchema()).parse(message.parts[1].lang).root as any;
+  assert.equal(parsed?.typeName, 'DependencyTree');
+  assert.equal(parsed.props.arcs.length, 4);
+  assert.match(model.requests[0].body.messages[0].content, /corpus_sentence/);
 });
 
 test('annot.suggest forwards the body with the agent token', async () => {
