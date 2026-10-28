@@ -17,11 +17,20 @@
 | --- | --- | --- | --- |
 | postgres | pgvector/pgvector:pg16 | 127.0.0.1:${POSTGRES_PORT} | postgres |
 | api | deploy/Dockerfile.api | 内部 8000 | data、models、stanza |
-| worker | deploy/Dockerfile.worker | — | data、models、stanza；处理全部任务，`--scale worker=N` 可加导入容量 |
-| worker-light | 同 worker | — | 只处理导出、统计、预标、知识库等短任务，避免被大导入阻塞 |
+| worker | deploy/Dockerfile.worker | — | data、models、stanza；处理全部任务，先取短任务；`--scale worker=N` 可加导入容量 |
+| worker-light | 同 worker | — | 只处理短任务（导出、统计、预标、知识库，以及小文件导入和小语料建索引），不被大导入阻塞；见下方队列规则 |
 | agent | deploy/Dockerfile.agent | 内部 8700 | agentdata |
 | web | deploy/Dockerfile.web（nginx） | 127.0.0.1:${HTTP_PORT} | — |
 | test | api 镜像 | — | 同 api |
+
+队列规则：
+
+| 道 | 任务 | 由谁处理 |
+| --- | --- | --- |
+| 短任务 | 统计、导出、预标注、知识库任务；上传总大小小于 `LIGHT_IMPORT_BYTES`（默认 5 MB）的导入；语料词数小于 `LIGHT_INDEX_TOKENS`（默认 100 万）的建索引 | worker-light（`WORKER_SMALL_IMPORTS=1`），worker 空闲时也处理 |
+| 长任务 | 其余导入与建索引；没有记录大小的旧任务和管理员脚本任务 | worker |
+
+每个 worker 先取短任务，再按创建时间取长任务；同一语料同时只运行一个建索引任务。排队中的任务在任务页和托盘显示"前面还有 n 个任务"（同一道中正在运行的和更早排队的）。导入大小记在任务参数 `bytes`，建索引的语料词数记在 `tokens`。worker-light 处理英文小文件导入时会加载 Stanza 英文模型（约 1 GiB 内存）。
 
 nginx 把 `/api/` 反代到 api、`/agent/` 反代到 agent（SSE：关闭缓冲，600 秒超时），`index.html` 不缓存。
 
@@ -37,6 +46,7 @@ nginx 把 `/api/` 反代到 api、`/agent/` 反代到 agent（SSE：关闭缓冲
 | EMBED_PROVIDER、EMBED_MODEL、EMBED_BASE_URL、EMBED_API_KEY、EMBED_DIM | 向量模型；默认本地 `paraphrase-multilingual-MiniLM-L12-v2`（384 维），远程须 384 维 |
 | MODELS_DIR、HF_HOME | 模型缓存目录（容器内 `/models`） |
 | SEARCH_COUNT_TIMEOUT | 检索完整计数的超时秒数，默认 20；超时后页面显示"计算中"并可重取 |
+| LIGHT_IMPORT_BYTES、LIGHT_INDEX_TOKENS | 短任务门槛，默认 5242880 字节、1000000 词（见第二节队列规则）；api 与 worker 读同一值 |
 
 密钥只放在 `deploy/.env`，不入库、不放 `tmp/`。
 
@@ -133,6 +143,7 @@ HTTP_PORT=18088 POSTGRES_PORT=25432 docker compose -f deploy/compose.yaml -p cor
 | 助手报 MODEL_AUTH_FAILED / RATE_LIMITED / TIMEOUT | 模型服务密钥、限额或网络；agent 日志有细节 |
 | 知识库检索提示向量未就绪 | worker 尚未下载完模型或 `models` 卷不可写；看 worker 日志 |
 | 网页导入返回 403 / 失败 | 目标站点拒绝容器访问（如维基百科）；改用文件导入 |
-| 导入很慢 | Stanza 英文解析与中文依存为 CPU 密集；大语料用管理员脚本后台导入；短任务由 worker-light 处理不受阻塞；需要更多导入并发时 `--scale worker=2` |
+| 导入很慢 | Stanza 英文解析与中文依存为 CPU 密集；大语料用管理员脚本后台导入；小于 5 MB 的导入与短任务由 worker-light 处理，不排在大导入后面；需要更多导入并发时 `--scale worker=2` |
+| 内置语料追加导入期间 | 语料保持可检索并显示"更新中"，旧索引继续服务，新索引建好后替换 |
 | 升级后 worker 报错 | 新镜像需要最新迁移，先 `up -d api` 再启动 worker |
 | api 刚启动时 503 | 迁移执行中或数据库未就绪，等待健康检查 |
