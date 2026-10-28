@@ -28,7 +28,14 @@ from services.api.jobs import (
     retry_job,
 )
 from services.api.metadata import metadata_fields
-from services.api.models import Corpus, Document, Job, Sentence, SentenceAlignment
+from services.api.models import (
+    Corpus,
+    Document,
+    Job,
+    Sentence,
+    SentenceAlignment,
+    Token,
+)
 from services.api.storage import corpus_dir, upload_dir
 from services.api.views import corpus_view, document_view, job_view
 
@@ -299,6 +306,44 @@ def list_sentences(
             ):
                 by_id[sid]["aligned"].append({"language": language, "text": text})
     return page
+
+
+@router.get("/corpora/{corpus_id}/documents/{document_id}/sentences/{sentence_index}")
+def get_sentence(
+    corpus_id: UUID, document_id: UUID, sentence_index: int, user: CurrentUser, db: Db
+):
+    """One stored sentence with its system tokens (index/head 1-based as in CoNLL-U, head 0 = root), no layer
+    needed: read-only view of corpora that ship with POS / dependencies (UD) for the assistant and viewers."""
+    load_corpus(db, corpus_id, user)
+    _document(db, corpus_id, document_id)
+    s = db.scalar(
+        select(Sentence).where(
+            Sentence.document_id == document_id, Sentence.idx == sentence_index
+        )
+    )
+    if s is None:
+        raise not_found("句子")
+    tokens = db.scalars(
+        select(Token).where(Token.sentence_id == s.id).order_by(Token.idx)
+    ).all()
+    return {
+        "document_id": document_id,
+        "sentence_index": s.idx,
+        "text": s.text,
+        "start_cp": s.start_cp,
+        "end_cp": s.end_cp,
+        "tokens": [
+            {
+                "index": t.idx + 1,
+                "form": t.form,
+                "pos": t.pos,
+                "lemma": t.lemma,
+                "head": t.head,
+                "deprel": t.deprel,
+            }
+            for t in tokens
+        ],
+    }
 
 
 @router.patch("/corpora/{corpus_id}/documents/{document_id}")

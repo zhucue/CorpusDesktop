@@ -12,7 +12,7 @@ import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
 import { describeScope, sameScope, useCorpora, useProjectId, useSubcorpora } from "../../lib/data";
 import { useExportJob } from "../../lib/exportJob";
-import { fmt, fmtShortTime, fmtVersion } from "../../lib/format";
+import { fmt, fmtRelative, fmtShortTime } from "../../lib/format";
 import { MEASURE_LABELS, StatChart } from "./StatChart";
 import { methodLabels, StatTable } from "./StatTable";
 import "./stats.css";
@@ -327,6 +327,8 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
   const [view, setView] = useState<"network" | "bar">("network");
   const [picked, setPicked] = useState<number | null>(null);
   const exporter = useExportJob(projectId);
+  const corpora = useCorpora(projectId);
+  const corpus = corpora.data?.items.find((c) => c.id === stat.scope.corpus_id);
   const p = stat.params as Body;
   const measure = stat.method === "collocations" ? String(((p as { measures?: string[] }).measures ?? ["logdice"])[0]) : undefined;
   const runExport = (format: "csv" | "xlsx") => exporter.start({ url: `/stats/${stat.id}/export`, body: { format }, label: format.toUpperCase() });
@@ -345,7 +347,10 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
   if (stat.method === "distribution" && t.hits != null) parts.push(<>{n(t.hits)} 命中</>);
   if (stat.method === "ngrams" && typeof p.contains === "string" && p.contains) parts.push(`含“${p.contains}”`);
   if (p.exclude_punct === true) parts.push(<>已排除标点和数字{t.excluded_tokens != null && <> {n(t.excluded_tokens)} 词</>}</>);
-  parts.push(`索引 ${fmtVersion(stat.index_version)}`, fmtShortTime(stat.created_at));
+  // Data version in words (the index hash means nothing to users): computed on an older index, or when the index was built.
+  if (corpus && corpus.index_version != null && String(corpus.index_version) !== String(stat.index_version)) parts.push("基于旧版索引");
+  else if (corpus?.meta?.indexed_at) parts.push(`索引更新 ${fmtRelative(corpus.meta.indexed_at)}`);
+  parts.push(fmtShortTime(stat.created_at));
   parts.push(
     <>
       <span className="num">
@@ -464,7 +469,7 @@ function SavedResults({ open, onClose, projectId, onOpen }: { open: boolean; onC
             <div className="grow col" style={{ gap: 2 }}>
               <span className="li-title ellipsis">{summary(s)}</span>
               <span className="small muted num">
-                {s.scope.name} · {fmt(s.row_count)} 项 · {fmtVersion(s.index_version)} · {fmtShortTime(s.created_at)}
+                {s.scope.name} · {fmt(s.row_count)} 项 · {fmtShortTime(s.created_at)}
               </span>
             </div>
             <Popconfirm title="删除这条结果？" okText="删除" cancelText="取消" onConfirm={() => del.mutate(s.id)}>

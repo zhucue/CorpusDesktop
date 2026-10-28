@@ -514,6 +514,8 @@ export interface SentenceSpans {
   end_cp: number;
   spans: Span[];
   relations: Relation[];
+  /** Every required annotator annotated (rows, none suggested) or confirmed the sentence; untouched = false. */
+  done?: boolean;
 }
 
 export type SpanPatch = {

@@ -439,10 +439,18 @@ def corpus_profile(db, corpus, tagset):
     if tagset:
         meta["tagset"] = tagset
     if raw_zh:
-        sample = db.scalars(
-            select(Sentence.text)
+        # spread the sample over the whole corpus: the first sentences can be all one script (Tatoeba)
+        zh = (
+            select(Sentence.id, Sentence.text)
             .join(Document, Document.id == Sentence.document_id)
             .where(Document.corpus_id == corpus.id, Document.language.in_(raw_zh))
+            .subquery()
+        )
+        n = db.scalar(select(func.count()).select_from(zh)) or 0
+        step = max(1, n // PROFILE_SENTENCES)
+        sample = db.scalars(
+            select(zh.c.text)
+            .where(func.mod(zh.c.id, step) == 0)
             .limit(PROFILE_SENTENCES)
         ).all()
         script = nlp.detect_script("".join(sample))

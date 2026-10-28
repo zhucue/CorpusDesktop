@@ -182,3 +182,19 @@ def test_document_sentences(owner, project):
         f"/api/corpora/{cid}/documents/{zh['id']}".replace(cid, project["id"])
     )
     assert other.status_code == 404
+
+
+def test_script_profile_samples_whole_corpus(owner, project, monkeypatch):
+    """A corpus that starts simplified and continues traditional is labelled mixed, not by its first sentences."""
+    from services.worker import tasks
+
+    monkeypatch.setattr(tasks, "PROFILE_SENTENCES", 4)
+    r = owner.post(
+        f"/api/projects/{project['id']}/corpora", json={"name": "混合", "language": "zh"}
+    )
+    cid = r.json()["id"]
+    hans = "这个国家为我们学习语言。\n" * 8
+    hant = "這個國家為我們學習語言。\n" * 8
+    upload(owner, cid, {"a.txt": hans + hant}, language="zh")
+    drain()
+    assert owner.get(f"/api/corpora/{cid}").json()["meta"]["script"] == "mixed"
