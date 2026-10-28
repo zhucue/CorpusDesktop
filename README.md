@@ -146,6 +146,7 @@ tests/             pytest · vitest · node:test
 | [平台重构设计](doc/语料检索分析与标注研究平台重构设计.docx) · [md](doc/platform-redesign.md) | 定位、功能、数据模型、查询语法、统计、标注、知识库、Agent、架构、计划与验收 |
 | [前端整体设计方案](doc/前端整体设计方案.docx) · [md](doc/frontend-design.md) | 视觉系统、页面、组件、动效、交互与各阶段实现记录；设计稿 [doc/ui-design](doc/ui-design/index.html) 可直接打开 |
 | [部署手册](doc/部署手册.docx) · [md](doc/deployment.md) | 环境、服务、变量、启动、升级、备份恢复、故障 |
+| [验收记录](doc/验收记录.docx) · [md](doc/acceptance.md) | 干净环境两条研究流程的步骤、耗时与截图 |
 | [contracts/](contracts/) | p1 语料与检索 · p2 统计与 Agent · p3 词性依存标注 · p4 知识库 · p5 片段对齐一致性 · p6 收尾 |
 | [doc/reviews/](doc/reviews/) · [change-log](doc/change-log.md) | 审查记录与变更原因日志；协作规范 [AGENTS.md](AGENTS.md) |
 
@@ -158,6 +159,6 @@ tests/             pytest · vitest · node:test
 | P3 | 词性与依存标注层、预标、校对、属性查询、CoNLL-U | ✅ |
 | P4 | 知识库：文献、术语、规范、笔记、混合检索 | ✅ |
 | P5 | 片段与关系、双语对齐、多人一致性与仲裁、brat / TMX | ✅ |
-| P6 | 前端完成度审查 ✅ · 权限回归 ✅ · 备份恢复 ✅ · 内置语料（维基、UD、Tatoeba 第 1 批）✅ · 性能基线 ⏸ · 干净环境验收 ⏳ | 🔄 |
+| P6 | 前端完成度审查 ✅ · 权限回归 ✅ · 备份恢复 ✅ · 内置语料（维基、UD、Tatoeba 第 1 批）✅ · 性能基线 ⏸ · 干净环境验收 ✅ | 🔄 |
 
 每个阶段：写契约 → 三方并行实现 → 整栈联调（真实 PostgreSQL、CWB、Stanza、真实模型）→ 验收 → 按功能提交。

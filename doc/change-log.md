@@ -114,3 +114,7 @@
 - README 改版：徽章、功能表、真实界面截图（`doc/screenshots/`，取自联调截图）、查询语法表、Mermaid 架构图、快速开始、折叠的开发与结构说明、文档表与进度表。原因：用户认为原 README 过于平淡，要求更有展示性；内容仍只写已验收事实。
 - 内置语料导入收口：`scripts/import_builtin.py` 增加 GET 重试（api 重启期间不中断）、按语料记录已上传批次的任务 ID（重跑沿用排队或运行中的任务，不重复上传）、`tatoeba --only 1,2` 只导指定批、GitHub 匿名限流时沿用本地已下载的 UD 版本。实际导入：维基中英各 1000 篇、UD en_ewt 与 zh_gsd r2.18 全量、Tatoeba 中英第 1 批（约 26 万句对，1 小时 17 分）；第 2 批导入到 35% 时取消，第 3–8 批与 `scripts/bench.py` 性能基线暂停。原因：英文 Stanza 标注约 440 词/秒，完整 Tatoeba 需 10 小时以上，用户决定测试阶段不需要全量，先到此为止；需要时重跑 `import_builtin.py tatoeba` 会跳过已导批次继续。
 - 权限矩阵重跑：worker 分队列后 `tests/integration/test_permissions_matrix.py` 对运行栈 5 项全部通过（含 Bearer 删除类禁止、任务创建者取消重试、`GET /jobs?builtin=1`、单人层仅创建者写入）。原因：P6-3 验收。
+
+## 2026 年 10 月 28 日
+
+- P6-8 干净环境验收：新卷 Compose 项目 `corpus-accept`（18088 端口）从构建到健康 17 秒，导入 Tatoeba 中英 1/32 批（66,525 句、15,410 句对），用普通账号在网页端走通翻译研究与学习者语料两条流程，每步截图与耗时记入 [验收记录](acceptance.md)（Word：验收记录.docx），结论通过。修复证据篮导出不写来源与许可行（`services/worker/tasks.py` `run_export_evidence` 按证据引用的文档与统计结果收集语料，`tests/api/test_builtin_sources.py` 加用例）。原因：检索命中只能经证据篮导出 DOCX，钉住内置语料命中后导出没有署名，违反 contracts/p6.md 第四节。首次英文导入因 Stanza 模型下载连接被重置失败、重跑成功，按人工重试处理不改代码。
