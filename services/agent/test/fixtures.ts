@@ -10,6 +10,8 @@ import type { Message, Part, Scope, Session, ToolCall } from '../src/types.ts';
 
 export const PROJECT = '11111111-1111-4111-8111-111111111111';
 export const CORPUS = '22222222-2222-4222-8222-222222222222';
+/** A built-in corpus (project_id null): the assistant never builds layers on it. */
+export const BUILTIN_CORPUS = '44444444-4444-4444-8444-444444444444';
 export const USER = { id: '33333333-3333-4333-8333-333333333333', email: 'r@example.edu', display_name: '研究生', is_admin: false };
 export const COOKIE = 'corpus_session=good';
 export const ORIGIN = 'http://localhost:8080';
@@ -233,6 +235,9 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
     if (!bearerOk) return fail(response, 401, 'AUTH_REQUIRED');
 
     if (path === `/corpora/${CORPUS}`) return json(response, 200, { id: CORPUS, name: 'UD 中文', language: 'zh', status: 'ready' });
+    if (path === `/corpora/${BUILTIN_CORPUS}`) {
+      return json(response, 200, { id: BUILTIN_CORPUS, project_id: null, name: 'UD 中文 GSD', language: 'zh', status: 'ready', stats: { documents: 1, sentences: 4997, tokens: 111279 } });
+    }
     if (path === '/search' && request.method === 'POST') {
       return json(response, 200, {
         search_id: 'search-1', parse: { ok: true }, counts: { hits: 2, sentences: 2, documents: 2, complete: true },
@@ -303,6 +308,8 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
       return json(response, 200, { ...layer('layer-new', 'pos', '词性', ready ? 'ready' : 'preannotating'), job_id: 'job-preannotate' });
     }
     if (path === `/layers/${DEP_LAYER}`) return json(response, 200, layer(DEP_LAYER, 'dep', '依存', 'ready'));
+    if (path === `/layers/${SPAN_LAYER}`) return json(response, 200, layer(SPAN_LAYER, 'span', '片段', 'ready'));
+    if (path === `/layers/${ALIGN_LAYER}`) return json(response, 200, layer(ALIGN_LAYER, 'alignment', '对齐', 'ready'));
     if (path === `/layers/${DEP_LAYER}/sentences/doc1/3`) return json(response, 200, SENTENCE);
     if (path === `/layers/${DEP_LAYER}/suggest` && request.method === 'POST') {
       return json(response, 200, {

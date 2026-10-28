@@ -4,6 +4,12 @@ import type { Message, Part, Scope, Session, ToolCall } from './types.ts';
 
 export interface SessionRecord extends Session { pi_session_path: string }
 
+export interface MessageFields { content: string; parts: Part[]; tool_calls: ToolCall[]; duration_ms?: number | null; stopped?: boolean }
+
+/** agent_messages has no flag column: a stopped run keeps a trailing {type: "stopped"} marker in parts. */
+const STOPPED = { type: 'stopped' };
+const storedParts = (parts: Part[], stopped?: boolean) => JSON.stringify(stopped ? [...parts, STOPPED] : parts);
+
 export interface Store {
   /** Process start: no run survives a restart (no cross-process resume). */
   resetRunning(): Promise<void>;
@@ -14,7 +20,7 @@ export interface Store {
   deleteSession(id: string): Promise<void>;
   listMessages(sessionId: string): Promise<Message[]>;
   insertMessage(sessionId: string, message: Message): Promise<void>;
-  updateMessage(id: string, fields: { content: string; parts: Part[]; tool_calls: ToolCall[]; duration_ms?: number | null }): Promise<void>;
+  updateMessage(id: string, fields: MessageFields): Promise<void>;
   deleteMessage(id: string): Promise<void>;
   close(): Promise<void>;
 }
@@ -31,9 +37,12 @@ function sessionRow(row: any): SessionRecord {
 }
 
 function messageRow(row: any): Message {
+  const raw: any[] = row.parts ?? [];
+  const stopped = raw.some(part => part?.type === STOPPED.type);
   return {
-    id: row.id, role: row.role, content: row.content ?? '', parts: row.parts ?? [], tool_calls: row.tool_calls ?? [],
-    created_at: iso(row.created_at), duration_ms: row.duration_ms ?? null,
+    id: row.id, role: row.role, content: row.content ?? '', parts: raw.filter(part => part?.type !== STOPPED.type),
+    tool_calls: row.tool_calls ?? [], created_at: iso(row.created_at), duration_ms: row.duration_ms ?? null,
+    ...(stopped ? { stopped: true } : {}),
   };
 }
 
@@ -98,15 +107,15 @@ export class PgStore implements Store {
     await this.pool.query(
       `INSERT INTO agent_messages (id, session_id, role, content, parts, tool_calls, created_at, duration_ms)
        VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)`,
-      [message.id, sessionId, message.role, message.content, JSON.stringify(message.parts),
+      [message.id, sessionId, message.role, message.content, storedParts(message.parts, message.stopped),
         JSON.stringify(message.tool_calls), message.created_at, message.duration_ms ?? null],
     );
   }
 
-  async updateMessage(id: string, fields: { content: string; parts: Part[]; tool_calls: ToolCall[]; duration_ms?: number | null }) {
+  async updateMessage(id: string, fields: MessageFields) {
     await this.pool.query(
       `UPDATE agent_messages SET content = $2, parts = $3::jsonb, tool_calls = $4::jsonb, duration_ms = $5 WHERE id = $1`,
-      [id, fields.content, JSON.stringify(fields.parts), JSON.stringify(fields.tool_calls), fields.duration_ms ?? null],
+      [id, fields.content, storedParts(fields.parts, fields.stopped), JSON.stringify(fields.tool_calls), fields.duration_ms ?? null],
     );
   }
 

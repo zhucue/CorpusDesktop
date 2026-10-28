@@ -5,9 +5,9 @@ import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { ApiClient, ApiError, type User } from './api.ts';
 import type { Config } from './config.ts';
-import { Runner, sessionDir } from './runner.ts';
+import { Runner, sessionDir, type RunOptions } from './runner.ts';
 import type { SessionRecord, Store } from './store.ts';
-import type { Scope, Session } from './types.ts';
+import type { Scope, Session, ToolCall } from './types.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_CONTENT = 20000;
@@ -148,14 +148,8 @@ export function createApp(config: Config, store: Store, runner: Runner) {
     return c.body(null, 204);
   });
 
-  app.post('/agent/sessions/:id/messages', async c => {
-    const session = await ownSession(c, await currentUser(c));
-    const input = await body(c);
-    const content = typeof input.content === 'string' ? input.content.trim() : '';
-    if (!content) throw new HttpError(422, 'EMPTY_CONTENT', '消息不能为空');
-    if (content.length > MAX_CONTENT) throw new HttpError(422, 'CONTENT_TOO_LONG', `消息不能超过 ${MAX_CONTENT} 字`);
-    if (!config.model) throw new HttpError(503, 'MODEL_NOT_CONFIGURED', '未配置模型服务');
-    if (!runner.reserve(session.id)) throw new HttpError(409, 'SESSION_BUSY', '会话正在运行');
+  /** Agent token, then the run as an SSE stream; the reservation is released by the run (or here on failure). */
+  async function stream(c: Context, session: SessionRecord, content: string, options: RunOptions) {
     let token: string;
     try {
       ({ token } = await browserApi(c).post<{ token: string }>('/auth/agent-token', { project_id: session.project_id }));
@@ -175,11 +169,67 @@ export function createApp(config: Config, store: Store, runner: Runner) {
       const ping = setInterval(() => { if (open) stream.write(': ping\n\n').catch(() => { open = false; }); }, 15000);
       try {
         // The run continues if the client disconnects; GET /agent/sessions/{id} shows its state.
-        await runner.run(session, content, token, emit);
+        await runner.run(session, content, token, emit, options);
       } finally {
         clearInterval(ping);
       }
     });
+  }
+
+  app.post('/agent/sessions/:id/messages', async c => {
+    const session = await ownSession(c, await currentUser(c));
+    const input = await body(c);
+    const regenerate = input.regenerate === true;
+    let content = typeof input.content === 'string' ? input.content.trim() : '';
+    if (regenerate) {
+      // Regenerate re-asks the last question; the old question and answer are replaced, not repeated.
+      const last = (await store.listMessages(session.id)).findLast(message => message.role === 'user');
+      if (!last) throw new HttpError(409, 'NOTHING_TO_REGENERATE', '没有可以重新生成的回答');
+      content = last.content;
+    }
+    if (!content) throw new HttpError(422, 'EMPTY_CONTENT', '消息不能为空');
+    if (content.length > MAX_CONTENT) throw new HttpError(422, 'CONTENT_TOO_LONG', `消息不能超过 ${MAX_CONTENT} 字`);
+    if (!config.model) throw new HttpError(503, 'MODEL_NOT_CONFIGURED', '未配置模型服务');
+    if (!runner.reserve(session.id)) throw new HttpError(409, 'SESSION_BUSY', '会话正在运行');
+    return stream(c, session, content, { regenerate });
+  });
+
+  /**
+   * Answer the confirm card of the latest assistant message. decline → JSON {message};
+   * execute → SSE run: the server runs the proposed calls as given, then the model reports.
+   */
+  app.post('/agent/sessions/:id/confirm', async c => {
+    const session = await ownSession(c, await currentUser(c));
+    const input = await body(c);
+    const ids = Array.isArray(input.tool_call_ids) ? input.tool_call_ids.filter((id): id is string => typeof id === 'string') : [];
+    const action = input.action;
+    if (!ids.length || (action !== 'execute' && action !== 'decline')) {
+      throw new HttpError(422, 'INVALID_CONFIRMATION', '需要 tool_call_ids 和 action（execute 或 decline）');
+    }
+    if (action === 'execute' && !config.model) throw new HttpError(503, 'MODEL_NOT_CONFIGURED', '未配置模型服务');
+    if (!runner.reserve(session.id)) throw new HttpError(409, 'SESSION_BUSY', '会话正在运行');
+    let calls: ToolCall[];
+    try {
+      const message = (await store.listMessages(session.id)).findLast(item => item.role === 'assistant');
+      const found = ids.map(id => message?.tool_calls.find(call => call.id === id));
+      if (!message || found.some(call => call?.state !== 'needs_confirmation')) {
+        throw new HttpError(409, 'CONFIRMATION_EXPIRED', '这个操作已处理或已失效');
+      }
+      calls = found as ToolCall[];
+      for (const call of calls) {
+        call.state = action === 'execute' ? 'confirmed' : 'declined';
+        call.result_summary = action === 'execute' ? '已确认执行' : '已取消';
+      }
+      await store.updateMessage(message.id, message);
+      if (action === 'decline') {
+        runner.release(session.id);
+        return c.json({ message });
+      }
+    } catch (error) {
+      runner.release(session.id);
+      throw error;
+    }
+    return stream(c, session, '', { confirmed: calls.map(call => structuredClone(call)) });
   });
 
   return app;

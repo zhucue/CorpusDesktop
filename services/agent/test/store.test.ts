@@ -53,7 +53,7 @@ test('PgStore session and message round trip', { skip: !url && 'AGENT_TEST_DATAB
     await store.updateMessage(assistantId, {
       content: '结果', parts: [{ type: 'text', text: '结果' }, { type: 'ui', lang: 'root = Callout("info", "x")' }],
       tool_calls: [{ id: 'c1', name: 'corpus.search', args: { query: 'x' }, state: 'succeeded', result_summary: '命中 1', duration_ms: 5 }],
-      duration_ms: 42,
+      duration_ms: 42, stopped: true,
     });
 
     const [session] = await store.listSessions(project, user);
@@ -66,6 +66,10 @@ test('PgStore session and message round trip', { skip: !url && 'AGENT_TEST_DATAB
     assert.equal(messages[1].parts[1].type, 'ui');
     assert.equal(messages[1].tool_calls[0].name, 'corpus.search');
     assert.equal(messages[1].duration_ms, 42);
+    // the stopped marker round-trips through parts and is not shown as a part
+    assert.equal(messages[1].stopped, true);
+    assert.equal(messages[1].parts.length, 2);
+    assert.equal(messages[0].stopped, undefined);
 
     await store.resetRunning();
     assert.equal((await store.getSession(id))!.state, 'idle');

@@ -1,13 +1,21 @@
 import type { IconName } from "../Icon";
 
-/** Agent tools (contracts/p2–p5, same names as services/agent/src/tools.ts), grouped as on the assistant page. */
+/** Agent tools (contracts/p2–p5, same names as services/agent/src/tools.ts), grouped by capability as on the assistant page. */
 export const AGENT_TOOLS: { group: string; tools: string[] }[] = [
-  { group: "语料", tools: ["corpora.list", "corpora.get", "subcorpora.list", "subcorpora.create", "corpus.parse", "corpus.search", "corpus.context"] },
+  { group: "语料与检索", tools: ["corpora.list", "corpora.get", "corpora.documents", "subcorpora.list", "subcorpora.create", "corpus.parse", "corpus.search", "corpus.context"] },
   { group: "统计", tools: ["stats.frequency", "stats.ngrams", "stats.collocations", "stats.keywords", "stats.distribution"] },
-  { group: "标注", tools: ["annot.layers", "annot.create_layer", "annot.sentence", "annot.diff", "annot.stats", "annot.suggest", "annot.export", "annot.spans", "annot.suggest_spans", "align.pairs", "align.suggest", "annot.agreement"] },
-  { group: "知识库", tools: ["kb.search", "kb.save", "kb.extract_terms", "kb.summarize", "kb.terms", "kb.documents"] },
-  { group: "成果", tools: ["evidence.add", "evidence.list", "queries.save", "queries.list", "export.create", "jobs.get", "jobs.cancel"] },
+  { group: "词性与依存标注", tools: ["annot.layers", "annot.create_layer", "annot.sentence", "annot.diff", "annot.stats", "annot.suggest", "annot.export"] },
+  { group: "片段与对齐", tools: ["annot.spans", "annot.suggest_spans", "align.pairs", "align.suggest", "annot.agreement"] },
+  { group: "知识库", tools: ["kb.search", "kb.terms", "kb.documents", "kb.save", "kb.extract_terms", "kb.summarize"] },
+  { group: "证据与导出", tools: ["evidence.add", "evidence.list", "queries.save", "queries.list", "export.create"] },
+  { group: "任务", tools: ["jobs.get", "jobs.cancel"] },
 ];
+
+/** Write tools: the assistant proposes them and runs them only after 执行 on the confirm card. */
+export const CONFIRM_TOOLS = new Set([
+  "subcorpora.create", "evidence.add", "queries.save", "export.create", "jobs.cancel", "annot.create_layer", "annot.suggest",
+  "annot.export", "annot.suggest_spans", "align.suggest", "kb.save", "kb.extract_terms", "kb.summarize",
+]);
 
 export const TOOL_COUNT = AGENT_TOOLS.reduce((n, g) => n + g.tools.length, 0);
 
@@ -15,6 +23,7 @@ export const TOOL_COUNT = AGENT_TOOLS.reduce((n, g) => n + g.tools.length, 0);
 export const TOOL_VIEW: Record<string, { title: string; label: string; icon: IconName }> = {
   "corpora.list": { title: "列出语料库", label: "正在读取语料库…", icon: "library" },
   "corpora.get": { title: "读取语料库", label: "正在读取语料库…", icon: "library" },
+  "corpora.documents": { title: "列出语料文档", label: "正在读取文档列表…", icon: "filetext" },
   "subcorpora.list": { title: "列出子库", label: "正在读取子库…", icon: "filter" },
   "subcorpora.create": { title: "新建子库", label: "正在新建子库…", icon: "filter" },
   "corpus.parse": { title: "解析查询式", label: "正在解析查询式…", icon: "brackets" },
@@ -49,5 +58,5 @@ export const TOOL_VIEW: Record<string, { title: string; label: string; icon: Ico
   "kb.extract_terms": { title: "抽取术语", label: "正在抽取术语…", icon: "booka" },
   "kb.summarize": { title: "生成摘要", label: "正在生成摘要…", icon: "sparkles" },
   "kb.terms": { title: "查术语", label: "正在查术语…", icon: "booka" },
-  "kb.documents": { title: "列出文档", label: "正在读取知识库文档…", icon: "bookopentext" },
+  "kb.documents": { title: "列出知识库文档", label: "正在读取知识库文档…", icon: "bookopentext" },
 };

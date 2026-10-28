@@ -8,6 +8,7 @@ import { Icon } from "../../components/Icon";
 import { ResultContext } from "../../components/results/cards";
 import { reducedMotion } from "../../theme/motion";
 import { AiMessage } from "./ChainView";
+import { ToolList } from "./ToolList";
 import { useAgentChat, useAgentHealth, useSessions, type ChatItem } from "./useAgentChat";
 import "./assistant.css";
 
@@ -124,6 +125,7 @@ export default function AssistantPanel({
   }
 
   const lastUser = [...chat.items].reverse().find((i) => i.kind === "user");
+  const used = new Set(chat.items.flatMap((i) => (i.kind === "ai" ? i.m.tools.map((t) => t.name) : [])));
   const sessions = useSessions(projectId);
   const sessionTitle = sessions.data?.items.find((s) => s.id === sessionId)?.title;
   const firstUser = chat.items.find((i) => i.kind === "user");
@@ -152,7 +154,8 @@ export default function AssistantPanel({
                     key={it.m.id || i}
                     m={it.m}
                     noteTitle={noteTitle}
-                    onRegenerate={i === chat.items.length - 1 && lastUser?.kind === "user" && !disabled ? () => void chat.send(lastUser.content) : undefined}
+                    onRegenerate={i === chat.items.length - 1 && lastUser?.kind === "user" && !disabled && !chat.running ? () => void chat.regenerate() : undefined}
+                    onConfirm={i === chat.items.length - 1 && !disabled && !chat.running ? chat.confirm : undefined}
                   />
                 ),
               )}
@@ -213,10 +216,12 @@ export default function AssistantPanel({
                 </button>
               </Popover>
               {!compact && (
-                <span className="pill" style={{ cursor: "default" }}>
-                  <Icon name="tool" size={14} />
-                  工具 {TOOL_COUNT}
-                </span>
+                <Popover trigger="click" placement="topLeft" content={<ToolList used={used} />} classNames={{ root: "tool-pop" }}>
+                  <button className="pill" type="button" aria-haspopup="dialog">
+                    <Icon name="tool" size={14} />
+                    <span>工具 {TOOL_COUNT}</span>
+                  </button>
+                </Popover>
               )}
               <div className="grow" />
               {health.data?.model_id && <span className="small muted mono">{health.data.model_id}</span>}

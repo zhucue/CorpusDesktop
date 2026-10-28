@@ -1,4 +1,5 @@
 import { createLibrary, defineComponent } from "@openuidev/react-lang";
+import { Fragment, type ReactNode } from "react";
 import { z } from "zod/v4";
 import {
   CalloutView,
@@ -206,6 +207,51 @@ export const COMPONENTS = [
 
 /** No root component: each ui block is a program whose entry is `root = <Component>(...)`. */
 export const library = createLibrary({ components: COMPONENTS });
+
+const KNOWN = new Set([...COMPONENTS.map((c) => c.name), "Query", "Mutation"]);
+const FALLBACK_PROPS = z.object(Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`a${i}`, z.any().optional()])));
+
+/** Children of an unknown component: registered components render, text shows as text, other values are skipped. */
+function fallbackValue(value: unknown, renderNode: (v: unknown) => ReactNode, depth = 0): ReactNode {
+  if (value === null || value === undefined || depth > 4) return null;
+  if (typeof value === "string") return value.trim() ? <p className="ui-fallback-text">{value}</p> : null;
+  if (typeof value === "number" || typeof value === "boolean") return null;
+  if (Array.isArray(value)) return value.map((v, i) => <Fragment key={i}>{fallbackValue(v, renderNode, depth + 1)}</Fragment>);
+  if ((value as { type?: unknown }).type === "element") return renderNode(value);
+  return Object.values(value as object).map((v, i) => <Fragment key={i}>{fallbackValue(v, renderNode, depth + 1)}</Fragment>);
+}
+
+const warned = new Set<string>();
+const libraries = new Map<string, typeof library>();
+
+/**
+ * Library for one program. A component outside the catalog (the model sometimes writes layout wrappers such as
+ * `Stack([...])`) becomes a plain container that renders its children instead of being dropped; logged once per name.
+ */
+export function libraryFor(lang: string): typeof library {
+  const unknown = [...new Set([...lang.matchAll(/(?<![\w@$.])([A-Z][A-Za-z0-9_]*)\s*\(/g)].map((m) => m[1]))].filter((n) => !KNOWN.has(n)).sort();
+  if (!unknown.length) return library;
+  const key = unknown.join(",");
+  let lib = libraries.get(key);
+  if (!lib) {
+    for (const name of unknown) {
+      if (warned.has(name)) continue;
+      warned.add(name);
+      console.warn(`[openui] unknown component "${name}" rendered as a plain container`);
+    }
+    const fallbacks = unknown.map((name) =>
+      defineComponent({
+        name,
+        description: "未注册组件的降级显示",
+        props: FALLBACK_PROPS,
+        component: ({ props, renderNode }) => <div className="ui-fallback">{fallbackValue(Object.values(props), renderNode)}</div>,
+      }),
+    );
+    lib = createLibrary({ components: [...COMPONENTS, ...fallbacks] });
+    libraries.set(key, lib);
+  }
+  return lib;
+}
 
 /** Direct renderers for the JSON fallback `{component, props}`. */
 export const RENDERERS: Record<string, React.FC<never>> = {

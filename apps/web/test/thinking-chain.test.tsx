@@ -90,8 +90,9 @@ describe("thinking chain", () => {
     expect(open()).toBe("true");
     expect(head().getAttribute("aria-expanded")).toBe("true");
     expect(document.querySelector(".think-scroll .think-text")?.textContent).toBe("先检索命中规模。");
-    expect(document.querySelector(".think-scroll .step-tool")?.textContent).toBe("corpus.search");
-    expect(document.querySelector(".think-scroll .step-args b")?.textContent).toBe('"翻译/v +文化"');
+    // Expanded steps name the arguments in Chinese; tool names and IDs are not shown.
+    expect(document.querySelector(".think-scroll .step-args")?.textContent).toBe("查询式 翻译/v +文化");
+    expect(document.querySelector(".think-scroll .step-tool")).toBeNull();
     act(() => head().click());
     expect(open()).toBe("false");
   });

@@ -8,7 +8,8 @@ import { NotePicker, writeToNote, type NoteTarget } from "../knowledge/NotePicke
 import { Icon } from "../../components/Icon";
 import { TOOL_VIEW } from "../../components/global/tools";
 import { reducedMotion } from "../../theme/motion";
-import { answerParts, fmtChars, isThinking, plainText, thinkingChars, thinkingText, type ChainMessage } from "./chain";
+import { answerParts, fmtChars, hasContent, isThinking, pendingCalls, plainText, scrubIds, thinkingChars, thinkingText, type ChainMessage } from "./chain";
+import { Markdown } from "./Markdown";
 
 const UiBlock = lazy(() => import("../../openui/UiBlock"));
 
@@ -52,43 +53,95 @@ function keyArg(args: Record<string, unknown>): string | null {
   return null;
 }
 
-function argsText(args: Record<string, unknown>): React.ReactNode[] {
-  return Object.entries(args ?? {})
-    .slice(0, 5)
-    .map(([k, v], i) => (
-      <span key={k}>
-        {i > 0 && " "}
-        {k}={KEY_ARGS.includes(k) ? <b>{argText(v)}</b> : argText(v)}
-      </span>
-    ));
+/** Chinese names of the arguments shown in the expanded step; IDs and scope objects are never shown. */
+const ARG_LABELS: Record<string, string> = {
+  query: "查询式",
+  q: "检索词",
+  node: "节点词",
+  window: "窗口",
+  unit: "单位",
+  n: "n",
+  top: "前",
+  min_freq: "最低频次",
+  measures: "指标",
+  measure: "指标",
+  pos: "词性",
+  pos_pattern: "词性序列",
+  field: "字段",
+  bins: "区间",
+  kind: "类型",
+  name: "名称",
+  title: "标题",
+  format: "格式",
+  source: "来源",
+  method: "方法",
+  label: "标签",
+  head: "head",
+  document_title: "文档",
+  document_ordinal: "第几个文档",
+  sentence_index: "句",
+  token_index: "词",
+  sort: "排序",
+};
+
+function argValue(k: string, v: unknown): string {
+  if (k === "sentence_index" || k === "src_sentence_index") return `第 ${Number(v) + 1} 句`;
+  if (Array.isArray(v) && v.every((x) => typeof x !== "object")) return v.join("、");
+  return typeof v === "string" ? v : JSON.stringify(v);
 }
 
-/** One tool call as a compact row: family icon, title, key argument, result, state dot; `detail` adds the raw call. */
+function argsText(args: Record<string, unknown>): React.ReactNode[] {
+  return Object.entries(args ?? {})
+    .filter(([k, v]) => ARG_LABELS[k] && v !== null && v !== undefined && !(typeof v === "object" && !Array.isArray(v)))
+    .slice(0, 6)
+    .map(([k, v], i) => {
+      const text = scrubIds(argValue(k, v));
+      const shown = text.length > 60 ? `${text.slice(0, 60)}…` : text;
+      return (
+        <span key={k}>
+          {i > 0 && "　"}
+          {ARG_LABELS[k]} {KEY_ARGS.includes(k) ? <b>{shown}</b> : shown}
+        </span>
+      );
+    });
+}
+
+const STATE_TEXT: Partial<Record<ToolCall["state"], string>> = {
+  running: "运行中",
+  cancelled: "已取消",
+  needs_confirmation: "待确认",
+  confirmed: "已确认",
+  declined: "已取消",
+};
+const STATE_CLASS: Record<ToolCall["state"], string> = {
+  running: "active",
+  succeeded: "done",
+  failed: "failed",
+  cancelled: "failed",
+  needs_confirmation: "pending",
+  confirmed: "done",
+  declined: "failed",
+};
+
+/** One tool call as a compact row: family icon, title, key argument, result, state dot; `detail` adds the arguments. */
 function Step({ call, detail }: { call: ToolCall; detail?: boolean }) {
   const view = TOOL_VIEW[call.name];
-  const cls = call.state === "running" ? "active" : call.state === "succeeded" ? "done" : "failed";
-  const res =
-    call.state === "running" ? "运行中" : call.state === "cancelled" ? "已取消" : call.state === "failed" ? call.result_summary || "失败" : call.result_summary;
+  const cls = STATE_CLASS[call.state] ?? "done";
+  const res = scrubIds(call.state === "failed" ? call.result_summary || "失败" : (STATE_TEXT[call.state] ?? call.result_summary));
   const key = keyArg(call.args);
+  const args = detail ? argsText(call.args) : [];
   return (
     <li className={`step ${cls}`} data-state={call.state}>
       <Icon name={view?.icon ?? "tool"} size={14} className="step-ic" />
       <div className="step-row">
-        <span className="step-title" title={call.name}>
-          {view?.title ?? call.name}
-        </span>
-        {key && <b className="step-key">{key}</b>}
+        <span className="step-title">{view?.title ?? call.name}</span>
+        {key && <b className="step-key">{scrubIds(key)}</b>}
         <span className="step-res" title={res}>
           {res}
         </span>
         <span className="step-dot" aria-hidden />
       </div>
-      {detail && (
-        <div className="step-args">
-          <span className="step-tool">{call.name}</span>
-          {Object.keys(call.args ?? {}).length > 0 && <> {argsText(call.args)}</>}
-        </div>
-      )}
+      {args.length > 0 && <div className="step-args">{args}</div>}
     </li>
   );
 }
@@ -153,7 +206,9 @@ export function ThinkingChain({ m }: { m: ChainMessage }) {
   const now = useNow(live);
   const label = chainLabel(m, now);
   const shownThinking = useTypewriter(thinking, m.status === "running");
-  const visible = thinking.slice(0, shownThinking);
+  const visible = scrubIds(thinking.slice(0, shownThinking));
+  // Two-line ticker: the latest reasoning as one flowing line pair (blank lines would leave a line empty).
+  const ticker = visible.replace(/\s+/g, " ").trim().slice(-240);
   const full = useStickToBottom<HTMLDivElement>(`${visible.length}:${m.tools.length}:${open}`, m.status === "running");
   const bodyId = useId();
   if (!m.tools.length && !thinking && m.status !== "running") return null;
@@ -184,7 +239,7 @@ export function ThinkingChain({ m }: { m: ChainMessage }) {
         <div className="think-peek">
           {thinking && (
             <div className="think-ticker" aria-hidden>
-              <span>{visible.slice(-400)}</span>
+              <span>{ticker}</span>
             </div>
           )}
           {latest && (
@@ -198,7 +253,7 @@ export function ThinkingChain({ m }: { m: ChainMessage }) {
         <div className="think-inner">
           {open && (
             <div className="think-scroll" ref={full.ref} onScroll={full.onScroll}>
-              {visible && <div className="think-text">{visible}</div>}
+              {/* Tool steps first: a long reasoning text would push them out of the 40vh box. */}
               {m.tools.length > 0 && (
                 <ol className="steps">
                   {m.tools.map((t) => (
@@ -206,6 +261,7 @@ export function ThinkingChain({ m }: { m: ChainMessage }) {
                   ))}
                 </ol>
               )}
+              {visible && <div className="think-text">{visible}</div>}
             </div>
           )}
         </div>
@@ -214,40 +270,9 @@ export function ThinkingChain({ m }: { m: ChainMessage }) {
   );
 }
 
-/** Inline formatting for answer text: `code` and [n] citations. */
-function Inline({ text }: { text: string }) {
-  const parts = text.split(/(`[^`\n]+`|\[\d+\])/g);
-  return (
-    <>
-      {parts.map((p, i) =>
-        p.startsWith("`") && p.endsWith("`") && p.length > 1 ? (
-          <code key={i}>{p.slice(1, -1)}</code>
-        ) : /^\[\d+\]$/.test(p) ? (
-          <span key={i} className="cite">
-            {p.slice(1, -1)}
-          </span>
-        ) : (
-          p
-        ),
-      )}
-    </>
-  );
-}
-
 function TextPart({ text, streaming }: { text: string; streaming: boolean }) {
   const shown = useTypewriter(text, streaming);
-  const visible = text.slice(0, shown);
-  const paras = visible.split(/\n{2,}/);
-  return (
-    <>
-      {paras.map((p, i) => (
-        <p key={i}>
-          <Inline text={p.replace(/^\s*[-*]\s+/gm, "· ").replace(/\*\*([^*]+)\*\*/g, "$1")} />
-          {streaming && i === paras.length - 1 && <span className="caret" aria-hidden />}
-        </p>
-      ))}
-    </>
-  );
+  return <Markdown text={scrubIds(text.slice(0, shown))} caret={streaming ? <span className="caret" aria-hidden /> : null} />;
 }
 
 export function Answer({ m }: { m: ChainMessage }) {
@@ -277,6 +302,67 @@ export function Answer({ m }: { m: ChainMessage }) {
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Confirm card for the write tools the assistant proposed (contracts/p2.md 第十二节). Buttons only on the latest
+ * message (`onConfirm` given); older cards show what happened.
+ */
+export function ConfirmCard({ m, onConfirm }: { m: ChainMessage; onConfirm?: (ids: string[], action: "execute" | "decline") => Promise<void> }) {
+  const [busy, setBusy] = useState<"execute" | "decline" | null>(null);
+  const proposals = m.tools.filter((t) => t.confirm && ["needs_confirmation", "confirmed", "declined"].includes(t.state));
+  if (!proposals.length) return null;
+  const pending = pendingCalls(m);
+  const open = pending.length > 0 && !!onConfirm && m.status !== "running";
+  const state = pending.length ? (open ? null : "未执行") : proposals.some((t) => t.state === "confirmed") ? "已执行" : "已取消";
+  const act = async (action: "execute" | "decline") => {
+    setBusy(action);
+    try {
+      await onConfirm?.(
+        pending.map((t) => t.id),
+        action,
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="confirm-card" role="group" aria-label="确认操作" data-state={state ?? "pending"}>
+      {proposals.map((t) => (
+        <div className="cc-item" key={t.id}>
+          <Icon name={TOOL_VIEW[t.name]?.icon ?? "tool"} size={14} className="cc-ic" />
+          <div className="cc-body">
+            <div className="cc-title">{t.confirm!.title}</div>
+            {t.confirm!.lines.length > 0 && (
+              <ul className="cc-lines">
+                {t.confirm!.lines.map((l, i) => (
+                  <li key={i}>{scrubIds(l)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      ))}
+      <div className="cc-actions">
+        {open ? (
+          <>
+            <button className="btn p s" type="button" disabled={!!busy} onClick={() => void act("execute")}>
+              <Icon name={busy === "execute" ? "loader" : "check"} size={14} />
+              执行
+            </button>
+            <button className="btn s" type="button" disabled={!!busy} onClick={() => void act("decline")}>
+              取消
+            </button>
+          </>
+        ) : (
+          <span className="cc-state">
+            <Icon name={state === "已执行" ? "circlecheck" : "circlex"} size={14} />
+            {state}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -328,31 +414,52 @@ function NoteActions({ m, noteTitle }: { m: ChainMessage; noteTitle: string }) {
   );
 }
 
-export function AiMessage({ m, onRegenerate, noteTitle }: { m: ChainMessage; onRegenerate?: () => void; noteTitle?: string }) {
+export function AiMessage({
+  m,
+  onRegenerate,
+  onConfirm,
+  noteTitle,
+}: {
+  m: ChainMessage;
+  onRegenerate?: () => void;
+  onConfirm?: (ids: string[], action: "execute" | "decline") => Promise<void>;
+  noteTitle?: string;
+}) {
   const [copied, setCopied] = useState(false);
+  const content = hasContent(m);
+  const chainShown = m.tools.length > 0 || !!thinkingText(m) || m.status === "running";
   return (
     <div className="msg-ai" data-status={m.status}>
       <ThinkingChain m={m} />
       <Answer m={m} />
-      {m.status !== "running" && (
+      <ConfirmCard m={m} onConfirm={onConfirm} />
+      {m.status === "stopped" && !chainShown && (
+        <div className="ans-stopped">
+          <Icon name="stop" size={14} />
+          已停止
+        </div>
+      )}
+      {m.status !== "running" && (content || onRegenerate) && (
         <div className="ans-actions">
-          <button
-            className="btn xs"
-            type="button"
-            onClick={() => {
-              void navigator.clipboard?.writeText(plainText(m)).then(() => setCopied(true));
-            }}
-          >
-            <Icon name={copied ? "check" : "copy"} size={14} />
-            {copied ? "已复制" : "复制"}
-          </button>
+          {content && (
+            <button
+              className="btn xs"
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(plainText(m)).then(() => setCopied(true));
+              }}
+            >
+              <Icon name={copied ? "check" : "copy"} size={14} />
+              {copied ? "已复制" : "复制"}
+            </button>
+          )}
           {onRegenerate && (
             <button className="btn xs" type="button" onClick={onRegenerate}>
               <Icon name="retry" size={14} />
               重新生成
             </button>
           )}
-          {m.status === "done" && noteTitle != null && <NoteActions m={m} noteTitle={noteTitle} />}
+          {m.status === "done" && content && noteTitle != null && <NoteActions m={m} noteTitle={noteTitle} />}
         </div>
       )}
     </div>

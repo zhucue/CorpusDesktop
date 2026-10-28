@@ -1,12 +1,15 @@
 /**
  * Pi customTools (contracts/p2.md §五 工具, p3.md §五 annot.*, p4.md §五 kb.*, p5.md §四 annot.spans / align.*). Each tool is a thin call to the api
  * with the run's agent token; the api decides permissions. Results stay compact.
+ *
+ * Write tools (those with `confirm`) never run from the model directly: the call returns NEEDS_CONFIRMATION
+ * with a proposal for the confirm card, and the server runs it after the user presses 执行 (contracts/p2.md 第十二节).
  */
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { Type, type Static, type TSchema } from 'typebox';
 import { ApiError, query, type ApiClient, type Job } from './api.ts';
-import type { Scope } from './types.ts';
+import type { Proposal, Scope } from './types.ts';
 
 export interface ToolContext {
   api: ApiClient;
@@ -20,6 +23,8 @@ export interface ToolOutput {
   data: unknown;
   summary: string;
   ref?: { kind: string; id: string };
+  /** Set when a write tool was only proposed. */
+  proposal?: Proposal;
 }
 
 interface Spec<T extends TSchema = TSchema> {
@@ -27,6 +32,8 @@ interface Spec<T extends TSchema = TSchema> {
   description: string;
   parameters: T;
   run: (args: Static<T>, signal: AbortSignal | undefined) => Promise<ToolOutput>;
+  /** Write tool: describe (and pre-check) the action for the confirm card; `run` happens only after the user confirms. */
+  confirm?: (args: Static<T>, signal: AbortSignal | undefined) => Promise<Proposal>;
 }
 
 const spec = <T extends TSchema>(value: Spec<T>) => value as unknown as Spec;
@@ -87,9 +94,23 @@ const compactKbDocument = (doc: any) => ({
 /** Pi tool names must match [A-Za-z0-9_-]; the contract name keeps the dot. */
 export const piName = (name: string) => name.replace('.', '_');
 
+/** Step and citation summaries are shown to users: Chinese names, no internal values. */
+const METHOD_NAMES: Record<string, string> = { frequency: '频次', ngrams: 'n-gram', collocations: '搭配', keywords: '关键词', distribution: '分布' };
+const CORPUS_STATUS: Record<string, string> = { ready: '就绪', indexing: '索引中', importing: '导入中', failed: '失败', pending: '等待中' };
+
 const compactJob = (job: Job) => ({
   job_id: job.id, kind: job.kind, state: job.state, progress: job.progress, result: job.result, error: job.error,
 });
+
+/** Subcorpus filter as text: {"year": {"gte": 2000, "lte": 2010}, "genre": ["news"]} → "year 2000–2010；genre news". */
+const filterText = (filter: Record<string, unknown>) => Object.entries(filter).map(([key, value]) => {
+  if (Array.isArray(value)) return `${key} ${value.join('、')}`;
+  if (value && typeof value === 'object') {
+    const range = value as { gte?: unknown; lte?: unknown };
+    return `${key} ${range.gte ?? ''}–${range.lte ?? ''}`;
+  }
+  return `${key} ${String(value)}`;
+}).join('；') || '无';
 
 export function toolSpecs(ctx: ToolContext): Spec[] {
   const { api, projectId } = ctx;
@@ -109,6 +130,25 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
       names.set(key, (await api.get<{ name: string }>(path, signal)).name);
     }
     return names.get(key)!;
+  }
+
+  const corpora = new Map<string, any>();
+  async function getCorpus(corpusId: string, signal?: AbortSignal): Promise<any> {
+    if (!corpora.has(corpusId)) corpora.set(corpusId, await api.get<any>(`/corpora/${seg(corpusId)}`, signal));
+    return corpora.get(corpusId);
+  }
+
+  /** The assistant does not create layers on built-in corpora (project_id null): a whole-corpus preannotation job is too heavy to start from a chat. */
+  async function projectCorpus(corpusId: string, signal?: AbortSignal): Promise<any> {
+    const corpus = await getCorpus(corpusId, signal);
+    if (corpus.project_id === null) {
+      throw new Error(`BUILTIN_CORPUS: “${corpus.name}”是内置语料，助手不在内置语料上建标注层；请告诉用户可以自己在标注页建层，或改用本项目语料`);
+    }
+    return corpus;
+  }
+
+  async function scopeLine(scope: NonNullable<Scope>, signal?: AbortSignal): Promise<string> {
+    return `范围：${await scopeName(scope, signal).catch(() => '未知范围')}`;
   }
 
   async function waitJob(job: Job, signal?: AbortSignal): Promise<Job> {
@@ -133,7 +173,7 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     const items: any[] = Array.isArray(list) ? list : list?.items ?? [];
     let wanted = 'ud-deprel';
     if (kind === 'pos') {
-      const corpus = await api.get<any>(`/corpora/${seg(corpusId)}`, signal);
+      const corpus = await getCorpus(corpusId, signal);
       wanted = String(corpus.language ?? '').startsWith('zh') ? 'jieba' : 'upos';
     }
     const builtin = items.filter(set => set.project_id === null);
@@ -215,13 +255,34 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     };
   };
 
+  /** Spans must lie inside the sentence; relation indices inside the new spans (checked before proposing and before posting). */
+  async function checkSpans(args: {
+    layer_id: string; document_id?: string; document_title?: string; document_ordinal?: number; sentence_index: number;
+    spans: { start_cp: number; end_cp: number }[]; relations?: { from: number | string; to: number | string }[];
+  }, signal?: AbortSignal) {
+    const doc = await resolveDocument(args.layer_id, args, signal);
+    const sentence = await readSpanSentence(args.layer_id, doc.document_id, args.sentence_index, signal);
+    const [lo, hi] = [Number(sentence.start_cp ?? 0), Number(sentence.end_cp ?? 0)];
+    for (const span of args.spans) {
+      if (span.start_cp >= span.end_cp || span.start_cp < lo || span.end_cp > hi) {
+        throw new Error(`SPAN_OUT_OF_SENTENCE: 片段 ${span.start_cp}-${span.end_cp} 不在该句范围 ${lo}-${hi} 内（start_cp/end_cp 为文档内偏移 = 句子 start_cp + 句内偏移）`);
+      }
+    }
+    for (const rel of args.relations ?? []) {
+      for (const end of [rel.from, rel.to]) {
+        if (typeof end === 'number' && end >= args.spans.length) throw new Error(`INVALID_RELATION: 下标 ${end} 超出 spans 数量 ${args.spans.length}`);
+      }
+    }
+    return { doc, sentence, lo };
+  }
+
   /** A job still running after the wait: hand back job_id instead of failing. */
   const pendingOutput = (job: Job, what: string, extra: Record<string, unknown> = {}): ToolOutput => ({
     data: {
       ...extra, job_id: job.id, kind: job.kind, state: job.state, progress: job.progress,
       note: `${what}等待超过 ${Math.round(ctx.jobWaitMs / 1000)} 秒仍未完成，请用户到任务页查看；不要重复提交。`,
     },
-    summary: `任务 ${job.id} 仍在运行`,
+    summary: '任务仍在运行',
     ref: { kind: 'job', id: job.id },
   });
   const jobFailed = (job: Job, what: string) =>
@@ -245,7 +306,7 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
         columns: stat.columns, row_count: stat.row_count, totals: stat.totals,
         rows: (stat.rows ?? []).slice(0, MAX_STAT_ROWS).map((row: any) => ({ key: row.key, values: row.values })),
       },
-      summary: `${stat.method ?? '统计'}：${stat.row_count ?? 0} 行`,
+      summary: `${METHOD_NAMES[stat.method] ?? '统计'}：${stat.row_count ?? 0} 行`,
       ref: { kind: 'stat', id: statId },
     };
   }
@@ -274,7 +335,25 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
       run: async (args, signal) => {
         const corpus = await api.get<any>(`/corpora/${args.corpus_id}`, signal);
         const fields = await api.get<unknown[]>(`/corpora/${args.corpus_id}/metadata-fields`, signal).catch(() => null);
-        return { data: { ...corpus, metadata_fields: fields }, summary: `${corpus.name}（${corpus.status}）`, ref: { kind: 'corpus', id: corpus.id } };
+        return { data: { ...corpus, metadata_fields: fields }, summary: `${corpus.name}（${CORPUS_STATUS[corpus.status] ?? corpus.status}）`, ref: { kind: 'corpus', id: corpus.id } };
+      },
+    }),
+    spec({
+      name: 'corpora.documents',
+      description: `列出一个语料库的文档（最多 ${MAX_LIST} 个，按语料顺序）：document_id、标题、句数。q 匹配标题。`,
+      parameters: Type.Object({ corpus_id: Type.String(), q: Type.Optional(Type.String()) }),
+      run: async (args, signal) => {
+        const page = await api.get<any>(`/corpora/${seg(args.corpus_id)}/documents${query({ q: args.q, page_size: MAX_LIST })}`, signal);
+        const items = listItems(page);
+        return {
+          data: {
+            total: page?.total ?? items.length,
+            items: items.slice(0, MAX_LIST).map((d: any) => ({
+              document_id: d.id, title: d.title, sentences: d.sentences ?? null, tokens: d.tokens ?? null,
+            })),
+          },
+          summary: `${page?.total ?? items.length} 个文档`,
+        };
       },
     }),
     spec({
@@ -293,6 +372,10 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
         name: Type.String({ minLength: 1 }),
         corpus_id: Type.String(),
         filter: Type.Record(Type.String(), Type.Unknown()),
+      }),
+      confirm: async (args, signal) => ({
+        title: `新建子库「${args.name}」`,
+        lines: [`语料库：${(await getCorpus(args.corpus_id, signal)).name}`, `筛选：${filterText(args.filter)}`],
       }),
       run: async (args, signal) => {
         const sub = await api.post<any>(`/projects/${projectId}/subcorpora`, args, signal);
@@ -459,6 +542,7 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
         source: Type.String({ description: '出处，如文档标题或统计名称' }),
         note: Type.Optional(Type.String()),
       }),
+      confirm: async args => ({ title: '加入证据篮', lines: [clip(args.text, 120), `出处：${args.source}`] }),
       run: async (args, signal) => {
         const item = await api.post<any>(`/projects/${projectId}/evidence`, args, signal);
         return {
@@ -487,6 +571,9 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
       name: 'queries.save',
       description: '保存查询式到项目。',
       parameters: Type.Object({ name: Type.String({ minLength: 1 }), query: Type.String({ minLength: 1 }), scope: ScopeArg }),
+      confirm: async (args, signal) => ({
+        title: `保存查询「${args.name}」`, lines: [`查询式：${args.query}`, await scopeLine(resolveScope(args.scope), signal)],
+      }),
       run: async (args, signal) => {
         const saved = await api.post<any>(`/projects/${projectId}/queries`, { name: args.name, query: args.query, scope: resolveScope(args.scope) }, signal);
         return { data: saved, summary: `已保存查询 ${saved.name}`, ref: { kind: 'query', id: saved.id } };
@@ -511,6 +598,16 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
         scope: ScopeArg,
         stat_id: Type.Optional(Type.String()),
       }),
+      confirm: async (args, signal) => {
+        const format = args.format.toUpperCase();
+        if (args.target === 'stat') {
+          if (!args.stat_id) throw new Error('STAT_ID_REQUIRED: 导出统计结果需要 stat_id');
+          const stat = await api.get<any>(`/stats/${seg(args.stat_id)}`, signal);
+          return { title: `导出统计结果（${format}）`, lines: [`${METHOD_NAMES[stat.method] ?? '统计'}：${stat.row_count ?? 0} 行`, `范围：${stat.scope?.name ?? ''}`] };
+        }
+        if (!args.query) throw new Error('QUERY_REQUIRED: 导出检索结果需要 query');
+        return { title: `导出检索结果（${format}）`, lines: [`查询式：${args.query}`, await scopeLine(resolveScope(args.scope), signal)] };
+      },
       run: async (args, signal) => {
         let job: Job;
         if (args.target === 'stat') {
@@ -523,7 +620,7 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
             page: 1, page_size: 50, format: args.format, project_id: projectId,
           }, signal);
         }
-        return { data: compactJob(job), summary: `导出任务 ${job.id}`, ref: { kind: 'job', id: job.id } };
+        return { data: compactJob(job), summary: '已提交导出任务', ref: { kind: 'job', id: job.id } };
       },
     }),
     spec({
@@ -539,6 +636,10 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
       name: 'jobs.cancel',
       description: '取消后台任务。',
       parameters: Type.Object({ job_id: Type.String() }),
+      confirm: async (args, signal) => {
+        const job = await api.get<any>(`/jobs/${seg(args.job_id)}`, signal);
+        return { title: '取消后台任务', lines: [String(job.summary || job.kind), `状态：${job.state}`] };
+      },
       run: async (args, signal) => {
         const job = await api.post<Job>(`/jobs/${args.job_id}/cancel`, {}, signal);
         return { data: compactJob(job), summary: `任务 ${job.state}`, ref: { kind: 'job', id: job.id } };
@@ -560,15 +661,28 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     }),
     spec({
       name: 'annot.create_layer',
-      description: '为语料库建立标注层并自动预标（后台任务，最多等待 90 秒）。kind=pos 词性、dep 依存；label_set_id 省略时用内置标签集。删除层即可撤销。',
+      description: '为本项目语料库建立标注层并自动预标（后台任务，最多等待 90 秒）。kind=pos 词性、dep 依存；label_set_id 省略时用内置标签集；document_ids 限定文档（用户说“这篇文档”时必须传）。不能用于内置语料。只在用户明确要求建层时调用。',
       parameters: Type.Object({
         corpus_id: Type.String(),
         kind: Type.Union([Type.Literal('pos'), Type.Literal('dep')]),
         name: Type.String({ minLength: 1 }),
         label_set_id: Type.Optional(Type.String()),
-        document_ids: Type.Optional(Type.Array(Type.String())),
+        document_ids: Type.Optional(Type.Array(Type.String(), { minItems: 1 })),
       }),
+      confirm: async (args, signal) => {
+        const corpus = await projectCorpus(args.corpus_id, signal);
+        const labelSetId = args.label_set_id ?? await defaultLabelSet(args.corpus_id, args.kind, signal);
+        const sets = listItems(await api.get<any>(`/label-sets${query({ project_id: projectId, kind: args.kind })}`, signal).catch(() => []));
+        const labelSet = sets.find((set: any) => set.id === labelSetId)?.name ?? '';
+        const docs = corpus.stats?.documents ?? null;
+        const lines = [`语料库：${corpus.name}`];
+        if (args.document_ids) lines.push(`文档：${args.document_ids.length} 篇`);
+        else lines.push(`文档：全部${docs !== null ? ` ${docs} 篇` : ''}${corpus.stats?.tokens ? `，约 ${corpus.stats.tokens} 词` : ''}`);
+        if (labelSet) lines.push(`标签集：${labelSet}`);
+        return { title: `新建${args.kind === 'pos' ? '词性' : '依存'}标注层「${args.name}」并预标`, lines };
+      },
       run: async (args, signal) => {
+        await projectCorpus(args.corpus_id, signal);
         const labelSetId = args.label_set_id ?? await defaultLabelSet(args.corpus_id, args.kind, signal);
         let layer = await api.post<any>(`/projects/${projectId}/layers`, {
           corpus_id: args.corpus_id, kind: args.kind, name: args.name, label_set_id: labelSetId,
@@ -588,7 +702,7 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
               ...compactLayer(layer), job: compactJob(job),
               note: `预标等待超过 ${Math.round(ctx.jobWaitMs / 1000)} 秒仍未完成，请用户到任务页查看；不要重复建层。`,
             },
-            summary: `标注层 ${layer.name} 预标中（任务 ${job.id}）`,
+            summary: `标注层 ${layer.name} 预标中`,
             ref: { kind: 'job', id: job.id },
           };
         }
@@ -633,7 +747,7 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
             ...(doc.title !== null ? { document_title: doc.title } : {}), ...(doc.note ? { note: doc.note } : {}),
             sentence_index: sentence.sentence_index ?? args.sentence_index, text: sentence.text, status: sentence.status, tokens,
           },
-          summary: `第 ${args.sentence_index} 句，${tokens.length} 个 token`,
+          summary: `第 ${args.sentence_index + 1} 句，${tokens.length} 个词`,
           ref: { kind: 'layer', id: args.layer_id },
         };
       },
@@ -701,6 +815,15 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
         head: Type.Optional(Type.Integer({ minimum: 0, description: 'dep 层：句内 token 序号，0 为根' })),
         note: Type.Optional(Type.String({ description: '建议理由' })),
       }),
+      confirm: async (args, signal) => {
+        if (args.label === undefined && args.head === undefined) throw new Error('LABEL_OR_HEAD_REQUIRED: 需要 label 或 head');
+        const layer = await getLayer(args.layer_id, signal);
+        const value = [args.label, args.head !== undefined ? `head ${args.head}` : ''].filter(Boolean).join('，');
+        return {
+          title: '提出标注建议（待人工确认）',
+          lines: [`标注层：${layer.name}`, `第 ${args.sentence_index + 1} 句第 ${args.token_index} 个词 → ${value}`, ...(args.note ? [`理由：${args.note}`] : [])],
+        };
+      },
       run: async (args, signal) => {
         if (args.label === undefined && args.head === undefined) throw new Error('LABEL_OR_HEAD_REQUIRED: 需要 label 或 head');
         const { layer_id: layerId, ...body } = args;
@@ -710,7 +833,7 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
             annotation_id: annot.id, document_id: args.document_id, sentence_index: args.sentence_index,
             token_index: annot.token_index ?? args.token_index, label: annot.label, head: annot.head, status: annot.status, source: annot.source,
           },
-          summary: `已建议 token ${annot.token_index ?? args.token_index}：${annot.status}`,
+          summary: `已建议第 ${annot.token_index ?? args.token_index} 个词：${annot.status}`,
           ref: { kind: 'layer', id: layerId },
         };
       },
@@ -722,11 +845,15 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
         layer_id: Type.String(),
         document_ids: Type.Optional(Type.Array(Type.String())),
       }),
+      confirm: async (args, signal) => ({
+        title: '导出 CoNLL-U',
+        lines: [`标注层：${(await getLayer(args.layer_id, signal)).name}`, `文档：${args.document_ids ? `${args.document_ids.length} 篇` : '全部'}`],
+      }),
       run: async (args, signal) => {
         const job = await api.post<Job>(`/layers/${seg(args.layer_id)}/export`, {
           format: 'conllu', ...(args.document_ids ? { document_ids: args.document_ids } : {}),
         }, signal);
-        return { data: compactJob(job), summary: `导出任务 ${job.id}`, ref: { kind: 'job', id: job.id } };
+        return { data: compactJob(job), summary: '已提交导出任务', ref: { kind: 'job', id: job.id } };
       },
     }),
     // ---- P5 spans, relations, alignment, agreement (contracts/p5.md §三–四)
@@ -770,20 +897,20 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
           label: Type.String({ minLength: 1 }),
         }), { maxItems: 50 })),
       }),
+      confirm: async (args, signal) => {
+        const { sentence } = await checkSpans(args, signal);
+        const layer = await getLayer(args.layer_id, signal);
+        const chars = Array.from(String(sentence.text ?? ''));
+        const base = Number(sentence.start_cp ?? 0);
+        const spans = args.spans.map(s => `${chars.slice(s.start_cp - base, s.end_cp - base).join('')}（${s.label}）`).join('、');
+        return {
+          title: '提出片段建议（待人工确认）',
+          lines: [`标注层：${layer.name}`, `第 ${args.sentence_index + 1} 句：${clip(spans, 160)}`,
+            ...(args.relations?.length ? [`关系：${args.relations.length} 条`] : [])],
+        };
+      },
       run: async (args, signal) => {
-        const doc = await resolveDocument(args.layer_id, args, signal);
-        const sentence = await readSpanSentence(args.layer_id, doc.document_id, args.sentence_index, signal);
-        const [lo, hi] = [Number(sentence.start_cp ?? 0), Number(sentence.end_cp ?? 0)];
-        for (const span of args.spans) {
-          if (span.start_cp >= span.end_cp || span.start_cp < lo || span.end_cp > hi) {
-            throw new Error(`SPAN_OUT_OF_SENTENCE: 片段 ${span.start_cp}-${span.end_cp} 不在该句范围 ${lo}-${hi} 内（start_cp/end_cp 为文档内偏移 = 句子 start_cp + 句内偏移）`);
-          }
-        }
-        for (const rel of args.relations ?? []) {
-          for (const end of [rel.from, rel.to]) {
-            if (typeof end === 'number' && end >= args.spans.length) throw new Error(`INVALID_RELATION: 下标 ${end} 超出 spans 数量 ${args.spans.length}`);
-          }
-        }
+        const { doc, sentence, lo } = await checkSpans(args, signal);
         const result = await api.post<any>(`/layers/${seg(args.layer_id)}/spans/suggest`, {
           document_id: doc.document_id, sentence_index: args.sentence_index, spans: args.spans,
           ...(args.relations?.length ? { relations: args.relations } : {}),
@@ -857,6 +984,10 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
           src: Type.Array(Type.Integer({ minimum: 1 }), { minItems: 1 }),
           tgt: Type.Array(Type.Integer({ minimum: 1 }), { minItems: 1 }),
         }), { minItems: 1, maxItems: 200 }),
+      }),
+      confirm: async (args, signal) => ({
+        title: '提出词级对齐建议（待人工确认）',
+        lines: [`对齐层：${(await getLayer(args.layer_id, signal)).name}`, `源文第 ${args.src_sentence_index + 1} 句：${args.links.length} 条连线`],
       }),
       run: async (args, signal) => {
         const { layer_id: layerId, ...body } = args;
@@ -940,6 +1071,15 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
           ref: Type.Record(Type.String(), Type.Unknown()),
         }))),
       }),
+      confirm: async (args, signal) => {
+        const firstLine = args.body.split('\n').map(line => line.replace(/^#+\s*/, '').trim()).find(Boolean) ?? '';
+        if (args.note_id) {
+          const current = await api.get<any>(`/kb/documents/${seg(args.note_id)}`, signal);
+          if (current.kind !== 'note') throw new Error('NOT_A_NOTE: 只能追加到笔记');
+          return { title: `追加到笔记「${current.title}」`, lines: [clip(firstLine, 120)] };
+        }
+        return { title: `新建笔记「${args.title ?? (clip(firstLine, 40) || '助手笔记')}」`, lines: [clip(args.body.replace(/\s+/g, ' '), 120)] };
+      },
       run: async (args, signal) => {
         let note: any;
         if (args.note_id) {
@@ -955,7 +1095,8 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
             kind: 'note', title: args.title ?? (clip(firstLine, 40) || '助手笔记'), body: args.body,
           }, signal);
         }
-        for (const ref of args.refs ?? []) await api.post(`/kb/documents/${seg(note.id)}/refs`, ref, signal);
+        // the quote is already in body: record the ref without appending it again
+        for (const ref of args.refs ?? []) await api.post(`/kb/documents/${seg(note.id)}/refs`, { ...ref, append: false }, signal);
         return {
           data: { note_id: note.id, title: note.title, appended: Boolean(args.note_id), refs_added: args.refs?.length ?? 0 },
           summary: `${args.note_id ? '已追加到笔记' : '已新建笔记'} ${note.title}`,
@@ -973,6 +1114,16 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
         top: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })),
         document_ids: Type.Optional(Type.Array(Type.String(), { minItems: 1 })),
       }),
+      confirm: async (args, signal) => {
+        if (args.source === 'literature') {
+          if (!args.document_ids?.length) throw new Error('DOCUMENT_IDS_REQUIRED: 从文献抽取需要 document_ids（先用 kb_documents 查找）');
+          return { title: '从文献抽取术语草稿', lines: [`文献：${args.document_ids.length} 篇`, '方法：模型'] };
+        }
+        return {
+          title: '从语料抽取术语草稿',
+          lines: [await scopeLine(resolveScope(args.scope), signal), `方法：${String(args.method) === 'model' ? '模型' : '词性模式'}，候选 ${args.top ?? 100} 个`],
+        };
+      },
       run: async (args, signal) => {
         let body: Record<string, unknown>;
         if (args.source === 'literature') {
@@ -999,6 +1150,9 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
       name: 'kb.summarize',
       description: '为知识库文档生成摘要（后台任务，最多等待 90 秒），返回摘要文本（模型生成的草稿）。',
       parameters: Type.Object({ document_id: Type.String() }),
+      confirm: async (args, signal) => ({
+        title: '为文档生成摘要', lines: [`文档：${(await api.get<any>(`/kb/documents/${seg(args.document_id)}`, signal)).title}`],
+      }),
       run: async (args, signal) => {
         const ref = { kind: 'kb_document', id: args.document_id };
         const job = await waitJob(await api.post<Job>(`/kb/documents/${seg(args.document_id)}/summarize`, {}, signal), signal);
@@ -1051,22 +1205,51 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
   ];
 }
 
+/** Write tools: proposed to the user first (contract names). */
+export const CONFIRM_TOOLS = new Set(
+  toolSpecs({ api: null as unknown as ApiClient, projectId: '', scope: null, jobPollMs: 0, jobWaitMs: 0 })
+    .filter(tool => tool.confirm).map(tool => tool.name),
+);
+
+const apiErrors = async <T>(work: () => Promise<T>): Promise<T> => {
+  try {
+    return await work();
+  } catch (error) {
+    // Keep the api error code visible to the model (e.g. QUERY_INVALID, FORBIDDEN).
+    if (error instanceof ApiError) throw new Error(`${error.code}: ${error.message}`);
+    throw error;
+  }
+};
+
+/** Runs a tool by contract name, skipping the confirmation step: only for calls the user confirmed. */
+export async function runConfirmed(ctx: ToolContext, name: string, args: unknown, signal?: AbortSignal): Promise<ToolOutput> {
+  const tool = toolSpecs(ctx).find(item => item.name === name);
+  if (!tool) throw new Error(`UNKNOWN_TOOL: ${name}`);
+  return apiErrors(() => tool.run(args as never, signal));
+}
+
 /** Pi ToolDefinitions; `details` carries the ToolOutput for the ToolCall projection. */
 export function piTools(ctx: ToolContext): ToolDefinition[] {
   return toolSpecs(ctx).map(tool => ({
     name: piName(tool.name),
     label: tool.name,
-    description: tool.description,
+    description: tool.confirm ? `${tool.description}（写操作：调用后先向用户展示确认卡片，用户点“执行”后由平台执行。）` : tool.description,
     parameters: tool.parameters,
     async execute(_toolCallId: string, params: unknown, signal: AbortSignal | undefined) {
-      let output: ToolOutput;
-      try {
-        output = await tool.run(params as never, signal);
-      } catch (error) {
-        // Keep the api error code visible to the model (e.g. QUERY_INVALID, FORBIDDEN).
-        if (error instanceof ApiError) throw new Error(`${error.code}: ${error.message}`);
-        throw error;
+      if (tool.confirm) {
+        const proposal = await apiErrors(() => tool.confirm!(params as never, signal));
+        const output: ToolOutput = {
+          data: {
+            status: 'NEEDS_CONFIRMATION',
+            note: '尚未执行。平台已向用户展示确认卡片，用户点“执行”后由平台执行并把结果告诉你。本轮不要再调用这个工具，也不要说已完成或已提交；用一句话说明将要做什么、请用户确认。',
+            proposal,
+          },
+          summary: '等待确认',
+          proposal,
+        };
+        return { content: [{ type: 'text' as const, text: JSON.stringify(output.data) }], details: output };
       }
+      const output = await apiErrors(() => tool.run(params as never, signal));
       return { content: [{ type: 'text' as const, text: JSON.stringify(output.data) }], details: output };
     },
   }));

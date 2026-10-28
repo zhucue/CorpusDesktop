@@ -27,9 +27,13 @@ export function useSessions(projectId: string) {
 }
 
 function itemsFrom(detail: AgentSessionDetail): ChatItem[] {
-  return detail.messages.map((m) =>
+  const items = detail.messages.map((m) =>
     m.role === "user" ? ({ kind: "user", id: m.id, content: m.content } as ChatItem) : ({ kind: "ai", m: fromMessage(m) } as ChatItem),
   );
+  // A run still going on the server (another tab, a dropped stream): its message is running even before any tool starts.
+  const last = items.at(-1);
+  if (detail.state === "running" && last?.kind === "ai") items[items.length - 1] = { kind: "ai", m: { ...last.m, status: "running" } };
+  return items;
 }
 
 /**
@@ -96,37 +100,27 @@ export function useAgentChat({
   }, [sessionId]);
   useEffect(() => () => active.current?.abort.abort(), []);
 
-  const send = useCallback(
-    async (content: string): Promise<boolean> => {
-      const text = content.trim();
-      if (!text || active.current) return false;
-      setError(null);
-      let sid = current.current;
-      try {
-        if (!sid) {
-          const s = await agentApi.post<AgentSession>("/sessions", { project_id: projectId, scope, title: text.replace(/\s+/g, " ").slice(0, 40) });
-          sid = s.id;
-          current.current = s.id;
-          qc.invalidateQueries({ queryKey: ["agent-sessions", projectId] });
-          onSessionCreated?.(s);
-        }
-      } catch (e) {
-        setError(e);
-        return false;
-      }
+  /**
+   * Streams one run (POST messages or confirm). `prepare` adds the placeholders; when the request is rejected
+   * before streaming (409 SESSION_BUSY, 503 MODEL_NOT_CONFIGURED…) the list goes back to how it was.
+   */
+  const streamRun = useCallback(
+    async (sid: string, path: string, payload: unknown, prepare: (list: ChatItem[], placeholder: ChatItem) => ChatItem[]): Promise<boolean> => {
       const localId = `local-${Date.now()}`;
       const abort = new AbortController();
       active.current = { id: localId, abort };
       setRunning(true);
-      const now = Date.now();
-      let chain: ChainMessage = { ...newChain(now), id: localId };
-      const userId = `u-${now}`;
-      setItems((list) => [...list, { kind: "user", id: userId, content: text }, { kind: "ai", m: chain }]);
+      let chain: ChainMessage = { ...newChain(Date.now()), id: localId };
+      let before: ChatItem[] | null = null;
+      setItems((list) => {
+        before = list;
+        return prepare(list, { kind: "ai", m: chain });
+      });
       let accepted = true;
       let finished = false;
       try {
-        const res = await fetch(`/agent/sessions/${sid}/messages`, {
-          ...buildInit("POST", { content: text }),
+        const res = await fetch(`/agent/sessions/${sid}/${path}`, {
+          ...buildInit("POST", payload),
           headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
           signal: abort.signal,
         });
@@ -145,10 +139,10 @@ export function useAgentChat({
       } catch (e) {
         if (!abort.signal.aborted) {
           setError(e);
-          // Request rejected before streaming (409 SESSION_BUSY, 503 MODEL_NOT_CONFIGURED…): drop the placeholder.
           if (chain.id === localId) {
             accepted = false;
-            setItems((list) => list.filter((it) => !(it.kind === "ai" && it.m.id === localId) && !(it.kind === "user" && it.id === userId)));
+            const restore = before;
+            if (restore) setItems(restore);
           } else {
             setItems((list) => list.map((it) => (it.kind === "ai" && it.m.id === chain.id && it.m.status === "running" ? { kind: "ai", m: { ...it.m, status: "error" } } : it)));
           }
@@ -159,16 +153,78 @@ export function useAgentChat({
         setRunning(false);
         qc.invalidateQueries({ queryKey: ["agent-sessions", projectId] });
         // Stream dropped without a final event: reload the session and follow it while it runs.
-        if (!finished && current.current === sid) {
-          setRemoteRunning(true);
-          qc.invalidateQueries({ queryKey: ["agent-session", sid] });
-        } else {
-          qc.invalidateQueries({ queryKey: ["agent-session", sid] });
-        }
+        if (!finished && current.current === sid) setRemoteRunning(true);
+        qc.invalidateQueries({ queryKey: ["agent-session", sid] });
       }
       return accepted;
     },
-    [projectId, scope, qc, onSessionCreated],
+    [projectId, qc],
+  );
+
+  const send = useCallback(
+    async (content: string): Promise<boolean> => {
+      const text = content.trim();
+      if (!text || active.current) return false;
+      setError(null);
+      let sid = current.current;
+      try {
+        if (!sid) {
+          const s = await agentApi.post<AgentSession>("/sessions", { project_id: projectId, scope, title: text.replace(/\s+/g, " ").slice(0, 40) });
+          sid = s.id;
+          current.current = s.id;
+          qc.invalidateQueries({ queryKey: ["agent-sessions", projectId] });
+          onSessionCreated?.(s);
+        }
+      } catch (e) {
+        setError(e);
+        return false;
+      }
+      const userId = `u-${Date.now()}`;
+      return streamRun(sid, "messages", { content: text }, (list, ai) => [...list, { kind: "user", id: userId, content: text }, ai]);
+    },
+    [projectId, scope, qc, onSessionCreated, streamRun],
+  );
+
+  /** Re-ask the last question: its old answer (and any confirm runs after it) is replaced, not repeated. */
+  const regenerate = useCallback(async (): Promise<boolean> => {
+    const sid = current.current;
+    if (!sid || active.current) return false;
+    setError(null);
+    return streamRun(sid, "messages", { regenerate: true }, (list, ai) => {
+      const at = list.map((it) => it.kind).lastIndexOf("user");
+      if (at < 0) return [...list, ai];
+      return [...list.slice(0, at + 1), ai];
+    });
+  }, [streamRun]);
+
+  /** Answer the confirm card: decline updates the card; execute runs the proposed calls in a new streamed turn. */
+  const confirm = useCallback(
+    async (ids: string[], action: "execute" | "decline"): Promise<void> => {
+      const sid = current.current;
+      if (!sid || active.current || !ids.length) return;
+      setError(null);
+      const mark = (list: ChatItem[]) =>
+        list.map((it) =>
+          it.kind === "ai" && it.m.tools.some((t) => ids.includes(t.id))
+            ? ({
+                kind: "ai",
+                m: { ...it.m, tools: it.m.tools.map((t) => (ids.includes(t.id) ? { ...t, state: action === "execute" ? "confirmed" : "declined" } : t)) },
+              } as ChatItem)
+            : it,
+        );
+      if (action === "decline") {
+        try {
+          await agentApi.post(`/sessions/${sid}/confirm`, { tool_call_ids: ids, action });
+          setItems(mark);
+        } catch (e) {
+          setError(e);
+        }
+        qc.invalidateQueries({ queryKey: ["agent-session", sid] });
+        return;
+      }
+      await streamRun(sid, "confirm", { tool_call_ids: ids, action }, (list, ai) => [...mark(list), ai]);
+    },
+    [qc, streamRun],
   );
 
   const stop = useCallback(async () => {
@@ -196,6 +252,8 @@ export function useAgentChat({
     loading: !!sessionId && detail.isPending,
     loadError: detail.error,
     send,
+    regenerate,
+    confirm,
     stop,
   };
 }

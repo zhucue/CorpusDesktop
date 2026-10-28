@@ -9,7 +9,7 @@ import { systemPrompt } from '../src/prompt.ts';
 import { Runner } from '../src/runner.ts';
 import { createApp } from '../src/server.ts';
 import {
-  AGENT_TOKEN, AGREEMENT, ALIGN_LAYER, CORPUS, COOKIE, DEP_LAYER, KB_SEARCH, SPAN_LAYER, LONG_CHUNK, MemoryStore, ORIGIN, PROJECT, USER, fakeApi, fakeModel, parseSse, testConfig, type Reply,
+  AGENT_TOKEN, AGREEMENT, ALIGN_LAYER, BUILTIN_CORPUS, CORPUS, COOKIE, DEP_LAYER, KB_SEARCH, SPAN_LAYER, LONG_CHUNK, MemoryStore, ORIGIN, PROJECT, USER, fakeApi, fakeModel, parseSse, testConfig, type Reply,
 } from './fixtures.ts';
 
 const closers: (() => Promise<void>)[] = [];
@@ -35,6 +35,31 @@ async function setup(replies: Reply[], options: { api?: Parameters<typeof fakeAp
     return (await response.json()) as { id: string; state: string };
   };
   return { api, model, store, app, call, createSession };
+}
+
+type Call = (method: string, path: string, body?: unknown) => Response | Promise<Response>;
+
+/** Pending proposals of the latest assistant message. */
+async function pending(call: Call, sessionId: string): Promise<any[]> {
+  const detail = await (await call('GET', `/agent/sessions/${sessionId}`)).json() as any;
+  return detail.messages.findLast((m: any) => m.role === 'assistant').tool_calls.filter((t: any) => t.state === 'needs_confirmation');
+}
+
+/** Presses 执行 on the latest confirm card; returns the SSE events of the confirm run. */
+async function confirmAll(call: Call, sessionId: string) {
+  const ids = (await pending(call, sessionId)).map(t => t.id);
+  assert.ok(ids.length > 0, 'a proposal awaits confirmation');
+  const response = await call('POST', `/agent/sessions/${sessionId}/confirm`, { tool_call_ids: ids, action: 'execute' });
+  assert.equal(response.status, 200);
+  return parseSse(await response.text());
+}
+
+/** Tool results the confirm run handed to the model in its [平台消息] prompt. */
+function confirmedResults(model: { requests: any[] }, index: number): any[] {
+  const user = model.requests[index].body.messages.findLast((m: any) => m.role === 'user');
+  const text = typeof user.content === 'string' ? user.content : user.content.map((c: any) => c.text ?? '').join('');
+  assert.match(text, /^\[平台消息\]/);
+  return [...text.matchAll(/：已执行，结果 (.*)$/gm)].map(m => JSON.parse(m[1]));
 }
 
 const KWIC = [
@@ -112,7 +137,7 @@ test('full run: search and collocation tools, prose and OpenUI streamed, message
   assert.match(system, /KwicTable\(search_id: string/);
   assert.match(system, /UD 中文/);
   const toolNames = model.requests[0].body.tools.map((t: any) => t.function.name);
-  assert.equal(toolNames.length, 37);
+  assert.equal(toolNames.length, 38);
   assert.ok(!toolNames.some((n: string) => ['read', 'bash', 'edit', 'write'].includes(n)));
   assert.ok(toolNames.includes('stats_collocations') && toolNames.includes('jobs_cancel') && toolNames.includes('kb_search') && toolNames.includes('align_suggest'));
 
@@ -315,16 +340,25 @@ test('annot.sentence then a DependencyTree block', async () => {
 
 test('annot.suggest forwards the body with the agent token', async () => {
   const args = { layer_id: DEP_LAYER, document_id: 'doc1', sentence_index: 3, token_index: 3, label: 'obj', head: 2, note: '宾语' };
-  const { api, model, call, createSession } = await setup([{ tool: 'annot_suggest', args }, { text: '已提出建议，待你确认。' }]);
+  const { api, model, call, createSession } = await setup([
+    { tool: 'annot_suggest', args }, { text: '将提出建议，请确认。' }, { text: '已提出建议，待你确认。' },
+  ]);
   const session = await createSession();
   const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '建议把这本书改成 obj' })).text());
-  const result = events.find(e => e.event === 'tool_result')!.data;
+  const proposed = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([proposed.name, proposed.state], ['annot.suggest', 'needs_confirmation']);
+  assert.deepEqual(proposed.confirm, { title: '提出标注建议（待人工确认）', lines: ['标注层：依存', '第 4 句第 3 个词 → obj，head 2', '理由：宾语'] });
+  assert.ok(!api.requests.some(r => r.path === `/layers/${DEP_LAYER}/suggest`), 'nothing is written before 执行');
+
+  const confirmed = await confirmAll(call, session.id);
+  const result = confirmed.find(e => e.event === 'tool_result')!.data;
   assert.deepEqual([result.name, result.state], ['annot.suggest', 'succeeded']);
+  assert.equal(confirmed.at(-1)!.event, 'done');
   const request = api.requests.find(r => r.path === `/layers/${DEP_LAYER}/suggest`)!;
   assert.equal(request.method, 'POST');
   assert.equal(request.headers.authorization, `Bearer ${AGENT_TOKEN}`);
   assert.deepEqual(request.body, { document_id: 'doc1', sentence_index: 3, token_index: 3, label: 'obj', head: 2, note: '宾语' });
-  const toolResult = JSON.parse(model.requests[1].body.messages.find((m: any) => m.role === 'tool').content);
+  const [toolResult] = confirmedResults(model, 2);
   assert.equal(toolResult.status, 'suggested');
   assert.equal(toolResult.annotation_id, 'annot-1');
   // no confirm path exists for the agent
@@ -334,17 +368,28 @@ test('annot.suggest forwards the body with the agent token', async () => {
 test('annot.create_layer resolves the built-in label set and waits for preannotation', async () => {
   const { api, model, call, createSession } = await setup([
     { tool: 'annot_create_layer', args: { corpus_id: CORPUS, kind: 'pos', name: '词性' } },
+    { text: '将新建词性层，请确认。' },
     { text: '标注层已就绪。' },
   ]);
   const session = await createSession();
   const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '建一个词性层' })).text());
-  const result = events.find(e => e.event === 'tool_result')!.data;
+  const proposed = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([proposed.name, proposed.state], ['annot.create_layer', 'needs_confirmation']);
+  assert.equal(proposed.confirm.title, '新建词性标注层「词性」并预标');
+  assert.deepEqual(proposed.confirm.lines, ['语料库：UD 中文', '文档：全部', '标签集：jieba']);
+  assert.ok(!api.requests.some(r => r.path === `/projects/${PROJECT}/layers` && r.method === 'POST'), 'no layer before 执行');
+  // the model is told the call is only proposed
+  const proposal = JSON.parse(model.requests[1].body.messages.find((m: any) => m.role === 'tool').content);
+  assert.equal(proposal.status, 'NEEDS_CONFIRMATION');
+
+  const confirmed = await confirmAll(call, session.id);
+  const result = confirmed.find(e => e.event === 'tool_result')!.data;
   assert.deepEqual([result.name, result.state], ['annot.create_layer', 'succeeded']);
   assert.deepEqual(result.result_ref, { kind: 'layer', id: 'layer-new' });
   const create = api.requests.find(r => r.path === `/projects/${PROJECT}/layers` && r.method === 'POST')!;
   assert.deepEqual(create.body, { corpus_id: CORPUS, kind: 'pos', name: '词性', label_set_id: 'ls-jieba' });
   assert.ok(api.requests.filter(r => r.path === '/jobs/job-preannotate').length >= 2);
-  const toolResult = JSON.parse(model.requests[1].body.messages.find((m: any) => m.role === 'tool').content);
+  const [toolResult] = confirmedResults(model, 2);
   assert.equal(toolResult.status, 'ready');
   assert.equal(toolResult.layer_id, 'layer-new');
 });
@@ -414,26 +459,32 @@ test('kb.save creates a note, adds refs and returns a note ref', async () => {
   const refs = [{ kind: 'chunk', ref: { chunk_id: 'chunk-1', document_id: 'kb-doc-1' } }];
   const { api, call, createSession } = await setup([
     { tool: 'kb_save', args: { body: '# 翻译腔\n\n定义见 chunk-1。', refs } },
+    { text: '将新建笔记，请确认。' },
     { text: '已保存为笔记。' },
   ]);
   const session = await createSession();
-  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '保存为笔记' })).text());
+  const first = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '保存为笔记' })).text());
+  assert.equal(first.find(e => e.event === 'tool_result')!.data.confirm.title, '新建笔记「翻译腔」');
+  const events = await confirmAll(call, session.id);
   const result = events.find(e => e.event === 'tool_result')!.data;
   assert.deepEqual([result.name, result.state], ['kb.save', 'succeeded']);
   assert.deepEqual(result.result_ref, { kind: 'note', id: 'note-1' });
   const create = api.requests.find(r => r.path === `/projects/${PROJECT}/kb/documents` && r.method === 'POST')!;
   assert.deepEqual(create.body, { kind: 'note', title: '翻译腔', body: '# 翻译腔\n\n定义见 chunk-1。' });
   const ref = api.requests.find(r => r.path === '/kb/documents/note-1/refs')!;
-  assert.deepEqual(ref.body, refs[0]);
+  // the quote is already in body, so the ref is recorded without appending it again
+  assert.deepEqual(ref.body, { ...refs[0], append: false });
 });
 
 test('kb.extract_terms polls the job and returns the newest 20 drafts', async () => {
   const { api, model, call, createSession } = await setup([
     { tool: 'kb_extract_terms', args: { source: 'corpus' } },
+    { text: '将抽取术语，请确认。' },
     { text: '新增 25 条草稿术语。' },
   ]);
   const session = await createSession();
-  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '从语料抽取术语' })).text());
+  parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '从语料抽取术语' })).text());
+  const events = await confirmAll(call, session.id);
   const result = events.find(e => e.event === 'tool_result')!.data;
   assert.deepEqual([result.name, result.state], ['kb.extract_terms', 'succeeded']);
   assert.deepEqual(result.result_ref, { kind: 'job', id: 'job-kbextract' });
@@ -441,7 +492,7 @@ test('kb.extract_terms polls the job and returns the newest 20 drafts', async ()
   assert.deepEqual(extract.body, { source: 'corpus', scope: { corpus_id: CORPUS }, method: 'pos_pattern', top: 100 });
   assert.ok(api.requests.filter(r => r.path === '/jobs/job-kbextract').length >= 2);
   assert.ok(api.requests.some(r => r.path === `/projects/${PROJECT}/kb/terms?status=draft`));
-  const toolResult = JSON.parse(model.requests[1].body.messages.find((m: any) => m.role === 'tool').content);
+  const [toolResult] = confirmedResults(model, 2);
   assert.equal(toolResult.created, 25);
   assert.equal(toolResult.terms.length, 20);
   assert.equal(toolResult.terms[0].term_id, 'draft-24');
@@ -515,18 +566,24 @@ test('annot.spans then a SpanView block; annot.suggest_spans posts the suggestio
     { tool: 'annot_spans', args: { layer_id: SPAN_LAYER, document_ordinal: 2, sentence_index: 3 } },
     { tool: 'annot_suggest_spans', args: suggest },
     { text: `doc1 第 4 句的翻译策略（待确认）：\n\`\`\`openui-lang\n${spanView}\n\`\`\`\n` },
+    { text: '已提出片段建议。' },
   ]);
   const session = await createSession();
   const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '标出第 4 句里的翻译策略' })).text());
   assert.equal(events.at(-1)!.event, 'done');
   const results = events.filter(e => e.event === 'tool_result').map(e => e.data);
-  assert.deepEqual(results.map(r => [r.name, r.state]), [['annot.spans', 'succeeded'], ['annot.suggest_spans', 'succeeded']]);
-  for (const r of results) assert.deepEqual(r.result_ref, { kind: 'layer', id: SPAN_LAYER });
+  assert.deepEqual(results.map(r => [r.name, r.state]), [['annot.spans', 'succeeded'], ['annot.suggest_spans', 'needs_confirmation']]);
+  assert.deepEqual(results[0].result_ref, { kind: 'layer', id: SPAN_LAYER });
+  assert.deepEqual(results[1].confirm.lines, ['标注层：片段', '第 4 句：他们（增译）', '关系：1 条']);
+  assert.ok(!api.requests.some(r => r.path === `/layers/${SPAN_LAYER}/spans/suggest`));
+  const executed = (await confirmAll(call, session.id)).find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([executed.name, executed.state, executed.result_ref], ['annot.suggest_spans', 'succeeded', { kind: 'layer', id: SPAN_LAYER }]);
 
   const read = api.requests.find(r => r.path.startsWith(`/layers/${SPAN_LAYER}/spans?`))!;
   assert.equal(read.path, `/layers/${SPAN_LAYER}/spans?document_id=doc1&cursor=doc1%3A2&page_size=1`);
   assert.equal(read.headers.authorization, `Bearer ${AGENT_TOKEN}`);
-  const [spans, suggested] = toolResults(model, 2);
+  const [spans] = toolResults(model, 2);
+  const [suggested] = confirmedResults(model, 3);
   assert.equal(spans.document_title, '新闻 01');
   assert.equal(spans.start_cp, 100);
   assert.deepEqual(spans.spans.map((s: any) => [s.span_id, s.start, s.end, s.label, s.status]),
@@ -582,16 +639,20 @@ test('align.pairs then an AlignmentGraph block; align.suggest posts links with t
     { tool: 'align_pairs', args: { layer_id: ALIGN_LAYER, src_document_id: 'src-doc', src_sentence_index: 0 } },
     { tool: 'align_suggest', args: suggest },
     { text: `src-doc 第 1 句的对齐：\n\`\`\`openui-lang\n${graph}\n\`\`\`\n` },
+    { text: '已提出对齐建议。' },
   ]);
   const session = await createSession();
   const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '看这对句子的对齐' })).text());
   const results = events.filter(e => e.event === 'tool_result').map(e => e.data);
-  assert.deepEqual(results.map(r => [r.name, r.state]), [['align.pairs', 'succeeded'], ['align.suggest', 'succeeded']]);
-  for (const r of results) assert.deepEqual(r.result_ref, { kind: 'layer', id: ALIGN_LAYER });
+  assert.deepEqual(results.map(r => [r.name, r.state]), [['align.pairs', 'succeeded'], ['align.suggest', 'needs_confirmation']]);
+  assert.deepEqual(results[1].confirm, { title: '提出词级对齐建议（待人工确认）', lines: ['对齐层：对齐', '源文第 1 句：1 条连线'] });
+  const executed = (await confirmAll(call, session.id)).find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([executed.name, executed.state, executed.result_ref], ['align.suggest', 'succeeded', { kind: 'layer', id: ALIGN_LAYER }]);
 
   const read = api.requests.find(r => r.path.startsWith(`/layers/${ALIGN_LAYER}/alignments?`))!;
   assert.equal(read.path, `/layers/${ALIGN_LAYER}/alignments?src_document_id=src-doc&page_size=10`);
-  const [pairs, suggested] = toolResults(model, 2);
+  const [pairs] = toolResults(model, 2);
+  const [suggested] = confirmedResults(model, 3);
   assert.deepEqual(pairs.pairs[0].src.tokens, ['He', 'translated', 'the', 'book', '.']);
   // the AlignmentGraph locator fields travel with each pair
   assert.equal(pairs.pairs[0].layer_id, ALIGN_LAYER);
@@ -650,4 +711,88 @@ test('annot.agreement reads kappa, alpha and the top 10 disagreements', async ()
   assert.equal(agreement.annotators.length, 2);
   assert.equal(agreement.disagreements.length, 10);
   assert.equal(agreement.more_disagreements, true);
+});
+
+// ---------------------------------------------------------------- write-tool confirmation, regenerate, stop
+
+test('write tools on a built-in corpus fail before any proposal; no layer is created', async () => {
+  const { api, call, createSession } = await setup([
+    { tool: 'annot_create_layer', args: { corpus_id: BUILTIN_CORPUS, kind: 'dep', name: '依存' } },
+    { text: '内置语料不能由助手建层。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '用依存树展示 UD 中文 GSD 的第 1 句' })).text());
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([result.name, result.state], ['annot.create_layer', 'failed']);
+  assert.match(result.result_summary, /BUILTIN_CORPUS/);
+  assert.equal(result.confirm, undefined);
+  assert.ok(!api.requests.some(r => r.method === 'POST' && r.path.endsWith('/layers')));
+  assert.deepEqual(await pending(call, session.id), []);
+});
+
+test('decline: nothing runs, the card answer is final, and the model hears about it with the next message', async () => {
+  const { api, model, call, createSession } = await setup([
+    { tool: 'evidence_add', args: { kind: 'text', ref: {}, text: '翻译是再创作。', source: '笔记' } },
+    { text: '要把这句加入证据篮吗？' },
+    { text: '好的，不加入。' },
+  ]);
+  const session = await createSession();
+  parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '把这句放进证据篮' })).text());
+  const [proposal] = await pending(call, session.id);
+  assert.deepEqual(proposal.confirm, { title: '加入证据篮', lines: ['翻译是再创作。', '出处：笔记'] });
+
+  const declined = await call('POST', `/agent/sessions/${session.id}/confirm`, { tool_call_ids: [proposal.id], action: 'decline' });
+  assert.equal(declined.status, 200);
+  const message = ((await declined.json()) as any).message;
+  assert.equal(message.tool_calls[0].state, 'declined');
+  // a handled proposal cannot be answered again
+  const again = await call('POST', `/agent/sessions/${session.id}/confirm`, { tool_call_ids: [proposal.id], action: 'execute' });
+  assert.equal(again.status, 409);
+  assert.equal(((await again.json()) as any).error.code, 'CONFIRMATION_EXPIRED');
+  const invalid = await call('POST', `/agent/sessions/${session.id}/confirm`, { tool_call_ids: [], action: 'execute' });
+  assert.equal(invalid.status, 422);
+
+  parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '那算了' })).text());
+  assert.ok(!api.requests.some(r => r.path === `/projects/${PROJECT}/evidence`));
+  const user = model.requests[2].body.messages.findLast((m: any) => m.role === 'user');
+  const text = typeof user.content === 'string' ? user.content : user.content.map((c: any) => c.text ?? '').join('');
+  assert.match(text, /^\[平台消息\] 用户取消了你上次提出的操作：加入证据篮/);
+  assert.match(text, /那算了$/);
+});
+
+test('regenerate replaces the last question and answer, in the store and in the model context', async () => {
+  const { model, call, createSession } = await setup([{ text: '第一次回答。' }, { text: '第二次回答。' }]);
+  const session = await createSession();
+  parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '翻译腔是什么' })).text());
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { regenerate: true })).text());
+  assert.equal(events.at(-1)!.event, 'done');
+  const detail = await (await call('GET', `/agent/sessions/${session.id}`)).json() as any;
+  assert.deepEqual(detail.messages.map((m: any) => [m.role, m.content]), [['user', '翻译腔是什么'], ['assistant', '第二次回答。']]);
+  const contents = model.requests[1].body.messages.map((m: any) => typeof m.content === 'string' ? m.content : JSON.stringify(m.content));
+  assert.ok(!contents.some((c: string) => c.includes('第一次回答')), 'the replaced answer left the context');
+  assert.equal(contents.filter((c: string) => c.includes('翻译腔是什么')).length, 1);
+});
+
+test('a stopped run is persisted as stopped', async () => {
+  const { api, call, createSession } = await setup(
+    [{ tool: 'stats_frequency', args: {} }],
+    { api: { statJobState: 'running' }, config: { jobWaitMs: 60000 } },
+  );
+  const session = await createSession();
+  const body = (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '统计词频' })).text();
+  await api.firstJobPoll;
+  await call('POST', `/agent/sessions/${session.id}/cancel`);
+  const events = parseSse(await body);
+  assert.equal(events.at(-1)!.data.message.stopped, true);
+  const detail = await (await call('GET', `/agent/sessions/${session.id}`)).json() as any;
+  assert.equal(detail.messages[1].stopped, true);
+});
+
+test('system prompt: read-only requests never call write tools, and prose carries no internal IDs', () => {
+  const prompt = systemPrompt('UD 中文');
+  assert.ok(prompt.includes('绝不调用写操作工具'));
+  assert.ok(prompt.includes('NEEDS_CONFIRMATION'));
+  assert.ok(prompt.includes('你不在内置语料上建标注层'));
+  assert.ok(prompt.includes('正文和思考中都不写内部 ID'));
+  assert.ok(!prompt.includes('写出 hit_id') && !prompt.includes('写出 document_id'));
 });

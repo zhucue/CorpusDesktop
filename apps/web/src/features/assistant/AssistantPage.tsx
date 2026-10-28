@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { agentApi, errorText, type AgentSession, type Scope, type ToolCall } from "../../api";
 import { Empty, ErrorAlert } from "../../components/common";
-import { AGENT_TOOLS, TOOL_VIEW } from "../../components/global/tools";
+import { TOOL_COUNT, TOOL_VIEW } from "../../components/global/tools";
 import { Icon } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
@@ -12,6 +12,7 @@ import { describeScope, useCorpora, useProjectId, useSubcorpora } from "../../li
 import { dayGroup, fmt, fmtShortTime, fmtVersion } from "../../lib/format";
 import "./assistant.css";
 import AssistantPanel, { HealthNotice } from "./AssistantPanel";
+import { ToolList } from "./ToolList";
 import { useSessions, type ChatItem } from "./useAgentChat";
 
 export function refLink(projectId: string, ref: ToolCall["result_ref"]): string | null {
@@ -107,6 +108,7 @@ function Rail({ projectId, scope, items }: { projectId: string; scope: Scope | n
   const used = new Set(calls.map((c) => c.name));
   const cited = calls.filter((c) => c.state === "succeeded" && c.result_ref);
   const stats = info.subcorpus?.stats ?? info.corpus?.stats;
+  const [toolsOpen, setToolsOpen] = useState(false);
   return (
     <aside className="rail" aria-label="上下文">
       <section>
@@ -147,33 +149,22 @@ function Rail({ projectId, scope, items }: { projectId: string; scope: Scope | n
             <div className="ev" key={c.id}>
               <span className="cite">{i + 1}</span>
               <div style={{ minWidth: 0 }}>
-                <div className="mono small">
-                  <Icon name={TOOL_VIEW[c.name]?.icon ?? "tool"} size={12} /> {c.name}
+                <div className="small muted row" style={{ gap: 4 }}>
+                  <Icon name={TOOL_VIEW[c.name]?.icon ?? "tool"} size={12} /> {TOOL_VIEW[c.name]?.title ?? c.name}
                 </div>
-                <div className="ellipsis">{href ? <Link to={href}>{c.result_summary || c.result_ref?.id}</Link> : c.result_summary}</div>
+                <div className="ellipsis">{href ? <Link to={href}>{c.result_summary || "打开"}</Link> : c.result_summary}</div>
               </div>
             </div>
           );
         })}
       </section>
       <section>
-        <h2>
+        <button className="rail-toggle" type="button" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)}>
           <Icon name="tool" size={14} />
-          可用工具
-        </h2>
-        {AGENT_TOOLS.map((g) => (
-          <div key={g.group}>
-            <div className="tool-group">{g.group}</div>
-            <div className="tool-chips">
-              {g.tools.map((t) => (
-                <span key={t} className={`chip static ${used.has(t) ? "used" : ""}`}>
-                  <Icon name={TOOL_VIEW[t]?.icon ?? "tool"} size={12} />
-                  {t}
-                </span>
-              ))}
-            </div>
-          </div>
-        ))}
+          <span className="grow">工具 {TOOL_COUNT}</span>
+          <Icon name="down" size={14} className="chev" />
+        </button>
+        {toolsOpen && <ToolList used={used} />}
       </section>
     </aside>
   );

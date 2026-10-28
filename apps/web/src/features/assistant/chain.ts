@@ -23,7 +23,7 @@ export function newChain(now: number): ChainMessage {
 
 export function fromMessage(m: AgentMessage): ChainMessage {
   const created = Date.parse(m.created_at) || 0;
-  const cancelled = m.tool_calls.some((t) => t.state === "cancelled");
+  const cancelled = m.stopped || m.tool_calls.some((t) => t.state === "cancelled");
   return {
     id: m.id,
     status: m.tool_calls.some((t) => t.state === "running") ? "running" : cancelled ? "stopped" : "done",
@@ -81,7 +81,7 @@ export function applyEvent(m: ChainMessage, e: SseEvent, now: number): ChainMess
     case "done": {
       const msg = data.message as AgentMessage | undefined;
       const tools = msg?.tool_calls ?? m.tools;
-      const stopped = m.stopRequested || tools.some((t) => t.state === "cancelled");
+      const stopped = m.stopRequested || msg?.stopped || tools.some((t) => t.state === "cancelled");
       return {
         ...m,
         id: msg?.id ?? m.id,
@@ -127,7 +127,7 @@ export const answerParts = (m: ChainMessage) => m.parts.filter((p) => p.type !==
 export const plainText = (m: ChainMessage) =>
   m.parts
     .filter((p): p is { type: "text"; text: string } => p.type === "text")
-    .map((p) => p.text)
+    .map((p) => scrubIds(p.text))
     .join("\n\n");
 
 /** Thinking phase: no answer yet, or a tool is still running. */
@@ -138,3 +138,32 @@ export const thinkingChars = (m: ChainMessage) => Array.from(thinkingText(m).rep
 
 /** 860 字 / 1.2k 字 */
 export const fmtChars = (n: number) => (n < 1000 ? `${n} 字` : `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k 字`);
+
+/** The answer has text or a component (the action row only shows then). */
+export const hasContent = (m: ChainMessage) => answerParts(m).some((p) => (p.type === "ui" ? p.lang.trim() : p.text.trim()));
+
+/** Write tools proposed in this message, waiting for 执行 / 取消. */
+export const pendingCalls = (m: ChainMessage) => m.tools.filter((t) => t.state === "needs_confirmation");
+
+const ID_KEY =
+  /\b(?:search|stat|hit|job|layer|document|doc|chunk|term|corpus|subcorpus|evidence|note|span|relation|annotation|alignment|label_set|query|kb_document|src_document|tgt_document)_ids?\s*[:=：]?\s*[`"'“]?(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?::\d+-\d+)?|[\w.:-]*\d[\w.:-]*)[`"'”]?/gi;
+const UUID = /[`"']?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?::\d+-\d+)?[`"']?/gi;
+/** Bare hex ids of 12+ characters mixing digits and letters (search ids, index versions). */
+const HEX = /\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{12,}\b/gi;
+
+/**
+ * Internal IDs never reach the reader (the model is told so; this is the safety net): drop "xxx_id: …" pairs,
+ * UUIDs and long hex strings, then the brackets and separators they leave behind.
+ */
+export function scrubIds(text: string): string {
+  return text
+    .replace(ID_KEY, "")
+    .replace(UUID, "")
+    .replace(HEX, "")
+    .replace(/[（(][\s，,、；;:：]*[）)]/g, "")
+    .replace(/([（(])[\s，,、；;]+/g, "$1")
+    .replace(/[\s，,、；;]+([）)])/g, "$1")
+    .replace(/[，,、；;]\s*([。！？：])/g, "$1")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ +([，。；：、）])/g, "$1");
+}

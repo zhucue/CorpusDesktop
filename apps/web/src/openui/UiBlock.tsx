@@ -1,6 +1,6 @@
 import { Renderer } from "@openuidev/react-lang";
 import { ErrorBoundary } from "../components/common/ErrorBoundary";
-import { library, RENDERERS } from "./library";
+import { libraryFor, RENDERERS } from "./library";
 
 /** JSON fallback: `{component, props}` (or an array of them). Returns null when the text is not that shape. */
 export function parseJsonBlock(text: string): { component: string; props: Record<string, unknown> }[] | null {
@@ -46,7 +46,7 @@ export default function UiBlock({ lang, streaming, index = 0 }: { lang: string; 
   return (
     <div className="ui-block" style={{ ["--i" as string]: index }}>
       <ErrorBoundary retry resetKey={lang} style={{ margin: 0 }}>
-        <Renderer response={lang} library={library} isStreaming={!!streaming} />
+        <Renderer response={lang} library={libraryFor(lang)} isStreaming={!!streaming} />
       </ErrorBoundary>
     </div>
   );

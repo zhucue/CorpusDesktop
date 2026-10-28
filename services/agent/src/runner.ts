@@ -15,7 +15,7 @@ import type { Config } from './config.ts';
 import { MODEL_ERROR_TEXT, trackModelRequests, type ModelHandle } from './model.ts';
 import { describeScope, systemPrompt } from './prompt.ts';
 import type { Store, SessionRecord } from './store.ts';
-import { piName, piTools, toolSpecs, type ToolOutput } from './tools.ts';
+import { piName, piTools, runConfirmed, toolSpecs, type ToolOutput } from './tools.ts';
 import type { Message, Part, ToolCall } from './types.ts';
 import { FenceSplitter } from './ui-stream.ts';
 
@@ -25,6 +25,15 @@ export type Emit = (event: string, data: unknown) => unknown;
 interface ActiveRun {
   cancelled: boolean;
   session?: AgentSession;
+  /** Aborts confirmed tool calls the server runs itself. */
+  abort: AbortController;
+}
+
+export interface RunOptions {
+  /** Replace the last question and everything after it (store rows and the Pi branch). */
+  regenerate?: boolean;
+  /** Proposals the user confirmed: run them first (no user message), then let the model report. */
+  confirmed?: ToolCall[];
 }
 
 export function sessionDir(dataDir: string, sessionId: string) {
@@ -77,7 +86,7 @@ export class Runner {
   /** Reserve the session synchronously; false when a run is already active (SESSION_BUSY). */
   reserve(sessionId: string): boolean {
     if (this.active.has(sessionId)) return false;
-    this.active.set(sessionId, { cancelled: false });
+    this.active.set(sessionId, { cancelled: false, abort: new AbortController() });
     return true;
   }
 
@@ -89,14 +98,16 @@ export class Runner {
     const run = this.active.get(sessionId);
     if (!run) return;
     run.cancelled = true;
+    run.abort.abort();
     await run.session?.abort();
   }
 
   /** Executes a reserved run to completion; always releases the reservation. */
-  async run(session: SessionRecord, content: string, token: string, emit: Emit): Promise<void> {
+  async run(session: SessionRecord, content: string, token: string, emit: Emit, options: RunOptions = {}): Promise<void> {
     const run = this.active.get(session.id)!;
     const model = this.model!;
     const started = Date.now();
+    const confirmed = options.confirmed ?? [];
     const userMessage: Message = {
       id: randomUUID(), role: 'user', content, parts: [{ type: 'text', text: content }], tool_calls: [],
       created_at: new Date(started).toISOString(),
@@ -116,10 +127,22 @@ export class Runner {
     };
 
     try {
-      await this.store.insertMessage(session.id, userMessage);
+      const history = await this.store.listMessages(session.id);
+      let replaced: string | null = null;
+      if (options.regenerate) {
+        const at = history.findLastIndex(message => message.role === 'user');
+        if (at >= 0) {
+          replaced = history[at].content;
+          for (const message of history.splice(at)) await this.store.deleteMessage(message.id);
+        }
+      }
+      // A proposal the user declined is told to the model once, with the next message.
+      const declined = history.findLast(message => message.role === 'assistant')?.tool_calls
+        .filter(call => call.state === 'declined').map(call => call.confirm?.title ?? call.name) ?? [];
+      if (!confirmed.length) await this.store.insertMessage(session.id, userMessage);
       await this.store.insertMessage(session.id, assistant);
       await this.store.updateSession(session.id, {
-        state: 'running', ...(session.title ? {} : { title: content.replace(/\s+/g, ' ').trim().slice(0, 40) }),
+        state: 'running', ...(session.title || !content ? {} : { title: content.replace(/\s+/g, ' ').trim().slice(0, 40) }),
       });
       emit('start', { message_id: assistant.id });
 
@@ -147,6 +170,43 @@ export class Runner {
       const scopeName = await this.scopeName(api, session).catch(() => null);
       const dir = sessionDir(this.config.dataDir, session.id);
       mkdirSync(dir, { recursive: true });
+
+      let prompt = content;
+      if (confirmed.length) {
+        const reports: string[] = [];
+        for (const proposed of confirmed) {
+          if (run.cancelled) break;
+          const call: ToolCall = { id: randomUUID(), name: proposed.name, args: proposed.args, state: 'running', result_summary: '', duration_ms: 0 };
+          const callStarted = Date.now();
+          calls.push(call);
+          emit('tool_call', call);
+          save();
+          const title = proposed.confirm?.title ?? proposed.name;
+          try {
+            const output = await runConfirmed(toolContext, proposed.name, proposed.args, run.abort.signal);
+            call.state = 'succeeded';
+            call.result_summary = output.summary;
+            if (output.ref) call.result_ref = output.ref;
+            reports.push(`- ${title}（${piName(proposed.name)}）：已执行，结果 ${JSON.stringify(output.data)}`);
+          } catch (error) {
+            call.state = run.cancelled ? 'cancelled' : 'failed';
+            call.result_summary = String((error as Error).message ?? error).slice(0, 300);
+            reports.push(`- ${title}（${piName(proposed.name)}）：执行失败，${call.result_summary}`);
+          }
+          call.duration_ms = Date.now() - callStarted;
+          emit('tool_result', call);
+          save();
+        }
+        prompt = [
+          '[平台消息] 用户点了“执行”，平台已执行你上次提出的操作：', ...reports,
+          '请用中文简要告诉用户结果，需要时用组件呈现；不要再次调用这些工具。',
+        ].join('\n');
+      } else if (declined.length) {
+        prompt = `[平台消息] 用户取消了你上次提出的操作：${declined.join('；')}。除非用户再次要求，不要再提出。\n\n${content}`;
+      }
+
+      const sessionManager = SessionManager.continueRecent(dir, dir);
+      if (replaced !== null) branchBefore(sessionManager, replaced);
       const tools = piTools(toolContext);
       ({ session: piSession } = await createAgentSession({
         cwd: dir,
@@ -156,7 +216,7 @@ export class Runner {
         thinkingLevel: model.config.reasoning ? 'medium' : 'off',
         resourceLoader: explicitResources(systemPrompt(describeScope(session.scope, scopeName))),
         settingsManager: SettingsManager.inMemory({ compaction: { enabled: true }, retry: { enabled: false } }),
-        sessionManager: SessionManager.continueRecent(dir, dir),
+        sessionManager,
         tools: tools.map(tool => tool.name),
         customTools: tools,
       }));
@@ -187,16 +247,17 @@ export class Runner {
           const call = calls.find(item => item.id === event.toolCallId);
           if (!call) return;
           const output = event.result?.details as ToolOutput | undefined;
-          call.state = event.isError ? (run.cancelled ? 'cancelled' : 'failed') : 'succeeded';
+          call.state = event.isError ? (run.cancelled ? 'cancelled' : 'failed') : output?.proposal ? 'needs_confirmation' : 'succeeded';
           call.result_summary = event.isError ? errorText(event.result) : output?.summary ?? '';
           if (!event.isError && output?.ref) call.result_ref = output.ref;
+          if (!event.isError && output?.proposal) call.confirm = output.proposal;
           call.duration_ms = event.durationMs ?? Date.now() - (startedAt.get(event.toolCallId) ?? Date.now());
           emit('tool_result', call);
           save();
         }
       });
 
-      if (!run.cancelled) await piSession.prompt(content);
+      if (!run.cancelled) await piSession.prompt(prompt);
       splitter.end();
 
       const last = [...piSession.messages].reverse().find(message => message.role === 'assistant') as
@@ -206,6 +267,7 @@ export class Runner {
       for (const call of calls) if (call.state === 'running') call.state = cancelled ? 'cancelled' : 'failed';
       assistant.content = textOf(parts);
       assistant.duration_ms = Date.now() - started;
+      if (cancelled) assistant.stopped = true;
       await saving;
       if (failed && !parts.length && !calls.length) await this.store.deleteMessage(assistant.id);
       else await this.store.updateMessage(assistant.id, assistant);
@@ -239,6 +301,19 @@ export class Runner {
     const path = 'subcorpus_id' in scope ? `/subcorpora/${scope.subcorpus_id}` : `/corpora/${scope.corpus_id}`;
     return (await api.get<{ name: string }>(path)).name;
   }
+}
+
+/** Regenerate: move the Pi leaf to just before the latest user prompt that carried `content`, so the old turn leaves the context. */
+function branchBefore(manager: SessionManager, content: string) {
+  const entry = manager.getBranch().findLast(item => {
+    if (item.type !== 'message' || (item as any).message?.role !== 'user') return false;
+    const value = (item as any).message.content;
+    const text = typeof value === 'string' ? value : Array.isArray(value) ? value.map((c: any) => c?.text ?? '').join('') : '';
+    return text.includes(content);
+  });
+  if (!entry) return;
+  if (entry.parentId) manager.branch(entry.parentId);
+  else manager.resetLeaf();
 }
 
 function textOf(parts: Part[]): string {
