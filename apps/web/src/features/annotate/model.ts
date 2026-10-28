@@ -15,6 +15,20 @@ export interface TokView {
   ann: Annotation | null;
 }
 
+/** jieba tag → UPOS, as engine.nlp.jieba_upos (the CoNLL-U export uses the same map). */
+const JIEBA_UPOS: Record<string, string> = {
+  n: "NOUN", nr: "PROPN", ns: "PROPN", nt: "PROPN", nz: "PROPN", v: "VERB", a: "ADJ", b: "ADJ", d: "ADV", p: "ADP", r: "PRON",
+  m: "NUM", q: "NOUN", c: "CCONJ", u: "PART", y: "PART", e: "INTJ", o: "INTJ", w: "PUNCT", f: "NOUN", s: "NOUN", t: "NOUN",
+};
+
+/** UPOS for a token tag: UPOS tags as they are, lower-case jieba tags mapped (X when unknown). */
+export function uposOf(tag: string | null | undefined): string | null {
+  if (!tag) return null;
+  if (!/^[a-z]/.test(tag)) return tag;
+  if (tag === "eng") return "X";
+  return JIEBA_UPOS[tag.slice(0, 2)] ?? JIEBA_UPOS[tag[0]] ?? "X";
+}
+
 export function annotationMap(s: SentenceAnnot): Map<number, Annotation> {
   return new Map(s.annotations.map((a) => [a.token_index, a]));
 }
@@ -52,10 +66,10 @@ export function sentenceStatus(s: SentenceAnnot): "pending" | "done" {
   return done ? "done" : "pending";
 }
 
-/** Arcs for DepGraph; rejected tokens draw nothing. */
+/** Arcs for DepGraph; rejected tokens draw nothing. Tokens show UPOS, the tag set of the UD relations. */
 export function graphOf(views: TokView[]): { tokens: GraphToken[]; arcs: GraphArc[] } {
   return {
-    tokens: views.map((v) => ({ index: v.index, form: v.form, pos: v.sysPos })),
+    tokens: views.map((v) => ({ index: v.index, form: v.form, pos: uposOf(v.sysPos) })),
     arcs: views
       .filter((v) => v.head != null && v.status !== "rejected")
       .map((v) => ({ dep: v.index, head: v.head!, label: v.label ?? "", suggested: v.status === "suggested" })),
@@ -192,7 +206,41 @@ export function keyCommand(e: KeyLike, ctx: { kind: LayerKind; labels: LabelDef[
   if (k === "e") return { type: "edit" };
   if (k === "p") return { type: "posColor" };
   const l = labelForKey(e.key, ctx.labels);
-  return l ? { type: "label", label: l.name } : null;
+  return l ? { type: "label", label: labelValue(l) } : null;
+}
+
+/** The value stored in annotations for a label (its id; name is the display name). */
+export const labelValue = (l: LabelDef) => l.id || l.name;
+
+/** Display name of a stored label value in a label set (the value itself when unknown). */
+export function labelName(labels: LabelDef[] | undefined, value: string | null | undefined): string {
+  if (value == null) return "";
+  return labels?.find((l) => l.id === value || l.name === value)?.name ?? value;
+}
+
+/** Layer source_model as shown: internal names in Chinese. */
+export function modelName(model: string | null | undefined): string {
+  if (!model) return "";
+  if (model === "system") return "语料自带标注";
+  if (model === "human") return "人工";
+  if (model === "llm") return "模型";
+  return model.replace(/^sentence_alignments/, "导入句对齐");
+}
+
+/**
+ * Where a value comes from. Reviewed rows keep their origin: a confirmed model suggestion reads
+ * "模型建议 · 人工确认" (modified: 人工修改, rejected: 人工拒绝); rows created by hand read 人工.
+ */
+export function sourceText(source: string, model: string, origin?: { modelLabel?: string | null; status?: AnnotStatus }): string {
+  if (source === "system") return modelName(model) || "语料自带标注";
+  if (source.startsWith("model:")) return source.slice(6);
+  if (source === "human" || source.startsWith("human:")) {
+    if (origin?.modelLabel == null) return "人工";
+    const from = model === "system" ? "语料自带" : "模型建议";
+    const how = origin.status === "modified" ? "人工修改" : origin.status === "rejected" ? "人工拒绝" : "人工确认";
+    return `${from} · ${how}`;
+  }
+  return source;
 }
 
 /** Next token after `from` that still needs review, wrapping; null when none is left. */

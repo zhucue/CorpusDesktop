@@ -2,7 +2,7 @@ import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { App, Dropdown, Popconfirm } from "antd";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { api, errorText, type Job, type Layer, type LayerDocument } from "../../api";
+import { api, errorText, type Job, type Layer, type LayerDocument, type LayerKind } from "../../api";
 import { Empty, ErrorAlert, exportTip, Skeleton, Tip } from "../../components/common";
 import { Icon } from "../../components/Icon";
 import { layerIcon } from "../../components/iconSets";
@@ -11,7 +11,7 @@ import { useShell } from "../../components/shell/shell";
 import { canEdit, useCorpora, useJob, useJobCreated, useMe, useProject, useProjectId } from "../../lib/data";
 import { fmt } from "../../lib/format";
 import { canWriteLayer, listOf, useLayers } from "./data";
-import { failedRetryBody, layerPct } from "./model";
+import { failedRetryBody, layerPct, modelName } from "./model";
 import NewLayerDialog, { kindLabels } from "./NewLayerDialog";
 import { KappaGauge, meanKappa, useAgreement } from "./Agreement";
 import AlignWorkspace from "./AlignWorkspace";
@@ -20,7 +20,17 @@ import Workspace from "./Workspace";
 import "./annotate.css";
 
 const FORMAT_NAMES: Record<string, string> = { conllu: "CoNLL-U", brat: "brat standoff", json: "JSON", tmx: "TMX", xlsx: "XLSX 统计" };
-const EXPORTS: Record<"span" | "relation" | "alignment", string[]> = { span: ["brat", "json", "xlsx"], relation: ["brat", "json"], alignment: ["tmx", "json"] };
+const EXPORTS: Record<LayerKind, string[]> = { pos: ["conllu", "json"], dep: ["conllu", "json"], span: ["brat", "json", "xlsx"], relation: ["brat", "json"], alignment: ["tmx", "json"] };
+/** What an export of the layer contains (services/worker/annot_tasks.EXPORT_SCOPE). */
+export const EXPORT_SCOPE: Record<LayerKind, string> = {
+  pos: "已确认、已修改的词取人工值；未校对的词取系统层自动值（语料自带，或预标写入的 jieba / Stanza 结果）",
+  dep: "已确认、已修改的词取人工值；未校对的词取系统层自动值（语料自带，或预标写入的 jieba / Stanza 结果）",
+  span: "已确认、已修改的片段；多人层为各标注者一致或已仲裁的片段；不含未校对的建议",
+  relation: "已确认、已修改的关系及其端点片段，端点未确认时一并导出并标为未确认；多人层为一致或已仲裁的关系",
+  alignment: "已确认、已修改的对齐和未校对的导入句对；多人层为一致或已仲裁的结果",
+};
+const FORMAT_NOTE: Record<string, string> = { conllu: "sent_id = 文档名-句号", tmx: "词对序号从 1 起", brat: "码点偏移" };
+const COLLAPSE_KEY = "annotate.layers.collapsed";
 
 export function ProgressRing({ pct, ok }: { pct: number; ok?: boolean }) {
   return (
@@ -78,8 +88,8 @@ function LayerItem({
               ) : layer.status === "failed" ? (
                 <span className="err-text">预标失败</span>
               ) : (
-                <span className="ellipsis mono" title={`${layer.corpus_name} · ${layer.source_model}`}>
-                  {layer.source_model}
+                <span className="ellipsis mono" title={`${layer.corpus_name} · ${modelName(layer.source_model)}`}>
+                  {modelName(layer.source_model)}
                 </span>
               )}
               <span className="num" style={{ whiteSpace: "nowrap", flexShrink: 0 }}>
@@ -139,6 +149,21 @@ export default function Annotate() {
   const jobCreated = useJobCreated();
   const [params, setParams] = useSearchParams();
   const [creating, setCreating] = useState(false);
+  const [layersCollapsed, setCollapsedState] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setLayersCollapsed = (v: boolean) => {
+    setCollapsedState(v);
+    try {
+      localStorage.setItem(COLLAPSE_KEY, v ? "1" : "0");
+    } catch {
+      /* per-viewer convenience only */
+    }
+  };
 
   const role = project.data?.role;
   const canManage = canEdit(project.data);
@@ -180,12 +205,14 @@ export default function Annotate() {
   });
 
   const exportJob = useMutation({
-    mutationFn: ({ id, format }: { id: string; format: string }) => api.post<Job>(`/layers/${id}/export`, { format }),
+    mutationFn: ({ id, format, annotators }: { id: string; format: string; annotators?: boolean }) =>
+      api.post<Job>(`/layers/${id}/export`, { format, ...(annotators ? { annotators: true } : {}) }),
     onSuccess: (_, v) => {
       jobCreated(projectId);
       message.success(
         <span>
-          已提交导出任务：{FORMAT_NAMES[v.format] ?? v.format}，<Link to={`/p/${projectId}/jobs`}>查看任务</Link>
+          已提交导出任务：{FORMAT_NAMES[v.format] ?? v.format}
+          {v.annotators ? "（含各标注者原始标注）" : ""}，<Link to={`/p/${projectId}/jobs`}>查看任务</Link>
         </span>,
       );
     },
@@ -205,20 +232,33 @@ export default function Annotate() {
   const usableCorpora = (corpora.data?.items ?? []).filter((c) => c.status === "ready" || c.status === "stale");
   const currentCorpus = shell.scopeInfo.corpus?.id;
 
+  // Collapsed, the list shows only the current layer; expanded it scrolls on its own (many layers never push the editor away).
+  const shownLayers = layersCollapsed && layer ? list.filter((l) => l.id === layer.id) : list;
   const layerList = (
     <section className="card layer-card" aria-label="标注层">
       <div className="row between" style={{ padding: "2px 4px 8px" }}>
-        <h2>标注层</h2>
-        {canManage && (
-          <Tip title="新建标注层">
-            <button className="btn ghost icon xs" type="button" aria-label="新建标注层" onClick={() => setCreating(true)}>
-              <Icon name="plus" size={14} />
-            </button>
-          </Tip>
-        )}
+        <h2>
+          标注层 <span className="small muted num">{fmt(list.length)}</span>
+        </h2>
+        <span className="row gap-4">
+          {list.length > 1 && (
+            <Tip title={layersCollapsed ? "展开全部标注层" : "只显示当前层"}>
+              <button className="btn ghost icon xs" type="button" aria-label={layersCollapsed ? "展开标注层" : "收起标注层"} aria-expanded={!layersCollapsed} onClick={() => setLayersCollapsed(!layersCollapsed)}>
+                <Icon name={layersCollapsed ? "down" : "up"} size={14} />
+              </button>
+            </Tip>
+          )}
+          {canManage && (
+            <Tip title="新建标注层">
+              <button className="btn ghost icon xs" type="button" aria-label="新建标注层" onClick={() => setCreating(true)}>
+                <Icon name="plus" size={14} />
+              </button>
+            </Tip>
+          )}
+        </span>
       </div>
-      <div className="col gap-4">
-        {list.map((l) => (
+      <div className="col gap-4 layer-list">
+        {shownLayers.map((l) => (
           <LayerItem
             key={l.id}
             layer={l}
@@ -244,32 +284,55 @@ export default function Annotate() {
         crumbs={1}
         actions={
           <>
-            {canManage && (
-              <button className="btn s" type="button" disabled={!layer || !!busy || preannotate.isPending} onClick={() => layer && preannotate.mutate({ id: layer.id })}>
-                <Icon name="spark" size={14} />
-                <span className="lbl">预标注</span>
+            {canManage &&
+              (layer?.mode === "multi" ? (
+                // Every annotator gets the same suggestions: agreement measured afterwards is no longer independent.
+                <Popconfirm
+                  title="多人层预标"
+                  description={<span style={{ display: "block", maxWidth: 280 }}>预标会给每位标注者铺同一份模型建议，影响独立标注和一致性。</span>}
+                  okText="仍然预标"
+                  cancelText="取消"
+                  disabled={!!busy || preannotate.isPending}
+                  onConfirm={() => preannotate.mutate({ id: layer.id })}
+                >
+                  <button className="btn s" type="button" disabled={!!busy || preannotate.isPending}>
+                    <Icon name="spark" size={14} />
+                    <span className="lbl">预标注</span>
+                  </button>
+                </Popconfirm>
+              ) : (
+                <button className="btn s" type="button" disabled={!layer || !!busy || preannotate.isPending} onClick={() => layer && preannotate.mutate({ id: layer.id })}>
+                  <Icon name="spark" size={14} />
+                  <span className="lbl">预标注</span>
+                </button>
+              ))}
+            <Dropdown
+              trigger={["click"]}
+              disabled={!layer || exportJob.isPending}
+              menu={{
+                style: { maxWidth: 340 },
+                items: layer
+                  ? [
+                      {
+                        type: "group",
+                        label: <span className="export-scope">{EXPORT_SCOPE[layer.kind]}</span>,
+                        children: EXPORTS[layer.kind].map((f) => {
+                          const note = f === "tmx" && layer.level !== "word" ? undefined : FORMAT_NOTE[f];
+                          return { key: f, label: note ? `${FORMAT_NAMES[f]} · ${note}` : FORMAT_NAMES[f] };
+                        }),
+                      },
+                      ...(layer.mode === "multi" ? [{ type: "divider" as const }, { key: "json+annotators", label: "JSON · 另附各标注者原始标注" }] : []),
+                    ]
+                  : [],
+                onClick: ({ key }) => layer && exportJob.mutate({ id: layer.id, format: key === "json+annotators" ? "json" : key, annotators: key === "json+annotators" }),
+              }}
+            >
+              <button className="btn s" type="button" disabled={!layer || exportJob.isPending} title={exportTip("导出所选层")}>
+                <Icon name="download" size={14} />
+                <span className="lbl">导出</span>
+                <Icon name="down" size={14} />
               </button>
-            )}
-            {!layer || layer.kind === "pos" || layer.kind === "dep" ? (
-              <Tip title={exportTip("导出 CoNLL-U")}>
-                <button className="btn s" type="button" disabled={!layer || exportJob.isPending} onClick={() => layer && exportJob.mutate({ id: layer.id, format: "conllu" })}>
-                  <Icon name="download" size={14} />
-                  <span className="lbl">导出 CoNLL-U</span>
-                </button>
-              </Tip>
-            ) : (
-              <Dropdown
-                trigger={["click"]}
-                disabled={exportJob.isPending}
-                menu={{ items: EXPORTS[layer.kind].map((f) => ({ key: f, label: FORMAT_NAMES[f] })), onClick: ({ key }) => exportJob.mutate({ id: layer.id, format: key }) }}
-              >
-                <button className="btn s" type="button">
-                  <Icon name="download" size={14} />
-                  <span className="lbl">导出</span>
-                  <Icon name="down" size={14} />
-                </button>
-              </Dropdown>
-            )}
+            </Dropdown>
             {canManage && (
               <button className="btn s p" type="button" onClick={() => setCreating(true)}>
                 <Icon name="plus" size={14} />
@@ -326,7 +389,7 @@ export default function Annotate() {
         onClose={() => setCreating(false)}
         onCreated={(l) => {
           setCreating(false);
-          message.success(`已新建标注层「${l.name}」，预标任务已提交`);
+          message.success(l.job_id || l.status === "created" ? `已新建标注层「${l.name}」，预标任务已提交` : `已新建标注层「${l.name}」`);
           selectLayer(l.id);
         }}
       />

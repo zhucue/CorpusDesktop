@@ -6,7 +6,7 @@ import type { LabelDef, Layer, Relation, SentenceSpans, Span } from "../../api";
 import { DiffRows, diffCounts, type DiffKind } from "../../components/annot/DiffRows";
 import { SpanText, type FlowPiece } from "../../components/annot/SpanText";
 import { cpSlice } from "../../components/annot/spans";
-import { Empty, ErrorAlert, Skeleton } from "../../components/common";
+import { Empty, ErrorAlert, Skeleton, Tip } from "../../components/common";
 import { PinButton } from "../../components/global/evidence";
 import { Icon } from "../../components/Icon";
 import { fmt } from "../../lib/format";
@@ -14,10 +14,11 @@ import { AgreementTab } from "./Agreement";
 import { useLabelSets, useLayerDocs } from "./data";
 import { LabelPanel } from "./LabelPanel";
 import { useAnnotatorView, useSpanActions, useSpanSentence, useSpanSentences, useSpanWindow } from "./spanData";
-import { flowRelations, flowSpans, isHumanSource, isSuggested, sortSpans, spanDiffBlocks, spanKeyCommand, spanSentenceDone, type SpanCommand } from "./spanModel";
-import { Stream, typingTarget } from "./Stream";
+import { labelName, labelValue, sourceText } from "./model";
+import { flowRelations, flowSpans, isHumanSource, isSuggested, sortSpans, spanDiffBlocks, spanKeyCommand, spanSentenceDone, stepSpan, type SpanCommand } from "./spanModel";
+import { controlKey, Stream, typingTarget, useEditorFocus } from "./Stream";
 import { StatsTab } from "./Tabs";
-import { sourceText, statusView } from "./Workspace";
+import { statusView } from "./Workspace";
 
 type Tab = "edit" | "diff" | "stats" | "agreement";
 type Sel = { kind: "span" | "rel"; id: string } | null;
@@ -109,7 +110,9 @@ export default function SpanWorkspace({
     [relSents, s, annot.keep],
   );
   const viewSpans = useMemo(() => flowSpans(spans, spanOrder), [spans, spanOrder]);
-  const viewRels = useMemo(() => flowRelations(relations), [relations]);
+  const relLabels = relSet?.labels;
+  // Arcs show the label's display name (e.g. 更正 for correction).
+  const viewRels = useMemo(() => flowRelations(relations).map((r) => ({ ...r, label: labelName(relLabels, r.label) })), [relations, relLabels]);
   const pieces: FlowPiece[] = flowSents.map((x) => ({ key: `${x.sentence_index}`, cp: x.start_cp, text: x.text, dim: x.sentence_index !== s?.sentence_index }));
   const flowText = (a: number, b: number) => {
     const p = flowSents.find((x) => a >= x.start_cp && a < x.end_cp);
@@ -130,6 +133,7 @@ export default function SpanWorkspace({
     setSelState({ key: sentKey, sel: next });
     setPendingState(null);
   };
+  const editorFocus = useEditorFocus();
 
   const [tab, setTab] = useState<Tab>(() => (["diff", "stats", "agreement"].includes(params.get("tab") ?? "") ? (params.get("tab") as Tab) : "edit"));
   const searchRef = useRef<HTMLInputElement>(null);
@@ -187,7 +191,7 @@ export default function SpanWorkspace({
   }
 
   function pick(label: LabelDef | string) {
-    const name = typeof label === "string" ? label : label.name;
+    const name = typeof label === "string" ? label : labelValue(label);
     if (!s || !canAnnotate) return;
     if (draft?.to) {
       const from = draft.from;
@@ -251,12 +255,16 @@ export default function SpanWorkspace({
         void moveSentence(cmd.delta);
         return;
       case "span": {
-        if (!ownSpans.length) return;
-        const i = selSpan ? ownSpans.findIndex((x) => x.id === selSpan.id) : -1;
-        const n = ownSpans[i < 0 ? (cmd.delta > 0 ? 0 : ownSpans.length - 1) : (i + cmd.delta + ownSpans.length) % ownSpans.length];
-        select({ kind: "span", id: n.id });
+        const n = stepSpan(ownSpans, selSpan ?? null, cmd.delta);
+        if (n) select({ kind: "span", id: n.id });
         return;
       }
+      case "confirmSentence":
+        if (!s || !canAnnotate) return;
+        void act.confirmSentence(s, isRel ? "relation" : "span", annot.keep);
+        select(null);
+        void moveSentence(1);
+        return;
       case "edit":
         searchRef.current?.focus();
         return;
@@ -288,7 +296,7 @@ export default function SpanWorkspace({
     if (tab !== "edit") return;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || typingTarget(e.target)) return;
-      if ((e.key === "Enter" || e.key === " ") && e.target instanceof Element && e.target.closest("button, a, [role='button'], [role='tab'], [role='switch']")) return;
+      if (controlKey(e)) return;
       const cmd = spanKeyCommand(e, { labels: panelLabels, relations: !!relLayerId });
       if (!cmd) return;
       e.preventDefault();
@@ -299,6 +307,7 @@ export default function SpanWorkspace({
   }, [tab, panelLabels, relLayerId]);
 
   function onSelectSpan(id: string | null, e: React.MouseEvent) {
+    editorFocus.focus();
     if (draft && !draft.to) {
       if (id && id !== draft.from) setDraftState({ ...draft, to: id });
       else setDraftState(null);
@@ -337,7 +346,7 @@ export default function SpanWorkspace({
   /* ---------- centre ---------- */
   const done = s ? spanSentenceDone({ ...s, spans: ownSpans, relations: ownRels }) : false;
   const editor = (
-    <section className="card" aria-label="编辑器">
+    <section className="card ed-card" aria-label="编辑器" tabIndex={-1} ref={editorFocus.ref}>
       <div className="card-head">
         <h2>{relLayerId ? "片段与关系" : "片段"}</h2>
         {sIdx != null && (
@@ -400,9 +409,9 @@ export default function SpanWorkspace({
               selectedRelation={selRel?.id ?? null}
               relFrom={draft?.from ?? null}
               pending={pending}
-              onSelectText={canAnnotate ? (r) => (setDraftState(null), setSelState({ key: sentKey, sel: null }), setPendingState({ key: sentKey, ...r })) : undefined}
+              onSelectText={canAnnotate ? (r) => (editorFocus.focus(), setDraftState(null), setSelState({ key: sentKey, sel: null }), setPendingState({ key: sentKey, ...r })) : undefined}
               onSelectSpan={onSelectSpan}
-              onSelectRelation={(id) => (setDraftState(null), select({ kind: "rel", id }))}
+              onSelectRelation={(id) => (editorFocus.focus(), setDraftState(null), select({ kind: "rel", id }))}
               onBoundary={canAnnotate ? (id, start, end) => {
                 const sp = spans.find((x) => x.id === id);
                 if (sp) void act.patchSpan(ownerOf(id)!, sp, { action: "modify", start_cp: start, end_cp: end });
@@ -466,6 +475,7 @@ export default function SpanWorkspace({
             from={spanText(selRel.from_span_id)}
             to={spanText(selRel.to_span_id)}
             layer={layer}
+            labels={relLabels}
             canAnnotate={canAnnotate}
             onConfirm={() => run({ type: "confirm" })}
             onReject={() => run({ type: "reject" })}
@@ -478,6 +488,12 @@ export default function SpanWorkspace({
           <span className="small muted">本句</span>
           <span className="num">{pendingHere}</span>
           <span className="small muted">处待确认</span>
+          <div className="grow" />
+          <Tip title="整句确认（Shift+Enter）">
+            <button className="btn xs" type="button" disabled={!canAnnotate || pendingHere === 0} onClick={() => run({ type: "confirmSentence" })}>
+              整句确认
+            </button>
+          </Tip>
         </div>
         {!canAnnotate && <div className="small muted">{readOnlyNote}</div>}
       </section>
@@ -503,9 +519,13 @@ export default function SpanWorkspace({
           <span>
             <span className="kbd">K</span> <span className="kbd">J</span>
           </span>
-          <span>选片段</span>
+          <span>选片段（按位置）</span>
           <span>
             <span className="kbd">←</span> <span className="kbd">→</span>
+          </span>
+          <span>整句确认</span>
+          <span>
+            <span className="kbd">Shift</span> <span className="kbd">Enter</span>
           </span>
           {relLayerId && (
             <>
@@ -533,7 +553,7 @@ export default function SpanWorkspace({
 
   return (
     <div className="ws">
-      <div className="col gap-16" style={{ minWidth: 0 }}>
+      <div className="col gap-16 ws-left" style={{ minWidth: 0 }}>
         {leftTop}
         {stream}
       </div>
@@ -603,7 +623,7 @@ function SpanCard({
       </div>
       <dl className="kv" style={{ gridTemplateColumns: "56px 1fr", margin: 0 }}>
         <dt>来源</dt>
-        <dd className="mono">{sourceText(span.source, layer.source_model)}</dd>
+        <dd>{sourceText(span.source, layer.source_model, { modelLabel: span.model_label, status: span.status })}</dd>
         {span.model_label && span.model_label !== span.label && (
           <>
             <dt>预标</dt>
@@ -700,6 +720,7 @@ function RelationCard({
   from,
   to,
   layer,
+  labels,
   canAnnotate,
   onConfirm,
   onReject,
@@ -709,6 +730,7 @@ function RelationCard({
   from: string;
   to: string;
   layer: Layer;
+  labels: LabelDef[] | undefined;
   canAnnotate: boolean;
   onConfirm: () => void;
   onReject: () => void;
@@ -723,9 +745,9 @@ function RelationCard({
       </div>
       <dl className="kv" style={{ gridTemplateColumns: "56px 1fr", margin: 0 }}>
         <dt>关系</dt>
-        <dd className={`mono ${rel.status === "rejected" ? "struck" : ""}`}>{rel.label}</dd>
+        <dd className={`mono ${rel.status === "rejected" ? "struck" : ""}`}>{labelName(labels, rel.label)}</dd>
         <dt>来源</dt>
-        <dd className="mono">{sourceText(rel.source, layer.source_model)}</dd>
+        <dd>{sourceText(rel.source, layer.source_model, { modelLabel: rel.model_label ?? null, status: rel.status })}</dd>
       </dl>
       <div className="act">
         <button className="btn ok" type="button" disabled={!canAnnotate} onClick={onConfirm}>

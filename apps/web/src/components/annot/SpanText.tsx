@@ -44,7 +44,20 @@ interface ArcView {
   status: AnnotStatus;
 }
 
-const LEVEL = 18;
+const LEVEL = 20;
+const MIN_ARC = 40;
+
+/**
+ * Arc end points: span centres, except for spans whose centres are close (nested spans such as book ⊂ three book),
+ * whose arcs start and end at the facing edges so they keep a width and their labels do not stack on one spot.
+ */
+export function anchors(a: { x: number; left: number; right: number }, b: { x: number; left: number; right: number }): [number, number] {
+  if (Math.abs(a.x - b.x) >= MIN_ARC) return [a.x, b.x];
+  const inset = (s: { left: number; right: number }) => Math.min(8, (s.right - s.left) / 4);
+  // keep the direction: the end that is further right moves right, the other left
+  if (a.x > b.x || (a.x === b.x && a.right - a.left < b.right - b.left)) return [a.right - inset(a), b.left + inset(b)];
+  return [a.left + inset(a), b.right - inset(b)];
+}
 const NO_RELATIONS: FlowRelation[] = [];
 const lw = (label: string) => [...label].reduce((w, ch) => w + (/[⺀-￿]/.test(ch) ? 11 : 6.8), 0) + 10;
 
@@ -144,14 +157,17 @@ export function SpanText({
       const line = rects.filter((r) => r.top - top < 4);
       const left = Math.min(...line.map((r) => r.left));
       const right = Math.max(...line.map((r) => r.right));
-      return { x: (left + right) / 2 - r0.left, y: top - r0.top, rects };
+      return { x: (left + right) / 2 - r0.left, y: top - r0.top, left: left - r0.left, right: right - r0.left, rects };
     };
     const work = relations
       .filter((r) => r.status !== "rejected" || r.id === selectedRelation)
       .map((r) => {
-        const a = firstLine(r.from);
-        const b = firstLine(r.to);
-        if (!a || !b) return null;
+        const fa = firstLine(r.from);
+        const fb = firstLine(r.to);
+        if (!fa || !fb) return null;
+        const [ax, bx] = anchors(fa, fb);
+        const a = { ...fa, x: ax };
+        const b = { ...fb, x: bx };
         return { r, a, b, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x), mx: (a.x + b.x) / 2, lw: lw(r.label), lvl: 1 };
       })
       .filter((x): x is NonNullable<typeof x> => !!x);

@@ -197,9 +197,9 @@ TRANSLATION_STRATEGIES = {
     "音译": "按读音转写",
     "省略": "省去原文的整段或成分",
 }
-ERROR_CORRECTION = {
-    "correction": "从偏误片段指向其更正片段",
-    "cause": "从偏误片段指向引起该偏误的片段",
+ERROR_CORRECTION = {  # id: (display name, description)
+    "correction": ("更正", "从偏误片段指向其更正片段"),
+    "cause": ("成因", "从偏误片段指向引起该偏误的片段"),
 }
 
 
@@ -242,7 +242,7 @@ BUILTIN = {
     "error-correction": (
         "relation",
         None,
-        [_label(t, d) for t, d in ERROR_CORRECTION.items()],
+        [{**_label(t, d), "name": n} for t, (n, d) in ERROR_CORRECTION.items()],
     ),
 }
 

@@ -14,7 +14,7 @@ export const LabelPanel = forwardRef<
   const needle = q.trim().toLowerCase();
   const shown = labels
     .map((l, i) => ({ l, i }))
-    .filter(({ l }) => !needle || `${l.name} ${l.description ?? ""}`.toLowerCase().includes(needle));
+    .filter(({ l }) => !needle || `${l.id} ${l.name} ${l.description ?? ""}`.toLowerCase().includes(needle));
   return (
     <section className="card lab-card" aria-label="标签">
       <div className="row between" style={{ padding: "2px 4px 8px" }}>
@@ -45,13 +45,15 @@ export const LabelPanel = forwardRef<
         {shown.length === 0 && <div className="empty sm">没有匹配的标签</div>}
         {shown.map(({ l, i }) => {
           const hint = keyHint(i);
+          // annotations store the label id; the name is shown
+          const on = current != null && (current === l.id || current === l.name);
           const btn = (
             <button
               key={l.id ?? l.name}
-              className={`lab-opt ${current === l.name ? "on" : ""}`}
+              className={`lab-opt ${on ? "on" : ""}`}
               type="button"
               role="option"
-              aria-selected={current === l.name}
+              aria-selected={on}
               disabled={disabled}
               data-c={colorPos ? posCat(l.name) : undefined}
               tabIndex={-1}
@@ -60,6 +62,7 @@ export const LabelPanel = forwardRef<
             >
               <i style={l.color ? { background: l.color } : undefined} />
               <span className="mono">{l.name}</span>
+              {l.id && l.id !== l.name && <span className="mono lab-desc">{l.id}</span>}
               {l.description && <span className="lab-desc ellipsis">{l.description}</span>}
               {hint && <span className="kbd">{hint}</span>}
             </button>

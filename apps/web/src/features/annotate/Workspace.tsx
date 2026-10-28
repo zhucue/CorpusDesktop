@@ -11,7 +11,8 @@ import { fmt } from "../../lib/format";
 import { posCat } from "../../lib/pos";
 import { useAnnotActions, useLabelSets, useLayerDocs, useSentence, useSentenceList } from "./data";
 import { LabelPanel } from "./LabelPanel";
-import { graphOf, isPending, keyCommand, nextPending, tokenViews, type Command, type TokView } from "./model";
+import { graphOf, isPending, keyCommand, labelValue, nextPending, sourceText, tokenViews, type Command, type TokView } from "./model";
+import { controlKey, scrollWithin, typingTarget, useEditorFocus } from "./Stream";
 import { DiffTab, StatsTab } from "./Tabs";
 
 export const statusView: Record<AnnotStatus, { label: string; cls: string }> = {
@@ -21,18 +22,9 @@ export const statusView: Record<AnnotStatus, { label: string; cls: string }> = {
   rejected: { label: "已拒绝", cls: "t-err" },
 };
 
-export function sourceText(source: string, model: string): string {
-  if (source === "system") return model || "系统层";
-  if (source.startsWith("model:")) return source.slice(6);
-  if (source.startsWith("human:")) return "人工";
-  return source;
-}
+export { sourceText };
 
 type Tab = "edit" | "diff" | "stats";
-
-function typingTarget(t: EventTarget | null): boolean {
-  return t instanceof Element && !!t.closest("input, textarea, select, [contenteditable='true'], .ant-modal-wrap, .ant-select-dropdown, .ant-popover");
-}
 
 /** Three-column review workspace for one layer: document and sentence stream, editor (tabs), current item and labels. */
 export default function Workspace({
@@ -86,6 +78,13 @@ export default function Workspace({
   const curTok = tok?.key === sentKey && views.some((v) => v.index === tok.index) ? tok.index : (views.find(isPending)?.index ?? views[0]?.index ?? null);
   const cur = views.find((v) => v.index === curTok) ?? null;
   const select = (index: number) => setTok({ key: sentKey, index });
+  const editorFocus = useEditorFocus();
+  // A click on a token or arc moves focus into the editor, so Enter never re-activates a button focused before.
+  const clickSelect = (index: number) => {
+    editorFocus.focus();
+    select(index);
+  };
+  const depRef = useRef<HTMLDivElement>(null);
 
   const [tab, setTab] = useState<Tab>(() => (["diff", "stats"].includes(params.get("tab") ?? "") ? (params.get("tab") as Tab) : "edit"));
   const [posColor, setPosColor] = useState(false);
@@ -139,7 +138,7 @@ export default function Workspace({
   }
 
   function pick(label: LabelDef | string) {
-    const name = typeof label === "string" ? label : label.name;
+    const name = typeof label === "string" ? label : labelValue(label);
     if (!s || !cur || !canAnnotate) return;
     if (cur.label === name && cur.status !== "rejected") void act(s, { token_index: cur.index, action: "confirm" });
     else void act(s, { token_index: cur.index, action: "modify", label: name });
@@ -197,7 +196,7 @@ export default function Workspace({
     if (tab !== "edit") return;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || typingTarget(e.target)) return;
-      if ((e.key === "Enter" || e.key === " ") && e.target instanceof Element && e.target.closest("button, a, [role='button'], [role='tab'], [role='switch']")) return;
+      if (controlKey(e)) return;
       const cmd = keyCommand(e, { kind: layer.kind, labels });
       if (!cmd) return;
       e.preventDefault();
@@ -208,8 +207,12 @@ export default function Workspace({
   }, [tab, layer.kind, labels]);
 
   useEffect(() => {
-    streamRef.current?.querySelector(".sent.on")?.scrollIntoView?.({ block: "nearest" });
-  }, [sentKey]);
+    scrollWithin(streamRef.current, streamRef.current?.querySelector(".sent.on"));
+  }, [sentKey, items.length]);
+  // A wide dependency tree scrolls itself to the selected token.
+  useEffect(() => {
+    scrollWithin(depRef.current, depRef.current?.querySelector(".dtk.sel"), "x");
+  }, [curTok, sentKey, s]);
 
   const graph = useMemo(() => graphOf(views), [views]);
   const headOptions = useMemo(
@@ -309,7 +312,7 @@ export default function Workspace({
 
   /* ---------- centre: editor ---------- */
   const editor = (
-    <section className="card" aria-label="编辑器">
+    <section className="card ed-card" aria-label="编辑器" tabIndex={-1} ref={editorFocus.ref}>
       <div className="card-head">
         <h2>{layer.kind === "pos" ? "词性" : "依存"}</h2>
         {sIdx != null && (
@@ -347,16 +350,16 @@ export default function Workspace({
         ) : !s ? (
           sent.isFetching || list.isPending ? <Skeleton rows={3} /> : <Empty icon="pilcrow" text="选择句子" />
         ) : layer.kind === "pos" ? (
-          <PosRow views={views} selected={curTok} onSelect={select} posColor={posColor} />
+          <PosRow views={views} selected={curTok} onSelect={clickSelect} posColor={posColor} />
         ) : (
-          <div className="depwrap">
+          <div className="depwrap" ref={depRef}>
             <DepGraph
               key={sentKey}
               tokens={graph.tokens}
               arcs={graph.arcs}
               selected={curTok}
-              onSelectToken={select}
-              onSelectArc={select}
+              onSelectToken={clickSelect}
+              onSelectArc={clickSelect}
               onHeadChange={canAnnotate ? changeHead : undefined}
               posColor={posColor}
             />
@@ -382,7 +385,7 @@ export default function Workspace({
             </div>
             <dl className="kv" style={{ gridTemplateColumns: "56px 1fr", margin: 0 }}>
               <dt>来源</dt>
-              <dd className="mono">{sourceText(cur.source, layer.source_model)}</dd>
+              <dd>{sourceText(cur.source, layer.source_model, { modelLabel: cur.ann?.model_label ?? null, status: cur.status })}</dd>
               {layer.kind === "pos" && cur.ann?.model_label && cur.ann.model_label !== cur.label && (
                 <>
                   <dt>预标</dt>
@@ -403,8 +406,13 @@ export default function Workspace({
                       value={cur.head ?? undefined}
                       disabled={!canAnnotate}
                       aria-label="中心词"
+                      showSearch
+                      optionFilterProp="label"
                       options={headOptions}
-                      onChange={(h: number) => changeHead(cur.index, h)}
+                      onChange={(h: number) => {
+                        changeHead(cur.index, h);
+                        setTimeout(editorFocus.focus, 0); // arrows and Enter work again right after choosing
+                      }}
                     />
                   </dd>
                 </>
@@ -478,7 +486,7 @@ export default function Workspace({
 
   return (
     <div className="ws">
-      <div className="col gap-16" style={{ minWidth: 0 }}>
+      <div className="col gap-16 ws-left" style={{ minWidth: 0 }}>
         {leftTop}
         {stream}
       </div>

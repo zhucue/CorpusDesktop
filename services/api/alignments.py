@@ -177,6 +177,23 @@ def list_alignments(
     }
 
 
+TARGET_SENTENCES_MAX = 5000
+
+
+@router.get("/layers/{layer_id}/target-sentences")
+def target_sentences(layer_id: UUID, document_id: UUID, user: CurrentUser, db: Db):
+    """Sentences of a target document (choices for sentence pairs: 1:n, n:1 or none), at most 5000."""
+    layer = _alignment_layer(db, layer_id, user)
+    _check_target(db, layer, document_id)
+    rows = db.execute(
+        select(Sentence.idx, Sentence.text)
+        .where(Sentence.document_id == document_id)
+        .order_by(Sentence.idx)
+        .limit(TARGET_SENTENCES_MAX)
+    ).all()
+    return {"items": [{"sentence_index": i, "text": t} for i, t in rows]}
+
+
 def _sentence_length(db, document_id, idx):
     n = db.scalar(
         select(func.count(Token.id))

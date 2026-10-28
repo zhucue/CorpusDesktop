@@ -623,9 +623,10 @@ def effective_spans(db, layer, document_ids=None, labels=None, attrs=None) -> li
     return out
 
 
-def effective_relations(db, layer, spans=None) -> list:
+def effective_relations(db, layer, spans=None, endpoints=False) -> list:
     """Effective relations of a relation layer → [{id, label, from: span, to: span}], endpoints among the
-    effective spans of the base layer (`spans`, computed when omitted)."""
+    effective spans of the base layer (`spans`, computed when omitted). endpoints=True (exports): a relation
+    whose endpoint span is not effective is kept with that span row, marked "effective": False."""
     base = db.get(AnnotationLayer, layer.base_layer_id)
     if base is None:
         return []
@@ -648,14 +649,15 @@ def effective_relations(db, layer, spans=None) -> list:
     if layer.mode == "multi":
         stmt = stmt.where(RelationAnnotation.annotator_id.in_(list(layer.annotators)))
     per = defaultdict(lambda: defaultdict(set))
-    first = {}
+    first, rows = {}, {}
     for r, a, b in db.execute(stmt).all():
-        k = relation_key(
-            span_key(a.document_id, a.start_cp, a.end_cp),
-            span_key(b.document_id, b.start_cp, b.end_cp),
-        )
+        ka = span_key(a.document_id, a.start_cp, a.end_cp)
+        kb = span_key(b.document_id, b.start_cp, b.end_cp)
+        k = relation_key(ka, kb)
         per[k][r.annotator_id].add(r.label)
         first.setdefault((k, r.label), r.id)
+        rows.setdefault(ka, a)
+        rows.setdefault(kb, b)
     chosen = []
     if layer.mode != "multi":
         chosen = [
@@ -674,16 +676,28 @@ def effective_relations(db, layer, spans=None) -> list:
                 and len(set(sets)) == 1
             ):
                 chosen += [(k, label) for label in sorted(sets[0])]
+
+    def end(key):
+        if key in by_extent:
+            return by_extent[key]
+        if endpoints and key in rows:
+            return {
+                **_span_dict(rows[key]),
+                "status": rows[key].status,
+                "effective": False,
+            }
+        return None
+
     out = []
     for k, label in chosen:
         a, _, b = k.partition(">")
-        if a in by_extent and b in by_extent:
+        if end(a) and end(b):
             out.append(
                 {
                     "id": first.get((k, label)),
                     "label": label,
-                    "from": by_extent[a],
-                    "to": by_extent[b],
+                    "from": end(a),
+                    "to": end(b),
                 }
             )
     out.sort(

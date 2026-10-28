@@ -1,5 +1,5 @@
 import { Select } from "antd";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { LayerDocument } from "../../api";
 import { Empty, ErrorAlert, Skeleton } from "../../components/common";
 import { Icon } from "../../components/Icon";
@@ -50,8 +50,8 @@ export function Stream({
   const ref = useRef<HTMLDivElement>(null);
   const doc = docs.find((d) => d.document_id === docId);
   useEffect(() => {
-    ref.current?.querySelector(".sent.on")?.scrollIntoView?.({ block: "nearest" });
-  }, [current, docId]);
+    scrollWithin(ref.current, ref.current?.querySelector(".sent.on"));
+  }, [current, docId, items.length]);
   return (
     <section className="card stream-card" aria-label={title}>
       <div className="row between" style={{ padding: "2px 6px 8px" }}>
@@ -146,4 +146,41 @@ export function Stream({
 /** The editor ignores single-key shortcuts while typing or inside overlays. */
 export function typingTarget(t: EventTarget | null): boolean {
   return t instanceof Element && !!t.closest("input, textarea, select, [contenteditable='true'], .ant-modal-wrap, .ant-select-dropdown, .ant-popover");
+}
+
+/**
+ * Enter / Space are left to a focused button only when the user reached it with the keyboard (Tab, :focus-visible).
+ * A button that merely kept focus after a mouse click or a closed dialog does not swallow the editor keys.
+ */
+export function controlKey(e: KeyboardEvent): boolean {
+  if (e.key !== "Enter" && e.key !== " ") return false;
+  const t = e.target;
+  if (!(t instanceof Element) || !t.closest("button, a, [role='button'], [role='tab'], [role='switch']")) return false;
+  try {
+    return t.matches(":focus-visible");
+  } catch {
+    return true;
+  }
+}
+
+/** Focus target of the editor card (tabIndex −1): clicks on tokens and spans move focus here. */
+export function useEditorFocus() {
+  const ref = useRef<HTMLElement>(null);
+  const focus = useCallback(() => {
+    const el = ref.current;
+    if (el && el.ownerDocument.activeElement !== el) el.focus({ preventScroll: true });
+  }, []);
+  return { ref, focus };
+}
+
+/** Scroll `el` into view inside `container` only (never the page), by as little as needed. */
+export function scrollWithin(container: HTMLElement | null, el: Element | null | undefined, axis: "x" | "y" = "y") {
+  if (!container || !el) return;
+  const c = container.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  if (axis === "y") {
+    if (r.top < c.top) container.scrollTop -= c.top - r.top + 8;
+    else if (r.bottom > c.bottom) container.scrollTop += r.bottom - c.bottom + 8;
+  } else if (r.left < c.left) container.scrollLeft -= c.left - r.left + 24;
+  else if (r.right > c.right) container.scrollLeft += r.right - c.right + 24;
 }

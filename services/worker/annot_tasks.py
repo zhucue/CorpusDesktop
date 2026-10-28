@@ -45,6 +45,7 @@ from services.api.models import (
     SentenceAlignment,
     SpanAnnotation,
     Token,
+    User,
 )
 from services.api.storage import export_path
 from services.worker import llm
@@ -827,18 +828,39 @@ def _export_docs(db, layer, params):
 
 
 def _span_and_relation_layers(db, layer):
-    """(span layer, [relation layers]) for a span layer (all relation layers on it) or a relation layer."""
+    """(span layer, [relation layers]) of an export: a span layer alone, or a relation layer on its base."""
     if layer.kind == "span":
-        rels = db.scalars(
-            select(AnnotationLayer)
-            .where(
-                AnnotationLayer.base_layer_id == layer.id,
-                AnnotationLayer.kind == "relation",
-            )
-            .order_by(AnnotationLayer.created_at)
-        ).all()
-        return layer, list(rels)
+        return layer, []
     return db.get(AnnotationLayer, layer.base_layer_id), [layer]
+
+
+EXPORT_SCOPE = {
+    "pos": "已确认、已修改的词取人工值；未校对的词取系统层自动值（语料自带，或预标写入的 jieba / Stanza 结果）",
+    "dep": "已确认、已修改的词取人工值；未校对的词取系统层自动值（语料自带，或预标写入的 jieba / Stanza 结果）",
+    "span": "已确认、已修改的片段；多人层为各标注者一致或已仲裁的片段；未校对的建议不导出",
+    "relation": (
+        "已确认、已修改的关系及其端点片段；端点片段未确认时随关系导出并标为未确认；"
+        "多人层为各标注者一致或已仲裁的关系；未校对的建议不导出"
+    ),
+    "alignment": (
+        "已确认、已修改的对齐和未校对的导入句对；多人层为各标注者一致或已仲裁的结果；"
+        "未校对的模型建议不导出"
+    ),
+}
+ANNOTATORS_SCOPE = "annotators：每位标注者自己的全部行（含建议、拒绝），用于复核一致性"
+
+
+def _endpoint_spans(relations):
+    """Endpoint spans of exported relations that are not effective themselves (by extent)."""
+    out = {}
+    for r in relations:
+        for end in (r["from"], r["to"]):
+            if end.get("effective") is False:
+                out.setdefault(
+                    eff.span_key(end["document_id"], end["start_cp"], end["end_cp"]),
+                    end,
+                )
+    return list(out.values())
 
 
 def _fragments(text, a, b):
@@ -854,16 +876,22 @@ def _fragments(text, a, b):
     return out or [(a, b)]
 
 
+ENDPOINT_NOTE = "端点片段未确认，仅作为已确认关系的端点导出"
+
+
 def brat_ann(text, spans, relations):
-    """.ann text: one T line per span (code-point offsets, fragments split at line breaks) and one R line per
-    relation whose spans are listed."""
-    lines, tid = [], {}
+    """.ann text: one T line per span (code-point offsets, fragments split at line breaks), an AnnotatorNotes
+    line for endpoint-only spans ("effective": False) and one R line per relation whose spans are listed."""
+    lines, tid, notes = [], {}, 0
     for n, s in enumerate(spans, 1):
         frags = _fragments(text, s["start_cp"], s["end_cp"])
         tid[eff.span_key(s["document_id"], s["start_cp"], s["end_cp"])] = f"T{n}"
         where = ";".join(f"{a} {b}" for a, b in frags)
         body = " ".join(text[a:b] for a, b in frags).replace("\t", " ")
         lines.append(f"T{n}\t{s['label']} {where}\t{body}")
+        if s.get("effective") is False:
+            notes += 1
+            lines.append(f"#{notes}\tAnnotatorNotes T{n}\t{ENDPOINT_NOTE}")
     count = 0
     for r in relations:
         a = tid.get(
@@ -881,8 +909,12 @@ def brat_ann(text, spans, relations):
 
 
 def run_export_brat(run, layer_id):
+    """Span layer: its effective spans. Relation layer: its effective relations with the base layer's
+    effective spans, plus endpoint spans that are not effective themselves (with an AnnotatorNotes line)."""
     with session() as db:
         layer = db.get(AnnotationLayer, layer_id)
+        if layer is None:
+            raise JobFailed("LAYER_DELETED", "标注层已删除")
         span_layer, rel_layers = _span_and_relation_layers(db, layer)
         if span_layer is None:
             raise JobFailed("LAYER_DELETED", "片段层已删除")
@@ -892,9 +924,12 @@ def run_export_brat(run, layer_id):
         relations = [
             r
             for rl in rel_layers
-            for r in eff.effective_relations(db, eff.eff_layer(rl), spans)
+            for r in eff.effective_relations(
+                db, eff.eff_layer(rl), spans, endpoints=True
+            )
             if r["from"]["document_id"] in doc_ids
         ]
+        endpoints = _endpoint_spans(relations)
         labels = [x["id"] for x in db.get(LabelSet, span_layer.label_set_id).labels]
         rel_labels = sorted(
             {
@@ -909,7 +944,10 @@ def run_export_brat(run, layer_id):
     path.parent.mkdir(parents=True, exist_ok=True)
     total_spans = total_rel = 0
     by_doc = defaultdict(list)
-    for s in spans:
+    for s in sorted(
+        spans + endpoints,
+        key=lambda s: (str(s["document_id"]), s["start_cp"], s["end_cp"]),
+    ):
         by_doc[s["document_id"]].append(s)
     rel_by_doc = defaultdict(list)
     for r in relations:
@@ -927,6 +965,7 @@ def run_export_brat(run, layer_id):
             total_spans += len(by_doc.get(d.id, []))
             total_rel += nrel
         conf = "".join(f"# {line}\n" for line in notice)
+        conf += f"# 导出口径：{EXPORT_SCOPE[layer.kind]}\n"
         conf += "[entities]\n" + "".join(f"{x}\n" for x in labels)
         conf += "\n[relations]\n" + "".join(
             f"{x}\tArg1:<ENTITY>, Arg2:<ENTITY>\n" for x in rel_labels
@@ -941,6 +980,7 @@ def run_export_brat(run, layer_id):
         {
             "documents": len(docs),
             "spans": total_spans,
+            "endpoint_spans": len(endpoints),
             "relations": total_rel,
             "offsets": "code points",
         },
@@ -1028,86 +1068,156 @@ def run_export_xlsx(run, layer_id):
     )
 
 
+def _str_ids(d):
+    return {
+        k: str(v) if k.endswith("document_id") and v is not None else v
+        for k, v in d.items()
+    }
+
+
+def _layer_entry(db, x, doc_ids):
+    """Effective annotations of one layer for the JSON export."""
+    e = eff.eff_layer(x)
+    entry = {
+        "id": str(x.id),
+        "name": x.name,
+        "kind": x.kind,
+        "mode": x.mode,
+        "label_set_id": str(x.label_set_id) if x.label_set_id else None,
+        "scope": EXPORT_SCOPE[x.kind],
+    }
+    id_set = set(doc_ids)
+    if x.kind == "span":
+        entry["spans"] = [_str_ids(s) for s in eff.effective_spans(db, e, doc_ids)]
+    elif x.kind == "relation":
+        base = db.get(AnnotationLayer, x.base_layer_id)
+        spans = eff.effective_spans(db, eff.eff_layer(base), doc_ids) if base else []
+        entry["base_layer_id"] = str(x.base_layer_id)
+        entry["base_layer_name"] = base.name if base else None
+        entry["relations"] = [
+            {
+                "id": r["id"],
+                "label": r["label"],
+                "from": _str_ids({"effective": True, **r["from"]}),
+                "to": _str_ids({"effective": True, **r["to"]}),
+            }
+            for r in eff.effective_relations(db, e, spans, endpoints=True)
+            if r["from"]["document_id"] in id_set
+        ]
+    elif x.kind == "alignment":
+        entry["level"] = x.level
+        entry["tgt_corpus_id"] = str(x.tgt_corpus_id)
+        entry["token_index_base"] = 1
+        entry["alignments"] = [
+            {
+                **_str_ids(p),
+                "links": [{"src": list(a), "tgt": list(b)} for a, b in p["links"]],
+            }
+            for p in eff.effective_alignments(db, e, doc_ids)
+        ]
+    else:
+        toks = eff.layer_tokens(db, doc_ids, {"pos": None, "dep": None, x.kind: e})
+        entry["token_index_base"] = 1
+        entry["tokens"] = [
+            {
+                "document_id": str(d),
+                "sentence_index": s,
+                "token_index": n,
+                "form": t[2],
+                "label": t[3] if x.kind == "pos" else t[6],
+                **({"head": t[5]} if x.kind == "dep" else {}),
+            }
+            for d, sents in toks.items()
+            for s, items in sents.items()
+            for n, t in enumerate(items, 1)
+        ]
+    return entry
+
+
+def _annotator_rows(db, x, doc_ids):
+    """{annotator id: [rows]} of a multi-annotator layer: every row of each listed annotator, any status."""
+    annotators = list(layer_annotators(x))
+    out = {a: [] for a in annotators}
+    common = {"status", "source", "model_label", "label"}
+    if x.kind == "span":
+        for s in eff.annotator_spans(db, x, annotators, doc_ids, statuses=None):
+            out[s.annotator_id].append(
+                {
+                    **_str_ids(eff._span_dict(s)),
+                    **{k: getattr(s, k) for k in common},
+                }
+            )
+    elif x.kind == "relation":
+        f, t = aliased(SpanAnnotation), aliased(SpanAnnotation)
+        for r, a, b in db.execute(
+            select(RelationAnnotation, f, t)
+            .join(f, f.id == RelationAnnotation.from_span_id)
+            .join(t, t.id == RelationAnnotation.to_span_id)
+            .where(
+                RelationAnnotation.layer_id == x.id,
+                RelationAnnotation.annotator_id.in_(annotators),
+                f.document_id.in_(doc_ids),
+            )
+            .order_by(f.document_id, f.start_cp, RelationAnnotation.id)
+        ).all():
+            out[r.annotator_id].append(
+                {
+                    "id": r.id,
+                    **{k: getattr(r, k) for k in common},
+                    "from": _str_ids({**eff._span_dict(a), "label": a.label}),
+                    "to": _str_ids({**eff._span_dict(b), "label": b.label}),
+                }
+            )
+    elif x.kind == "alignment":
+        for r in db.scalars(
+            select(AlignmentAnnotation)
+            .where(
+                AlignmentAnnotation.layer_id == x.id,
+                AlignmentAnnotation.annotator_id.in_(annotators),
+                AlignmentAnnotation.src_document_id.in_(doc_ids),
+            )
+            .order_by(
+                AlignmentAnnotation.src_document_id,
+                AlignmentAnnotation.src_sentence_index,
+                AlignmentAnnotation.id,
+            )
+        ):
+            out[r.annotator_id].append(
+                {
+                    "id": r.id,
+                    "src_document_id": str(r.src_document_id),
+                    "src_sentence_index": r.src_sentence_index,
+                    "tgt_document_id": str(r.tgt_document_id),
+                    "tgt_sentence_index": r.tgt_sentence_index,
+                    "src_tokens": list(r.src_tokens or []),
+                    "tgt_tokens": list(r.tgt_tokens or []),
+                    "status": r.status,
+                    "source": r.source,
+                }
+            )
+    emails = dict(
+        db.execute(select(User.id, User.email).where(User.id.in_(annotators))).all()
+    )
+    return [
+        {"annotator_id": str(a), "email": emails.get(a), "rows": rows}
+        for a, rows in out.items()
+    ]
+
+
 def run_export_json(run, layer_id):
-    """Documents of the layer and the effective annotations of every layer of the project on that corpus."""
+    """The selected layer only: its effective annotations over the layer's documents (a relation layer carries
+    its endpoint spans in each relation). params.annotators on a multi-annotator layer adds each annotator's
+    own rows."""
     with session() as db:
         layer = db.get(AnnotationLayer, layer_id)
+        if layer is None:
+            raise JobFailed("LAYER_DELETED", "标注层已删除")
         docs = _export_docs(db, layer, run.params)
         doc_ids = [d.id for d in docs]
-        id_set = set(doc_ids)
-        layers = db.scalars(
-            select(AnnotationLayer)
-            .where(
-                AnnotationLayer.project_id == layer.project_id,
-                AnnotationLayer.corpus_id == layer.corpus_id,
-            )
-            .order_by(AnnotationLayer.created_at, AnnotationLayer.id)
-        ).all()
-        out_layers = []
-        for x in layers:
-            e = eff.eff_layer(x)
-            entry = {
-                "id": str(x.id),
-                "name": x.name,
-                "kind": x.kind,
-                "mode": x.mode,
-                "label_set_id": str(x.label_set_id) if x.label_set_id else None,
-            }
-            if x.kind == "span":
-                entry["spans"] = [
-                    {**s, "document_id": str(s["document_id"])}
-                    for s in eff.effective_spans(db, e, doc_ids)
-                ]
-            elif x.kind == "relation":
-                entry["base_layer_id"] = str(x.base_layer_id)
-                entry["relations"] = [
-                    {
-                        "id": r["id"],
-                        "label": r["label"],
-                        "from": {
-                            k: str(v) if k == "document_id" else v
-                            for k, v in r["from"].items()
-                        },
-                        "to": {
-                            k: str(v) if k == "document_id" else v
-                            for k, v in r["to"].items()
-                        },
-                    }
-                    for r in eff.effective_relations(db, e)
-                    if r["from"]["document_id"] in id_set
-                ]
-            elif x.kind == "alignment":
-                entry["level"] = x.level
-                entry["tgt_corpus_id"] = str(x.tgt_corpus_id)
-                entry["alignments"] = [
-                    {
-                        **p,
-                        "src_document_id": str(p["src_document_id"]),
-                        "tgt_document_id": str(p["tgt_document_id"]),
-                        "links": [
-                            {"src": list(a), "tgt": list(b)} for a, b in p["links"]
-                        ],
-                    }
-                    for p in eff.effective_alignments(db, e, doc_ids)
-                ]
-            else:
-                toks = eff.layer_tokens(
-                    db, doc_ids, {"pos": None, "dep": None, x.kind: e}
-                )
-                entry["tokens"] = [
-                    {
-                        "document_id": str(d),
-                        "sentence_index": s,
-                        "token_index": n,
-                        "form": t[2],
-                        "label": t[3] if x.kind == "pos" else t[6],
-                        **({"head": t[5]} if x.kind == "dep" else {}),
-                    }
-                    for d, sents in toks.items()
-                    for s, items in sents.items()
-                    for n, t in enumerate(items, 1)
-                ]
-            out_layers.append(entry)
+        entry = _layer_entry(db, layer, doc_ids)
+        raw = run.params.get("annotators") and layer.mode == "multi"
+        if raw:
+            entry["annotators"] = _annotator_rows(db, layer, doc_ids)
         corpus = db.get(Corpus, layer.corpus_id)
         data = {
             "corpus": {
@@ -1115,7 +1225,9 @@ def run_export_json(run, layer_id):
                 "name": corpus.name,
                 "language": corpus.language,
             },
+            "scope": [EXPORT_SCOPE[layer.kind], *([ANNOTATORS_SCOPE] if raw else [])],
             "offsets": "code points",
+            "sentence_index_base": 0,
             "documents": [
                 {
                     "id": str(d.id),
@@ -1125,10 +1237,10 @@ def run_export_json(run, layer_id):
                 }
                 for d in docs
             ],
-            "layers": out_layers,
+            "layers": [entry],
         }
         notice = _notice(
-            db, layer.corpus_id, *(x.tgt_corpus_id for x in layers if x.tgt_corpus_id)
+            db, layer.corpus_id, *([layer.tgt_corpus_id] if layer.tgt_corpus_id else [])
         )
         if notice:
             data = {"source": notice, **data}
@@ -1141,7 +1253,7 @@ def run_export_json(run, layer_id):
     _finish(
         run,
         f"{_safe(name)}-{_stamp()}.json",
-        {"documents": len(docs), "layers": len(out_layers)},
+        {"documents": len(docs), "layers": 1, "annotators": bool(raw)},
     )
 
 
@@ -1192,6 +1304,15 @@ def run_export_tmx(run, layer_id):
     )
     for line in notice:
         etree.SubElement(header, "note").text = line
+    etree.SubElement(header, "prop", type="x-scope").text = EXPORT_SCOPE["alignment"]
+    etree.SubElement(
+        header, "prop", type="x-source-format"
+    ).text = "x-source / x-target：文档 id:句序号，句序号从 0 起"
+    if layer.level == "word":
+        etree.SubElement(header, "prop", type="x-word-alignment-format").text = (
+            "i-j：源语词序号-目标语词序号，从 1 起，与 CoNLL-U 的 ID 列一致；"
+            "Pharaoh 格式从 0 起，换用时两边各减 1"
+        )
     body = etree.SubElement(root, "body")
     for p in pairs:
         src = (p["src_document_id"], p["src_sentence_index"])

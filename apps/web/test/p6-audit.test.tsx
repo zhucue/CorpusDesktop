@@ -182,8 +182,8 @@ describe("span workspace relations", () => {
       if (p === "/api/label-sets")
         return json({
           items: [
-            { id: "ls-le", project_id: null, name: "learner-errors", kind: "span", language: null, labels: [{ id: "1", name: "时态" }, { id: "2", name: "冠词" }], created_at: "" },
-            { id: "ls-ec", project_id: null, name: "error-correction", kind: "relation", language: null, labels: [{ id: "c", name: "cause" }], created_at: "" },
+            { id: "ls-le", project_id: null, name: "learner-errors", kind: "span", language: null, labels: [{ id: "时态", name: "时态" }, { id: "冠词", name: "冠词" }], created_at: "" },
+            { id: "ls-ec", project_id: null, name: "error-correction", kind: "relation", language: null, labels: [{ id: "cause", name: "cause" }], created_at: "" },
           ],
         });
       if (p === "/api/layers/L5/documents") return json({ items: [{ document_id: "d1", title: "作文 1", sentences: 1, done: 0, pending: 1 }] });

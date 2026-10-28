@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { App, Form, Input, Modal, Select } from "antd";
+import { App, Checkbox, Form, Input, Modal, Select } from "antd";
 import { useEffect } from "react";
 import { MAX_PAGE_SIZE, api, errorText, type Doc, type LabelSet, type Layer, type LayerKind, type Page } from "../../api";
 import { ErrorAlert } from "../../components/common";
@@ -22,6 +22,7 @@ interface Values {
   guideline_document_id?: string;
   mode?: "single" | "multi";
   annotators?: string[];
+  preannotate?: boolean;
 }
 
 export const kindLabels: Record<LayerKind, string> = { pos: "词性", dep: "依存", span: "片段", relation: "关系", alignment: "对齐" };
@@ -31,7 +32,7 @@ const KINDS: LayerKind[] = ["pos", "dep", "span", "relation", "alignment"];
 export const TEMPLATES: { name: string; label: string; kind: "span" | "relation" }[] = [
   { name: "learner-errors", label: "学习者偏误", kind: "span" },
   { name: "translation-strategies", label: "翻译策略", kind: "span" },
-  { name: "error-correction", label: "error-correction", kind: "relation" },
+  { name: "error-correction", label: "偏误更正", kind: "relation" },
 ];
 
 /** Built-in label set for a new layer: jieba for Chinese POS, UPOS otherwise; UD relations for dependencies; first template otherwise. */
@@ -68,6 +69,8 @@ export default function NewLayerDialog({
   const kind: LayerKind = Form.useWatch("kind", form) ?? "pos";
   const mode = Form.useWatch("mode", form) ?? "single";
   const tgtId = Form.useWatch("tgt_corpus_id", form);
+  const level = Form.useWatch("level", form) ?? "sentence";
+  const preannotateMulti = !!Form.useWatch("preannotate", form);
   const labelSetId = Form.useWatch("label_set_id", form);
   const usable = (corpora.data?.items ?? []).filter((c) => c.status === "ready" || c.status === "stale");
   const corpus = usable.find((c) => c.id === corpusId);
@@ -89,14 +92,22 @@ export default function NewLayerDialog({
   const templates = TEMPLATES.filter((t) => t.kind === kind);
   const chosen = sets.find((s) => s.id === labelSetId);
 
-  // Defaults follow the corpus language and the layer kind.
+  // POS layers default to the tag set the corpus already carries (UPOS for UD corpora, jieba for jieba-tagged ones).
+  const defaults = useQuery({
+    queryKey: ["layer-defaults", projectId, corpusId],
+    queryFn: () => api.get<{ pos_label_set: string }>(`/projects/${projectId}/corpora/${corpusId}/layer-defaults`),
+    enabled: open && !!corpusId && kind === "pos",
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Defaults follow the corpus (its tags, else its language) and the layer kind.
   useEffect(() => {
     if (!open || !usesLabels) return;
-    const want = defaultLabelSetName(kind, corpus?.language);
+    const want = (kind === "pos" && defaults.data?.pos_label_set) || defaultLabelSetName(kind, corpus?.language);
     const pick = sets.find((s) => s.project_id == null && s.name === want) ?? sets[0];
     form.setFieldValue("label_set_id", pick?.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, kind, corpus?.id, labelSets.data]);
+  }, [open, kind, corpus?.id, labelSets.data, defaults.data]);
 
   // A guideline linked to the chosen label set (P4 规范 → 关联标签集) is preselected.
   useEffect(() => {
@@ -136,7 +147,9 @@ export default function NewLayerDialog({
   });
 
   const defaultName = () =>
-    kind === "alignment" ? `${corpus?.name ?? ""} ↔ ${tgt?.name ?? ""} 对齐`.trim() : `${corpus?.name ?? ""} ${chosen && !tokenKind ? chosen.name : kindLabels[kind]}`.trim();
+    kind === "alignment"
+      ? `${corpus?.name ?? ""}${tgt && tgt.id !== corpus?.id ? ` ↔ ${tgt.name}` : ""} ${level === "word" ? "词级" : "句级"}对齐`.trim()
+      :`${corpus?.name ?? ""} ${chosen && !tokenKind ? chosen.name : kindLabels[kind]}`.trim();
 
   const create = useMutation({
     mutationFn: (v: Values) => {
@@ -149,7 +162,11 @@ export default function NewLayerDialog({
       if (v.kind !== "alignment") body.label_set_id = v.label_set_id;
       if (!tokenKind) {
         body.mode = v.mode ?? "single";
-        if (v.mode === "multi") body.annotators = v.annotators ?? [];
+        if (v.mode === "multi") {
+          body.annotators = v.annotators ?? [];
+          // multi layers start without suggestions unless asked: shared suggestions bias independent annotation
+          body.preannotate = !!v.preannotate;
+        }
         // only span / relation layers take a guideline (api: 422 INVALID_GUIDELINE otherwise)
         if (v.guideline_document_id && v.kind !== "alignment") body.guideline_document_id = v.guideline_document_id;
       }
@@ -177,9 +194,10 @@ export default function NewLayerDialog({
       }}
       footer={null}
       destroyOnHidden
+      focusTriggerAfterClose={false}
       width={560}
     >
-      <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "pos", mode: "single", level: "sentence" }} onFinish={(v) => create.mutate(v)}>
+      <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "pos", mode: "single", level: "sentence", preannotate: false }} onFinish={(v) => create.mutate(v)}>
         <Form.Item name="kind" hidden>
           <Input />
         </Form.Item>
@@ -284,6 +302,11 @@ export default function NewLayerDialog({
             )}
           </div>
         )}
+        {!tokenKind && mode === "multi" && (
+          <Form.Item name="preannotate" valuePropName="checked" style={{ marginTop: -8 }}>
+            <Checkbox>预标（每位标注者得到同一份模型建议，会影响独立标注和一致性）</Checkbox>
+          </Form.Item>
+        )}
         <Form.Item name="document_ids" label="文档（不选为全部）">
           <Select
             mode="multiple"
@@ -302,7 +325,7 @@ export default function NewLayerDialog({
           </button>
           <button className="btn p" type="submit" disabled={create.isPending}>
             {create.isPending && <span className="spin" />}
-            新建并预标
+            {!tokenKind && mode === "multi" && !preannotateMulti ? "新建" : "新建并预标"}
           </button>
         </div>
       </Form>

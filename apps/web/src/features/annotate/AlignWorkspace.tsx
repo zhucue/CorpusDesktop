@@ -1,8 +1,8 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Select, Tabs } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import type { Alignment, Layer, SentencePair } from "../../api";
+import { api, type Alignment, type Layer, type SentencePair } from "../../api";
 import { toggleLink, type LinkGroup } from "../../components/annot/align";
 import { AlignGraph } from "../../components/annot/AlignGraph";
 import { Empty, Skeleton } from "../../components/common";
@@ -154,19 +154,41 @@ export default function AlignWorkspace({
     if (steps.length) void act.run(steps);
   }
 
-  function changeTarget(p: SentencePair, tgtIdx: number) {
-    if (!canAnnotate) return;
-    const sentAl = mine(p).find((a) => a.level === "sentence");
-    const reload = (ok: boolean) => {
-      if (!ok) return;
+  const sentRow = (p: SentencePair) => mine(p).find((a) => a.level === "sentence");
+  /** Target sentences of the current source sentence that are aligned (pair row not rejected). */
+  const activeTargets = pairs.filter((p) => p.tgt && sentRow(p) && sentRow(p)!.status !== "rejected").map((p) => p.tgt!.sentence_index);
+  const tgtDoc = pairs.find((p) => p.tgt)?.tgt?.document_id ?? fallbackTgtDoc;
+  const targets = useQuery({
+    queryKey: ["align-targets", layer.id, tgtDoc],
+    queryFn: () => api.get<{ items: { sentence_index: number; text: string }[] }>(`/layers/${layer.id}/target-sentences`, { document_id: tgtDoc }),
+    enabled: !word && !!tgtDoc && tab === "edit",
+    staleTime: 5 * 60 * 1000,
+  });
+
+  /**
+   * Sentence level: the source sentence's targets become `next` — 1:1, 1:n (several), none (empty); n:1 is the same
+   * target chosen for several source sentences. New targets are created, dropped ones rejected, re-chosen ones confirmed.
+   */
+  function setTargets(next: number[]) {
+    if (!canAnnotate || !pairs.length || !tgtDoc) return;
+    const steps: (() => Promise<unknown>)[] = [];
+    const have = new Set<number>();
+    for (const p of pairs) {
+      const r = sentRow(p);
+      if (!p.tgt || !r) continue;
+      have.add(p.tgt.sentence_index);
+      const want = next.includes(p.tgt.sentence_index);
+      if (!want && r.status !== "rejected") steps.push(() => act.patchOne(p, r, { action: "reject" }));
+      if (want && r.status === "rejected") steps.push(() => act.patchOne(p, r, { action: "confirm" }));
+    }
+    for (const i of next) if (!have.has(i)) steps.push(() => act.create(pairs[0], `tmp:${i}`, { tgt_document_id: tgtDoc, tgt_sentence_index: i }));
+    if (!steps.length) return;
+    void act.run(steps).then((ok) => {
+      // a new target is a new pair: reload so the editor and the right panel show it
       void qc.invalidateQueries({ queryKey: ["align-pairs", layer.id, docId] });
       void qc.invalidateQueries({ queryKey: ["align-one", layer.id, docId] });
-    };
-    if (sentAl) void act.run([() => act.patchOne(p, sentAl, { action: "modify", tgt_sentence_index: tgtIdx })]).then(reload);
-    else {
-      const tgtDoc = p.tgt?.document_id ?? fallbackTgtDoc;
-      if (tgtDoc) void act.run([() => act.create(p, "tmp:s", { tgt_document_id: tgtDoc, tgt_sentence_index: tgtIdx })]).then(reload);
-    }
+      return ok;
+    });
   }
 
   const runRef = useRef({ setAll, movePair });
@@ -190,11 +212,12 @@ export default function AlignWorkspace({
     return () => document.removeEventListener("keydown", onKey);
   }, [tab]);
 
-  /** Target sentence choices: target sentences of the loaded pairs in that target document. */
-  function targetOptions(tgtDoc: string | undefined) {
+  /** Target sentence choices: every sentence of the target document (the loaded pairs' targets until it arrives). */
+  function targetOptions() {
     const seen = new Map<number, string>();
     for (const p of items) if (p.tgt && p.tgt.document_id === tgtDoc) seen.set(p.tgt.sentence_index, p.tgt.text);
-    return [...seen.entries()].sort((a, b) => a[0] - b[0]).map(([i, t]) => ({ value: i, label: `句 ${i + 1} · ${t}` }));
+    for (const t of targets.data?.items ?? []) seen.set(t.sentence_index, t.text);
+    return [...seen.entries()].sort((a, b) => a[0] - b[0]).map(([i, t]) => ({ value: i, label: `句 ${i + 1} · ${t}`, short: `句 ${i + 1}` }));
   }
 
   const stream = (
@@ -224,10 +247,12 @@ export default function AlignWorkspace({
       <div className="row small bi-head">
         <span className="mono muted grow ellipsis">{p.tgt ? `句 ${p.src.sentence_index + 1} ↔ 句 ${p.tgt.sentence_index + 1}` : `句 ${p.src.sentence_index + 1}`}</span>
         {sent && <span className={`tag ${statusView[sent.status].cls}`}>{statusView[sent.status].label}</span>}
-        {sent && <span className="mono muted">{sourceText(sent.source, layer.source_model)}</span>}
-        <span className="muted">
-          候选分数 <b className="mono">{fmtScore(score)}</b>
-        </span>
+        {sent && <span className="muted">{sourceText(sent.source, layer.source_model)}</span>}
+        {score != null && (
+          <span className="muted">
+            候选分数 <b className="mono">{fmtScore(score)}</b>
+          </span>
+        )}
       </div>
     );
   };
@@ -297,23 +322,29 @@ export default function AlignWorkspace({
                   <div className="sp-tgt">{p.tgt ? p.tgt.text : <span className="muted">未对齐</span>}</div>
                 </div>
               )}
-              {!word && (
-                <div className="row small" style={{ gap: 8 }}>
-                  <span className="muted">目标句</span>
-                  <Select
-                    size="small"
-                    style={{ flex: 1, minWidth: 0 }}
-                    aria-label="目标句"
-                    placeholder="选择目标句"
-                    disabled={!canAnnotate}
-                    value={p.tgt?.sentence_index}
-                    options={targetOptions(p.tgt?.document_id ?? fallbackTgtDoc)}
-                    onChange={(v: number) => changeTarget(p, v)}
-                  />
-                </div>
-              )}
             </div>
           ))
+        )}
+        {!word && pairs.length > 0 && (
+          <div className="row small" style={{ gap: 8, marginTop: 4 }}>
+            <span className="muted" style={{ flexShrink: 0 }}>
+              目标句
+            </span>
+            <Select
+              mode="multiple"
+              size="small"
+              style={{ flex: 1, minWidth: 0 }}
+              aria-label="目标句"
+              placeholder="未对齐"
+              disabled={!canAnnotate || !tgtDoc}
+              loading={targets.isFetching}
+              value={activeTargets}
+              options={targetOptions()}
+              optionLabelProp="short"
+              optionFilterProp="label"
+              onChange={(v: number[]) => setTargets(v)}
+            />
+          </div>
         )}
       </div>
     </section>
@@ -330,7 +361,22 @@ export default function AlignWorkspace({
           <>
             <dl className="kv" style={{ gridTemplateColumns: "64px 1fr", margin: 0 }}>
               <dt>目标句</dt>
-              <dd className="num">{fmt(pairs.filter((p) => p.tgt).length)}</dd>
+              <dd>
+                {word ? (
+                  pairs.filter((p) => p.tgt).map((p) => `句 ${p.tgt!.sentence_index + 1}`).join("、") || "未对齐"
+                ) : activeTargets.length ? (
+                  <span className="tgt-list">
+                    {[...activeTargets].sort((a, b) => a - b).map((i) => (
+                      <span key={i} className="tag t-gray">
+                        句 {i + 1}
+                      </span>
+                    ))}
+                    {activeTargets.length > 1 && <span className="small muted">1:{activeTargets.length}</span>}
+                  </span>
+                ) : (
+                  "未对齐"
+                )}
+              </dd>
               {word && (
                 <>
                   <dt>词对</dt>
@@ -400,7 +446,7 @@ export default function AlignWorkspace({
 
   return (
     <div className="ws">
-      <div className="col gap-16" style={{ minWidth: 0 }}>
+      <div className="col gap-16 ws-left" style={{ minWidth: 0 }}>
         {leftTop}
         {stream}
       </div>

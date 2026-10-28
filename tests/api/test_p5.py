@@ -780,6 +780,7 @@ def export(client, layer, fmt):
 
 def test_span_exports(owner, project, essay, reviewed):
     layer, rel = reviewed
+    # a span layer exports its own spans only
     job, d = export(owner, layer, "brat")
     assert d.headers["content-type"] == "application/zip"
     z = zipfile.ZipFile(io.BytesIO(d.content))
@@ -791,18 +792,41 @@ def test_span_exports(owner, project, essay, reviewed):
     spans = effective_count(
         layer["id"], [x["id"] for x in label_set(owner, "learner-errors")["labels"]]
     )
-    assert (
-        len(lines) == spans + 1 == job["result"]["spans"] + job["result"]["relations"]
-    )
+    assert len(lines) == spans == job["result"]["spans"] == 4
+    assert job["result"]["relations"] == 0
     t_lines = [x.split("\t") for x in lines if x.startswith("T")]
     for _, kind_range, body in t_lines:
         _label, a, b = kind_range.split(" ")
         assert txt[int(a) : int(b)] == body
     labels = {body: kind_range.split(" ")[0] for _, kind_range, body in t_lines}
     assert labels == {"go": "时态", "have": "主谓一致", "book": "用词", "fine": "时态"}
-    r_line = next(x for x in lines if x.startswith("R"))
+    assert "# 导出口径：" in z.read("annotation.conf").decode("utf-8")
+
+    # a confirmed relation whose endpoint span is not confirmed (was: rejected) is exported with that span
+    spans_by_text = by_text(all_spans(owner, layer))
+    r = owner.post(
+        f"/api/layers/{rel['id']}/relations",
+        json={
+            "from_span_id": spans_by_text["have"]["id"],
+            "to_span_id": spans_by_text["was"]["id"],
+            "label": "cause",
+        },
+    )
+    assert r.status_code == 200, r.text
+    job, d = export(owner, rel, "brat")
+    z = zipfile.ZipFile(io.BytesIO(d.content))
+    lines = z.read("001-essay.ann").decode("utf-8").splitlines()
+    t_lines = [x.split("\t") for x in lines if x.startswith("T")]
     ids = {body: tid for tid, _, body in t_lines}
-    assert r_line == f"R1\tcorrection Arg1:{ids['have']} Arg2:{ids['book']}"
+    assert set(ids) == {"go", "have", "book", "was", "fine"}
+    r_lines = [x for x in lines if x.startswith("R")]
+    assert r_lines == [
+        f"R1\tcorrection Arg1:{ids['have']} Arg2:{ids['book']}",
+        f"R2\tcause Arg1:{ids['have']} Arg2:{ids['was']}",
+    ]
+    notes = [x for x in lines if x.startswith("#")]
+    assert len(notes) == 1 and notes[0].startswith(f"#1\tAnnotatorNotes {ids['was']}\t")
+    assert job["result"]["relations"] == 2 and job["result"]["endpoint_spans"] == 1
     conf = z.read("annotation.conf").decode("utf-8")
     assert "\ncorrection\tArg1:<ENTITY>, Arg2:<ENTITY>\n" in conf
 
@@ -822,8 +846,19 @@ def test_span_exports(owner, project, essay, reviewed):
     job, d = export(owner, rel, "json")
     data = json.loads(d.content)
     assert data["documents"][0]["text"] == ESSAY and data["offsets"] == "code points"
-    kinds = {x["kind"]: x for x in data["layers"]}
-    assert len(kinds["span"]["spans"]) == 4 and len(kinds["relation"]["relations"]) == 1
+    # only the exported layer; relations carry their endpoint spans
+    assert [x["kind"] for x in data["layers"]] == ["relation"]
+    rels = data["layers"][0]["relations"]
+    assert [(r["label"], r["from"]["label"], r["to"]["label"]) for r in rels] == [
+        ("correction", "主谓一致", "用词"),
+        ("cause", "主谓一致", "主谓一致"),
+    ]
+    assert [r["to"]["effective"] for r in rels] == [True, False]
+    assert data["scope"] and "annotators" not in data["layers"][0]
+    job, d = export(owner, layer, "json")
+    data = json.loads(d.content)
+    assert [x["kind"] for x in data["layers"]] == ["span"]
+    assert len(data["layers"][0]["spans"]) == 4
     assert (
         owner.post(
             f"/api/layers/{layer['id']}/export", json={"format": "tmx"}
@@ -931,11 +966,14 @@ def test_multi_annotator_spans(owner, project, essay, fake_llm, member, make_use
     assert pair["n"] == 4 and pair["kappa"] == pytest.approx(kappa(o, b))
     assert agreement["alpha"] == pytest.approx(alpha_two(o, b))
     assert agreement["lenient"]["n"] == 4
-    assert {x["label"] for x in agreement["per_label"]} == {
-        "时态",
-        "主谓一致",
-        "用词",
-        "∅",
+    # same extents everywhere: the overlap-tolerant κ equals the exact one
+    assert agreement["lenient"]["pairwise"][0]["kappa"] == pytest.approx(kappa(o, b))
+    # n = units where at least one annotator gave the label
+    assert {x["label"]: x["n"] for x in agreement["per_label"]} == {
+        "时态": 2,
+        "主谓一致": 2,
+        "用词": 1,
+        "∅": 1,
     }
 
     dis = owner.get(f"/api/layers/{lid}/disagreements").json()
@@ -954,7 +992,31 @@ def test_multi_annotator_spans(owner, project, essay, fake_llm, member, make_use
         by_word["was"]["sentence_index"] == 2
         and by_word["was"]["text"] == "We was happy ."
     )
+    # the disputed words and where they sit in the sentence
+    assert by_word["was"]["target_text"] == "was" and by_word["was"]["marks"] == [
+        [3, 6]
+    ]
+    assert by_word["have"]["target_text"] == "have"
     assert ann.get(f"/api/layers/{lid}/disagreements").status_code == 403
+
+    # JSON with each annotator's own rows (multi layers)
+    r = owner.post(
+        f"/api/layers/{lid}/export", json={"format": "json", "annotators": True}
+    )
+    drain()
+    job = owner.get(f"/api/jobs/{r.json()['id']}").json()
+    assert job["state"] == "succeeded", job
+    data = json.loads(owner.get(f"/api/jobs/{job['id']}/download").content)
+    entry = data["layers"][0]
+    assert [x["kind"] for x in data["layers"]] == ["span"] and len(data["scope"]) == 2
+    raw = {x["annotator_id"]: x["rows"] for x in entry["annotators"]}
+    assert set(raw) == {owner.user_id, ann.user_id}
+    assert {x["status"] for x in raw[ann.user_id]} == {
+        "confirmed",
+        "modified",
+        "rejected",
+    }
+    assert len(entry["spans"]) == 2  # go and book: agreed
 
     r = owner.post(
         f"/api/layers/{lid}/adjudicate",
@@ -1118,6 +1180,55 @@ def pairs(client, layer, **params):
     r = client.get(f"/api/layers/{layer['id']}/alignments", params=params)
     assert r.status_code == 200, r.text
     return r.json()
+
+
+def test_sentence_pair_choices_and_tmx_header(owner, project, tmx, fake_llm):
+    sent = make_layer(
+        owner,
+        project,
+        corpus_id=tmx["id"],
+        kind="alignment",
+        name="句对齐",
+        level="sentence",
+    )
+    r = owner.get(
+        f"/api/layers/{sent['id']}/target-sentences", params={"document_id": tmx["zh"]}
+    )
+    assert r.status_code == 200, r.text
+    assert [x["sentence_index"] for x in r.json()["items"]] == [0, 1, 2]
+    # 1:2 — a second target for source sentence 0; none — source sentence 2 rejected
+    r = owner.post(
+        f"/api/layers/{sent['id']}/alignments",
+        json={
+            "src_document_id": tmx["en"],
+            "src_sentence_index": 0,
+            "tgt_document_id": tmx["zh"],
+            "tgt_sentence_index": 1,
+        },
+    )
+    assert r.status_code == 200, r.text
+    items = pairs(owner, sent)["items"]
+    assert [
+        (p["src"]["sentence_index"], p["tgt"]["sentence_index"]) for p in items
+    ] == [(0, 0), (0, 1), (1, 1), (2, 2)]
+    last = items[-1]["alignments"][0]
+    owner.patch(
+        f"/api/layers/{sent['id']}/alignments/{last['id']}", json={"action": "reject"}
+    )
+    _, d = export(owner, sent, "tmx")
+    root = etree.fromstring(d.content)
+    header = root.find("header")
+    props = {p.get("type"): p.text for p in header.findall("prop")}
+    assert "x-scope" in props and "从 0 起" in props["x-source-format"]
+    assert "x-word-alignment-format" not in props  # sentence level
+    targets = [
+        tu.find("prop[@type='x-target']").text.split(":")[1]
+        for tu in root.findall(".//tu")
+    ]
+    assert targets == ["0", "1", "1"]  # 0→0, 0→1 (1:2), 1→1 (2:1); 2 none
+    assert owner.get(
+        f"/api/projects/{project['id']}/corpora/{tmx['id']}/layer-defaults"
+    ).json() == {"pos_label_set": "upos"}
 
 
 def test_alignment_layers(owner, project, tmx, fake_llm):
@@ -1376,7 +1487,7 @@ def test_layer_exports_carry_source_notice(owner, project, essay, reviewed, tmx)
     assert "README.txt" in z.namelist()
     assert z.read("README.txt").decode("utf-8") == notice + "\n"
     conf = z.read("annotation.conf").decode("utf-8")
-    assert conf.startswith(f"# {notice}\n[entities]\n")
+    assert conf.startswith(f"# {notice}\n# 导出口径：") and "\n[entities]\n" in conf
 
     _, d = export(owner, layer, "xlsx")
     wb = load_workbook(io.BytesIO(d.content))

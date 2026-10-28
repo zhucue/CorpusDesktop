@@ -4,8 +4,9 @@ the tokens (pos, lemma, head, deprel); nothing is read from a database here.
 Columns: ID = token number in the sentence; FORM; LEMMA; UPOS = pos when it is a UPOS tag, otherwise the
 jieba tag mapped to UPOS (X when unknown) with the original tag in XPOS; FEATS = _; HEAD, DEPREL (`_` when
 empty); DEPS = _; MISC = SpaceAfter=No when the next token starts where this one ends. Comments: `# newdoc id`
-(Document.external_id or title) before each document, then `# sent_id = <doc id>-<n>` (n from 1) and
-`# text`. Multiword-token ranges are not written; each stored token is one word line.
+(Document.external_id or title) before each document, then `# sent_id = <doc id>-<n>` (whitespace in the id as
+`_`; n = the sentence number in the document from 1, as the platform shows it) and `# text`. Multiword-token
+ranges are not written; each stored token is one word line.
 """
 
 from collections.abc import Iterable
@@ -27,12 +28,11 @@ def write_conllu(documents: Iterable[Document]) -> str:
     for doc in documents:
         doc_id = _field(doc.external_id or doc.title)
         out.append(f"# newdoc id = {doc_id}")
-        n = 0
-        for s in doc.sentences:
+        prefix = "_".join(doc_id.split())
+        for n, s in enumerate(doc.sentences, 1):
             if not s.tokens:
                 continue
-            n += 1
-            out.append(f"# sent_id = {doc_id}-{n}")
+            out.append(f"# sent_id = {prefix}-{n}")
             out.append(f"# text = {' '.join(doc.text[s.start : s.end].split())}")
             for i, t in enumerate(s.tokens):
                 if t.pos in UPOS or t.pos is None:

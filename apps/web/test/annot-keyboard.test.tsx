@@ -186,3 +186,31 @@ describe("annotation keyboard reducer", () => {
     await waitFor(() => expect(document.querySelector('.tk[data-index="1"] .pchip')?.className).toContain("suggested"));
   });
 });
+
+describe("editor focus (QA Q46)", () => {
+  it("a click on a token takes focus from a button outside, so Enter confirms instead of pressing that button", async () => {
+    const calls = mockApi();
+    const outside = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <App>
+          <MemoryRouter initialEntries={["/p/p1/annotate?layer=L1"]}>
+            <button type="button" onClick={outside}>
+              新建标注层
+            </button>
+            <Workspace layer={LAYER} projectId="p1" canAnnotate />
+          </MemoryRouter>
+        </App>
+      </QueryClientProvider>,
+    );
+    await screen.findByText("翻译");
+    screen.getByText("新建标注层").focus(); // where focus lands after the dialog closes
+    fireEvent.click(document.querySelector('.tk[data-index="2"]')!);
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("编辑器");
+    fireEvent.keyDown(document.activeElement!, { key: "Enter" });
+    await waitFor(() => expect(posts(calls)).toHaveLength(1));
+    expect(posts(calls)[0].body).toEqual({ document_id: "d1", sentence_index: 0, token_index: 2, action: "confirm" });
+    expect(outside).not.toHaveBeenCalled();
+  });
+});

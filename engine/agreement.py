@@ -65,8 +65,10 @@ def pairwise(values: dict) -> list[dict]:
 
 
 def per_label(values: dict) -> list[dict]:
-    """One-vs-rest κ per label, averaged over annotator pairs (None when undefined for every pair)."""
+    """One-vs-rest κ per label, averaged over annotator pairs (None when undefined for every pair); n = items
+    where at least one annotator gave the label."""
     labels = sorted({v for vs in values.values() for v in vs}, key=str)
+    columns = list(zip(*values.values()))
     out = []
     for label in labels:
         ks = [
@@ -79,8 +81,48 @@ def per_label(values: dict) -> list[dict]:
             )
             is not None
         ]
-        out.append({"label": label, "kappa": sum(ks) / len(ks) if ks else None})
+        out.append(
+            {
+                "label": label,
+                "kappa": sum(ks) / len(ks) if ks else None,
+                "n": sum(label in item for item in columns),
+            }
+        )
     return out
+
+
+def overlap_units(units: list) -> list:
+    """Overlap-tolerant span units (the lenient agreement variant).
+
+    units: exact-extent units of one sentence, [(start, end, {annotator: value})] with only the annotators that
+    marked that extent. A unit joins an overlapping unit of other annotators (no annotator in both), one with
+    the same value first, then the largest overlap. Units of one annotator never merge: nested spans of the
+    same annotator stay separate and exact matches are unchanged, so only boundary differences are forgiven.
+    Returns [(start, end, {annotator: value})] by start.
+    """
+    work = sorted(
+        ([a, b, dict(v)] for a, b, v in units), key=lambda u: (u[0], u[1], str(u[2]))
+    )
+    merged = True
+    while merged:
+        merged = False
+        for u in work:
+            best, best_score = None, None
+            for w in work:
+                if w is u or w[0] >= u[1] or u[0] >= w[1] or set(w[2]) & set(u[2]):
+                    continue
+                same = bool(set(w[2].values()) & set(u[2].values()))
+                score = (same, min(u[1], w[1]) - max(u[0], w[0]), -w[0])
+                if best_score is None or score > best_score:
+                    best, best_score = w, score
+            if best is not None:
+                best[0], best[1] = min(best[0], u[0]), max(best[1], u[1])
+                best[2].update(u[2])
+                work.remove(u)
+                merged = True
+                break
+    work.sort(key=lambda u: (u[0], u[1]))
+    return [(a, b, v) for a, b, v in work]
 
 
 def summary(values: dict) -> dict:

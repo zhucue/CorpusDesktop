@@ -120,3 +120,19 @@
 .dis-val.final { color: var(--success); }
 .align-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 16px; }
 .tpl-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+
+/* QA 2026-10-28: focusable editor card, bounded layer list, disagreement context, export scope */
+.ed-card:focus { outline: none; }
+.ed-card:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+.layer-list { max-height: min(42vh, 420px); overflow-y: auto; overscroll-behavior: contain; }
+.dis-target { font-size: 14px; font-weight: 600; }
+.dis-sent { font-size: 13px; line-height: 1.7; color: var(--text-2); }
+.dis-sent mark { background: var(--mark-bg); color: var(--text); border-radius: 3px; padding: 0 2px; box-shadow: inset 0 -2px 0 var(--accent); }
+.export-scope { display: block; max-width: 320px; white-space: normal; line-height: 1.5; font-size: 12px; }
+.tgt-list { display: flex; flex-wrap: wrap; gap: 4px; }
+/* The left column stays in the viewport (below the 56 px top bar): layers and sentences scroll inside it, so J/K never scroll the page away from the editor. */
+.ws-left { position: sticky; top: 72px; height: calc(100vh - 88px); min-height: 420px; }
+.ws-left > .layer-card { flex: 0 1 auto; min-height: 0; max-height: min(40vh, 360px); display: flex; flex-direction: column; }
+.ws-left > .layer-card .layer-list { flex: 1 1 auto; min-height: 0; max-height: none; }
+.ws-left > .stream-card { flex: 1 1 0; min-height: 220px; display: flex; flex-direction: column; }
+.ws-left > .stream-card .stream { flex: 1 1 auto; min-height: 0; max-height: none; }

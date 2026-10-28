@@ -491,6 +491,8 @@ EXPORT_FORMATS = {
 class ExportInput(BaseModel):
     format: Literal["conllu", "brat", "json", "tmx", "xlsx"]
     document_ids: list[UUID] | None = Field(default=None, max_length=10000)
+    # multi-annotator layers, JSON: also each annotator's own rows (all statuses)
+    annotators: bool = False
 
 
 # ---- validation of labels and heads ----
@@ -997,6 +999,18 @@ def layer_stats(
     }
 
 
+@router.get("/projects/{project_id}/corpora/{corpus_id}/layer-defaults")
+def layer_defaults(project_id: UUID, corpus_id: UUID, user: CurrentUser, db: Db):
+    """Defaults for a new layer on the corpus: pos_label_set = the built-in tag set matching the tags the corpus
+    already carries (upos for UD corpora, jieba for jieba-tagged ones, by language when mixed)."""
+    require_project(db, project_id, user, READ)
+    corpus = project_corpus(db, project_id, corpus_id)
+    tagset = corpus_tagset(corpus) if corpus.index_version else "mixed"
+    if tagset not in ("upos", "jieba"):
+        tagset = "jieba" if is_zh(corpus.language) else "upos"
+    return {"pos_label_set": tagset}
+
+
 @router.post("/layers/{layer_id}/export")
 def export_layer(layer_id: UUID, body: ExportInput, user: CurrentUser, db: Db):
     layer = load_layer(db, layer_id, user)
@@ -1011,6 +1025,9 @@ def export_layer(layer_id: UUID, body: ExportInput, user: CurrentUser, db: Db):
         "layer_id": str(layer.id),
         "format": body.format,
         "document_ids": _check_documents(db, layer.corpus_id, body.document_ids),
+        "annotators": body.annotators
+        and layer.mode == "multi"
+        and body.format == "json",
     }
     job = enqueue(db, "export", params, user.id, layer.project_id)
     db.commit()

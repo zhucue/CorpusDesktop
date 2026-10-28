@@ -2,7 +2,7 @@ import type { Alignment, AlignmentPatch, AnnotStatus, LabelDef, PairToken, Relat
 import type { DiffToken } from "../../components/annot/DiffRows";
 import type { FlowRelation, FlowSpan } from "../../components/annot/SpanText";
 import { labelColor } from "../../components/annot/spans";
-import { labelForKey, type KeyLike } from "./model";
+import { labelForKey, labelValue, type KeyLike } from "./model";
 
 export const isSuggested = (x: { status: AnnotStatus }) => x.status === "suggested";
 export const isHumanSource = (source: string) => source === "human" || source.startsWith("human");
@@ -12,8 +12,23 @@ export function spanSentenceDone(s: SentenceSpans): boolean {
   return !s.spans.some(isSuggested) && !s.relations.some(isSuggested);
 }
 
+/** Text order: by start, the longer span first when two start together, then id (stable for equal extents). */
 export function sortSpans(spans: Span[]): Span[] {
-  return [...spans].sort((a, b) => a.start_cp - b.start_cp || b.end_cp - a.end_cp);
+  return [...spans].sort((a, b) => a.start_cp - b.start_cp || b.end_cp - a.end_cp || String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+}
+
+/**
+ * ←/→ over the sentence's spans in text order, wrapping. Without a selection: the first (→) or last (←) span; a
+ * selection outside the list (e.g. a context sentence) continues from its start offset.
+ */
+export function stepSpan(spans: Span[], current: { id: string; start_cp: number } | null, delta: 1 | -1): Span | null {
+  const order = sortSpans(spans);
+  if (!order.length) return null;
+  const i = current ? order.findIndex((x) => x.id === current.id) : -1;
+  if (i >= 0) return order[(i + delta + order.length) % order.length];
+  if (!current) return delta > 0 ? order[0] : order[order.length - 1];
+  if (delta > 0) return order.find((x) => x.start_cp > current.start_cp) ?? order[0];
+  return [...order].reverse().find((x) => x.start_cp < current.start_cp) ?? order[order.length - 1];
 }
 
 export function flowSpans(spans: Span[], labelOrder: string[]): FlowSpan[] {
@@ -116,6 +131,7 @@ export function effectiveAlignPatch(a: Alignment, body: AlignmentPatch, tgtSente
 
 export type SpanCommand =
   | { type: "confirm" }
+  | { type: "confirmSentence" }
   | { type: "reject" }
   | { type: "span"; delta: 1 | -1 }
   | { type: "sentence"; delta: 1 | -1 }
@@ -124,12 +140,12 @@ export type SpanCommand =
   | { type: "relation" }
   | { type: "cancel" };
 
-/** Span editor keys: digits / letters pick labels, Enter confirms, Del rejects, ←/→ spans, J/K sentences, R starts a relation. */
+/** Span editor keys: digits / letters pick labels, Enter confirms, Shift+Enter confirms the sentence, Del rejects, ←/→ spans, J/K sentences, R starts a relation. */
 export function spanKeyCommand(e: KeyLike, ctx: { labels: LabelDef[]; relations: boolean }): SpanCommand | null {
   if (e.ctrlKey || e.metaKey || e.altKey) return null;
   switch (e.key) {
     case "Enter":
-      return { type: "confirm" };
+      return e.shiftKey ? { type: "confirmSentence" } : { type: "confirm" };
     case "Delete":
     case "Backspace":
       return { type: "reject" };
@@ -146,7 +162,7 @@ export function spanKeyCommand(e: KeyLike, ctx: { labels: LabelDef[]; relations:
   if (k === "e") return { type: "edit" };
   if (k === "r" && ctx.relations) return { type: "relation" };
   const l = labelForKey(e.key, ctx.labels);
-  return l ? { type: "label", label: l.name } : null;
+  return l ? { type: "label", label: labelValue(l) } : null;
 }
 
 /* ---------- alignment ---------- */

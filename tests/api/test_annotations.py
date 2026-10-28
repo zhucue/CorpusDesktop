@@ -676,7 +676,11 @@ def test_conllu_export(owner, project, corpus):
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/plain")
     sents = conllu.parse(r.text)
     assert [s.metadata["text"] for s in sents] == TEXT.split("\n")
-    assert sents[0].metadata["sent_id"] == f"{doc}-1"
+    docs = owner.get(f"/api/corpora/{corpus['id']}/documents").json()
+    title = docs["items"][0]["title"]
+    # document title (no external id) and the sentence number as the platform shows it
+    assert sents[0].metadata["sent_id"] == f"{'_'.join(title.split())}-1"
+    assert sents[1].metadata["sent_id"] == f"{'_'.join(title.split())}-2"
     for s, sent in enumerate(sents):
         rows = [(t["form"], t["upos"], t["deprel"], t["head"]) for t in sent]
         expected = [
@@ -686,3 +690,43 @@ def test_conllu_export(owner, project, corpus):
         if s == 1:
             expected[1] = ("language", "NOUN", "nsubj", 4)  # the human value wins
         assert rows == expected
+
+
+def test_project_rename_usage_and_delete(owner, project, corpus, member):
+    """Q71: owners rename and delete a project; others may not; delete removes layers with project label sets."""
+    pid = project["id"]
+    upos = label_set(owner, "upos")
+    mine = owner.post(
+        f"/api/projects/{pid}/label-sets",
+        json={"name": "p", "kind": "pos", "copy_from": upos["id"]},
+    ).json()
+    r = owner.post(
+        f"/api/projects/{pid}/layers",
+        json={"corpus_id": corpus["id"], "kind": "pos", "name": "p", "label_set_id": mine["id"]},
+    )
+    assert r.status_code == 200, r.text
+    drain()
+    owner.post(
+        f"/api/projects/{pid}/kb/documents",
+        json={"kind": "note", "title": "n", "body": "x"},
+    )
+    editor = member("editor")
+    assert editor.patch(f"/api/projects/{pid}", json={"name": "改名"}).status_code == 403
+    assert editor.delete(f"/api/projects/{pid}").status_code == 403
+    r = owner.patch(f"/api/projects/{pid}", json={"name": " 新名称 "})
+    assert r.status_code == 200 and r.json()["name"] == "新名称"
+    assert owner.patch(f"/api/projects/{pid}", json={"name": ""}).status_code == 422
+    usage = editor.get(f"/api/projects/{pid}/usage").json()
+    assert usage == {
+        "corpora": 1,
+        "layers": 1,
+        "notes": 1,
+        "kb_documents": 0,
+        "terms": 0,
+        "members": 2,
+    }
+    assert owner.delete(f"/api/projects/{pid}").status_code == 204
+    assert owner.get(f"/api/projects/{pid}").status_code == 404
+    assert editor.get(f"/api/projects/{pid}").status_code == 404
+    assert owner.get(f"/api/corpora/{corpus['id']}").status_code == 404
+    assert owner.get("/api/projects").json()["total"] == 0

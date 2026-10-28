@@ -224,7 +224,27 @@ export function useSpanActions(opts: { listLayerId: string; spanLayerId: string;
     }
   }
 
-  return { createSpan, patchSpan, deleteSpan, createRelation, patchRelation };
+  /**
+   * Shift+Enter: the user's suggestions in the sentence → confirmed (spans of a span layer starting in it, or the
+   * relations of a relation layer) and the sentence counts as reviewed; the server's sentence replaces the cache.
+   */
+  async function confirmSentence(s: SentenceSpans, kind: "span" | "relation", keep: (x: { annotator_id: string | null }) => boolean): Promise<boolean> {
+    const done = <T extends { status: string; annotator_id: string | null }>(x: T): T => (x.status === "suggested" && keep(x) ? { ...x, status: "confirmed" } : x);
+    patch(s.document_id, s.sentence_index, (x) =>
+      kind === "span" ? { ...x, spans: x.spans.map((y) => (y.start_cp >= x.start_cp ? done(y) : y)) } : { ...x, relations: x.relations.map(done) },
+    );
+    try {
+      const r = normSentence(await api.post<SentenceSpans>(`/layers/${opts.listLayerId}/sentences/${s.document_id}/${s.sentence_index}/confirm`, {}));
+      patch(s.document_id, s.sentence_index, (x) => ({ ...x, spans: r.spans, relations: kind === "relation" ? r.relations : x.relations }));
+      refresh();
+      return true;
+    } catch (e) {
+      fail(e);
+      return false;
+    }
+  }
+
+  return { createSpan, patchSpan, deleteSpan, createRelation, patchRelation, confirmSentence };
 }
 
 /* ---------- alignment ---------- */

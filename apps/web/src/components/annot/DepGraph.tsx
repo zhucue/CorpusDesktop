@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { posCat } from "../../lib/pos";
 import { headFromDrop, layoutDeps, tokenAt, type GraphArc, type GraphToken } from "./geometry";
 import "./annot.css";
@@ -35,6 +35,14 @@ export function DepGraph({
   const hl = new Set(highlight ?? []);
   const { y0, top } = layout;
   const n = layout.arcs.length;
+  // Arcs draw in one after another on mount; later changes (a new head, a confirmation) redraw only that arc, at once.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(true), 900 + n * 90);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const rootI = settled ? 0 : n;
 
   function point(e: React.PointerEvent): { x: number; y: number } {
     const box = svg.current!.getBoundingClientRect();
@@ -99,10 +107,10 @@ export function DepGraph({
       {[...layout.arcs]
         .sort((a, b) => b.lvl - a.lvl)
         .map((a, i) => {
-          const o = n - 1 - i;
+          const o = settled ? 0 : n - 1 - i;
           const active = selected === a.dep;
           return (
-            <g key={`a${a.dep}`} className={`darc ${a.suggested ? "sugg" : ""} ${active ? "on" : ""} ${drag?.dep === a.dep ? "dragging" : ""}`} data-dep={a.dep} data-head={a.head}>
+            <g key={`a${a.dep}-${a.head}-${a.suggested ? "s" : "c"}`} className={`darc ${a.suggested ? "sugg" : ""} ${active ? "on" : ""} ${drag?.dep === a.dep ? "dragging" : ""}`} data-dep={a.dep} data-head={a.head}>
               <path className="arc draw" style={{ ["--i" as string]: o }} pathLength={a.suggested ? undefined : 1} d={a.path} />
               <polygon className="arrow" style={{ ["--i" as string]: o }} points={`${a.xd - 4},${y0 - 9} ${a.xd + 4},${y0 - 9} ${a.xd},${y0 - 1}`} />
               <g
@@ -127,12 +135,12 @@ export function DepGraph({
           );
         })}
       {layout.roots.map((r0) => (
-        <g key={`r${r0.dep}`} className={`darc root ${r0.suggested ? "sugg" : ""} ${selected === r0.dep ? "on" : ""}`} data-dep={r0.dep} data-head={0}>
-          <path className="arc draw" style={{ ["--i" as string]: n }} pathLength={r0.suggested ? undefined : 1} d={r0.path} />
-          <polygon className="arrow" style={{ ["--i" as string]: n }} points={`${r0.x - 4},${y0 - 9} ${r0.x + 4},${y0 - 9} ${r0.x},${y0 - 1}`} />
+        <g key={`r${r0.dep}-${r0.suggested ? "s" : "c"}`} className={`darc root ${r0.suggested ? "sugg" : ""} ${selected === r0.dep ? "on" : ""}`} data-dep={r0.dep} data-head={0}>
+          <path className="arc draw" style={{ ["--i" as string]: rootI }} pathLength={r0.suggested ? undefined : 1} d={r0.path} />
+          <polygon className="arrow" style={{ ["--i" as string]: rootI }} points={`${r0.x - 4},${y0 - 9} ${r0.x + 4},${y0 - 9} ${r0.x},${y0 - 1}`} />
           <g
             className={`rel ${onSelectArc ? "click" : ""}`}
-            style={{ ["--i" as string]: n }}
+            style={{ ["--i" as string]: rootI }}
             onClick={onSelectArc ? () => onSelectArc(r0.dep) : undefined}
             onMouseDown={(e) => e.preventDefault()}
             role={onSelectArc ? "button" : undefined}

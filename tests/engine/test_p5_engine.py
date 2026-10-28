@@ -81,6 +81,55 @@ def test_summary_and_per_label():
     assert s["pairwise"][0]["kappa"] == pytest.approx(0.5)
     per = {x["label"]: x["kappa"] for x in s["per_label"]}
     assert per["x"] == pytest.approx(0.5) and per["y"] == pytest.approx(0.5)
+    # n: items where at least one annotator gave the label (x: 1, 3, 4; y: 2, 3)
+    assert {x["label"]: x["n"] for x in s["per_label"]} == {"x": 3, "y": 2}
+
+
+def test_overlap_units_nested_spans_stay_separate():
+    # QA trial data (偏误-双人): both annotators marked 317–329 时态 and the nested 317–321 主谓一致. The old
+    # lenient variant chained the two into one unit "主谓一致+时态", so the agreed nested span counted once and
+    # the lenient κ (0.57) fell below the exact κ (0.61). Units of the same annotator must not merge.
+    exact = [
+        (317, 329, {"A": "时态", "B": "时态"}),
+        (317, 321, {"A": "主谓一致", "B": "主谓一致"}),
+    ]
+    assert agreement.overlap_units(exact) == sorted(exact)
+
+
+def test_overlap_units_forgive_boundaries_by_hand():
+    # A: "have visited" 10–22 体, B: "have" 10–14 体 → one unit, agreed
+    # A: 30–34 时态 alone → A 时态 / B ∅; B: 40–45 冠词 and A: 43–48 介词 overlap → one unit, different labels
+    units = agreement.overlap_units(
+        [
+            (10, 22, {"A": "体"}),
+            (10, 14, {"B": "体"}),
+            (30, 34, {"A": "时态"}),
+            (40, 45, {"B": "冠词"}),
+            (43, 48, {"A": "介词"}),
+        ]
+    )
+    assert units == [
+        (10, 22, {"A": "体", "B": "体"}),
+        (30, 34, {"A": "时态"}),
+        (40, 48, {"B": "冠词", "A": "介词"}),
+    ]
+    # exact units (5): A = 体 ∅ 时态 ∅ 介词, B = ∅ 体 ∅ 冠词 ∅ → p_o 0, κ < 0
+    # lenient (3): A = 体 时态 介词, B = 体 ∅ 冠词 → p_o 1/3, p_e 1/9 (体 1·1) → κ = (1/3 − 1/9)/(8/9) = 0.25
+    a = [u[2].get("A", "∅") for u in units]
+    b = [u[2].get("B", "∅") for u in units]
+    assert agreement.cohen_kappa(a, b) == pytest.approx(0.25)
+    # a span overlapping a unit that already has every annotator joins nothing; a third coder joins the best unit
+    three = agreement.overlap_units(
+        [
+            (10, 22, {"A": "体", "B": "体"}),
+            (12, 22, {"C": "体"}),
+            (12, 16, {"C": "时态"}),
+        ]
+    )
+    assert three == [
+        (10, 22, {"A": "体", "B": "体", "C": "体"}),
+        (12, 16, {"C": "时态"}),
+    ]
 
 
 # ---- alignment ----

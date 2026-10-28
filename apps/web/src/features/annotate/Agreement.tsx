@@ -4,7 +4,27 @@ import { useState } from "react";
 import { api, errorText, type Adjudication, type Agreement, type CursorPage, type Disagreement, type LabelDef, type Layer } from "../../api";
 import { Empty, ErrorAlert, Skeleton } from "../../components/common";
 import { fmt } from "../../lib/format";
+import { labelName } from "./model";
 import { fmtKappa, kappaBand } from "./spanModel";
+
+const NONE = "∅";
+const KIND_NAMES: Record<string, string> = { token: "词", span: "片段", relation: "关系", alignment: "对齐" };
+
+/** Sentence text with the disputed words marked (marks: [start, end) code points). */
+export function MarkedText({ text, marks }: { text: string; marks: [number, number][] }) {
+  const cps = [...text];
+  const sorted = [...marks].filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0]);
+  const out: React.ReactNode[] = [];
+  let at = 0;
+  sorted.forEach(([a, b], i) => {
+    const s = Math.max(a, at);
+    if (s > at) out.push(cps.slice(at, s).join(""));
+    if (b > s) out.push(<mark key={i}>{cps.slice(s, b).join("")}</mark>);
+    at = Math.max(at, b);
+  });
+  if (at < cps.length) out.push(cps.slice(at).join(""));
+  return <>{out}</>;
+}
 
 export function useAgreement(layerId: string | undefined, enabled = true) {
   return useQuery({
@@ -42,7 +62,7 @@ export function KappaGauge({ value, annotators }: { value: number | null; annota
 }
 
 /** Annotator progress, pairwise κ matrix, α and per-label κ. */
-export function AgreementView({ data }: { data: Agreement }) {
+export function AgreementView({ data, labels }: { data: Agreement; labels?: LabelDef[] }) {
   const people = data.annotators;
   const name = (id: string) => people.find((p) => p.user_id === id)?.email ?? id.slice(0, 8);
   const cell = (a: string, b: string) => data.pairwise.find((p) => (p.a === a && p.b === b) || (p.a === b && p.b === a));
@@ -163,6 +183,7 @@ export function AgreementView({ data }: { data: Agreement }) {
         <section className="card" aria-label="按标签">
           <div className="card-head">
             <h2>按标签 κ</h2>
+            <span className="small muted">n = 至少一人标了该标签的单位</span>
           </div>
           <table className="tbl">
             <tbody>
@@ -170,9 +191,14 @@ export function AgreementView({ data }: { data: Agreement }) {
                 .sort((a, b) => (a.kappa ?? -2) - (b.kappa ?? -2))
                 .map((l) => (
                   <tr key={l.label}>
-                    <td className="mono">{l.label}</td>
+                    <td className={l.label === NONE ? "" : "mono"} title={l.label === NONE ? "一方标了片段、另一方在该处没有标注" : undefined}>
+                      {l.label === NONE ? "未标注" : labelName(labels, l.label)}
+                    </td>
                     <td className={`r num k-${kappaBand(l.kappa).cls || "hi"}`} style={{ width: 90 }}>
                       {fmtKappa(l.kappa)}
+                    </td>
+                    <td className="r num muted" style={{ width: 70 }}>
+                      {l.n != null ? `n = ${fmt(l.n)}` : ""}
                     </td>
                     <td className="small muted" style={{ width: 110 }}>
                       {kappaBand(l.kappa).text}
@@ -188,15 +214,18 @@ export function AgreementView({ data }: { data: Agreement }) {
 }
 
 /** A disagreement value as text: labels, spans `text [label]`, alignment pairs. */
-export function valueText(v: unknown): string {
-  if (v == null) return "—";
-  if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return String(v);
-  if (Array.isArray(v)) return v.map(valueText).join("；");
+export function valueText(v: unknown, name: (label: string) => string = (l) => l): string {
+  if (v == null) return "未标注";
+  if (typeof v === "string") return v === NONE ? "未标注" : name(v);
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (Array.isArray(v)) return v.map((x) => valueText(x, name)).join("；");
   const o = v as Record<string, unknown>;
   if (Array.isArray(o.src_tokens) || Array.isArray(o.tgt_tokens)) return `${(o.src_tokens as number[] | undefined)?.join(",") ?? ""} → ${(o.tgt_tokens as number[] | undefined)?.join(",") ?? ""}`;
+  if (o.label === null && "label" in o) return "无（拒绝）";
   if (typeof o.label === "string") {
     const where = typeof o.text === "string" ? o.text : o.start_cp != null ? `${o.start_cp}–${o.end_cp}` : "";
-    return where ? `${where} [${o.label}]` : o.label;
+    const head = typeof o.head === "number" ? ` → ${o.head}` : "";
+    return where ? `${where} [${name(o.label)}]` : `${name(o.label)}${head}`;
   }
   if (o.status === "rejected") return "拒绝";
   return JSON.stringify(v);
@@ -208,6 +237,7 @@ function Adjudicate({ d, layerId, labels, canAdjudicate, email }: { d: Disagreem
   const qc = useQueryClient();
   const { message } = App.useApp();
   const [custom, setCustom] = useState<string>("");
+  const name = (l: string) => labelName(labels, l);
   const first = d.values.find((v) => v.value != null)?.value;
   const labelish = typeof first === "string" || (!!first && typeof first === "object" && typeof (first as { label?: unknown }).label === "string");
   const save = useMutation({
@@ -232,25 +262,31 @@ function Adjudicate({ d, layerId, labels, canAdjudicate, email }: { d: Disagreem
   }
   return (
     <div className="disagree" data-key={d.target_key}>
-      <div className="row">
-        <span className="mono small muted grow ellipsis">
+      <div className="row" style={{ alignItems: "baseline" }}>
+        <span className="mono small muted" style={{ flexShrink: 0 }}>
           {d.sentence_index != null ? `句 ${d.sentence_index + 1}` : d.target_key}
-          {d.text ? ` · ${d.text}` : ""}
         </span>
-        <span className="tag t-gray">{d.target_kind}</span>
+        {d.target_text && <b className="dis-target">{d.target_text}</b>}
+        <span className="grow" />
+        <span className="tag t-gray">{KIND_NAMES[d.target_kind] ?? d.target_kind}</span>
         {isAdjudicated(d) && (
           <span className="tag t-ok" data-testid="adjudicated">
             已仲裁
           </span>
         )}
       </div>
+      {d.text && (
+        <div className="dis-sent">
+          <MarkedText text={d.text} marks={d.marks ?? []} />
+        </div>
+      )}
       <div className="col gap-4">
         {d.values.map((v) => (
           <div className="row dis-val" key={v.annotator_id}>
             <span className="ellipsis dis-who" title={email(v.annotator_id, v.email)}>
               {email(v.annotator_id, v.email)}
             </span>
-            <span className="mono grow">{valueText(v.value)}</span>
+            <span className="mono grow">{valueText(v.value, name)}</span>
             {canAdjudicate && (
               <button className="btn xs" type="button" disabled={save.isPending} onClick={() => save.mutate(v.value)}>
                 采用
@@ -261,14 +297,14 @@ function Adjudicate({ d, layerId, labels, canAdjudicate, email }: { d: Disagreem
         {final !== undefined && (
           <div className="row dis-val final">
             <span className="dis-who">仲裁</span>
-            <span className="mono grow">{valueText(final)}</span>
+            <span className="mono grow">{valueText(final, name)}</span>
           </div>
         )}
       </div>
       {canAdjudicate && (
         <div className="row" style={{ gap: 6 }}>
           {labelish && labels.length ? (
-            <Select size="small" style={{ width: 200 }} placeholder="改为其他标签" aria-label="仲裁标签" value={custom || undefined} onChange={setCustom} showSearch options={labels.map((l) => ({ value: l.name, label: l.name }))} />
+            <Select size="small" style={{ width: 200 }} placeholder="改为其他标签" aria-label="仲裁标签" value={custom || undefined} onChange={setCustom} showSearch options={labels.map((l) => ({ value: l.id || l.name, label: l.name }))} />
           ) : (
             <Input size="small" style={{ width: 240 }} className="mono" placeholder={labelish ? "标签" : "JSON"} aria-label="仲裁值" value={custom} onChange={(e) => setCustom(e.target.value)} />
           )}
@@ -305,7 +341,7 @@ export function AgreementTab({ layer, labels, canAdjudicate }: { layer: Layer; l
   return (
     <div className="col gap-20">
       <ErrorAlert error={q.error} />
-      {q.data ? <AgreementView data={q.data} /> : !q.error && <Skeleton rows={6} />}
+      {q.data ? <AgreementView data={q.data} labels={labels} /> : !q.error && <Skeleton rows={6} />}
       {canAdjudicate && (
       <section className="card" aria-label="分歧">
         <div className="card-head">

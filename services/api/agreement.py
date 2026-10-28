@@ -4,8 +4,9 @@ Only targets every annotator of the layer has finished count:
 - token layers: a token is finished when the annotator's row is not suggested; value = label (rejected = ∅);
 - span / relation layers: a sentence is finished when the annotator confirmed it (sentence confirm) or has rows
   in it and none suggested; units are the span extents (start_cp, end_cp) found by anyone in finished
-  sentences, value = the annotator's label there or ∅ (exact). The lenient variant groups spans that overlap
-  across annotators and compares their labels. Relations: units are (from extent, to extent);
+  sentences, value = the annotator's label there or ∅ (exact). The lenient variant merges an extent with an
+  overlapping extent of other annotators (engine.agreement.overlap_units): boundary differences no longer
+  count, nested spans of one annotator stay separate units. Relations: units are (from extent, to extent);
 - alignment layers: a source sentence is finished as for spans; sentence level compares the set of target
   sentences, word level each word pair (i, j) linked by anyone (linked / not linked).
 κ: Cohen per annotator pair; α: nominal Krippendorff over all annotators; per_label: one-vs-rest κ.
@@ -23,7 +24,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 
 from engine import agreement as ag
@@ -44,6 +45,7 @@ from services.api.models import (
     Sentence,
     SentenceReview,
     SpanAnnotation,
+    Token,
     User,
 )
 from services.api.spans import check_label
@@ -180,23 +182,22 @@ def span_units(db, layer, annotators, lenient=False):
                     else None,
                 }
         return values, info, done
-    by_sentence = defaultdict(list)
+    # exact extents per sentence, then overlapping extents of different annotators merge (engine.agreement)
+    by_sentence = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
     for r in human:
-        by_sentence[(r["document_id"], r["sentence_index"])].append(r)
-    for key, spans in by_sentence.items():
-        spans.sort(key=lambda r: (r["start_cp"], r["end_cp"]))
-        clusters, end = [], -1
-        for r in spans:  # overlap chains
-            if r["start_cp"] >= end:
-                clusters.append([])
-            clusters[-1].append(r)
-            end = max(end, r["end_cp"])
-        for c in clusters:
-            k = eff.span_key(key[0], c[0]["start_cp"], max(r["end_cp"] for r in c))
+        sentence = (r["document_id"], r["sentence_index"])
+        extent = (r["start_cp"], r["end_cp"])
+        by_sentence[sentence][extent][r["annotator_id"]].add(r["label"])
+    for key, extents in by_sentence.items():
+        exact = [
+            (a, b, {who: "+".join(sorted(ls)) for who, ls in by.items()})
+            for (a, b), by in extents.items()
+        ]
+        for a, b, by in ag.overlap_units(exact):
+            k = eff.span_key(key[0], a, b)
             info[k] = key
-            for a in annotators:
-                labels = sorted({r["label"] for r in c if r["annotator_id"] == a})
-                values[k][a] = {"kappa": "+".join(labels) if labels else NONE}
+            for who in annotators:
+                values[k][who] = {"kappa": by.get(who, NONE)}
     return values, info, done
 
 
@@ -385,6 +386,55 @@ def _disagreements(db, layer, annotators):
     return out
 
 
+def _target_marks(db, page, texts, starts) -> dict:
+    """{(kind, key): {target_text, marks}}: the words a disagreement is about and their [start, end) code
+    points inside the sentence text (token: the token; span: the extent; relation: both extents, from first)."""
+    out = {}
+    tokens = {}
+    wanted = {
+        (where[0], where[1]) for kind, _, where, _ in page if kind == "token" and where
+    }
+    if wanted:
+        for d, i, t, a, b, form in db.execute(
+            select(
+                Sentence.document_id,
+                Sentence.idx,
+                Token.idx,
+                Token.start_cp,
+                Token.end_cp,
+                Token.form,
+            )
+            .join(Token, Token.sentence_id == Sentence.id)
+            .where(tuple_(Sentence.document_id, Sentence.idx).in_(list(wanted)))
+        ):
+            tokens[(d, i, t + 1)] = (a, b, form)
+    for kind, key, where, _ in page:
+        if not where or where not in texts:
+            continue
+        text, base = texts[where], starts[where]
+        try:
+            if kind == "token":
+                t = int(key.rsplit(":", 1)[1])
+                a, b, form = tokens.get((where[0], where[1], t), (None, None, None))
+                if form is None:
+                    continue
+                marks = [[a - base, b - base]]
+                label = form
+            elif kind in ("span", "relation"):
+                parts = [eff.parse_span_key(x) for x in key.split(">")]
+                marks = [[a - base, b - base] for _, a, b in parts]
+                label = " → ".join(text[max(0, a) : b] for a, b in marks)
+            else:
+                continue
+        except ValueError:
+            continue
+        marks = [
+            [max(0, a), min(len(text), b)] for a, b in marks if b > 0 and a < len(text)
+        ]
+        out[(kind, key)] = {"target_text": label, "marks": marks}
+    return out
+
+
 @router.get("/layers/{layer_id}/disagreements")
 def disagreements(
     layer_id: UUID,
@@ -402,18 +452,17 @@ def disagreements(
     start = int(cursor or 0)
     page = items[start : start + page_size]
     adjudicated = eff._adjudications(db, layer, KIND_OF_LAYER[layer.kind])
-    texts = {}
+    texts, starts = {}, {}
     keys = {x[2] for x in page if x[2]}
     if keys:
-        texts = {
-            (d, i): t
-            for d, i, t in db.execute(
-                select(Sentence.document_id, Sentence.idx, Sentence.text).where(
-                    Sentence.document_id.in_({k[0] for k in keys})
-                )
-            )
-            if (d, i) in keys
-        }
+        for d, i, t, a in db.execute(
+            select(
+                Sentence.document_id, Sentence.idx, Sentence.text, Sentence.start_cp
+            ).where(Sentence.document_id.in_({k[0] for k in keys}))
+        ):
+            if (d, i) in keys:
+                texts[(d, i)], starts[(d, i)] = t, a
+    targets = _target_marks(db, page, texts, starts)
     return {
         "items": [
             {
@@ -422,6 +471,7 @@ def disagreements(
                 "document_id": where[0] if where else None,
                 "sentence_index": where[1] if where else None,
                 "text": texts.get(where) if where else None,
+                **targets.get((kind, key), {"target_text": None, "marks": []}),
                 "values": [{"annotator_id": a, "value": v} for a, v in values.items()],
                 "adjudicated": key in adjudicated,
                 "final": adjudicated.get(key),
