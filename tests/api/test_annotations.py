@@ -730,3 +730,20 @@ def test_project_rename_usage_and_delete(owner, project, corpus, member):
     assert editor.get(f"/api/projects/{pid}").status_code == 404
     assert owner.get(f"/api/corpora/{corpus['id']}").status_code == 404
     assert owner.get("/api/projects").json()["total"] == 0
+
+
+def test_sentence_system_tokens_without_layer(owner, make_user, corpus):
+    """GET /corpora/{id}/documents/{doc}/sentences/{n}: system POS and dependencies with no layer (read-only)."""
+    url = f"/api/corpora/{corpus['id']}/documents/{corpus['document_id']}/sentences"
+    s = owner.get(f"{url}/0").json()
+    assert s["text"] == "Language is a system." and s["sentence_index"] == 0
+    assert [
+        (t["index"], t["form"], t["pos"], t["deprel"], t["head"]) for t in s["tokens"]
+    ] == [
+        (1, "Language", "NOUN", "nsubj", 4),
+        (2, "is", "AUX", "cop", 4),
+        (3, "a", "DET", "det", 4),
+        (4, "system.", "NOUN", "root", 0),
+    ]
+    assert owner.get(f"{url}/9").status_code == 404
+    assert make_user("stranger@example.edu").get(f"{url}/0").status_code in (403, 404)

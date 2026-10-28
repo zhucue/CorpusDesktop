@@ -9,6 +9,7 @@ import { layerIcon } from "../../components/iconSets";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
 import { canEdit, useCorpora, useJob, useJobCreated, useMe, useProject, useProjectId } from "../../lib/data";
+import { useExportJob } from "../../lib/exportJob";
 import { fmt } from "../../lib/format";
 import { canWriteLayer, listOf, useLayers } from "./data";
 import { failedRetryBody, layerPct, modelName } from "./model";
@@ -204,20 +205,14 @@ export default function Annotate() {
     onError: (e) => message.error(errorText(e)),
   });
 
-  const exportJob = useMutation({
-    mutationFn: ({ id, format, annotators }: { id: string; format: string; annotators?: boolean }) =>
-      api.post<Job>(`/layers/${id}/export`, { format, ...(annotators ? { annotators: true } : {}) }),
-    onSuccess: (_, v) => {
-      jobCreated(projectId);
-      message.success(
-        <span>
-          已提交导出任务：{FORMAT_NAMES[v.format] ?? v.format}
-          {v.annotators ? "（含各标注者原始标注）" : ""}，<Link to={`/p/${projectId}/jobs`}>查看任务</Link>
-        </span>,
-      );
-    },
-    onError: (e) => message.error(errorText(e)),
-  });
+  // Same flow as search / stats exports: "已开始导出", auto-download and a 下载 toast when the job finishes.
+  const exporter = useExportJob(projectId);
+  const exportLayer = (id: string, format: string, annotators: boolean) =>
+    exporter.start({
+      url: `/layers/${id}/export`,
+      body: { format, ...(annotators ? { annotators: true } : {}) },
+      label: `${FORMAT_NAMES[format] ?? format}${annotators ? "（含各标注者原始标注）" : ""}`,
+    });
 
   const del = useMutation({
     mutationFn: (id: string) => api.del(`/layers/${id}`),
@@ -308,7 +303,7 @@ export default function Annotate() {
               ))}
             <Dropdown
               trigger={["click"]}
-              disabled={!layer || exportJob.isPending}
+              disabled={!layer || exporter.busy}
               menu={{
                 style: { maxWidth: 340 },
                 items: layer
@@ -324,10 +319,10 @@ export default function Annotate() {
                       ...(layer.mode === "multi" ? [{ type: "divider" as const }, { key: "json+annotators", label: "JSON · 另附各标注者原始标注" }] : []),
                     ]
                   : [],
-                onClick: ({ key }) => layer && exportJob.mutate({ id: layer.id, format: key === "json+annotators" ? "json" : key, annotators: key === "json+annotators" }),
+                onClick: ({ key }) => layer && exportLayer(layer.id, key === "json+annotators" ? "json" : key, key === "json+annotators"),
               }}
             >
-              <button className="btn s" type="button" disabled={!layer || exportJob.isPending} title={exportTip("导出所选层")}>
+              <button className="btn s" type="button" disabled={!layer || exporter.busy} title={exportTip("导出所选层")}>
                 <Icon name="download" size={14} />
                 <span className="lbl">导出</span>
                 <Icon name="down" size={14} />

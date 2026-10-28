@@ -235,7 +235,7 @@ export function useSpanActions(opts: { listLayerId: string; spanLayerId: string;
     );
     try {
       const r = normSentence(await api.post<SentenceSpans>(`/layers/${opts.listLayerId}/sentences/${s.document_id}/${s.sentence_index}/confirm`, {}));
-      patch(s.document_id, s.sentence_index, (x) => ({ ...x, spans: r.spans, relations: kind === "relation" ? r.relations : x.relations }));
+      patch(s.document_id, s.sentence_index, (x) => ({ ...x, spans: r.spans, relations: kind === "relation" ? r.relations : x.relations, done: r.done ?? true }));
       refresh();
       return true;
     } catch (e) {

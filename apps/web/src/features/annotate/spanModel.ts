@@ -7,9 +7,13 @@ import { labelForKey, labelValue, type KeyLike } from "./model";
 export const isSuggested = (x: { status: AnnotStatus }) => x.status === "suggested";
 export const isHumanSource = (source: string) => source === "human" || source.startsWith("human");
 
-/** A sentence is done when nothing in it is still a suggestion. */
-export function spanSentenceDone(s: SentenceSpans): boolean {
-  return !s.spans.some(isSuggested) && !s.relations.some(isSuggested);
+/**
+ * A sentence is done when nothing in it is still a suggestion and it was annotated or confirmed: `done` from the
+ * api (every required annotator; untouched sentences are not done), or rows added here since the list loaded.
+ */
+export function spanSentenceDone(s: SentenceSpans, kind: "span" | "relation" = "span"): boolean {
+  if (s.spans.some(isSuggested) || s.relations.some(isSuggested)) return false;
+  return s.done !== false || (kind === "relation" ? s.relations : s.spans).length > 0;
 }
 
 /** Text order: by start, the longer span first when two start together, then id (stable for equal extents). */

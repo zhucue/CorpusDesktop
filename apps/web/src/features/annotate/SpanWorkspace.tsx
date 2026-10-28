@@ -332,7 +332,7 @@ export default function SpanWorkspace({
       onDoc={(v) => go(v, null)}
       filter={statusFilter}
       onFilter={setStatusFilter}
-      items={items.map((it) => ({ key: it.sentence_index, text: it.text, done: spanSentenceDone({ ...it, spans: it.spans.filter(annot.keep), relations: it.relations.filter(annot.keep) }) }))}
+      items={items.map((it) => ({ key: it.sentence_index, text: it.text, done: spanSentenceDone({ ...it, spans: it.spans.filter(annot.keep), relations: it.relations.filter(annot.keep) }, isRel ? "relation" : "span") }))}
       current={sIdx}
       onPick={(k) => go(docId, k)}
       loading={list.isPending}
@@ -344,7 +344,7 @@ export default function SpanWorkspace({
   );
 
   /* ---------- centre ---------- */
-  const done = s ? spanSentenceDone({ ...s, spans: ownSpans, relations: ownRels }) : false;
+  const done = s ? spanSentenceDone({ ...s, spans: ownSpans, relations: ownRels }, isRel ? "relation" : "span") : false;
   const editor = (
     <section className="card ed-card" aria-label="编辑器" tabIndex={-1} ref={editorFocus.ref}>
       <div className="card-head">
@@ -490,7 +490,7 @@ export default function SpanWorkspace({
           <span className="small muted">处待确认</span>
           <div className="grow" />
           <Tip title="整句确认（Shift+Enter）">
-            <button className="btn xs" type="button" disabled={!canAnnotate || pendingHere === 0} onClick={() => run({ type: "confirmSentence" })}>
+            <button className="btn xs" type="button" disabled={!canAnnotate || (pendingHere === 0 && done)} onClick={() => run({ type: "confirmSentence" })}>
               整句确认
             </button>
           </Tip>

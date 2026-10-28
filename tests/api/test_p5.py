@@ -352,9 +352,13 @@ def test_span_review_and_relations(owner, project, essay, fake_llm, member):
         rest["next_cursor"] is None and rest["items"][1]["spans"] == []
     )  # every sentence listed
     pending = sentences(owner, layer, status="pending")["items"]
-    assert [
-        s["sentence_index"] for s in pending
-    ] == []  # the batch failed: nothing suggested
+    assert [s["sentence_index"] for s in pending] == [
+        0,
+        1,
+        2,
+        3,
+        4,
+    ]  # the batch failed: nothing suggested, nothing done
 
     owner.post(
         f"/api/layers/{layer['id']}/preannotate",
@@ -363,7 +367,7 @@ def test_span_review_and_relations(owner, project, essay, fake_llm, member):
     drain()
     assert [
         s["sentence_index"] for s in sentences(owner, layer, status="pending")["items"]
-    ] == [0, 1, 2]
+    ] == [0, 1, 2, 3, 4]  # 0–2 suggested, 3–4 untouched
     spans = by_text(all_spans(owner, layer))
     confirmed = patch_span(owner, layer, spans["go"], action="confirm")
     assert confirmed["status"] == "confirmed" and confirmed["revision"] == 1
@@ -467,7 +471,8 @@ def test_span_review_and_relations(owner, project, essay, fake_llm, member):
         "用词": 1,
     }
     docs = owner.get(f"/api/layers/{layer['id']}/documents").json()["items"]
-    assert docs[0]["sentences"] == 5 and docs[0]["pending"] == 0
+    # sentence 3 (its batch failed) has no rows and was never confirmed
+    assert docs[0]["sentences"] == 5 and docs[0]["pending"] == 1
 
     viewer = member("viewer")
     assert viewer.get(f"/api/layers/{layer['id']}/spans").status_code == 200
@@ -497,9 +502,10 @@ def test_span_review_and_relations(owner, project, essay, fake_llm, member):
         "book",
     )
     assert suggested["status"] == "suggested" and suggested["label"] == "cause"
-    # the review workspace lists the relation layer's documents with pending sentences
+    # the review workspace lists the relation layer's documents with pending sentences:
+    # sentence 1 has a suggestion, the others are not yet reviewed
     docs = owner.get(f"/api/layers/{rel['id']}/documents")
-    assert docs.status_code == 200 and docs.json()["items"][0]["pending"] == 1
+    assert docs.status_code == 200 and docs.json()["items"][0]["pending"] == 5
     r = owner.patch(
         f"/api/layers/{rel['id']}/relations/{suggested['id']}",
         json={"action": "modify", "label": "correction"},
@@ -1430,8 +1436,8 @@ def test_alignment_candidates_without_stored_pairs(owner, project, fake_llm):
 
 
 def test_layer_documents_done(owner, project, essay, fake_llm, member):
-    """A sentence is done once confirmed or when its rows are all reviewed; a document is done (done = sentences)
-    when it has rows and none is suggested. Single-mode layers are written only by their creator."""
+    """A sentence is done once confirmed (整句确认) or when it has rows and all are reviewed; an untouched sentence
+    is still to do, also where pre-annotation suggested nothing. Single-mode layers are written only by their creator."""
     layer = span_layer(owner, project, essay)
     lid, doc = layer["id"], essay["document_id"]
 
@@ -1444,13 +1450,13 @@ def test_layer_documents_done(owner, project, essay, fake_llm, member):
         json={"sentence_range": {"start": 0, "end": 3}},
     )
     drain()
-    assert progress() == (5, 0, 3)  # suggestions in sentences 0–2 only
+    assert progress() == (5, 0, 5)  # suggestions in sentences 0–2; 3–4 untouched
     r = owner.post(f"/api/layers/{lid}/sentences/{doc}/4/confirm", json={})
     assert r.status_code == 200, r.text
-    assert progress() == (5, 1, 3)
+    assert progress() == (5, 1, 4)
     spans = by_text(all_spans(owner, layer))
     patch_span(owner, layer, spans["go"], action="confirm")
-    assert progress() == (5, 2, 2)
+    assert progress() == (5, 2, 3)
 
     annotator, editor = member("annotator"), member("editor")
     for client in (annotator, editor):
@@ -1458,12 +1464,18 @@ def test_layer_documents_done(owner, project, essay, fake_llm, member):
             f"/api/layers/{lid}/spans/{spans['have']['id']}", json={"action": "confirm"}
         )
         assert r.status_code == 403 and r.json()["error"]["code"] == "NOT_ANNOTATOR"
-        assert progress(client) == (5, 2, 2)
+        assert progress(client) == (5, 2, 3)
 
     patch_span(owner, layer, spans["have"], action="confirm")
     patch_span(owner, layer, spans["book"], action="reject")
     patch_span(owner, layer, spans["was"], action="modify", label="时态")
-    assert progress() == (5, 5, 0)  # sentence 3 never reviewed, but no row is pending
+    assert progress() == (5, 4, 1)  # sentence 3 has no rows and was never confirmed
+    pending = owner.get(
+        f"/api/layers/{lid}/spans", params={"document_id": doc, "status": "pending"}
+    ).json()["items"]
+    assert [(s["sentence_index"], s["done"]) for s in pending] == [(3, False)]
+    owner.post(f"/api/layers/{lid}/sentences/{doc}/3/confirm", json={})
+    assert progress() == (5, 5, 0)
     assert owner.get(f"/api/layers/{lid}").json()["documents"] == {
         "total": 1,
         "done": 1,
@@ -1513,3 +1525,43 @@ def test_layer_exports_carry_source_notice(owner, project, essay, reviewed, tmx)
         "来源：平行；许可：CC BY 4.0；署名：某某大学"
     ]
     assert len(root.findall(".//tu")) == 3
+
+
+def test_multi_annotator_sentence_needs_every_annotator(owner, project, essay, member):
+    """Multi-annotator span layer without pre-annotation: nothing is done until each listed annotator has
+    annotated (rows, none suggested) or confirmed the sentence; the 待办 list and document counts agree."""
+    ann, editor = member("annotator"), member("editor")
+    layer = span_layer(
+        owner, project, essay, mode="multi", annotators=[owner.user_id, ann.user_id]
+    )
+    lid, doc = layer["id"], essay["document_id"]
+
+    def progress(client):
+        item = client.get(f"/api/layers/{lid}/documents").json()["items"][0]
+        return item["sentences"], item["done"], item["pending"]
+
+    def todo(client):
+        items = sentences(client, layer, document_id=doc, status="pending")["items"]
+        assert not any(s["done"] for s in items)
+        return [s["sentence_index"] for s in items]
+
+    for client in (owner, ann, editor):
+        assert progress(client) == (5, 0, 5)
+        assert todo(client) == [0, 1, 2, 3, 4]
+    assert not any(s["done"] for s in sentences(editor, layer)["items"])
+
+    r = ann.post(
+        f"/api/layers/{lid}/spans",
+        json={"document_id": doc, "start_cp": 12, "end_cp": 14, "label": "时态"},
+    )
+    assert r.status_code == 200, r.text
+    assert progress(ann) == (5, 1, 4) and todo(ann) == [1, 2, 3, 4]
+    assert progress(owner) == (5, 0, 5)  # owner, a listed annotator, has not done it
+    assert progress(editor) == (5, 0, 5) and todo(editor)[0] == 0
+
+    r = owner.post(f"/api/layers/{lid}/sentences/{doc}/0/confirm", json={})
+    assert r.status_code == 200, r.text
+    assert progress(owner) == (5, 1, 4)
+    assert progress(editor) == (5, 1, 4) and todo(editor) == [1, 2, 3, 4]
+    first = sentences(editor, layer, document_id=doc)["items"][0]
+    assert first["sentence_index"] == 0 and first["done"] is True

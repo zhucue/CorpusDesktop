@@ -17,7 +17,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, exists, func, literal, or_, select, tuple_, union
+from sqlalchemy import and_, exists, false, func, literal, or_, select, tuple_, union
 
 from services.api.annotations import (
     ANNOTATE,
@@ -25,7 +25,7 @@ from services.api.annotations import (
     parse_cursor,
     refresh_progress,
 )
-from services.api.annotators import visible, writer
+from services.api.annotators import layer_annotators, visible, writer
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, not_found
 from services.api.label_sets import human_only
@@ -239,12 +239,31 @@ def sentence_spans(db, layer, sentences, span_annotators, rel_annotators):
             .order_by(RelationAnnotation.id)
         ).all()
     texts = doc_texts(db, {s[0] for s in sentences})
+    who = done_annotators(
+        layer, rel_annotators if layer.kind == "relation" else span_annotators
+    )
+    reviewed = set(
+        db.execute(
+            select(
+                SentenceReview.document_id,
+                SentenceReview.sentence_index,
+                SentenceReview.annotator_id,
+            ).where(
+                SentenceReview.layer_id == layer.id,
+                SentenceReview.annotator_id.in_(who),
+                tuple_(SentenceReview.document_id, SentenceReview.sentence_index).in_(
+                    [(d, i) for d, i, *_ in sentences]
+                ),
+            )
+        ).all()
+    )
     out = []
     for doc, idx, a, b, text in sentences:
         mine = [
             s for s in spans if s.document_id == doc and s.start_cp < b and s.end_cp > a
         ]
         rels = [r for r, f in relations if f.document_id == doc and a <= f.start_cp < b]
+        own = rels if layer.kind == "relation" else [x for x in mine if x.start_cp >= a]
         out.append(
             {
                 "document_id": doc,
@@ -254,36 +273,63 @@ def sentence_spans(db, layer, sentences, span_annotators, rel_annotators):
                 "end_cp": b,
                 "spans": [span_view(s, texts.get(doc)) for s in mine],
                 "relations": [relation_view(r) for r in rels],
+                "done": all(
+                    (doc, idx, w) in reviewed
+                    or _rows_done([x for x in own if x.annotator_id == w])
+                    for w in who
+                ),
             }
         )
     return out
 
 
-def _pending(layer, annotators):
-    """SQL condition: the sentence has suggested rows of the visible annotators."""
-    if layer.kind == "relation":
-        return exists(
-            select(RelationAnnotation.id)
-            .join(SpanAnnotation, SpanAnnotation.id == RelationAnnotation.from_span_id)
-            .where(
-                RelationAnnotation.layer_id == layer.id,
-                RelationAnnotation.status == "suggested",
+def done_annotators(layer, annotators) -> list:
+    """Whose work a sentence needs to be done: the visible annotators, or every listed annotator (owner view)."""
+    return list(annotators) if annotators is not None else layer_annotators(layer)
+
+
+def _rows_done(rows) -> bool:
+    """An annotator's rows in a sentence: done when there are some and none is still suggested."""
+    return bool(rows) and all(r.status != "suggested" for r in rows)
+
+
+def _open(layer, annotators):
+    """SQL condition on Sentence: still to do for some annotator in done_annotators — not marked reviewed
+    (整句确认) and either has suggested rows or no rows of that annotator at all. An untouched sentence is
+    never done, also where pre-annotation suggested nothing: the annotator confirms it (Shift+Enter)."""
+    conds = []
+    for w in done_annotators(layer, annotators):
+        if layer.kind == "relation":
+            rows = (
+                select(RelationAnnotation.id)
+                .join(SpanAnnotation, SpanAnnotation.id == RelationAnnotation.from_span_id)
+                .where(
+                    RelationAnnotation.layer_id == layer.id,
+                    RelationAnnotation.annotator_id == w,
+                    SpanAnnotation.document_id == Sentence.document_id,
+                    SpanAnnotation.sentence_index == Sentence.idx,
+                )
+            )
+            status = RelationAnnotation.status
+        else:
+            rows = select(SpanAnnotation.id).where(
+                SpanAnnotation.layer_id == layer.id,
+                SpanAnnotation.annotator_id == w,
                 SpanAnnotation.document_id == Sentence.document_id,
-                SpanAnnotation.start_cp >= Sentence.start_cp,
-                SpanAnnotation.start_cp < Sentence.end_cp,
-                *_of(RelationAnnotation, annotators),
+                SpanAnnotation.sentence_index == Sentence.idx,
+            )
+            status = SpanAnnotation.status
+        reviewed = exists(
+            select(SentenceReview.layer_id).where(
+                SentenceReview.layer_id == layer.id,
+                SentenceReview.annotator_id == w,
+                SentenceReview.document_id == Sentence.document_id,
+                SentenceReview.sentence_index == Sentence.idx,
             )
         )
-    return exists(
-        select(SpanAnnotation.id).where(
-            SpanAnnotation.layer_id == layer.id,
-            SpanAnnotation.status == "suggested",
-            SpanAnnotation.document_id == Sentence.document_id,
-            SpanAnnotation.start_cp < Sentence.end_cp,
-            SpanAnnotation.end_cp > Sentence.start_cp,
-            *_of(SpanAnnotation, annotators),
-        )
-    )
+        todo = or_(exists(rows.where(status == "suggested")), ~exists(rows))
+        conds.append(and_(~reviewed, todo))
+    return or_(*conds) if conds else false()
 
 
 def _annotators(db, layer, user, annotator_id):
@@ -331,7 +377,7 @@ def list_spans(
     span_ann, rel_ann = _annotators(db, layer, user, annotator_id)
     pending = None
     if status == "pending":
-        pending = _pending(layer, rel_ann if layer.kind == "relation" else span_ann)
+        pending = _open(layer, rel_ann if layer.kind == "relation" else span_ann)
     rows, next_cursor = sentence_page(
         db, layer, document_id, cursor, page_size, pending
     )
@@ -824,10 +870,11 @@ def confirm_p5_sentence(db, layer, user, document_id, sentence_index):
 
 
 def p5_documents(db, layer, annotators):
-    """Documents of a span / relation / alignment layer: sentences, done and pending (with suggestions).
+    """Documents of a span / relation / alignment layer: sentences, done and pending (still to do).
 
-    A sentence is done when it was confirmed (sentence_reviews) or has rows and none is suggested; a document is
-    done (done = sentences) when it has rows and none is suggested."""
+    Span / relation layers: pending = sentences still open for some annotator (_open), done = the rest.
+    Alignment layers: a sentence is done when it was confirmed (sentence_reviews) or has rows and none is
+    suggested; a document is done (done = sentences) when it has rows and none is suggested."""
     from services.api.models import AlignmentAnnotation
 
     docs = db.execute(
@@ -835,6 +882,29 @@ def p5_documents(db, layer, annotators):
         .where(Document.id.in_(layer_documents_stmt(layer)))
         .order_by(Document.created_at, Document.id)
     ).all()
+    if layer.kind in ("span", "relation"):
+        # same rule as the sentence list (_open): multi-annotator layers need every listed annotator
+        open_by_doc = dict(
+            db.execute(
+                select(Sentence.document_id, func.count())
+                .where(
+                    Sentence.document_id.in_([d for d, _, _ in docs]),
+                    _open(layer, annotators),
+                )
+                .group_by(Sentence.document_id)
+            ).all()
+        )
+        items = [
+            {
+                "document_id": d,
+                "title": t,
+                "sentences": n,
+                "done": max(n - open_by_doc.get(d, 0), 0),
+                "pending": open_by_doc.get(d, 0),
+            }
+            for d, t, n in docs
+        ]
+        return {"items": items, "total": len(items)}
     if layer.kind == "alignment":
         m = AlignmentAnnotation
         doc_col, idx_col = m.src_document_id, m.src_sentence_index
