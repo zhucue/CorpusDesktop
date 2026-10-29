@@ -22,8 +22,18 @@ x-python-env: &python-env
   EMBED_API_KEY: ${EMBED_API_KEY:-}
   EMBED_DIM: ${EMBED_DIM:-}
 
+# 常驻服务：异常退出或宿主机重启后自动拉起；容器日志单文件 20 MB，保留 5 个
+x-service: &service
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
+
 services:
   postgres:
+    <<: *service
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: corpus
@@ -39,6 +49,7 @@ services:
       retries: 30
 
   api:
+    <<: *service
     build: { context: .., dockerfile: deploy/Dockerfile.api, target: api }
     environment: *python-env
     volumes:
@@ -53,6 +64,7 @@ services:
 
   # 处理全部任务类型。增加导入/索引并发：docker compose ... up -d --scale worker=2
   worker: &worker
+    <<: *service
     build: { context: .., dockerfile: deploy/Dockerfile.worker }
     environment: &worker-env
       <<: *python-env
@@ -77,6 +89,7 @@ services:
       WORKER_SMALL_IMPORTS: "1"
 
   agent:
+    <<: *service
     build: { context: .., dockerfile: deploy/Dockerfile.agent }
     environment:
       MODEL_BASE_URL: ${MODEL_BASE_URL:-}
@@ -94,6 +107,7 @@ services:
       api: { condition: service_healthy }
 
   web:
+    <<: *service
     build: { context: .., dockerfile: deploy/Dockerfile.web }
     ports:
       - "127.0.0.1:${HTTP_PORT:-8080}:80"
