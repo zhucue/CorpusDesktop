@@ -8,7 +8,9 @@ only of punctuation or symbols are tagged `w` and tokens made only of digits `m`
 deprel stay empty at import; annotate_dependencies_zh (P3 pre-annotation) parses the stored tokens with Stanza.
 
 English (en): Stanza tokenize, mwt, pos (UPOS), lemma, depparse; pipelines load lazily from
-STANZA_RESOURCES_DIR.
+STANZA_RESOURCES_DIR. Peak memory grows with the text per pipeline call, so each call takes at most BATCH
+items and BATCH_WORDS whitespace-separated words (an item longer than that is a call of its own), and pos /
+depparse run in batches of STANZA_BATCH: a 4,000-token Word file peaks at about 1.3 GB instead of 5 GB.
 
 Documents without sentences are split per paragraph ("\n"); existing sentences without tokens (Tatoeba,
 TMX) are tokenised in place; sentences that already have tokens (CoNLL-U) are left untouched.
@@ -28,7 +30,9 @@ from engine.model import Document, Sentence, Token
 
 STANZA_PROCESSORS = {"en": "tokenize,mwt,pos,lemma,depparse"}
 LANGUAGES = ("en", "zh")
-BATCH = 200  # paragraphs / sentences per Stanza call
+BATCH = 200  # max paragraphs / sentences per Stanza call; also the progress cadence
+BATCH_WORDS = 500  # max words per Stanza call
+STANZA_BATCH = 1000  # pos_batch_size / depparse_batch_size (Stanza default 5000)
 ZH_PROGRESS = 2000  # Chinese sentences between progress callbacks
 
 _CJK = re.compile(r"[㐀-䶿一-鿿豈-﫿]")
@@ -210,6 +214,8 @@ def _zh_depparse():
         "zh-hans",
         processors="tokenize,pos,lemma,depparse",
         tokenize_pretokenized=True,
+        pos_batch_size=STANZA_BATCH,
+        depparse_batch_size=STANZA_BATCH,
         dir=os.environ.get("STANZA_RESOURCES_DIR"),
         logging_level="WARN",
         download_method=DownloadMethod.REUSE_RESOURCES,
@@ -248,6 +254,8 @@ def pipeline(lang: str):
     return stanza.Pipeline(
         lang,
         processors=STANZA_PROCESSORS[lang],
+        pos_batch_size=STANZA_BATCH,
+        depparse_batch_size=STANZA_BATCH,
         dir=os.environ.get("STANZA_RESOURCES_DIR"),
         logging_level="WARN",
         download_method=DownloadMethod.REUSE_RESOURCES,
@@ -278,14 +286,29 @@ def _tokens(sent, base: int) -> list[Token]:
     return out
 
 
+def _chunks(texts: list[str]):
+    """Consecutive slices of texts, one per Stanza call: at most BATCH items and BATCH_WORDS words;
+    an item longer than BATCH_WORDS goes alone."""
+    i = 0
+    while i < len(texts):
+        j, words = i, 0
+        while j < len(texts) and j - i < BATCH:
+            n = len(texts[j].split())
+            if j > i and words + n > BATCH_WORDS:
+                break
+            words += n
+            j += 1
+        yield texts[i:j]
+        i = j
+
+
 def _process(lang: str, texts: list[str]):
+    """One Stanza document per text, in order."""
     import stanza
 
     nlp = pipeline(lang)
-    for i in range(0, len(texts), BATCH):
-        yield from nlp.bulk_process(
-            [stanza.Document([], text=t) for t in texts[i : i + BATCH]]
-        )
+    for part in _chunks(texts):
+        yield from nlp.bulk_process([stanza.Document([], text=t) for t in part])
 
 
 def _annotate_stanza(doc: Document, lang: str, progress) -> None:

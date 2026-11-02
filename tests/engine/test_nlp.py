@@ -231,3 +231,20 @@ def test_progress_offsets(monkeypatch):
     seen = []
     nlp.annotate(en, seen.append)
     assert seen == [9, len(en.text)]
+
+
+def test_chunks_item_and_word_caps(monkeypatch):
+    """Stanza calls are bounded by BATCH items and BATCH_WORDS words; order and count are kept."""
+    monkeypatch.setattr(nlp, "BATCH", 3)
+    monkeypatch.setattr(nlp, "BATCH_WORDS", 5)
+    texts = ["a", "b", "c", "d", "e f g", "h i", "x " * 9, "j", "k l m n"]
+    parts = list(nlp._chunks(texts))
+    assert parts == [
+        ["a", "b", "c"],  # item cap
+        ["d", "e f g"],  # word cap: 1 + 3, adding 2 more would exceed 5
+        ["h i"],
+        ["x " * 9],  # oversized item alone
+        ["j", "k l m n"],
+    ]
+    assert [t for p in parts for t in p] == texts
+    assert list(nlp._chunks([])) == []
