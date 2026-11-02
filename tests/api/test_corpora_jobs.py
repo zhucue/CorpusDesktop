@@ -169,24 +169,22 @@ def test_cancel_running_import_rolls_back(owner, corpus):
     assert owner.get(f"/api/projects/{corpus['project_id']}/jobs").json()["total"] == 1
 
 
-def _set_running(job_id, heartbeat_ago, started_ago):
-    """Backdate a running job: heartbeat/started ages as timedelta, heartbeat None = no heartbeat."""
+def _set_running(job_id, heartbeat_ago, started_ago, worker_id=None):
+    """Backdate a running job: heartbeat/started ages as timedelta, heartbeat None = no heartbeat.
+    worker_id: reassign the job to another worker."""
     from sqlalchemy import func, update
 
     from services.api.db import transaction
     from services.api.models import Job
 
+    values = {
+        "heartbeat_at": None if heartbeat_ago is None else func.now() - heartbeat_ago,
+        "started_at": func.now() - started_ago,
+    }
+    if worker_id:
+        values["worker_id"] = worker_id
     with transaction() as db:
-        db.execute(
-            update(Job)
-            .where(Job.id == job_id)
-            .values(
-                heartbeat_at=None
-                if heartbeat_ago is None
-                else func.now() - heartbeat_ago,
-                started_at=func.now() - started_ago,
-            )
-        )
+        db.execute(update(Job).where(Job.id == job_id).values(**values))
 
 
 def test_worker_restart_fails_stale_running_jobs(owner, corpus):
@@ -201,6 +199,35 @@ def test_worker_restart_fails_stale_running_jobs(owner, corpus):
     j = owner.get(f"/api/jobs/{job['id']}").json()
     assert j["state"] == "failed" and j["error"]["code"] == "WORKER_RESTARTED"
     assert owner.get(f"/api/corpora/{corpus['id']}").json()["status"] == "failed"
+
+
+def test_worker_startup_fails_own_running_jobs(owner, project):
+    """A restarted container reuses its hostname: its old running jobs are dead despite a fresh heartbeat."""
+    from services.worker.main import claim, recover
+
+    jobs = []
+    for name in ("own", "other"):
+        r = owner.post(
+            f"/api/projects/{project['id']}/corpora",
+            json={"name": name, "language": "en"},
+        )
+        assert r.status_code == 200, r.text
+        jobs.append(
+            (r.json()["id"], upload(owner, r.json()["id"], {"a.txt": TEXT_A}).json())
+        )
+    claim()
+    claim()
+    _set_running(
+        jobs[1][1]["id"], timedelta(minutes=1), timedelta(minutes=5), "other-worker"
+    )
+    recover()  # periodic reaper: fresh heartbeats are kept
+    states = [owner.get(f"/api/jobs/{j['id']}").json()["state"] for _, j in jobs]
+    assert states == ["running", "running"]
+    recover(own=True)
+    own = owner.get(f"/api/jobs/{jobs[0][1]['id']}").json()
+    assert own["state"] == "failed" and own["error"]["code"] == "WORKER_RESTARTED"
+    assert owner.get(f"/api/corpora/{jobs[0][0]}").json()["status"] == "failed"
+    assert owner.get(f"/api/jobs/{jobs[1][1]['id']}").json()["state"] == "running"
 
 
 def test_recover_legacy_jobs_without_heartbeat(owner, project):

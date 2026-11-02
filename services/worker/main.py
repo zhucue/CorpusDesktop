@@ -4,7 +4,8 @@ Several workers may run side by side. WORKER_KINDS limits the job kinds one take
 WORKER_SMALL_IMPORTS=1 lets a worker limited by WORKER_KINDS also take small import/index jobs
 (services.api.jobs.small_heavy). Every worker takes short-lane jobs first, then the oldest; an index
 job waits while another index build of the same corpus runs. A running job's heartbeat_at is refreshed every HEARTBEAT_SECONDS, and jobs whose heartbeat went
-stale (their worker died) are failed at startup and by a periodic reaper."""
+stale (their worker died) are failed at startup and by a periodic reaper. At startup a worker also fails
+running jobs carrying its own WORKER_ID: a restarted container keeps its hostname, so they are dead."""
 
 import logging
 import os
@@ -149,23 +150,24 @@ def _beat(job_id, stop):
             log.exception("heartbeat for job %s failed", job_id)
 
 
-def recover():
+def recover(own=False):
     """Fail running jobs whose worker is gone: heartbeat older than STALE_AFTER, or (jobs claimed
     before heartbeats existed) no heartbeat and started more than LEGACY_STALE_AFTER ago.
-    Jobs of live workers are never touched. They cannot resume; the user retries manually."""
+    own=True (worker startup) also fails jobs claimed under this WORKER_ID, whatever their heartbeat.
+    Jobs of other live workers are never touched. They cannot resume; the user retries manually."""
+    dead = [
+        Job.heartbeat_at < func.now() - STALE_AFTER,
+        and_(
+            Job.heartbeat_at.is_(None),
+            Job.started_at < func.now() - LEGACY_STALE_AFTER,
+        ),
+    ]
+    if own:
+        dead.append(Job.worker_id == WORKER_ID)
     with transaction() as db:
         jobs = db.scalars(
             select(Job)
-            .where(
-                Job.state == "running",
-                or_(
-                    Job.heartbeat_at < func.now() - STALE_AFTER,
-                    and_(
-                        Job.heartbeat_at.is_(None),
-                        Job.started_at < func.now() - LEGACY_STALE_AFTER,
-                    ),
-                ),
-            )
+            .where(Job.state == "running", or_(*dead))
             .with_for_update(skip_locked=True)
         ).all()
         for job in jobs:
@@ -272,7 +274,7 @@ def warm_embeddings():
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
-    recover()
+    recover(own=True)
     threading.Thread(target=reap, daemon=True).start()
     threading.Thread(target=warm_embeddings, daemon=True).start()
     log.info("worker %s ready, kinds: %s", WORKER_ID, ",".join(worker_kinds()) or "all")
