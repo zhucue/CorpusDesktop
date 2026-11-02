@@ -8,8 +8,9 @@
 | --- | --- |
 | 操作系统 | Linux x86_64（Windows / macOS 的 Docker Desktop 可用于开发） |
 | Docker | Engine 24+ 与 Compose v2 |
-| 资源 | 4 CPU、16 GiB 内存起（api 与 worker 各加载向量模型约 500 MB；Stanza 英文约 1 GiB）；磁盘：镜像约 8 GiB，模型缓存约 1.5 GiB，语料与索引按数据量（完整 Tatoeba 中英约 2 GiB） |
-| 网络 | 首次启动需访问 Hugging Face（向量模型）、Stanza 模型源、对话模型服务；离线部署先在联网机器拉取 `models`、`stanza` 卷内容（第四节） |
+| 资源 | 4 CPU、16 GiB 内存起（api、worker、worker-light 各加载向量模型，常驻约 800 MB；Stanza 英文标注时每个正在导入的 worker 峰值约 2 GiB）；磁盘：镜像约 8 GiB，模型缓存约 1.5 GiB，语料与索引按数据量（完整 Tatoeba 中英约 2 GiB） |
+| 小内存（≤ 4 GiB） | 只跑一个 worker：`docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --scale worker-light=0`；或设 `EMBED_PROVIDER=openai`，不在三个容器各加载一份本地向量模型。两项都不做时导入会被内核 OOM 终止 |
+| 网络 | 首次启动需访问 Hugging Face（向量模型）、Stanza 模型源、对话模型服务；向量模型已在 `models` 卷缓存时离线加载，缓存缺失才联网下载；离线部署先在联网机器拉取 `models`、`stanza` 卷内容（第四节） |
 | 域名与证书 | 对外访问需域名和 HTTPS，由宿主机 Caddy 或 nginx 终止（第五节） |
 
 ## 二 服务
@@ -31,7 +32,7 @@
 | 短任务 | 统计、导出、预标注、知识库任务；上传总大小小于 `LIGHT_IMPORT_BYTES`（默认 5 MB）的导入；语料词数小于 `LIGHT_INDEX_TOKENS`（默认 100 万）的建索引 | worker-light（`WORKER_SMALL_IMPORTS=1`），worker 空闲时也处理 |
 | 长任务 | 其余导入与建索引；没有记录大小的旧任务和管理员脚本任务 | worker |
 
-每个 worker 先取短任务，再按创建时间取长任务；同一语料同时只运行一个建索引任务。排队中的任务在任务页和托盘显示"前面还有 n 个任务"（同一道中正在运行的和更早排队的）。导入大小记在任务参数 `bytes`，建索引的语料词数记在 `tokens`。worker-light 处理英文小文件导入时会加载 Stanza 英文模型（约 1 GiB 内存）。
+每个 worker 先取短任务，再按创建时间取长任务；同一语料同时只运行一个建索引任务。排队中的任务在任务页和托盘显示"前面还有 n 个任务"（同一道中正在运行的和更早排队的）。导入大小记在任务参数 `bytes`，建索引的语料词数记在 `tokens`。worker-light 处理英文小文件导入时会加载 Stanza 英文模型，标注时内存峰值约 2 GiB。
 
 ## 三 `.env` 变量
 
