@@ -316,3 +316,44 @@ def test_local_embeddings():
     dot = lambda a, b: sum(x * y for x, y in zip(a, b))
     assert dot(vecs[0], vecs[1]) > dot(vecs[0], vecs[2])
     assert embed.model_name() == embed.DEFAULT_MODEL
+
+
+def test_local_model_tries_cache_first(monkeypatch):
+    """A cached model loads with local_files_only=True only; download falls back to the hub."""
+    import sys
+    import types
+
+    from engine.kb import embed
+
+    calls, cached = [], [True]
+
+    class Fake:
+        def __init__(self, name, local_files_only, **kw):
+            calls.append(local_files_only)
+            if local_files_only and not cached[0]:
+                raise OSError("not in cache")
+
+        def get_sentence_embedding_dimension(self):
+            return 384
+
+    monkeypatch.setitem(
+        sys.modules,
+        "sentence_transformers",
+        types.SimpleNamespace(SentenceTransformer=Fake),
+    )
+    monkeypatch.delenv("EMBED_PROVIDER", raising=False)
+    monkeypatch.delenv("EMBED_MODEL", raising=False)
+
+    def load(download, is_cached):
+        monkeypatch.setattr(embed, "_models", {})
+        calls.clear()
+        cached[0] = is_cached
+        embed.load(download=download)
+        return list(calls)
+
+    assert load(True, True) == [True]
+    assert load(True, False) == [True, False]
+    assert load(False, True) == [True]
+    with pytest.raises(embed.EmbedUnavailable):
+        load(False, False)
+    assert calls == [True]

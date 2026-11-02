@@ -1,9 +1,10 @@
 """Text embeddings (contracts/p4.md §二), unit length so cosine distance = 1 − dot product.
 
 EMBED_PROVIDER=local (default): sentence-transformers EMBED_MODEL (default paraphrase-multilingual-MiniLM-L12-v2
-at the pinned revision EMBED_REVISION) on CPU, cached under MODELS_DIR. The worker may download it
-(download=True); the API only loads files already in the cache, so a missing model degrades search instead of
-blocking a request. EMBED_PROVIDER=openai: POST {EMBED_BASE_URL}/embeddings with EMBED_API_KEY / EMBED_MODEL;
+at the pinned revision EMBED_REVISION) on CPU, cached under MODELS_DIR. Loading always tries the cache first
+(local_files_only) so a cached model never touches the network; only the worker (download=True) falls back to
+downloading when that fails. The API only loads files already in the cache, so a missing model degrades search
+instead of blocking a request. EMBED_PROVIDER=openai: POST {EMBED_BASE_URL}/embeddings with EMBED_API_KEY / EMBED_MODEL;
 EMBED_DIM must equal DIM (the kb_chunks.embedding column). Any failure raises EmbedUnavailable.
 """
 
@@ -49,13 +50,22 @@ def _local(download: bool):
                 revision = _env("EMBED_REVISION") or (
                     DEFAULT_REVISION if name == DEFAULT_MODEL else None
                 )
-                model = SentenceTransformer(
-                    name,
-                    device="cpu",
-                    cache_folder=_env("MODELS_DIR") or None,
-                    revision=revision,
-                    local_files_only=not download,
-                )
+
+                def make(local_only):
+                    return SentenceTransformer(
+                        name,
+                        device="cpu",
+                        cache_folder=_env("MODELS_DIR") or None,
+                        revision=revision,
+                        local_files_only=local_only,
+                    )
+
+                try:  # cached: no network (an unreachable hub costs minutes of retries)
+                    model = make(True)
+                except Exception:
+                    if not download:
+                        raise
+                    model = make(False)
             except (
                 Exception
             ) as e:  # missing files, network, bad name: all mean "not available"
