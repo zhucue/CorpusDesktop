@@ -819,12 +819,15 @@ def write_rows(path: Path, rows) -> int:
     return len(meta) + len(data)
 
 
-def read_rows(path: Path, lo: int, hi: int) -> list[Row]:
-    """Rows lo..hi-1 written by write_rows (fewer past the end); FileNotFoundError when the files are gone."""
+def read_rows(path: Path, lo: int, hi: int | None = None) -> list[Row]:
+    """Rows lo..hi-1 written by write_rows (fewer past the end; hi None: to the end); FileNotFoundError when
+    the files are gone."""
     path = Path(path)
     lo = max(0, lo)
     arr = array("i")
     with open(path / "rows.bin", "rb") as f:
+        if hi is None:
+            hi = os.fstat(f.fileno()).st_size // 16
         f.seek(lo * 16)
         arr.frombytes(f.read(max(0, hi - lo) * 16))
     if not arr:
@@ -928,21 +931,14 @@ def _hit(
         end = toks[max(j, 0)][0] + b - cum[max(j, 0)]
     else:
         start, end = t0, t1
-    if ctx.unit == "sentence" or (ctx.sentence_only and ctx.unit == "paragraph"):
-        ss, se = ix.pairs("sents.bin", d[4] + n, 1)[0]
-        left, right = ix.text(d, ss, start), ix.text(d, end, se)
-    elif ctx.unit == "paragraph":
-        left = ix.text(d, start - PARA_MAX, start).rsplit("\n", 1)[-1]
-        right = ix.text(d, end, end + PARA_MAX).split("\n", 1)[0]
-    else:
-        floor, ceil = 0, d[2]
-        if ctx.sentence_only:
-            floor, ceil = ix.pairs("sents.bin", d[4] + n, 1)[0]
-        lo, hi = max(floor, start - ctx.size), min(ceil, end + ctx.size)
-        # the window cuts the text: one extra character outside it tells whether a word is cut
-        more_l, more_r = lo > floor, hi < ceil
-        left = _word_cut_left(ix.text(d, lo - more_l, start), more_l)
-        right = _word_cut_right(ix.text(d, end, hi + more_r), more_r)
+    left, right = _around(
+        lambda a, b: ix.text(d, a, b),
+        d[2],
+        lambda: ix.pairs("sents.bin", d[4] + n, 1)[0],
+        start,
+        end,
+        ctx,
+    )
     return Hit(
         f"{d[0]}:{start}-{end}",
         d[0],
@@ -953,6 +949,74 @@ def _hit(
         ix.text(d, start, end),
         right,
     )
+
+
+def _around(text, length, sentence, start, end, ctx: Context) -> tuple[str, str]:
+    """(left, right) context of code points start..end of a document: text(a, b) reads its code points a..b-1
+    (clamped), length = its code points, sentence() = (start, end) of the hit's sentence."""
+    if ctx.unit == "sentence" or (ctx.sentence_only and ctx.unit == "paragraph"):
+        ss, se = sentence()
+        return text(ss, start), text(end, se)
+    if ctx.unit == "paragraph":
+        left = text(start - PARA_MAX, start).rsplit("\n", 1)[-1]
+        return left, text(end, end + PARA_MAX).split("\n", 1)[0]
+    floor, ceil = sentence() if ctx.sentence_only else (0, length)
+    lo, hi = max(floor, start - ctx.size), min(ceil, end + ctx.size)
+    # the window cuts the text: one extra character outside it tells whether a word is cut
+    more_l, more_r = lo > floor, hi < ceil
+    left = _word_cut_left(text(lo - more_l, start), more_l)
+    return left, _word_cut_right(text(end, hi + more_r), more_r)
+
+
+class DocText:
+    """Code-point reads of the documents of a corpus, for hits given in document code points (answered from
+    PostgreSQL): text.bin / sents.bin of the current index, so a page never reads whole documents. Documents
+    the index lacks (no index yet, or added after it was built) come from fallback(doc_id) → (text, {sentence
+    index: (start, end)})."""
+
+    def __init__(self, index_dir: Path, corpus_key: str, fallback=None):
+        try:
+            self.ix = _open(str(_home(Path(index_dir), _key(corpus_key))))
+        except ValueError:
+            self.ix = None
+        self.fallback = fallback
+        self._loaded = {}
+
+    def _doc(self, doc_id: str):
+        if self.ix is not None:
+            with contextlib.suppress(ValueError):
+                return self.ix.doc(doc_id), None
+        if doc_id not in self._loaded:
+            if self.fallback is None:
+                raise ValueError(f"索引中没有文档：{doc_id}")
+            self._loaded[doc_id] = self.fallback(doc_id)
+        return None, self._loaded[doc_id]
+
+    def text(self, doc_id: str, a: int, b: int) -> str:
+        d, mem = self._doc(doc_id)
+        if d is not None:
+            return self.ix.text(d, a, b)
+        return mem[0][max(0, a) : max(0, b)]
+
+    def hit(self, doc_id: str, n: int, start: int, end: int, ctx: Context) -> Hit:
+        """The hit at code points start..end of sentence n, context as cwb hits."""
+        d, mem = self._doc(doc_id)
+        if d is not None:
+            length = d[2]
+
+            def sentence():
+                return self.ix.pairs("sents.bin", d[4] + n, 1)[0]
+        else:
+            length = len(mem[0])
+
+            def sentence():
+                return mem[1].get(n, (start, end))
+
+        left, right = _around(
+            lambda a, b: self.text(doc_id, a, b), length, sentence, start, end, ctx
+        )
+        match = self.text(doc_id, start, end)
+        return Hit(f"{doc_id}:{start}-{end}", doc_id, n, start, end, left, match, right)
 
 
 def _wordy(c: str) -> bool:

@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Dropdown, Form, Input, Modal, Popover, Select } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -12,16 +12,16 @@ import {
   type ParseResult,
   type SavedQuery,
   type Scope,
-  type SearchRequest,
+  type SearchRequest as BaseSearchRequest,
   type SearchResult,
   type SearchScope,
+  type Span,
 } from "../../api";
 import { ErrorAlert, Empty, exportTip, IndexPendingNote, QueryChip, Sparkline, Tip } from "../../components/common";
 import { ScopeSelect } from "../../components/common/ScopeSelect";
 import { Icon } from "../../components/Icon";
 import { conditionTerms, hasPos, KwicTable, type KwicMark, type KwicRow } from "../../components/results/Kwic";
 import { cpLength, labelColor } from "../../components/annot/spans";
-import { fetchSentenceSpans } from "../annotate/spanData";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useShell } from "../../components/shell/shell";
 import { describeScope, useCorpora, useProjectId, useSubcorpora } from "../../lib/data";
@@ -40,6 +40,7 @@ import { distributionFields, fieldLabel } from "./fields";
 import { posGroups } from "./posTags";
 import { convertScript, guessScript, scriptLabel } from "./script";
 import { sortNote, useCountPoll, type SearchCounts, type SearchPage } from "./countPoll";
+import { withCondition } from "./condition";
 import { AlignedInput, BreakdownMenu, isAlignedError, parseAlignedParam, SampleDialog, TranslationsButton } from "./SearchTools";
 import SemanticSearch from "./SemanticSearch";
 import "./search.css";
@@ -61,6 +62,18 @@ const CHIPS: [string, string, string][] = [
   ["{lemma=}", "{lemma=}", "词元"],
   ["[标签]", "[]", "片段标签：[时态]、词[时态]、[时态:k=v]"],
 ];
+
+/** P11: 简繁通查 (contracts/p11.md §一); omitted = on for corpora with Chinese. */
+type SearchRequest = BaseSearchRequest & { script_variants?: boolean };
+
+/** Corpus has Chinese text (document languages from the index profile, else its declared language). */
+function zhCorpus(c: { language?: string; meta?: { languages?: string[] } } | null | undefined): boolean {
+  const langs = c?.meta?.languages?.length ? c.meta.languages : [c?.language ?? ""];
+  return langs.some((l) => /^(zh|cmn|zho|chi)\b/i.test(l ?? ""));
+}
+
+/** Spans of a KWIC page's sentences, one request per page (POST /search/span-marks). */
+type SpanMarks = { items: { document_id: string; sentence_index: number; spans: Pick<Span, "start_cp" | "end_cp" | "label" | "status">[] }[] };
 
 const isExpired = (e: unknown) => e instanceof ApiError && e.code === "SEARCH_EXPIRED";
 function withoutSearchId(r: SearchRequest): SearchRequest {
@@ -149,6 +162,7 @@ export function CountsCards({
   spark,
   searching,
   note,
+  parallel,
 }: {
   counts: SearchCounts | null;
   spark?: { values: number[]; label: string } | null;
@@ -156,6 +170,8 @@ export function CountsCards({
   searching?: boolean;
   /** Shown on the hit card, e.g. 含译文条件. */
   note?: string;
+  /** Parallel corpus: the third card counts sentence pairs, not documents (one document per language side). */
+  parallel?: boolean;
 }) {
   const pending = searching ? "检索中" : counts && !counts.complete ? (counts.failed ? "未完成" : "计算中") : undefined;
   const v = (n: number | undefined) => (counts ? (n ?? 0) : null);
@@ -178,10 +194,17 @@ export function CountsCards({
         </div>
       </div>
       <div className="card card-pad count-card">
-        <div>
-          <div className="stat-label">文档</div>
-          <Count value={v(counts?.documents)} unit="篇" pending={pending} />
-        </div>
+        {parallel ? (
+          <div>
+            <div className="stat-label">句对</div>
+            <Count value={v(counts?.pairs ?? counts?.sentences)} unit="对" pending={pending} />
+          </div>
+        ) : (
+          <div>
+            <div className="stat-label">文档</div>
+            <Count value={v(counts?.documents)} unit="篇" pending={pending} />
+          </div>
+        )}
       </div>
     </section>
   );
@@ -447,6 +470,10 @@ export default function Search() {
   const [runId, setRunId] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [within, setWithin] = useState("");
+  const [withinOp, setWithinOp] = useState<"+" | "-">("+");
+  // the query before 结果内筛选 added its condition; restored when the filter is cleared
+  const [withinBase, setWithinBase] = useState<string | null>(null);
+  const [variantsPick, setVariantsPick] = useState<{ corpus: string | undefined; on: boolean } | null>(null);
   const [posOn, setPosOn] = useState(false);
   const [legend, setLegend] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
@@ -468,6 +495,8 @@ export default function Search() {
   const allCorpora = corpora.data?.items ?? [];
   const allSubs = subcorpora.data?.items ?? [];
   const info = describeScope(scope, allCorpora, allSubs);
+  const zh = zhCorpus(info.corpus);
+  const variants = variantsPick && variantsPick.corpus === info.corpus?.id ? variantsPick.on : zh;
 
   /* ---------- annotation layers for {pos=} / {dep=} (default: latest ready layer of the corpus) ---------- */
   const layersQ = useLayers(projectId);
@@ -533,6 +562,10 @@ export default function Search() {
     retry: false,
   });
   const result = search.data;
+  // 简繁通查: the query as searched (Han strings with their other spellings), for the tools that count the
+  // same hits (distribution, breakdown, translations, sampling, tidy export)
+  const searched = result?.searched_query && req && result.searched_query !== req.query ? result.searched_query : null;
+  const toolReq = req && searched ? { ...req, query: searched } : req;
 
   // Poll the background count; once done, the page on screen is fetched again when it was unsorted or short.
   const { counts, error: pollError } = useCountPoll({
@@ -574,7 +607,14 @@ export default function Search() {
   const distField = distBase ? (distRuns[distKey] ?? null) : null;
   const distBody =
     distBase && distField && result
-      ? { scope: distBase.scope, query: distBase.query, field: distField, bins: 10, project_id: projectId, ...(distBase.aligned ? { aligned: distBase.aligned } : {}) }
+      ? {
+          scope: distBase.scope,
+          query: searched && distBase.query === req?.query ? searched : distBase.query,
+          field: distField,
+          bins: 10,
+          project_id: projectId,
+          ...(distBase.aligned ? { aligned: distBase.aligned } : {}),
+        }
       : null;
   const dist = useStatJob("distribution", distBody, projectId, 0, { quiet: true });
   const dRows = useMemo(() => (dist.stat ? distRows(dist.stat) : undefined), [dist.stat]);
@@ -592,7 +632,15 @@ export default function Search() {
     });
   }
 
-  function run(opts?: { query?: string; scope?: SearchScope | null; fromDist?: boolean; layers?: SearchRequest["layers"]; aligned?: SearchRequest["aligned"] | null }) {
+  function run(opts?: {
+    query?: string;
+    scope?: SearchScope | null;
+    fromDist?: boolean;
+    layers?: SearchRequest["layers"];
+    aligned?: SearchRequest["aligned"] | null;
+    keepWithin?: boolean;
+    variants?: boolean;
+  }) {
     const q = (opts?.query ?? query).trim();
     const sc = opts && "scope" in opts ? opts.scope : scope;
     if (!sc || !q) return;
@@ -609,6 +657,9 @@ export default function Search() {
       page_size: PAGE_SIZE,
       include_tokens: true,
     };
+    const scCorpus = describeScope(sc, allCorpora, allSubs).corpus;
+    const scVariants = opts?.variants ?? (variantsPick && variantsPick.corpus === scCorpus?.id ? variantsPick.on : zhCorpus(scCorpus));
+    if (zhCorpus(scCorpus) || scVariants) next.script_variants = scVariants;
     const lay = opts?.layers ? { ...layersFor(sc), ...opts.layers } : layersFor(sc);
     if (lay) next.layers = lay;
     if (al) next.aligned = al;
@@ -617,7 +668,10 @@ export default function Search() {
     setReq(next);
     setSelected(null);
     setExpanded(null);
-    setWithin("");
+    if (!opts?.keepWithin) {
+      setWithin("");
+      setWithinBase(null);
+    }
     if (!opts?.fromDist) {
       setPicked(null);
       setDistBase({ query: q, scope: sc, aligned: next.aligned });
@@ -676,9 +730,30 @@ export default function Search() {
 
   // Re-run when context length or sort changes.
   useEffect(() => {
-    if (req) run({ query: req.query, scope: req.scope, fromDist: true, aligned: req.aligned ?? null });
+    if (req) run({ query: req.query, scope: req.scope, fromDist: true, aligned: req.aligned ?? null, keepWithin: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctxMode, sort, posLayer, depLayer, spanLayer]);
+
+  /** 结果内筛选: the term becomes a same-sentence condition and the search runs again over all hits. */
+  function applyWithin(term: string) {
+    if (!req) return;
+    const base = withinBase ?? req.query;
+    if (!term.trim()) {
+      if (withinBase == null) return;
+      setQuery(base);
+      run({ query: base, scope: req.scope, aligned: req.aligned ?? null });
+      return;
+    }
+    const q = withCondition(base, withinOp, term);
+    setQuery(q);
+    run({ query: q, scope: req.scope, aligned: req.aligned ?? null, keepWithin: true });
+    setWithinBase(base);
+  }
+
+  function toggleVariants(on: boolean) {
+    setVariantsPick({ corpus: info.corpus?.id, on });
+    if (req) run({ query: req.query, scope: req.scope, fromDist: true, aligned: req.aligned ?? null, keepWithin: true, variants: on });
+  }
 
   function pickDist(i: number | null) {
     setPicked(i);
@@ -700,7 +775,7 @@ export default function Search() {
     exporter.start({ url: "/search/export", body: { ...withoutSearchId(req!), format, project_id: projectId }, label: format.toUpperCase() });
   // 导出整洁数据 (contracts/p10.md §三): one row per document of the current scope, hit columns for the current query
   const tidyExport = (format: "csv" | "xlsx") =>
-    exporter.start({ url: "/stats/tidy_export", body: { project_id: projectId, scope: req!.scope, queries: [req!.query], format }, label: `整洁数据 ${format.toUpperCase()}` });
+    exporter.start({ url: "/stats/tidy_export", body: { project_id: projectId, scope: req!.scope, queries: [toolReq!.query], format }, label: `整洁数据 ${format.toUpperCase()}` });
 
   const saveQuery = useMutation({
     mutationFn: (name: string) => api.post<SavedQuery>(`/projects/${projectId}/queries`, { name, query: query.trim(), scope }),
@@ -750,9 +825,7 @@ export default function Search() {
   const corpusName = info.corpus?.name ?? "";
   const parallel = !!info.corpus?.parallel;
   const alignedError = isAlignedError(search.error) ? search.error : null;
-  const rows: (KwicRow & { hit: Hit })[] = (result?.items ?? [])
-    .filter((h) => !within || `${h.left}${h.match}${h.right}`.includes(within))
-    .map((h) => ({
+  const rows: (KwicRow & { hit: Hit })[] = (result?.items ?? []).map((h) => ({
       id: h.hit_id,
       left: h.left,
       match: h.match,
@@ -769,7 +842,7 @@ export default function Search() {
 
   /* ---------- script (简/繁): recorded at import, else guessed from the hits; zero-hit hint (QA Q36) ---------- */
   const script = info.corpus?.meta?.script ?? facts?.script ?? guessScript(rows.slice(0, 20).map((r) => r.left + r.match + r.right).join(""));
-  const zeroHits = !!req && !!counts?.complete && counts.hits === 0 && /[一-鿿]/.test(req.query) && !req.search_id;
+  const zeroHits = !!req && !!counts?.complete && counts.hits === 0 && /[一-鿿]/.test(req.query) && !req.search_id && !result?.script_variants;
   const altScript = useQuery({
     queryKey: ["script-alt", req],
     enabled: zeroHits,
@@ -787,18 +860,22 @@ export default function Search() {
     },
   });
 
-  /* ---------- span highlights: spans of the sentences of rows that scrolled into view (片段层) ---------- */
+  /* ---------- span highlights (片段层): the spans of the page's sentences, one request per page ---------- */
   const markLayer = req?.layers?.span ?? null;
-  const [seen, setSeen] = useState<{ layer: string | null; keys: string[] }>({ layer: null, keys: [] });
-  const seenKeys = seen.layer === markLayer ? seen.keys : [];
-  const rowKey = (h: Hit) => `${h.document_id}:${h.sentence_index}`;
-  const spanQs = useQueries({
-    queries: (markLayer ? seenKeys : []).map((k) => {
-      const [doc, idx] = [k.slice(0, k.lastIndexOf(":")), Number(k.slice(k.lastIndexOf(":") + 1))];
-      return { queryKey: ["span-one", markLayer, doc, idx], queryFn: () => fetchSentenceSpans(markLayer!, doc, idx), staleTime: 60 * 1000, meta: { background: true } };
-    }),
+  const rowKey = (h: { document_id: string; sentence_index: number }) => `${h.document_id}:${h.sentence_index}`;
+  const pageKeys = [...new Set((result?.items ?? []).map(rowKey))];
+  const marksQ = useQuery({
+    queryKey: ["span-marks", markLayer, pageKeys],
+    enabled: !!markLayer && pageKeys.length > 0,
+    staleTime: 60 * 1000,
+    meta: { background: true },
+    queryFn: () =>
+      api.post<SpanMarks>("/search/span-marks", {
+        layer_id: markLayer,
+        sentences: pageKeys.map((k) => ({ document_id: k.slice(0, k.lastIndexOf(":")), sentence_index: Number(k.slice(k.lastIndexOf(":") + 1)) })),
+      }),
   });
-  const spanBy = new Map(seenKeys.map((k, i) => [k, spanQs[i]?.data]));
+  const spanBy = new Map((marksQ.data?.items ?? []).map((x) => [rowKey(x), x.spans]));
   const markSet = labelSetsQ.data?.find((ls) => ls.id === allLayers.find((l) => l.id === markLayer)?.label_set_id);
   const markOrder = (markSet?.labels ?? []).map((l) => l.name);
   function rowMarks(r: KwicRow): KwicMark[] | undefined {
@@ -806,15 +883,9 @@ export default function Search() {
     const ss = hit ? spanBy.get(rowKey(hit)) : undefined;
     if (!hit || !ss) return undefined;
     const rowStart = hit.start_cp - cpLength(hit.left);
-    return ss.spans
+    return ss
       .filter((x) => x.status !== "rejected")
       .map((x) => ({ start: x.start_cp - rowStart, end: x.end_cp - rowStart, label: x.label, color: labelColor(x.label, markOrder) }));
-  }
-  function rowVisible(id: string) {
-    const hit = rows.find((x) => x.id === id)?.hit;
-    if (!hit || !markLayer) return;
-    const k = rowKey(hit);
-    setSeen((p) => (p.layer === markLayer ? (p.keys.includes(k) ? p : { layer: markLayer, keys: [...p.keys, k] }) : { layer: markLayer, keys: [k] }));
   }
   // 依存树 expander: the dependency layer the search used, else the corpus default; hidden without one.
   const treeLayer = req ? (req.layers?.dep ?? defaultLayer(allLayers, describeScope(req.scope, allCorpora, allSubs).corpus?.id, "dep")?.id ?? null) : null;
@@ -928,6 +999,14 @@ export default function Search() {
               </Tip>
             ))}
             {script && script !== "simplified" && <span className="tag t-gray">{scriptLabel[script]}</span>}
+            {zh && (
+              <Tip title="汉字串同时检索简体与繁体写法">
+                <span className="pos-toggle">
+                  <button className="switch" type="button" role="switch" aria-checked={variants} aria-label="简繁通查" onClick={() => toggleVariants(!variants)} />
+                  <span>简繁通查</span>
+                </span>
+              </Tip>
+            )}
             <div className="grow" />
             <div className="parse" aria-live="polite">
               <ParseLine query={query.trim()} parse={parseShown} error={parse.error} />
@@ -998,6 +1077,7 @@ export default function Search() {
             spark={spark}
             searching={search.isFetching && search.isPlaceholderData && !req?.search_id}
             note={req?.aligned ? `含译文条件（${req.aligned.op === "+" ? "含" : "不含"} ${req.aligned.query}）` : undefined}
+            parallel={!!info.corpus?.parallel}
           />
         )}
 
@@ -1038,7 +1118,33 @@ export default function Search() {
                     { value: "random", label: "随机" },
                   ]}
                 />
-                <Input size="small" placeholder="结果内筛选" value={within} onChange={(e) => setWithin(e.target.value)} style={{ width: 128 }} allowClear />
+                <span className="row" style={{ gap: 4 }} role="group" aria-label="结果内筛选">
+                  <Select
+                    size="small"
+                    value={withinOp}
+                    onChange={setWithinOp}
+                    style={{ width: 72 }}
+                    aria-label="筛选方式"
+                    options={[
+                      { value: "+", label: "含" },
+                      { value: "-", label: "不含" },
+                    ]}
+                  />
+                  <Tip title="作为同句条件重新检索全部结果，回车生效">
+                    <Input
+                      size="small"
+                      placeholder="结果内筛选"
+                      value={within}
+                      onChange={(e) => {
+                        setWithin(e.target.value);
+                        if (!e.target.value && withinBase != null) applyWithin("");
+                      }}
+                      onPressEnter={() => applyWithin(within)}
+                      style={{ width: 128 }}
+                      allowClear
+                    />
+                  </Tip>
+                </span>
                 <span className="pos-toggle">
                   <Tip title={posAvailable ? "词性着色（P）" : "当前结果不含词性"}>
                     <button
@@ -1077,8 +1183,8 @@ export default function Search() {
                     {sortNote(result, counts)}
                   </span>
                 )}
-                <BreakdownMenu projectId={projectId} req={req} fields={distFields} />
-                {(parallel || !!req?.aligned) && <TranslationsButton projectId={projectId} req={req} />}
+                <BreakdownMenu projectId={projectId} req={toolReq} fields={distFields} />
+                {(parallel || !!req?.aligned) && <TranslationsButton projectId={projectId} req={toolReq} />}
                 <Tip title={counts?.complete ? "从全部命中中抽样并逐条编码" : "计数完成后可抽样"}>
                   <button className="btn s" type="button" disabled={!req || !counts?.complete || !counts.hits} onClick={() => setSampling(true)}>
                     <Icon name="pen" size={14} />
@@ -1164,7 +1270,6 @@ export default function Search() {
                       expanded={expanded}
                       onExpand={setExpanded}
                       marks={markLayer ? rowMarks : undefined}
-                      onRowVisible={markLayer ? rowVisible : undefined}
                       extraActions={(r) => {
                         const hit = rows.find((x) => x.id === r.id)?.hit;
                         return hit ? (
@@ -1210,7 +1315,7 @@ export default function Search() {
         )}
       </div>
 
-      <SampleDialog open={sampling} onClose={() => setSampling(false)} projectId={projectId} req={req} hits={counts?.complete ? counts.hits : null} />
+      <SampleDialog open={sampling} onClose={() => setSampling(false)} projectId={projectId} req={toolReq} hits={counts?.complete ? counts.hits : null} />
 
       <Modal title="保存查询" open={saving} footer={null} onCancel={() => setSaving(false)} destroyOnHidden>
         <div className="col" style={{ marginBottom: 12 }}>

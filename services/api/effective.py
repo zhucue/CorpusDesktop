@@ -8,8 +8,9 @@ Query attributes `{pos=, dep=, lemma=}` (engine.query) are resolved here: pos / 
 exactly (pos values arrive already expanded for the corpus tagset), lemma compares tokens.lemma case-insensitively.
 - anchored queries: cwb.search finds the attribute slot's token in each hit and calls filter_tokens with the
   candidate (document_id, sentence_index, token_index) keys;
-- pure attribute queries (one `{…}` slot, optionally with `/pos`, no +/- conditions): pg_search produces the
-  hits from `tokens` alone, with the code points, counts, sort, paging and context of cwb.search.
+- pure attribute queries (one `{…}` slot, optionally with `/pos`, no +/- conditions): pg_hit_rows produces the
+  hit rows from `tokens` alone, with the code points and sort of cwb.query_rows; services.api.search stores
+  them as a result set like CWB rows, and cp_hits gives the page's context from the index (cwb.DocText).
 
 P5 (contracts/p5.md): layers with mode = multi keep one set of annotations per annotator. Their effective value
 for a target is the adjudication when there is one, else the value all annotators agree on (each annotator's
@@ -18,11 +19,12 @@ pairs without agreement are not effective). In single mode the annotations are s
 Effective spans and relations: status confirmed or modified. Effective alignments: confirmed or modified, or
 still suggested when imported (source = system, from sentence_alignments).
 Span labels `[标签]` (engine.query `#spans` lines): pure span queries produce one hit per effective span
-(span_search); anchored ones keep hits whose slot token lies inside such a span (filter_span_tokens).
+(span_hit_rows); anchored ones keep hits whose slot token lies inside such a span (filter_span_tokens).
 """
 
 import json
 import random
+import subprocess
 from collections import defaultdict
 from pathlib import Path
 from typing import NamedTuple
@@ -45,9 +47,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import aliased
 
-from engine.model import Counts, Hit, SearchResult
+from engine import cwb
+from engine.model import Hit
 from services.api.access import require_project
 from services.api.errors import ApiError
 from services.api.metadata import filter_clause
@@ -112,7 +116,6 @@ def effective_status(model):
     )
 
 
-PARA_MAX = 2000  # as engine.cwb
 BATCH = 20000
 
 
@@ -301,21 +304,79 @@ def scope_clauses(corpus, filt, fields):
     return where
 
 
-def pg_search(
-    db, corpus, filt, fields, atom, constraints, layers, req, page, page_size, keep=None
-):
-    """Hits of a pure attribute query from `tokens`; same semantics as engine.cwb.search. keep: (op,
-    {(document id str, sentence index)}) of a translation condition, as cwb.query_rows(aligned=)."""
-    rows = pg_rows(db, corpus, filt, fields, atom, constraints, layers, req.sort, keep)
-    if req.sort == "random":
-        random.Random(req.seed or 0).shuffle(rows)
-    counts = Counts(
-        len(rows), len({(r[0], r[1]) for r in rows}), len({r[0] for r in rows}), True
-    )
-    lo = (page - 1) * page_size
-    return SearchResult(
-        counts, _hits(db, rows[lo : lo + page_size], req.context), page, page_size
-    )
+def statement_timeout(db, seconds):
+    """Context manager: statements inside it run under PostgreSQL statement_timeout = seconds, in a savepoint;
+    a statement cancelled for it raises subprocess.TimeoutExpired (the savepoint is rolled back, so the session
+    stays usable)."""
+    return _StatementTimeout(db, seconds)
+
+
+class _StatementTimeout:
+    def __init__(self, db, seconds):
+        self.db, self.seconds = db, seconds
+
+    def __enter__(self):
+        self.nested = self.db.begin_nested()
+        self.before = self.db.scalar(select(func.current_setting("statement_timeout")))
+        ms = str(max(1, int(self.seconds * 1000)))
+        self.db.execute(select(func.set_config("statement_timeout", ms, True)))
+
+    def __exit__(self, kind, exc, tb):
+        if (
+            exc is None
+        ):  # back to the value before (the savepoint keeps a local setting)
+            self.db.execute(
+                select(func.set_config("statement_timeout", self.before, True))
+            )
+            self.nested.commit()
+            return False
+        self.nested.rollback()
+        if (
+            isinstance(exc, OperationalError)
+            and getattr(exc.orig, "sqlstate", None) == "57014"
+        ):
+            raise subprocess.TimeoutExpired("postgresql", self.seconds) from exc
+        return False
+
+
+def pg_hit_rows(
+    db,
+    corpus,
+    filt,
+    fields,
+    atom,
+    constraints,
+    layers,
+    sort="position",
+    seed=None,
+    keep=None,
+    limit=None,
+    max_hits=None,
+) -> list:
+    """Rows (start_cp, end_cp, document id str, sentence index) of a pure attribute query, the semantics of
+    cwb.query_rows: ordered by `sort` (random: shuffled with seed), filtered by a translation condition `keep`
+    (op, {(document id str, sentence index)}). limit: only the first rows in corpus order; more than max_hits
+    matching tokens (before `keep`) raise cwb.TooManyHits."""
+    cap = limit if max_hits is None else max_hits + 1
+    if limit is not None and max_hits is not None:
+        cap = min(limit, max_hits + 1)
+    while True:
+        raw = pg_rows(
+            db, corpus, filt, fields, atom, constraints, layers, sort, limit=cap
+        )
+        kept = keep_rows(raw, keep)
+        # a limited read with a translation condition grows until `limit` rows are left (as cwb.prefix_rows)
+        if limit is None or keep is None or len(kept) >= limit or len(raw) < cap:
+            break
+        cap *= 4
+    if max_hits is not None and len(raw) > max_hits:
+        raise cwb.TooManyHits(max_hits)
+    rows = [(r[2], r[3], str(r[0]), r[1]) for r in kept]
+    if limit is not None:
+        rows = rows[:limit]
+    if sort == "random":
+        random.Random(seed or 0).shuffle(rows)
+    return rows
 
 
 def keep_rows(rows, keep):
@@ -401,50 +462,28 @@ def pg_rows(
     return rows
 
 
-def _hits(db, rows, ctx):
-    doc_ids = {r[0] for r in rows}
-    texts = {
-        d.id: Path(d.text_path).read_text(encoding="utf-8")
-        for d in db.scalars(select(Document).where(Document.id.in_(doc_ids)))
-    }
-    spans = {}
-    if ctx.unit == "sentence" and rows:
-        for doc, idx, a, b in db.execute(
-            select(
-                Sentence.document_id, Sentence.idx, Sentence.start_cp, Sentence.end_cp
-            ).where(
-                Sentence.document_id.in_(doc_ids),
-                Sentence.idx.in_({r[1] for r in rows}),
-            )
-        ):
-            spans[(doc, idx)] = (a, b)
-    hits = []
-    for doc, n, start, end, *_ in rows:
-        text = texts[doc]
-        if ctx.unit == "sentence":
-            a, b = spans[(doc, n)]
-            left, right = text[a:start], text[end:b]
-        elif ctx.unit == "paragraph":
-            left = text[max(0, start - PARA_MAX) : start].rsplit("\n", 1)[-1]
-            right = text[end : end + PARA_MAX].split("\n", 1)[0]
-        else:
-            left, right = (
-                text[max(0, start - ctx.size) : start],
-                text[end : end + ctx.size],
-            )
-        hits.append(
-            Hit(
-                f"{doc}:{start}-{end}",
-                str(doc),
-                n,
-                start,
-                end,
-                left,
-                text[start:end],
-                right,
+def doc_text(db, corpus) -> cwb.DocText:
+    """Code-point reads of the corpus's documents from its index; documents the index lacks are read from
+    their text files and sentence rows."""
+    from services.api.storage import corpus_key, index_dir
+
+    def fallback(doc_id):
+        d = db.get(Document, UUID(doc_id))
+        spans = db.execute(
+            select(Sentence.idx, Sentence.start_cp, Sentence.end_cp).where(
+                Sentence.document_id == d.id
             )
         )
-    return hits
+        text = Path(d.text_path).read_text(encoding="utf-8")
+        return text, {i: (a, b) for i, a, b in spans}
+
+    return cwb.DocText(index_dir(corpus.id), corpus_key(corpus.id), fallback)
+
+
+def cp_hits(db, corpus, rows, ctx) -> list[Hit]:
+    """Hits of rows (start_cp, end_cp, document id str, sentence index) with context as cwb hits."""
+    texts = doc_text(db, corpus)
+    return [texts.hit(str(d), n, a, b, ctx) for a, b, d, n in rows]
 
 
 def frequency(db, corpus, filt, fields, unit, layers, pos_tags, top, min_freq):
@@ -932,11 +971,10 @@ def scope_spans(db, corpus, filt, fields, layer, constraint) -> list:
     return spans
 
 
-def span_search(
-    db, corpus, filt, fields, layer, constraint, req, page, page_size, keep=None
-):
-    """Hits of a pure span query: one per effective span, hit = the span; counts, sort and context as
-    cwb.search (left / right sort compare the 40 code points before / after the span). keep: as pg_search."""
+def span_hit_rows(db, corpus, filt, fields, layer, constraint, sort, seed, keep=None):
+    """Rows (start_cp, end_cp, document id str, sentence index) of a pure span query: one per effective span;
+    sort as cwb.query_rows (left / right compare the 40 code points before / after the span, read from the
+    index). keep: as pg_hit_rows."""
     spans = scope_spans(db, corpus, filt, fields, layer, constraint)
     rows = keep_rows(
         [
@@ -945,30 +983,18 @@ def span_search(
         ],
         keep,
     )
-    if req.sort in ("left", "right"):
-        texts = _texts(db, {r[0] for r in rows})
-        if req.sort == "left":
+    if sort in ("left", "right"):
+        texts = doc_text(db, corpus)
+        if sort == "left":
             rows.sort(
-                key=lambda r: texts[r[0]][max(0, r[2] - 40) : r[2]][::-1].casefold()
+                key=lambda r: texts.text(str(r[0]), r[2] - 40, r[2])[::-1].casefold()
             )
         else:
-            rows.sort(key=lambda r: texts[r[0]][r[3] : r[3] + 40].casefold())
-    elif req.sort == "random":
-        random.Random(req.seed or 0).shuffle(rows)
-    counts = Counts(
-        len(rows), len({(r[0], r[1]) for r in rows}), len({r[0] for r in rows}), True
-    )
-    lo = (page - 1) * page_size
-    return SearchResult(
-        counts, _hits(db, rows[lo : lo + page_size], req.context), page, page_size
-    )
-
-
-def _texts(db, doc_ids) -> dict:
-    return {
-        d.id: Path(d.text_path).read_text(encoding="utf-8")
-        for d in db.scalars(select(Document).where(Document.id.in_(list(doc_ids))))
-    }
+            rows.sort(key=lambda r: texts.text(str(r[0]), r[3], r[3] + 40).casefold())
+    out = [(a, b, str(d), n) for d, n, a, b in rows]
+    if sort == "random":
+        random.Random(seed or 0).shuffle(out)
+    return out
 
 
 def filter_span_tokens(db, layer, constraint, keys) -> set:

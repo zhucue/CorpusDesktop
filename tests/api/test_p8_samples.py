@@ -133,7 +133,10 @@ def test_aligned_export_and_distribution(owner, project, parallel):
     assert job["result"]["rows"] == job["result"]["hits"] == 3
     d = owner.get(f"/api/jobs/{job['id']}/download")
     rows = list(csv.reader(io.StringIO(d.content.decode("utf-8-sig"))))
-    assert sum(1 for row in rows if row and "书" in row[7:8][0]) == 3
+    assert sum(1 for row in rows if len(row) > 7 and "书" in row[7]) == 3
+    assert (
+        rows[0][0].startswith("查询式：书") and "译文条件：不含 translate" in rows[0][0]
+    )
 
     # distribution with the same condition
     r = owner.post(

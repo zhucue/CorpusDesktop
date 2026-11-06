@@ -46,6 +46,7 @@ compile() output (opaque to callers, passed unchanged to cwb.search), one item p
 A bare `{…}` slot compiles to `[]` (any token); a string with attributes matches one whole token (like `/pos`).
 """
 
+import functools
 import json
 import re
 import unicodedata
@@ -527,6 +528,59 @@ def parse(text: str, tagset: str = "upos") -> QueryAST:
         [Condition(op, seq) for op, seq in parts[1:]],
         [t for t, _ in lexed],
     )
+
+
+# ---------------------------------------------------------------- simplified / traditional
+
+_HAN = re.compile(r"[㐀-䶿一-鿿豈-﫿\U00020000-\U0003134f]")
+ZH_CONVERSIONS = ("s2t", "s2tw", "t2s")  # OpenCC configurations
+
+
+@functools.cache
+def _opencc(config: str):
+    import opencc  # opencc-python-reimplemented (Apache-2.0): OpenCC dictionaries in pure Python
+
+    return opencc.OpenCC(config)
+
+
+def zh_spellings(s: str) -> list[str]:
+    """s and its simplified / traditional spellings (OpenCC s2t, s2tw, t2s), without repeats."""
+    return list(dict.fromkeys([s, *(_opencc(c).convert(s) for c in ZH_CONVERSIONS)]))
+
+
+def script_variants(text: str, tagset: str = "upos", convert=zh_spellings) -> str:
+    """Query text with each word that contains Han characters followed by its other spellings as `|`
+    alternatives (`语言/n` → `语言/n|語言/n`), in the main query and in +/- conditions; repeats dropped. Quoted
+    forms are exact spellings and stay as they are (statistics rows reopen their counted tokens with them).
+    A term carrying `{…}` or `[…]` is left as it is (alternatives cannot carry them). The text must parse; when
+    the expanded text would not (a spelling longer than MAX_CJK), the text is returned unchanged."""
+    text = unicodedata.normalize("NFC", text or "")
+    toks = parse(text, tagset).tokens
+    out, last = [], 0
+    for i, tok in enumerate(toks):
+        if tok.kind != "word" or not _HAN.search(tok.text):
+            continue
+        nxt = toks[i + 1] if i + 1 < len(toks) else None
+        if (
+            nxt
+            and nxt.kind in ("attr", "span")
+            and nxt.position == tok.position + len(tok.text)
+        ):
+            continue
+        others = [v for v in convert(tok.text) if v != tok.text]
+        if not others:
+            continue
+        end = tok.position + len(tok.text)
+        out.append(text[last:end] + "".join("|" + v for v in others))
+        last = end
+    if not out:
+        return text
+    expanded = "".join(out) + text[last:]
+    try:
+        parse(expanded, tagset)
+    except QueryError:
+        return text
+    return expanded
 
 
 # ---------------------------------------------------------------- compile

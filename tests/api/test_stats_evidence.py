@@ -89,6 +89,7 @@ def test_stats_job_lifecycle(owner, project, corpus, member, fake_stats):
         "exclude_punct": True,  # punctuation left out by default
         "parts": "document",
         "dispersion": True,
+        "case_sensitive": False,  # case variants merged by default (P11)
     }
     stat = owner.get(f"/api/stats/{stat_id}").json()
     assert stat["method"] == "frequency" and stat["project_id"] == project["id"]
@@ -117,7 +118,7 @@ def test_stats_job_lifecycle(owner, project, corpus, member, fake_stats):
     rows = list(csv.reader(io.StringIO(r.content.decode("utf-8-sig"))))
     # parameters, scope and token total (punctuation included) above the table
     assert rows[0] == [
-        "统计：频次（单位 词形；离散度部分 文档；最低频次 1；显示前 2；排除标点和数字）"
+        "统计：频次（单位 词形；离散度部分 文档；最低频次 1；显示前 2；排除标点和数字；区分大小写：否）"
     ]
     assert rows[1] == ["范围：作文，14 词（含标点）"]
     assert rows[2][0].startswith("索引版本：")
@@ -147,7 +148,11 @@ def test_stats_other_methods_and_validation(owner, project, corpus, fake_stats):
         "ngrams",
         {"scope": scope, "n": 2, "contains": "language", "exclude_punct": False},
     )
-    assert fake_stats[-1]["kw"] == {"contains": "language", "exclude_punct": False}
+    assert fake_stats[-1]["kw"] == {
+        "contains": "language",
+        "exclude_punct": False,
+        "case_sensitive": False,
+    }
     run_stat(owner, "collocations", {"scope": scope, "node": "language", "pos": "n"})
     assert fake_stats[-1]["args"][1:3] == ("language", 5)
     sub = owner.post(

@@ -305,3 +305,28 @@ def test_translations(owner, parallel, corpus):
     for body, code in bad:
         r = owner.post("/api/stats/translations", json=body)
         assert r.status_code == 422 and r.json()["error"]["code"] == code, r.text
+
+
+def test_translations_merge_case(owner, parallel):
+    """P11: The / the merge by default; the condition lists both spellings and reopens the counted sentences;
+    case_sensitive keeps them apart; the export says which (contracts/p11.md §一)."""
+    scope = {"corpus_id": parallel["id"]}
+    body = {"scope": scope, "query": "红|了", "min_freq": 1}
+    stat = run_stat(owner, "translations", body)
+    rows = {r["key"]: r for r in stat["rows"]}
+    assert "The" not in rows
+    the = rows["the"]
+    assert the["values"]["cooc"] == 2
+    assert set(the["search_aligned"]["query"].split("|")) == {'"the"', '"The"'}
+    got = search(
+        owner, {"scope": scope, "query": "红|了", "aligned": the["search_aligned"]}
+    )
+    assert got["sentences"] == 2
+    exact = run_stat(owner, "translations", {**body, "case_sensitive": True})
+    rows = {r["key"]: r["values"]["cooc"] for r in exact["rows"]}
+    assert rows.get("the") == 1 and rows.get("The") == 1
+
+    job = owner.post(f"/api/stats/{stat['id']}/export", json={"format": "csv"}).json()
+    drain()
+    text = owner.get(f"/api/jobs/{job['id']}/download").content.decode("utf-8-sig")
+    assert "区分大小写：否" in text.splitlines()[0]

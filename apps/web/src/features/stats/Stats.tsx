@@ -42,6 +42,8 @@ const METHODS: StatMethod[] = [
 ];
 /** Methods with the 排除标点和数字 option (word / lemma units). */
 const PUNCT_METHODS: StatMethod[] = ["frequency", "ngrams", "collocations", "keywords", "translations"];
+/** Methods with the 区分大小写 option (word / lemma values; merged case variants by default, contracts/p11.md §一). */
+const CASE_METHODS: StatMethod[] = ["frequency", "ngrams", "collocations", "keywords", "breakdown", "translations"];
 /** Methods whose form offers the corpus's metadata fields. */
 const FIELD_METHODS: StatMethod[] = ["frequency", "distribution", "breakdown", "translations"];
 
@@ -94,7 +96,7 @@ function resultScope(stat: StatResult): Scope | undefined {
 /** Form values that reproduce a stored result's request (its method tab is chosen by the caller). */
 function formValues(stat: StatResult): Body {
   const p = stat.params as Body;
-  const v: Body = { unit: p.unit, pos: p.pos ?? undefined, min_freq: p.min_freq, top: p.top, exclude_punct: p.exclude_punct ?? false };
+  const v: Body = { unit: p.unit, pos: p.pos ?? undefined, min_freq: p.min_freq, top: p.top, exclude_punct: p.exclude_punct ?? false, case_sensitive: p.case_sensitive === true };
   const lay = p.layers as { span?: string; relation?: string } | undefined;
   if (lay?.span || lay?.relation) v.layer_id = lay.span ?? lay.relation;
   if (stat.method === "keywords") Object.assign(v, { target: toScope(p.target) ?? toScope(stat.scope), reference: toScope(p.reference), measure: p.measure });
@@ -175,6 +177,9 @@ function MethodForm({
   const labelUnit = method === "frequency" && (unit === "span_label" || unit === "relation_label");
   const unitLayers = (layers.data ?? []).filter((l) => l.kind === (unit === "relation_label" ? "relation" : "span") && l.status === "ready" && (!corpusId || l.corpus_id === corpusId));
   const punctOption = PUNCT_METHODS.includes(method) && (unit === undefined || unit === "word" || unit === "lemma");
+  const caseOption =
+    CASE_METHODS.includes(method) &&
+    (method === "breakdown" ? by === undefined || ["word", "lemma", "left1", "right1"].includes(by) : unit === undefined || unit === "word" || unit === "lemma");
 
   // The range follows the shared scope (palette, breadcrumb, other tabs, search); declared before the
   // opened-result effect so an opened result's own (possibly filtered) scope wins on mount.
@@ -206,6 +211,7 @@ function MethodForm({
     const v = form.getFieldsValue(true) as Body;
     const body: Body = { project_id: projectId };
     const punct = punctOption ? !!v.exclude_punct : undefined;
+    if (caseOption) body.case_sensitive = !!v.case_sensitive;
     if (method === "frequency") {
       const spanUnit = v.unit === "span_label" || v.unit === "relation_label";
       Object.assign(body, { scope: v.scope, unit: v.unit, pos: spanUnit ? undefined : v.pos || undefined, top: v.top, min_freq: v.min_freq, exclude_punct: punct });
@@ -435,6 +441,11 @@ function MethodForm({
             <Checkbox>排除标点和数字</Checkbox>
           </Form.Item>
         )}
+        {caseOption && (
+          <Form.Item name="case_sensitive" valuePropName="checked" initialValue={false} className="chk">
+            <Checkbox>区分大小写</Checkbox>
+          </Form.Item>
+        )}
       </ParamsCard>
       {method === "keywords" && <ScriptWarning projectId={projectId} target={formScope} reference={ref} />}
       <IndexPendingNote corpus={scopeCorpus?.index_pending ? scopeCorpus : method === "keywords" ? describeScope(ref ?? null, corpora.data?.items ?? [], subs.data?.items ?? []).corpus : null} />
@@ -469,7 +480,10 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
         {stat.method === "keywords" && t.reference && <> 对 {n(t.reference.tokens)} 词</>}
       </>,
     );
-  parts.push(...p10Meta(stat));
+  // Parallel corpora: sentence pairs, not documents (a parallel corpus has one document per language side)
+  const parallel = !!corpus?.parallel;
+  if (parallel && !stat.scope.subcorpus_id && corpus?.stats.pairs != null) parts.push(<>{n(corpus.stats.pairs)} 句对</>);
+  parts.push(...p10Meta(stat, parallel));
   if (stat.method === "collocations" && t.node_hits != null) parts.push(<>节点 {n(t.node_hits)} 次</>);
   if ((stat.method === "distribution" || stat.method === "breakdown") && t.hits != null) parts.push(<>{n(t.hits)} 命中</>);
   if (stat.method === "breakdown" && typeof p.by === "string") parts.push(`按${breakdownByLabel(p.by)}`);
@@ -483,6 +497,7 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
     if (t.unaligned) parts.push(<>无对齐 {n(t.unaligned)}</>);
   }
   if (stat.method === "ngrams" && typeof p.contains === "string" && p.contains) parts.push(`含“${p.contains}”`);
+  if (p.case_sensitive === true) parts.push("区分大小写");
   if (p.exclude_punct === true) parts.push(<>已排除标点和数字{t.excluded_tokens != null && <> {n(t.excluded_tokens)} 词</>}</>);
   // Data version in words (the index hash means nothing to users): computed on an older index, or when the index was built.
   if (corpus && corpus.index_version != null && String(corpus.index_version) !== String(stat.index_version)) parts.push("基于旧版索引");
@@ -588,12 +603,12 @@ const TEST_LABELS: Record<string, string> = { mann_whitney: "Mann-Whitney U", sp
 const VOCAB_BY: Record<string, string> = { corpus: "整体", document: "每篇" };
 
 /** Result header facts of the P10 methods (parameters that change how to read the numbers). */
-function p10Meta(stat: StatResult): React.ReactNode[] {
+function p10Meta(stat: StatResult, parallel: boolean): React.ReactNode[] {
   const p = stat.params as Body;
   const t = stat.totals;
   const out: React.ReactNode[] = [];
   if (stat.method === "text_metrics") {
-    if (t.documents != null) out.push(`${fmt(t.documents)} 篇`);
+    if (t.documents != null && !parallel) out.push(`${fmt(t.documents)} 篇`);
     if (p.sttr_window) out.push(`STTR 窗口 ${fmt(Number(p.sttr_window))} 词`);
     if (p.group_by) out.push(`按 ${p.group_by}`);
   }

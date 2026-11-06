@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { distributionFields, fieldLabel, internalField } from "../src/features/search/fields";
+import { withCondition } from "../src/features/search/condition";
 import { convertScript, guessScript } from "../src/features/search/script";
 
 describe("search page helpers (QA 2026-10-28)", () => {
@@ -29,5 +30,12 @@ describe("search page helpers (QA 2026-10-28)", () => {
     expect(fields).toEqual(["year", "genre", "position"]);
     expect(fieldLabel("year")).toBe("年份");
     expect(internalField("revision_id") && internalField("part") && !internalField("genre")).toBe(true);
+  });
+});
+
+describe("结果内筛选 (contracts/p11.md §一)", () => {
+  it("adds the term as a same-sentence condition", () => {
+    expect(withCondition("语言 ", "+", " 文化")).toBe("语言 +文化");
+    expect(withCondition("the /n", "-", "not")).toBe("the /n -not");
   });
 });

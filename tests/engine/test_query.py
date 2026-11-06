@@ -203,3 +203,19 @@ def test_attributes_parse_and_compile():
     }
     gap = compile(parse("the $2 {pos=DET}")).split("\n")
     assert gap[-1] == '#target 1 [word="the" %c] []{0,2} @[]'
+
+
+def test_script_variants_expand_han_terms():
+    """简繁通查 (contracts/p11.md §一): Han terms gain their other spellings as `|` alternatives."""
+    from engine.query import script_variants
+
+    assert script_variants("语言") == "语言|語言"
+    assert script_variants("語言/n +文化") == "語言/n|语言/n +文化"
+    assert (
+        script_variants('"头发" 头发') == '"头发" 头发|頭髮'
+    )  # quoted: exact spelling
+    # a term carrying {…} cannot take alternatives; Latin text is unchanged
+    assert script_variants("学生{dep=nsubj} 发展") == "学生{dep=nsubj} 发展|發展"
+    assert script_variants("language +the") == "language +the"
+    ast = parse(script_variants("语言"))
+    assert [a.text for a in ast.anchor.items[0]] == ["语言", "語言"]

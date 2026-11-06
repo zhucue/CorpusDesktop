@@ -37,9 +37,13 @@ def part(d, value):
 
 
 def compute(ud, case):
+    """The golden cases count exact spellings (the reference is case-sensitive); merged case variants, the
+    default since P11, are checked against them in test_case_variants_merge."""
     p = dict(case["params"])
     scope = stats.Scope(ud, "ud_en")
     m = case["method"]
+    if m != "distribution":
+        p.setdefault("case_sensitive", True)
     if m == "keywords":
         return stats.keywords(part(ud, "a"), part(ud, "b"), top=20, **p)
     return getattr(stats, m)(scope, top=20, **p)
@@ -179,7 +183,9 @@ def test_exclude_punct_and_ngram_contains(ud):
     scope = stats.Scope(ud, "ud_en")
     full = stats.frequency(scope, top=10000)
     clean = stats.frequency(scope, top=10000, exclude_punct=True)
-    punct = {r["key"]: r["values"]["freq"] for r in full.rows if stats.is_punct(r["key"])}
+    punct = {
+        r["key"]: r["values"]["freq"] for r in full.rows if stats.is_punct(r["key"])
+    }
     assert punct  # UD English has punctuation and numbers
     assert not any(stats.is_punct(r["key"]) for r in clean.rows)
     assert clean.row_count == full.row_count - len(punct)
@@ -192,9 +198,84 @@ def test_exclude_punct_and_ngram_contains(ud):
 
     bi = stats.ngrams(scope, n=2, min_freq=1, top=10000)
     with_the = stats.ngrams(scope, n=2, min_freq=1, top=10000, contains="the")
-    assert with_the.rows and all("the" in r["key"].split("\t") for r in with_the.rows)
-    assert with_the.row_count == sum("the" in r["key"].split("\t") for r in bi.rows)
+    assert with_the.rows and all(
+        "the" in r["key"].lower().split("\t") for r in with_the.rows
+    )
+    assert with_the.row_count == sum(
+        "the" in r["key"].lower().split("\t") for r in bi.rows
+    )
     clean_bi = stats.ngrams(scope, n=2, min_freq=1, top=10000, exclude_punct=True)
     assert not any(
         stats.is_punct(v) for r in clean_bi.rows for v in r["key"].split("\t")
     )
+
+
+def _hits(ud, q, restrict=None):
+    r = cwb.search(
+        ud,
+        "ud_en",
+        query.compile(query.parse(q)),
+        restrict=restrict,
+        sort="position",
+        seed=None,
+        page=1,
+        page_size=1,
+        context=Context(),
+    )
+    return r.counts.hits
+
+
+@pytest.mark.cwb
+def test_case_variants_merge(ud):
+    """Default case_sensitive=False (contracts/p11.md §一): `The` and `the` are one row whose frequency is the
+    sum of the spellings; its query finds exactly that many hits, as the unquoted word does in search."""
+    scope = stats.Scope(ud, "ud_en")
+    exact = stats.frequency(scope, top=100000, case_sensitive=True).rows
+    exact = {r["key"]: r["values"]["freq"] for r in exact}
+    assert exact["The"] and exact["the"]
+    merged = {r["key"].lower(): r for r in stats.frequency(scope, top=100000).rows}
+    lowered = {}
+    for k, f in exact.items():
+        lowered[k.lower()] = lowered.get(k.lower(), 0) + f
+    assert {k: r["values"]["freq"] for k, r in merged.items()} == lowered
+    the = merged["the"]
+    assert the["key"] == "the" and the["values"]["freq"] == exact["The"] + exact["the"]
+    assert set(the["search_query"].split("|")) == {'"the"', '"The"'}
+    assert (
+        _hits(ud, the["search_query"])
+        == _hits(ud, "the")
+        == exact["The"] + exact["the"]
+    )
+
+    bi = stats.ngrams(scope, n=2, min_freq=1, top=100000)
+    bi_exact = stats.ngrams(scope, n=2, min_freq=1, top=100000, case_sensitive=True)
+    assert sum(r["values"]["freq"] for r in bi.rows) == sum(
+        r["values"]["freq"] for r in bi_exact.rows
+    )
+    top = bi.rows[0]
+    assert _hits(ud, top["search_query"]) == top["values"]["freq"]
+
+    a, b = part(ud, "a"), part(ud, "b")
+    kw = stats.keywords(a, b, items=["THE"], min_freq=1)
+    kw_exact = stats.keywords(a, b, items=["The", "the"], case_sensitive=True)
+    assert kw.rows[0]["key"] == "THE"  # items: as given
+    assert kw.rows[0]["values"]["target_freq"] == sum(
+        r["values"]["target_freq"] for r in kw_exact.rows
+    )
+
+    coll = stats.collocations(scope, "of", window=2, min_freq=1, top=100000)
+    coll_exact = stats.collocations(
+        scope, "of", window=2, min_freq=1, top=100000, case_sensitive=True
+    )
+    the_coll = next(r for r in coll.rows if r["key"] == "the")
+    assert the_coll["values"]["freq"] == sum(
+        r["values"]["freq"] for r in coll_exact.rows if r["key"].lower() == "the"
+    )
+
+    by_word = stats.breakdown(scope, "th?", "word", top=1000)
+    row = next(r for r in by_word.rows if r["key"] == "the")
+    assert row["values"]["hits"] == exact["The"] + exact["the"]
+    assert _hits(ud, row["search_query"]) == row["values"]["hits"]
+    left = stats.breakdown(scope, "of", "right1", top=50)
+    for r in [r for r in left.rows if r["search_query"]][:3]:
+        assert _hits(ud, r["search_query"]) == r["values"]["hits"], r

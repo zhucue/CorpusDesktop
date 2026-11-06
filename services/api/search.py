@@ -14,12 +14,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import Integer, and_, bindparam, func, select, tuple_
+from sqlalchemy import Integer, and_, bindparam, func, or_, select, tuple_
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import aliased
 
 from engine import cwb, query
+from engine.metrics import lang_code
 from engine.model import Context
 from services.api import effective
 from services.api.access import (
@@ -116,6 +117,8 @@ class SearchInput(BaseModel):
         False  # add Hit.tokens (sentence tokens with POS) to each item
     )
     layers: LayersInput | None = None
+    # 简繁通查: Han strings also match their other script (None: on for corpora with Chinese)
+    script_variants: bool | None = None
 
 
 class ExportInput(SearchInput):
@@ -175,6 +178,30 @@ def plan_query(text, tagset="mixed"):
 
 def compile_query(text, tagset="mixed"):
     return plan_query(text, tagset)[1]
+
+
+def zh_corpus(corpus) -> bool:
+    """The corpus has Chinese text (index profile languages, else its declared language)."""
+    langs = (corpus.meta or {}).get("languages") or [corpus.language]
+    return any(lang_code(x) == "zh" for x in langs if x)
+
+
+def variants_on(corpus, body) -> bool:
+    """Whether a search expands Han strings into simplified and traditional spellings (简繁通查)."""
+    flag = getattr(body, "script_variants", None)
+    return zh_corpus(corpus) if flag is None else flag
+
+
+def plan_search(corpus, body, tagset):
+    """(query text searched, ast, compiled) of a search request: the request's query, with 简繁通查 its Han
+    strings followed by their other spellings (engine.query.script_variants). Syntax errors point into the
+    query as typed."""
+    plan_query(body.query, tagset)
+    text = body.query
+    if variants_on(corpus, body):
+        text = query.script_variants(body.query, tagset)
+    ast, cqp = plan_query(text, tagset)
+    return text, ast, cqp
 
 
 TAGSET_NAMES = {"upos": "UPOS", "jieba": "jieba（北大标注）", "mixed": "UPOS + jieba"}
@@ -304,35 +331,6 @@ def search_context(corpus, req: SearchInput) -> Context:
     )
 
 
-def run_search(
-    corpus,
-    restrict,
-    cqp,
-    req: SearchInput,
-    page,
-    page_size,
-    count_timeout,
-    attr_filter=None,
-    keep=None,
-):
-    kw = {"attr_filter": attr_filter} if attr_filter else {}
-    if keep is not None:
-        kw["aligned"] = keep
-    return cwb.search(
-        index_dir(corpus.id),
-        corpus_key(corpus.id),
-        cqp,
-        restrict=restrict,
-        sort=req.sort,
-        seed=req.seed,
-        page=page,
-        page_size=page_size,
-        context=search_context(corpus, req),
-        count_timeout=count_timeout,
-        **kw,
-    )
-
-
 def pg_answered(ast, cqp) -> bool:
     """Pure span and pure attribute queries are answered from PostgreSQL (services.api.effective)."""
     return bool(query.spans(cqp) and query.pure_span(ast)) or bool(
@@ -360,64 +358,118 @@ def attr_filter_for(db, cqp, layers):
     return attr_filter
 
 
-def search_page(
-    db, corpus, restrict, ast, cqp, layers, req, page, page_size, timeout, keep=None
+def _pg_args(db, corpus, req):
+    filt = scope_filter(db, req.scope)
+    return filt, field_types(db, corpus.id) if filt else {}
+
+
+def complete_rows(
+    db, corpus, restrict, ast, cqp, layers, req, keep, timeout, cancel=None
 ):
-    """One page of hits. Attribute constraints are resolved in PostgreSQL (services.api.effective):
-    pure attribute queries entirely, anchored ones by filtering the CWB hits on the slot tokens. Span labels
-    likewise: a pure span query lists the effective spans, anchored ones keep slot tokens inside them.
-    keep: sentences of a translation condition (aligned_keep)."""
-    constraints = query.attrs(cqp)
-    span_constraints = query.spans(cqp)
-    if span_constraints and query.pure_span(ast):
-        filt = scope_filter(db, req.scope)
-        fields = field_types(db, corpus.id) if filt else {}
-        return effective.span_search(
-            db,
-            corpus,
-            filt,
-            fields,
-            layers["span"],
-            span_constraints[0],
-            req,
-            page,
-            page_size,
-            keep,
-        )
-    if constraints and pure_attr(ast):
-        filt = scope_filter(db, req.scope)
-        fields = field_types(db, corpus.id) if filt else {}
-        atom = ast.anchor.items[0][0]
-        return effective.pg_search(
-            db,
-            corpus,
-            filt,
-            fields,
-            atom,
-            constraints[0],
-            layers,
-            req,
-            page,
-            page_size,
-            keep,
-        )
-    return run_search(
-        corpus,
-        restrict,
+    """The complete hit rows of a search, filtered (keep: sentences of a translation condition, aligned_keep)
+    and ordered by req.sort / req.seed. CWB queries give cwb rows (match, matchend, doc id, sentence); queries
+    answered from PostgreSQL (pg_answered: pure attribute and pure span queries, services.api.effective) give
+    rows (start_cp, end_cp, doc id, sentence) in document code points; both are stored and sliced alike.
+    Raises subprocess.TimeoutExpired past `timeout` seconds (PostgreSQL statement_timeout), cwb.Cancelled once
+    `cancel` is set (CWB) and cwb.TooManyHits past MAX_HITS."""
+    if pg_answered(ast, cqp):
+        filt, fields = _pg_args(db, corpus, req)
+        with effective.statement_timeout(db, timeout):
+            if query.spans(cqp) and query.pure_span(ast):
+                rows = effective.span_hit_rows(
+                    db,
+                    corpus,
+                    filt,
+                    fields,
+                    layers["span"],
+                    query.spans(cqp)[0],
+                    req.sort,
+                    req.seed,
+                    keep,
+                )
+                if len(rows) > MAX_HITS:
+                    raise cwb.TooManyHits(MAX_HITS)
+                return rows
+            return effective.pg_hit_rows(
+                db,
+                corpus,
+                filt,
+                fields,
+                ast.anchor.items[0][0],
+                query.attrs(cqp)[0],
+                layers,
+                req.sort,
+                req.seed,
+                keep,
+                max_hits=MAX_HITS,
+            )
+    return cwb.query_rows(
+        index_dir(corpus.id),
+        corpus_key(corpus.id),
         cqp,
-        req,
-        page,
-        page_size,
-        timeout,
-        attr_filter_for(db, cqp, layers),
-        keep,
+        restrict=restrict,
+        sort=req.sort,
+        seed=req.seed,
+        timeout=timeout,
+        attr_filter=attr_filter_for(db, cqp, layers),
+        cancel=cancel,
+        max_hits=MAX_HITS,
+        **({"aligned": keep} if keep is not None else {}),
     )
+
+
+PG_PREFIX_TIMEOUT = 5  # seconds for the corpus-order first page of a PostgreSQL query still being counted
+
+
+def prefix_rows(db, corpus, restrict, ast, cqp, layers, req, keep, need):
+    """The first `need` rows in corpus order while the complete rows are counted in the background: CWB through
+    cwb.prefix_rows; pure attribute queries through a limited PostgreSQL query ([] past PG_PREFIX_TIMEOUT);
+    pure span queries have none (their page waits for the count)."""
+    if pg_answered(ast, cqp):
+        if query.spans(cqp):
+            return []
+        filt, fields = _pg_args(db, corpus, req)
+        try:
+            with effective.statement_timeout(db, min(PG_PREFIX_TIMEOUT, COUNT_TIMEOUT)):
+                return effective.pg_hit_rows(
+                    db,
+                    corpus,
+                    filt,
+                    fields,
+                    ast.anchor.items[0][0],
+                    query.attrs(cqp)[0],
+                    layers,
+                    keep=keep,
+                    limit=need,
+                )
+        except subprocess.TimeoutExpired:
+            return []
+    return cwb.prefix_rows(
+        index_dir(corpus.id),
+        corpus_key(corpus.id),
+        cqp,
+        need,
+        restrict=restrict,
+        timeout=max(COUNT_TIMEOUT, 60),
+        attr_filter=attr_filter_for(db, cqp, layers),
+        max_hits=MAX_HITS,
+        **({"aligned": keep} if keep is not None else {}),
+    )
+
+
+def rows_hits(db, corpus, ast, cqp, rows, ctx):
+    """Engine hits (text and context) of rows from complete_rows / prefix_rows."""
+    if pg_answered(ast, cqp):
+        return effective.cp_hits(db, corpus, rows, ctx)
+    return cwb.hits(index_dir(corpus.id), corpus_key(corpus.id), cqp, rows, ctx)
 
 
 # ---- translation condition (contracts/p8.md §四) ----
 
 
-def plan_aligned(db, corpus, user, aligned: AlignedInput | None, layers, scope=None):
+def plan_aligned(
+    db, corpus, user, aligned: AlignedInput | None, layers, scope=None, variants=False
+):
     """Checked translation condition {op, text, ast, cqp, layers, languages} or None. languages: the corpus
     languages outside `scope`, where the condition query runs (None: the whole corpus). 422 NOT_PARALLEL outside parallel
     corpora; QUERY_INVALID / INVALID_LAYER messages start with 译文条件 so the page points at that input."""
@@ -426,7 +478,10 @@ def plan_aligned(db, corpus, user, aligned: AlignedInput | None, layers, scope=N
     if not corpus.parallel:
         raise ApiError(422, "NOT_PARALLEL", "译文条件只能用于平行语料")
     try:
-        ast = query.parse(aligned.query, corpus_tagset(corpus))
+        tagset = corpus_tagset(corpus)
+        ast = query.parse(aligned.query, tagset)
+        if variants:
+            ast = query.parse(query.script_variants(aligned.query, tagset), tagset)
         cqp = query.compile(ast)
     except query.QueryError as e:
         raise ApiError(
@@ -532,17 +587,6 @@ def aligned_keep(db, corpus, plan, timeout, cancel=None):
     return plan["op"], aligned_sentences(db, found)
 
 
-def keep_job(corpus, plan, entry):
-    """Background job of a PostgreSQL-answered search: only the condition sentences (pages follow per
-    request); returns None so the entry gets no result set."""
-
-    def job(cancel):
-        with session() as db:
-            entry["keep"] = aligned_keep(db, corpus, plan, FULL_TIMEOUT, cancel)
-
-    return job
-
-
 def aligned_sentences(db, sentences) -> set:
     """{(document id str, sentence index)} aligned to any of `sentences` in sentence_alignments."""
     if not sentences:
@@ -630,6 +674,19 @@ class SearchCache:
             for entry in reversed(self.entries.values()):
                 if entry["key"] == key and entry["state"] == "done" and entry["dir"]:
                     return entry["dir"]
+        return None
+
+    def done_entry(self, corpus, restrict, cqp, sort="position", seed=None):
+        """{"dir", "seed", "counts"} of a finished result set with this key (any search_id; with sort random
+        and a seed given, that seed), or None."""
+        key = self.key(corpus, restrict, cqp, sort)
+        with self.lock:
+            for entry in reversed(self.entries.values()):
+                if entry["key"] != key or entry["state"] != "done" or not entry["dir"]:
+                    continue
+                if sort == "random" and seed is not None and entry["seed"] != seed:
+                    continue
+                return {k: entry[k] for k in ("dir", "seed", "counts")}
         return None
 
     def open(self, corpus, restrict, cqp, req: SearchInput):
@@ -720,12 +777,7 @@ class SearchCache:
             rows = job(entry["cancel"])
             if entry["cancel"].is_set():
                 raise cwb.Cancelled()
-            if rows is None:  # keep_job: the condition sentences are ready
-                with self.lock:
-                    if entry["state"] == "running":
-                        entry["state"] = "ready"
-            else:
-                self.finish(entry, rows)
+            self.finish(entry, rows)
         except subprocess.TimeoutExpired:
             self.fail(entry, timeout_message())
         except cwb.TooManyHits as e:
@@ -771,43 +823,43 @@ def counts_view(c):
     }
 
 
-def cwb_page(
-    db, user, entry, corpus, restrict, cqp, layers, req: SearchInput, aligned=None
+def page_hits(
+    db, user, entry, corpus, restrict, ast, cqp, layers, req: SearchInput, aligned=None
 ):
-    """(engine hits, counts, sort_applied) of one page of a CWB query, from the search_id's result set.
+    """(engine hits, counts, sort_applied) of one page of a search, from the search_id's result set: CWB and
+    PostgreSQL queries alike (contracts/p7.md §1, contracts/p11.md §一).
 
-    First request: the full query with COUNT_TIMEOUT; on timeout a background count with FULL_TIMEOUT
+    First request: the complete rows with COUNT_TIMEOUT; on timeout a background count with FULL_TIMEOUT
     starts and pages come from a corpus-order prefix (sort not applied) until it is done. More than MAX_HITS
-    anchor hits fail the count at once; pages still come from the prefix. aligned: a plan_aligned result;
-    its sentences are computed once per search_id (entry["keep"]); until then prefix pages are empty."""
-    ix, key = index_dir(corpus.id), corpus_key(corpus.id)
+    hits fail the count at once; pages still come from the prefix. aligned: a plan_aligned result; its
+    sentences are computed once per search_id (entry["keep"]); until then prefix pages are empty."""
     ctx = search_context(corpus, req)
     lo, hi = (req.page - 1) * req.page_size, req.page * req.page_size
-    rows_kw = {"restrict": restrict, "attr_filter": attr_filter_for(db, cqp, layers)}
     if entry["state"] is None:  # only the request that created the search_id gets here
         try:
             if aligned is not None:
                 entry["keep"] = aligned_keep(db, corpus, aligned, COUNT_TIMEOUT)
-            rows = cwb.query_rows(
-                ix,
-                key,
+            rows = complete_rows(
+                db,
+                corpus,
+                restrict,
+                ast,
                 cqp,
-                sort=req.sort,
-                seed=req.seed,
-                timeout=COUNT_TIMEOUT,
-                max_hits=MAX_HITS,
-                **rows_kw,
-                **keep_kw(entry),
+                layers,
+                req,
+                entry["keep"],
+                COUNT_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
             owner = (user.id, "token" if token_project(user) else "session")
-            job = full_count(corpus, restrict, cqp, layers, req, aligned, entry)
+            job = full_count(corpus.id, restrict, ast, cqp, layers, req, aligned, entry)
             searches.start(entry, owner, job)
         except cwb.TooManyHits as e:
             searches.fail(entry, too_many_text(e))
         else:
             searches.finish(entry, rows)
-            return cwb.hits(ix, key, cqp, rows[lo:hi], ctx), entry["counts"], True
+            hits = rows_hits(db, corpus, ast, cqp, rows[lo:hi], ctx)
+            return hits, entry["counts"], True
     with searches.lock:
         state, path, counts = entry["state"], entry["dir"], entry["counts"]
         partial, cut = entry["partial"], entry["cut"]
@@ -816,57 +868,36 @@ def cwb_page(
             rows = cwb.read_rows(path, lo, hi)
         except FileNotFoundError:
             raise ApiError(409, "SEARCH_EXPIRED", "检索结果已失效，请重新检索")
-        return cwb.hits(ix, key, cqp, rows, ctx), counts, True
+        return rows_hits(db, corpus, ast, cqp, rows, ctx), counts, True
     if cut < hi and (aligned is None or entry["keep"] is not None):
-        partial = cwb.prefix_rows(
-            ix,
-            key,
-            cqp,
-            hi,
-            timeout=max(COUNT_TIMEOUT, 60),
-            max_hits=MAX_HITS,
-            **rows_kw,
-            **keep_kw(entry),
+        partial = prefix_rows(
+            db, corpus, restrict, ast, cqp, layers, req, entry["keep"], hi
         )
         with searches.lock:
             if entry["state"] != "done" and entry["cut"] < hi:
                 entry.update(partial=partial, cut=hi)
-    hits = cwb.hits(ix, key, cqp, partial[lo:hi], ctx)
+    hits = rows_hits(db, corpus, ast, cqp, partial[lo:hi], ctx)
     return hits, searches.counts(entry), req.sort == "position"
 
 
-def keep_kw(entry):
-    return {"aligned": entry["keep"]} if entry.get("keep") is not None else {}
-
-
 def full_count(
-    corpus, restrict, cqp, layers, req: SearchInput, aligned=None, entry=None
+    corpus_id, restrict, ast, cqp, layers, req: SearchInput, aligned=None, entry=None
 ):
     """Background job: the complete rows with FULL_TIMEOUT and MAX_HITS, in its own database session
     (with a translation condition, its sentences first when the first request did not get them)."""
-    ix, key = index_dir(corpus.id), corpus_key(corpus.id)
 
     def job(cancel):
         with session() as db:
-            kw = {}
+            corpus = db.get(Corpus, corpus_id)
+            keep = None
             if aligned is not None:
                 if entry["keep"] is None:
                     entry["keep"] = aligned_keep(
                         db, corpus, aligned, FULL_TIMEOUT, cancel
                     )
-                kw["aligned"] = entry["keep"]
-            return cwb.query_rows(
-                ix,
-                key,
-                cqp,
-                restrict=restrict,
-                sort=req.sort,
-                seed=req.seed,
-                timeout=FULL_TIMEOUT,
-                attr_filter=attr_filter_for(db, cqp, layers),
-                cancel=cancel,
-                max_hits=MAX_HITS,
-                **kw,
+                keep = entry["keep"]
+            return complete_rows(
+                db, corpus, restrict, ast, cqp, layers, req, keep, FULL_TIMEOUT, cancel
             )
 
     return job
@@ -988,56 +1019,27 @@ def parse(body: ParseInput, user: CurrentUser, db: Db):
 def search(body: SearchInput, user: CurrentUser, db: Db):
     corpus, restrict = resolve_scope(db, body.scope, user)
     tagset = corpus_tagset(corpus)
-    ast, cqp = plan_query(body.query, tagset)
+    text, ast, cqp = plan_search(corpus, body, tagset)
+    variants = variants_on(corpus, body)
     layers = effective.check_layers(db, body.layers, corpus, user)
     with_span_layer(db, cqp, layers, corpus, user)
     check_layer_problem(db, corpus, user, ast, layers)
-    aligned = plan_aligned(db, corpus, user, body.aligned, layers, body.scope)
+    aligned = plan_aligned(db, corpus, user, body.aligned, layers, body.scope, variants)
     sid, entry = searches.open(
         corpus, restrict, aligned_cache_key(cache_key(cqp, layers), aligned), body
     )
     req = body.model_copy(update={"seed": entry["seed"]})
-    pg = pg_answered(ast, cqp)
-    if pg and aligned is not None and entry["keep"] is None and entry["state"] is None:
-        # condition sentences within COUNT_TIMEOUT, else in the background (as P7 counts)
-        try:
-            entry["keep"] = aligned_keep(db, corpus, aligned, COUNT_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            owner = (user.id, "token" if token_project(user) else "session")
-            searches.start(entry, owner, keep_job(corpus, aligned, entry))
-        except cwb.TooManyHits as e:
-            searches.fail(entry, too_many_text(e))
-    if pg and aligned is not None and entry["keep"] is None:
-        hits, counts, sort_applied = [], searches.counts(entry), body.sort == "position"
-    elif pg:
-        result = search_page(
-            db,
-            corpus,
-            restrict,
-            ast,
-            cqp,
-            layers,
-            req,
-            body.page,
-            body.page_size,
-            COUNT_TIMEOUT,
-            entry["keep"],
-        )
-        hits = result.items
-        counts = entry["counts"] or counts_view(result.counts)
-        if counts["complete"]:
-            entry["counts"] = counts
-        sort_applied = counts["complete"] or body.sort == "position"
-    else:
-        hits, counts, sort_applied = cwb_page(
-            db, user, entry, corpus, restrict, cqp, layers, req, aligned
-        )
+    hits, counts, sort_applied = page_hits(
+        db, user, entry, corpus, restrict, ast, cqp, layers, req, aligned
+    )
     items = enrich(db, hits)
     if body.include_tokens:
         attach_tokens(db, items)
     return {
         "search_id": sid,
-        "parse": parse_view(body.query, tagset),
+        "parse": parse_view(text, tagset),
+        "script_variants": variants,
+        "searched_query": text,
         "counts": counts,
         "sort_applied": sort_applied,
         "items": items,
@@ -1081,14 +1083,89 @@ def context(
     return {"document": document_view(doc), "sentences": sentences}
 
 
+class SentenceRef(BaseModel):
+    document_id: UUID
+    sentence_index: int = Field(ge=0)
+
+
+class SpanMarksInput(BaseModel):
+    layer_id: UUID
+    sentences: list[SentenceRef] = Field(min_length=1, max_length=200)
+
+
+@router.post("/search/span-marks")
+def span_marks(body: SpanMarksInput, user: CurrentUser, db: Db):
+    """Spans of a span (or relation) layer in the sentences of a KWIC page, for highlighting: one request per
+    page. Spans the user sees in the annotation editor (their own in a multi-annotator layer), all statuses."""
+    from services.api.annotations import load_layer
+    from services.api.annotators import visible
+    from services.api.models import SpanAnnotation
+    from services.api.spans import span_layer_of
+
+    base = span_layer_of(db, load_layer(db, body.layer_id, user))
+    who = visible(db, base, user)
+    keys = {(s.document_id, s.sentence_index) for s in body.sentences}
+    sentences = db.execute(
+        select(Sentence.document_id, Sentence.idx, Sentence.start_cp, Sentence.end_cp)
+        .join(Document, Document.id == Sentence.document_id)
+        .where(
+            Document.corpus_id == base.corpus_id,
+            tuple_(Sentence.document_id, Sentence.idx).in_(keys),
+        )
+    ).all()
+    found = {}
+    if sentences:
+        stmt = select(SpanAnnotation).where(
+            SpanAnnotation.layer_id == base.id,
+            or_(
+                *(
+                    and_(
+                        SpanAnnotation.document_id == d,
+                        SpanAnnotation.start_cp < b,
+                        SpanAnnotation.end_cp > a,
+                    )
+                    for d, _, a, b in sentences
+                )
+            ),
+        )
+        if who is not None:
+            stmt = stmt.where(SpanAnnotation.annotator_id.in_(who))
+        spans = db.scalars(
+            stmt.order_by(
+                SpanAnnotation.start_cp, SpanAnnotation.end_cp, SpanAnnotation.id
+            )
+        ).all()
+        for d, idx, a, b in sentences:
+            found[(d, idx)] = [
+                {
+                    "id": x.id,
+                    "start_cp": x.start_cp,
+                    "end_cp": x.end_cp,
+                    "label": x.label,
+                    "status": x.status,
+                }
+                for x in spans
+                if x.document_id == d and x.start_cp < b and x.end_cp > a
+            ]
+    return {
+        "items": [
+            {"document_id": d, "sentence_index": i, "spans": found[(d, i)]}
+            for d, i in sorted(found, key=lambda k: (str(k[0]), k[1]))
+        ]
+    }
+
+
 @router.post("/search/export")
 def export(body: ExportInput, user: CurrentUser, db: Db):
+    """Export job of a search. When the API holds the search's finished result set, the job reads it
+    (params.rows_dir) instead of running the query again; otherwise the job computes it once."""
     corpus, restrict = resolve_scope(db, body.scope, user)
-    ast, cqp = plan_query(body.query, corpus_tagset(corpus))
+    _, ast, cqp = plan_search(corpus, body, corpus_tagset(corpus))
+    variants = variants_on(corpus, body)
     layers = effective.check_layers(db, body.layers, corpus, user)
     with_span_layer(db, cqp, layers, corpus, user)
     check_layer_problem(db, corpus, user, ast, layers)
-    aligned = plan_aligned(db, corpus, user, body.aligned, layers, body.scope)
+    aligned = plan_aligned(db, corpus, user, body.aligned, layers, body.scope, variants)
     if layers.get("span"):
         body = body.model_copy(
             update={
@@ -1097,10 +1174,21 @@ def export(body: ExportInput, user: CurrentUser, db: Db):
                 )
             }
         )
-    _, entry = searches.open(
-        corpus, restrict, aligned_cache_key(cache_key(cqp, layers), aligned), body
+    done = searches.done_entry(
+        corpus,
+        restrict,
+        aligned_cache_key(cache_key(cqp, layers), aligned),
+        body.sort,
+        body.seed,
     )
-    body = body.model_copy(update={"seed": entry["seed"], "search_id": None})
+    seed = body.seed
+    if done is not None:
+        seed = done["seed"]
+    elif body.sort == "random" and seed is None:
+        seed = secrets.randbelow(2**31)
+    body = body.model_copy(
+        update={"seed": seed, "search_id": None, "script_variants": variants}
+    )
     if body.scope.subcorpus_id:
         project_id = db.get(Subcorpus, body.scope.subcorpus_id).project_id
     else:
@@ -1108,6 +1196,9 @@ def export(body: ExportInput, user: CurrentUser, db: Db):
         if body.project_id and corpus.project_id is None:
             require_project(db, body.project_id, user, READ)
     params = body.model_dump(mode="json", exclude={"project_id"})
+    if done is not None:  # the worker reads it while the index version is unchanged
+        params["rows_dir"] = str(done["dir"])
+        params["rows_index_version"] = corpus.index_version
     job = enqueue(db, "export", params, user.id, project_id)
     db.commit()
     return job_view(job)

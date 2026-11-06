@@ -58,17 +58,21 @@ def test_corpus_meta_and_export_notice(owner, project, make_user):
     rows = list(
         csv.reader(io.StringIO(export(builtin["id"], "csv").decode("utf-8-sig")))
     )
-    assert rows[0] == [NOTICE] and rows[1] == [] and rows[2][0] == "命中 ID"
-    assert len(rows) == 3 + 2
+    # the search line (contracts/p11.md §一), the source line, a blank row, the table
+    assert rows[0][0].startswith("查询式：") and rows[1] == [NOTICE] and rows[2] == []
+    assert rows[3][0] == "命中 ID"
+    assert len(rows) == 4 + 2
     sheet = load_workbook(io.BytesIO(export(builtin["id"], "xlsx"))).active
     values = [
         [c for c in row if c is not None] for row in sheet.iter_rows(values_only=True)
     ]
-    assert values[0] == [NOTICE] and values[1] == [] and values[2][0] == "命中 ID"
+    assert values[1] == [NOTICE] and values[2] == [] and values[3][0] == "命中 ID"
 
-    # corpora without license / attribution export the table only
+    # corpora without license / attribution: no source line
     rows = list(csv.reader(io.StringIO(export(plain["id"], "csv").decode("utf-8-sig"))))
-    assert rows[0][0] == "命中 ID"
+    assert (
+        rows[0][0].startswith("查询式：") and rows[1] == [] and rows[2][0] == "命中 ID"
+    )
 
     # evidence basket DOCX: the notice of the pinned hit's corpus under the title
     doc_id = owner.get(f"/api/corpora/{builtin['id']}/documents").json()["items"][0][

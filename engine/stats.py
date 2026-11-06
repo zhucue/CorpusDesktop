@@ -3,7 +3,11 @@
 A scope is an index plus an optional CQP restrict expression (engine.query.compile_filter): the documents whose
 tokens satisfy it. Frequencies come from cwb-scan-corpus over the scope's document ranges (`-w s` keeps n-grams
 inside one sentence); query hits come from CQP as in cwb.search (anchor within s, same-sentence +/- conditions).
-Word units are exact CWB forms (NFC, case-sensitive), so a row's `"form"` query finds exactly the counted tokens.
+Word and lemma units merge case variants by default (case_sensitive=False, contracts/p11.md §一), as search
+matches unquoted words regardless of case: values are compared lower-cased, a row shows the spelling most frequent
+in the scope (ties: the lower-cased one) and its search_query is the alternation of every spelling counted
+(`"The"|"the"`), so it finds exactly the counted tokens. case_sensitive=True counts exact CWB forms (NFC), one row
+per spelling. POS values, Chinese text and metadata are unaffected.
 A missing lemma or POS ("_") is not listed but counts in the token total. POS filters resolve against the
 index tagset (cwb.tagset: UPOS, jieba or mixed), as query POS does.
 
@@ -41,7 +45,7 @@ Measures (N = tokens in scope):
   Rows sort by the measure (rounded to 1e-10 so equal values tie), then frequency desc, then key.
 
 search_query (engine.query.parse accepts every generated string):
-  word `"form"` (+ `/tag` with a POS filter); lemma: alternation of the scope's forms of that lemma
+  word `"form"` (+ `/tag` with a POS filter; merged case variants: `"The"|"the"`); lemma: alternation of the scope's forms of that lemma
   (`"run"|"ran"`, may also match homographs of other lemmas); pos `/TAG`; n-gram slots joined by spaces.
   collocation: search_query = `node $K "coll"` (collocate right of the node, K = window-1) and
   search_query_reverse = `"coll" $K node` (left); the grammar has no top-level alternation, so the two
@@ -174,6 +178,40 @@ def _merge(spans):
         else:
             out.append([a, b])
     return out
+
+
+def folder(case_sensitive=True, unit="word"):
+    """Key of a word / lemma value: lower-cased unless case_sensitive (POS values as they are)."""
+    if case_sensitive or unit == "pos":
+        return _same
+    return str.lower
+
+
+def _same(v):
+    return v
+
+
+class Spellings:
+    """Spellings counted under each merged key: shown = the most frequent (ties: the lower-cased spelling,
+    then the smaller string), all = every spelling, most frequent first."""
+
+    def __init__(self):
+        self.by_key = {}
+
+    def add(self, key, value, f):
+        c = self.by_key.setdefault(key, Counter())
+        c[value] += f
+
+    def _order(self, key):
+        items = self.by_key.get(key, {}).items()
+        return sorted(items, key=lambda x: (-x[1], x[0] != key, x[0]))
+
+    def shown(self, key, default=None):
+        order = self._order(key)
+        return order[0][0] if order else (key if default is None else default)
+
+    def all(self, key) -> list:
+        return [v for v, _ in self._order(key)]
 
 
 class _Corpus:
@@ -355,8 +393,9 @@ class _Attr:
         return v
 
 
-def _slot(c: _Corpus, unit, value, tag=None):
-    """One query slot matching a unit value, or None when it cannot be written."""
+def _slot(c: _Corpus, unit, value, tag=None, spellings=None):
+    """One query slot matching a unit value (or any of its merged spellings), or None when it cannot be
+    written."""
     if (
         unit == "pos"
     ):  # only when `/value` matches exactly this tag (jieba `n` would also match nr, ns …)
@@ -365,8 +404,14 @@ def _slot(c: _Corpus, unit, value, tag=None):
         except query.QueryError:
             exact = False
         return f"/{value}" if exact else None
-    words = [value] if unit == "word" else c.forms(tag).get(value, [])
-    words = [w for w in words if '"' not in w]
+    values = spellings or [value]
+    if unit == "word":
+        words = values
+    else:
+        forms = c.forms(tag)
+        words = list(dict.fromkeys(w for v in values for w in forms.get(v, [])))
+    if any('"' in w for w in words):
+        return None
     suffix = f"/{tag}" if tag else ""
     return "|".join(f'"{w}"{suffix}' for w in words) or None
 
@@ -429,8 +474,9 @@ def segments(ranges, total, k=SEGMENTS) -> list[list[tuple[int, int]]]:
     return out
 
 
-def _part_counts(c: _Corpus, keys, parts, shown, scanned):
-    """(sizes {part: tokens}, {value: {part: f}}) of the shown values; scanned = the (value, doc_id) scan."""
+def _part_counts(c: _Corpus, keys, parts, shown, scanned, fold=_same):
+    """(sizes {part: tokens}, {key: {part: f}}) of the shown keys; scanned = the (value, doc_id) scan; fold:
+    value → key (merged case variants)."""
     kind, field = _parts(parts)
     want = set(shown)
     counts = {v: Counter() for v in want}
@@ -442,8 +488,8 @@ def _part_counts(c: _Corpus, keys, parts, shown, scanned):
                 continue
             sizes[k] = size
             for (value,), f in c.scan(keys, ranges).items():
-                if value in want:
-                    counts[value][k] += f
+                if fold(value) in want:
+                    counts[fold(value)][k] += f
         return sizes, counts
     if kind == "document":
         doc_part = {d: d for _, _, d in c.docs}
@@ -454,8 +500,8 @@ def _part_counts(c: _Corpus, keys, parts, shown, scanned):
         if d in doc_part:
             sizes[doc_part[d]] += b - a + 1
     for (value, d), f in _checked(scanned.items()):
-        if value in want and d in doc_part:
-            counts[value][doc_part[d]] += f
+        if fold(value) in want and d in doc_part:
+            counts[fold(value)][doc_part[d]] += f
     return dict(sizes), counts
 
 
@@ -468,38 +514,46 @@ def frequency(
     exclude_punct=False,
     parts="document",
     dispersion=False,
+    case_sensitive=False,
 ) -> Table:
     """dispersion: add range, range_pct, dp, dp_norm, juilland_d over `parts` (module docstring)."""
     _check_unit(unit, ("word", "lemma", "pos"))
     _parts(parts)
     c = _Corpus(scope)
     skip = exclude_punct and unit != "pos"
-    freq, docs, excluded = Counter(), Counter(), 0
+    fold, names = folder(case_sensitive, unit), Spellings()
+    freq, docs, seen, excluded = Counter(), Counter(), set(), 0
     pos_keys = _pos_keys([pos], c.tagset)
     scanned = c.scan([unit, "doc_id", *pos_keys])
-    for (value, _), f in _checked(scanned.items()):
+    for (value, d), f in _checked(scanned.items()):
         if skip and is_punct(value):
             excluded += f
         elif unit == "word" or value != MISSING:
-            freq[value] += f
-            docs[value] += 1
+            k = fold(value)
+            freq[k] += f
+            names.add(k, value, f)
+            if (k, d) not in seen:
+                seen.add((k, d))
+                docs[k] += 1
     items = sorted(
-        (v for v in freq if freq[v] >= min_freq), key=lambda v: (-freq[v], v)
+        (k for k in freq if freq[k] >= min_freq),
+        key=lambda k: (-freq[k], names.shown(k)),
     )
     shown = items[:top]
     if dispersion:
-        sizes, counts = _part_counts(c, [unit, *pos_keys], parts, shown, scanned)
+        sizes, counts = _part_counts(c, [unit, *pos_keys], parts, shown, scanned, fold)
     rows = []
-    for v in shown:
+    for k in shown:
+        v = names.shown(k)
         values = {
             "item": v,
-            "freq": freq[v],
-            "per_million": c.pm(freq[v]),
-            "doc_freq": docs[v],
+            "freq": freq[k],
+            "per_million": c.pm(freq[k]),
+            "doc_freq": docs[k],
         }
         if dispersion:
-            values.update(dispersion_measures(counts[v], sizes))
-        rows.append(_row(v, values, _slot(c, unit, v, pos)))
+            values.update(dispersion_measures(counts[k], sizes))
+        rows.append(_row(v, values, _slot(c, unit, v, pos, names.all(k))))
     columns = [
         _col("item", "项", "string"),
         _col("freq", "频次"),
@@ -528,8 +582,10 @@ def ngrams(
     min_freq=2,
     contains=None,
     exclude_punct=False,
+    case_sensitive=False,
 ) -> Table:
-    """contains: keep only n-grams with this unit value (exact word form or lemma) in some slot."""
+    """contains: keep only n-grams with this unit value (word form or lemma; merged case variants unless
+    case_sensitive) in some slot."""
     _check_unit(unit, ("word", "lemma"))
     if not 2 <= n <= 4:
         raise ValueError("n 须为 2 至 4")
@@ -542,20 +598,28 @@ def ngrams(
     keys = [unit if i == 0 else f"{unit}+{i}" for i in range(n)] + _pos_keys(
         tags, c.tagset
     )
-    counts = {
-        k: f
-        for k, f in _checked(c.scan(keys, within_s=True).items())
-        if f >= min_freq
-        and (unit == "word" or MISSING not in k)
-        and (contains is None or contains in k)
-        and not (exclude_punct and any(is_punct(v) for v in k))
-    }
-    items = sorted(counts, key=lambda k: (-counts[k], k))
+    fold = folder(case_sensitive, unit)
+    want = None if contains is None else fold(contains)
+    merged, names = Counter(), Spellings()
+    for k, f in _checked(c.scan(keys, within_s=True).items()):
+        if (unit == "word" or MISSING not in k) and not (
+            exclude_punct and any(is_punct(v) for v in k)
+        ):
+            nk = tuple(fold(v) for v in k)
+            if want is None or want in nk:
+                merged[nk] += f
+                names.add(nk, k, f)
+    counts = {k: f for k, f in merged.items() if f >= min_freq}
+    items = sorted(counts, key=lambda k: (-counts[k], names.shown(k)))
     rows = []
-    for k in items[:top]:
-        slots = [_slot(c, unit, v, t) for v, t in zip(k, tags)]
+    for nk in items[:top]:
+        k, spelled = names.shown(nk), names.all(nk)
+        slots = [
+            _slot(c, unit, v, t, list(dict.fromkeys(x[i] for x in spelled)))
+            for i, (v, t) in enumerate(zip(k, tags))
+        ]
         q = None if None in slots else " ".join(slots)
-        f = counts[k]
+        f = counts[nk]
         rows.append(
             _row(
                 "\t".join(k),
@@ -587,6 +651,7 @@ def collocations(
     min_freq=3,
     top=200,
     exclude_punct=False,
+    case_sensitive=False,
 ) -> Table:
     _check_unit(unit, ("word", "lemma"))
     measures = list(measures) or list(MEASURES)
@@ -606,21 +671,26 @@ def collocations(
     union = _merge(spans)
     r1 = sum(b - a + 1 for a, b in union)
     keys = [unit, *_pos_keys([pos], c.tagset)]
-    observed = c.scan(keys, union) if union else Counter()
-    totals = c.scan(keys) if observed else Counter()
+    fold, names = folder(case_sensitive, unit), Spellings()
+    observed, totals = Counter(), Counter()
+    for (y,), o in (c.scan(keys, union) if union else Counter()).items():
+        observed[fold(y)] += o
+    for (y,), f in (c.scan(keys) if observed else Counter()).items():
+        totals[fold(y)] += f
+        names.add(fold(y), y, f)
     n, f_node = c.tokens, len(hits)
     stats = {}
-    for (y,), o in _checked(observed.items()):
+    for y, o in _checked(observed.items()):
         if (
             o < min_freq
             or (unit == "lemma" and y == MISSING)
             or (exclude_punct and is_punct(y))
         ):
             continue
-        c1 = totals[(y,)]
+        c1 = totals[y]
         e = r1 * c1 / n
         stats[y] = {
-            "collocate": y,
+            "collocate": names.shown(y),
             "freq": o,
             "coll_freq": c1,
             "mi": math.log2(o / e),
@@ -633,7 +703,10 @@ def collocations(
             "delta_p_coll": o / c1 - ((r1 - o) / (n - c1) if n > c1 else 0.0),
         }
     first = "delta_p_node" if measures[0] == "delta_p" else measures[0]
-    items = sorted(stats, key=lambda y: (-_rank(stats[y][first]), -stats[y]["freq"], y))
+    items = sorted(
+        stats,
+        key=lambda y: (-_rank(stats[y][first]), -stats[y]["freq"], names.shown(y)),
+    )
     gap = f" ${window - 1} " if window > 1 else " "
     tail = "".join(f" {cond.op}{cond.query.text}" for cond in ast.conditions)
     shown = [
@@ -645,10 +718,10 @@ def collocations(
     rows = []
     for y in items[:top]:
         s = stats[y]
-        slot = _slot(c, unit, y, pos)
+        slot = _slot(c, unit, s["collocate"], pos, names.all(y))
         rows.append(
             _row(
-                y,
+                s["collocate"],
                 {k: s[k] for k in ("collocate", "freq", "coll_freq", *shown)},
                 slot and f"{ast.anchor.text}{gap}{slot}{tail}",
                 search_query_reverse=slot and f"{slot}{gap}{ast.anchor.text}{tail}",
@@ -716,8 +789,11 @@ def keywords(
     exclude_punct=False,
     direction="positive",
     items=None,
+    case_sensitive=False,
 ) -> Table:
-    """direction: positive (a/c > b/d), negative (b/d > a/c) or both; items: only these words."""
+    """direction: positive (a/c > b/d), negative (b/d > a/c) or both; items: only these words. Merged case
+    variants (unless case_sensitive) count in both scopes; a row shows the spelling most frequent in both (items:
+    the word as given)."""
     _check_unit(unit, ("word", "lemma"))
     if measure not in KEYWORD_MEASURES:
         raise ValueError(f"未知关键词指标：{measure}")
@@ -728,40 +804,59 @@ def keywords(
         raise ValueError("参照范围没有词")
     if not t.tokens:
         raise ValueError("目标范围没有词")
-    ft, fr = t.scan([unit]), r.scan([unit])
+    fold, names, in_target = folder(case_sensitive, unit), Spellings(), Spellings()
+    ft, fr = Counter(), Counter()
+    for counter, scanned, own in (
+        (ft, t.scan([unit]), in_target),
+        (fr, r.scan([unit]), None),
+    ):
+        for (w,), f in scanned.items():
+            counter[fold(w)] += f
+            names.add(fold(w), w, f)
+            if own is not None:
+                own.add(fold(w), w, f)
     c, d = t.tokens, r.tokens
     types = {
         w
-        for (w,) in (*ft, *fr)
+        for w in (*ft, *fr)
         if not (unit == "lemma" and w == MISSING)
         and not (exclude_punct and is_punct(w))
     }
     m = max(len(types), 1)
     stats = {}
     if items is not None:
-        words = list(dict.fromkeys(items))
+        words = list(dict.fromkeys(fold(w) for w in items))
     else:
         words = []
         for w in _checked(types):
-            a, b = ft.get((w,), 0), fr.get((w,), 0)
+            a, b = ft.get(w, 0), fr.get(w, 0)
             pos_ok = a / c > b / d and a >= min_freq
             neg_ok = b / d > a / c and b >= min_freq
             if (direction != "negative" and pos_ok) or (
                 direction != "positive" and neg_ok
             ):
                 words.append(w)
+    given = {fold(w): w for w in reversed(items or [])}
     for w in words:
-        a, b = ft.get((w,), 0), fr.get((w,), 0)
-        stats[w] = {"word": w, **keyword_values(a, b, c, d, m)}
+        a, b = ft.get(w, 0), fr.get(w, 0)
+        shown = given[w] if w in given else names.shown(w)  # items: as given
+        stats[w] = {"word": shown, **keyword_values(a, b, c, d, m)}
     if items is None:
         words.sort(
             key=lambda w: (
                 -_rank(_keyword_rank(stats[w], measure)),
                 -stats[w]["target_freq"],
-                w,
+                stats[w]["word"],
             )
         )
-    rows = [_row(w, stats[w], _slot(t, unit, w)) for w in words[:top]]
+    rows = [
+        _row(
+            stats[w]["word"],
+            stats[w],
+            _slot(t, unit, stats[w]["word"], None, in_target.all(w) or names.all(w)),
+        )
+        for w in words[:top]
+    ]
     columns = [
         _col("word", "词", "string"),
         _col("target_freq", "目标频次"),
@@ -942,27 +1037,40 @@ def _plain_value(v):
     return bool(v) and v != MISSING and not any(ch in _ATTR_UNSAFE for ch in v)
 
 
-def _breakdown_query(c: _Corpus, ast, kind, values, tail):
-    """search_query of a breakdown row (contracts/p8.md §一), None when it cannot be written."""
+def _breakdown_query(c: _Corpus, ast, kind, values, tail, spelled=None):
+    """search_query of a breakdown row (contracts/p8.md §一), None when it cannot be written. spelled: every
+    spelling (value tuple) merged into the row, most frequent first."""
     anchor = ast.anchor.text
+    spelled = spelled or [values]
+
+    def alternatives(i):
+        forms = list(dict.fromkeys(x[i] for x in spelled))
+        return (
+            None if any('"' in v for v in forms) else "|".join(f'"{v}"' for v in forms)
+        )
+
     if kind == "word":
-        if any('"' in v for v in values):
-            return None
-        return " ".join(f'"{v}"' for v in values) + tail
+        slots = [alternatives(i) for i in range(len(values))]
+        return None if None in slots else " ".join(slots) + tail
     if kind == "lemma":
         if len(values) == 1 and not tail and _plain_value(values[0]):
             return f"{{lemma={values[0]}}}"
         # several slots or conditions: `{lemma=}` slots would make CWB scan every position, so each slot
         # is the alternation of the scope's forms of that lemma (as frequency rows)
-        slots = [_slot(c, "lemma", v) if v != MISSING else None for v in values]
+        slots = [
+            _slot(c, "lemma", v, None, list(dict.fromkeys(x[i] for x in spelled)))
+            if v != MISSING
+            else None
+            for i, v in enumerate(values)
+        ]
         return None if None in slots else " ".join(slots) + tail
     if kind == "pos":
         slots = [_slot(c, "pos", v) for v in values]
         return None if None in slots else " ".join(slots) + tail
     (v,) = values
-    if v in (SENT_START, SENT_END) or '"' in v:
+    if v in (SENT_START, SENT_END) or (slot := alternatives(0)) is None:
         return None
-    return f'"{v}" {anchor}{tail}' if kind == "left1" else f'{anchor} "{v}"{tail}'
+    return f"{slot} {anchor}{tail}" if kind == "left1" else f"{anchor} {slot}{tail}"
 
 
 def breakdown(
@@ -974,6 +1082,7 @@ def breakdown(
     numeric=False,
     attr_filter=None,
     max_hits=None,
+    case_sensitive=False,
 ) -> Table:
     """Hits of a query split by the hit's word forms / lemmas / POS (multi-token hits joined by spaces), the
     word left / right of it in its sentence, or a metadata field of its document (`meta:<field>`). The hits
@@ -988,7 +1097,8 @@ def breakdown(
     c = _Corpus(scope)
     ast = query.parse(query_text, c.tagset)
     hits = c.rows(query_text, attr_filter, max_hits)
-    counts = Counter()
+    raw = Counter()
+    counts = raw
     if kind in ("word", "lemma", "pos"):
         with c.attr(kind) as att:
             for m, me, _, _ in _checked(hits):
@@ -1007,12 +1117,19 @@ def breakdown(
         doc_value = c.doc_values(field)
         for _, _, d, _ in _checked(hits):
             counts[(doc_value.get(d),)] += 1
+    names = Spellings()
+    if kind in ("word", "lemma", "left1", "right1"):  # merged case variants
+        fold, counts = folder(case_sensitive), Counter()
+        for k, f in raw.items():
+            nk = tuple(fold(v) for v in k)
+            counts[nk] += f
+            names.add(nk, k, f)
     total = len(hits)
     tail = "".join(f" {cond.op}{cond.query.text}" for cond in ast.conditions)
 
     def label(k):
         if kind != "meta":
-            return " ".join(k)
+            return " ".join(names.shown(k))
         if k[0] is None:
             return NO_VALUE
         return str(_number(k[0])) if numeric else k[0]
@@ -1039,9 +1156,9 @@ def breakdown(
             q = query_text if extra else None
             rows.append(_row(item, values, q, **extra))
         else:
-            rows.append(
-                _row("\t".join(k), values, _breakdown_query(c, ast, kind, k, tail))
-            )
+            shown, spelled = names.shown(k), names.all(k)
+            q = _breakdown_query(c, ast, kind, shown, tail, spelled)
+            rows.append(_row("\t".join(shown), values, q))
     columns = [
         _col("item", "项", "string"),
         _col("hits", "命中数"),

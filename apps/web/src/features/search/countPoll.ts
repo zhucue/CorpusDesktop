@@ -3,8 +3,8 @@ import type { Counts, SearchRequest, SearchResult } from "../../api";
 
 /** POST /search fields of contracts/p7.md §1: the background count can fail; left / right / random apply
  *  only once the count is complete (sort_applied). */
-export type SearchCounts = Counts & { failed?: boolean; message?: string };
-export type SearchPage = Omit<SearchResult, "counts"> & { counts: SearchCounts; sort_applied?: boolean };
+export type SearchCounts = Counts & { failed?: boolean; message?: string; pairs?: number | null };
+export type SearchPage = Omit<SearchResult, "counts"> & { counts: SearchCounts; sort_applied?: boolean; script_variants?: boolean; searched_query?: string };
 
 export const COUNT_POLL_MS = 3000;
 export const SORT_PENDING = "排序在计数完成后生效";

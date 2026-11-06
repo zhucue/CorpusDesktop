@@ -25,6 +25,8 @@ from engine import model as em
 from engine.conllu import write_conllu
 from services.api import effective, semantic
 from services.api.annotations import (
+    add_document_counts,
+    document_counts,
     is_zh,
     refresh_progress,
 )
@@ -53,10 +55,8 @@ from services.api.search import (
     corpus_tagset,
     enrich,
     plan_query,
-    pure_attr,
     resolve_scope,
     scope_filter,
-    search_page,
     with_span_layer,
 )
 from services.api.storage import (
@@ -630,6 +630,7 @@ def _rows(items):
     for item in items:
         values = {
             **item,
+            "sentence_index": item["sentence_index"] + 1,  # 句 n in the KWIC, from 1
             "aligned": "\n".join(
                 f"[{a['language']}] {a['text']}" for a in item["aligned"]
             ),
@@ -689,45 +690,116 @@ def _write_xlsx(path, header, rows, sheet="检索结果", notice=()):
     wb.save(path)
 
 
+SORT_NAMES = {"position": "按出处", "left": "按左语境", "right": "按右语境"}
+
+
+def _export_result_rows(rows_dir):
+    """The rows of the API's finished result set named by the job (services.api.search.SearchCache), or None
+    when there is none or the API has evicted it meanwhile."""
+    from services.api.search import SearchCache
+
+    if not rows_dir:
+        return None
+    path = Path(rows_dir).resolve()
+    if path.parent != SearchCache.root().resolve():
+        return None
+    try:
+        return cwb.read_rows(path, 0)
+    except FileNotFoundError:
+        return None
+
+
+def _export_head(db, corpus, req, text, counts, at):
+    """The line above an exported search table: what was searched and counted (as the source lines)."""
+    info = _scope_info(db, req.scope, corpus)
+    scope = info["name"]
+    if req.scope.filter is not None:
+        scope += f"（临时筛选 {json.dumps(req.scope.filter, ensure_ascii=False)}）"
+    parts = [f"查询式：{req.query}"]
+    if text != req.query:
+        parts.append(f"简繁通查：{text}")
+    parts.append(f"范围：{scope}")
+    if req.aligned is not None:
+        op = "含" if req.aligned.op == "+" else "不含"
+        parts.append(f"译文条件：{op} {req.aligned.query}")
+    parts += [f"命中：{counts.hits}", f"句：{counts.sentences}"]
+    parts.append(f"文档：{counts.documents}")
+    sort = SORT_NAMES.get(req.sort) or f"随机（种子 {req.seed}）"
+    parts.append(f"排序：{sort}")
+    parts.append(f"导出时间：{at:%Y-%m-%d %H:%M} UTC")
+    parts.append(f"索引版本：{corpus.index_version or '—'}")
+    return "；".join(parts)
+
+
 def run_export(run):
-    req = ExportInput.model_validate(run.params)  # seed pinned at enqueue
-    items, hits = [], None
+    """Hits of a search (contracts/p11.md §一): the rows of the API's finished result set (params.rows_dir),
+    else the complete rows computed once; texts and context are read EXPORT_PAGE rows at a time. The file
+    opens with the query, scope, translation condition, counts, sort, export time and index version, then the
+    source lines; 句序 counts from 1 as in the KWIC."""
+    import subprocess
+
+    from services.api.search import (
+        complete_rows,
+        plan_search,
+        rows_hits,
+        search_context,
+        too_many_text,
+        variants_on,
+    )
+
+    req = ExportInput.model_validate(run.params)  # seed and 简繁通查 pinned at enqueue
+    items = []
     with session() as db:
         user = db.get(User, run.owner_id)
         corpus, restrict = resolve_scope(db, req.scope, user)
-        ast, cqp = plan_query(req.query, corpus_tagset(corpus))
+        tagset = corpus_tagset(corpus)
+        text, ast, cqp = plan_search(corpus, req, tagset)
         layers = effective.check_layers(db, req.layers, corpus, user)
         with_span_layer(db, cqp, layers, corpus, user)
-        keep = _aligned_keep(db, corpus, user, req.aligned, layers, req.scope)
-        notice = source_notice(db, [corpus.id])
-        size = (
-            10**9 if pure_attr(ast) or query.pure_span(ast) else EXPORT_PAGE
-        )  # PostgreSQL answers in one pass
-        page = 1
-        while True:
-            result = search_page(
-                db,
-                corpus,
-                restrict,
-                ast,
-                cqp,
-                layers,
-                req,
-                page,
-                size,
-                EXPORT_COUNT_TIMEOUT,
-                keep,
-            )
-            if hits is None:
-                hits = result.counts.hits
-            items += enrich(db, result.items)
-            run.progress(len(items), hits, "导出")
-            if len(result.items) < size:
-                break
-            page += 1
+        aligned = req.aligned
+        if aligned is not None and variants_on(corpus, req):
+            try:
+                expanded = query.script_variants(aligned.query, tagset)
+                aligned = aligned.model_copy(update={"query": expanded})
+            except query.QueryError:
+                pass  # plan_aligned reports it
+        keep = _aligned_keep(db, corpus, user, aligned, layers, req.scope)
+        rows = None
+        if run.params.get("rows_index_version") == corpus.index_version:
+            rows = _export_result_rows(run.params.get("rows_dir"))
+        if rows is None:  # no stored rows, or the index was rebuilt since
+            try:
+                rows = complete_rows(
+                    db,
+                    corpus,
+                    restrict,
+                    ast,
+                    cqp,
+                    layers,
+                    req,
+                    keep,
+                    EXPORT_COUNT_TIMEOUT,
+                    run.cancel,
+                )
+            except subprocess.TimeoutExpired as e:
+                raise JobFailed(
+                    "TIMEOUT",
+                    f"检索超时（{EXPORT_COUNT_TIMEOUT} 秒），请缩小范围或加条件",
+                ) from e
+            except cwb.TooManyHits as e:
+                raise JobFailed("TOO_MANY_HITS", too_many_text(e)) from e
+        counts = cwb.count_rows(rows)
+        ctx = search_context(corpus, req)
+        for i in range(0, len(rows), EXPORT_PAGE):
+            run.check()
+            chunk = rows_hits(db, corpus, ast, cqp, rows[i : i + EXPORT_PAGE], ctx)
+            items += enrich(db, chunk)
+            run.progress(len(items), counts.hits, "导出")
+        head = _export_head(db, corpus, req, text, counts, datetime.now(UTC))
+        notice = [head, *source_notice(db, [corpus.id])]
     run.check()
-    header, rows = _rows(items)
-    _finish_export(run, "检索结果", header, rows, {"hits": hits}, notice)
+    header, out = _rows(items)
+    _finish_export(run, "检索结果", header, out, {"hits": counts.hits}, notice)
 
 
 def _aligned_keep(db, corpus, user, aligned, layers, scope=None):
@@ -939,6 +1011,12 @@ def run_export_stats(run):
         parts.append(f"显示前 {p['top']}")
     if p.get("exclude_punct"):
         parts.append("排除标点和数字")
+    # word / lemma values (contracts/p11.md §一); results stored before the option say nothing
+    cased = p.get("unit") in ("word", "lemma") or (
+        method == "breakdown" and p.get("by") in ("word", "lemma", "left1", "right1")
+    )
+    if "case_sensitive" in p and cased:
+        parts.append(f"区分大小写：{'是' if p['case_sensitive'] else '否'}")
     head = [f"统计：{label}（{'；'.join(parts)}）"]
     head.append(f"范围：{scope_name}，{totals.get('tokens', 0):,} 词（含标点）")
     if reference:
@@ -1312,6 +1390,7 @@ def _scope_info(db, scope: Scope, corpus):
 def _compute(p, target, reference, numeric, positions=None):
     method, top = p["method"], p["top"]
     punct = p.get("exclude_punct", False)  # jobs queued before the option: kept
+    case = {"case_sensitive": p.get("case_sensitive", False)}  # contracts/p11.md §一
     if method == "frequency":
         return stats.frequency(
             target,
@@ -1322,6 +1401,7 @@ def _compute(p, target, reference, numeric, positions=None):
             exclude_punct=punct,
             parts=p.get("parts", "document"),
             dispersion=p.get("dispersion", False),  # jobs queued before P8: none
+            **case,
         )
     if method == "ngrams":
         return stats.ngrams(
@@ -1333,6 +1413,7 @@ def _compute(p, target, reference, numeric, positions=None):
             p["min_freq"],
             contains=p.get("contains"),
             exclude_punct=punct,
+            **case,
         )
     if method == "collocations":
         return stats.collocations(
@@ -1345,6 +1426,7 @@ def _compute(p, target, reference, numeric, positions=None):
             p["min_freq"],
             top,
             exclude_punct=punct,
+            **case,
         )
     if method == "keywords":
         return stats.keywords(
@@ -1357,6 +1439,7 @@ def _compute(p, target, reference, numeric, positions=None):
             exclude_punct=punct,
             direction=p.get("direction", "positive"),
             items=p.get("items"),
+            **case,
         )
     return stats.distribution(
         target,
@@ -1548,6 +1631,7 @@ def _breakdown(db, p, corpus, user, target):
         numeric=numeric,
         attr_filter=_hit_filter(db, p, corpus, user),
         max_hits=MAX_HITS,
+        case_sensitive=p.get("case_sensitive", False),
     )
 
 
@@ -1612,6 +1696,10 @@ def _translations(db, p, corpus, scope, user, target, params):
         if lg == lang:
             hit_targets[h].append(o)
     unit_col = Token.form if p["unit"] == "word" else Token.lemma
+    # case variants merge unless case_sensitive (contracts/p11.md §一): keys lower-cased, spellings kept
+    merge = not p.get("case_sensitive", False)
+    key_col = func.lower(unit_col) if merge else unit_col
+    fold, names = stats.folder(not merge), stats.Spellings()
     target_values = {}
     for chunk in _chunks({o for os in hit_targets.values() for o in os}):
         for sid, value in db.execute(
@@ -1619,7 +1707,8 @@ def _translations(db, p, corpus, scope, user, target, params):
                 Token.sentence_id.in_(chunk), unit_col.is_not(None)
             )
         ):
-            target_values.setdefault(sid, set()).add(value)
+            target_values.setdefault(sid, set()).add(fold(value))
+            names.add(fold(value), value, 1)
     a, n = translations.cooccurrence(
         hit_targets, target_values, p.get("exclude_punct", True)
     )
@@ -1645,11 +1734,11 @@ def _translations(db, p, corpus, scope, user, target, params):
     for chunk in _chunks(translations.candidates(a, p["min_freq"])):
         b.update(
             db.execute(
-                select(unit_col, func.count(distinct(universe.c.sid)))
+                select(key_col, func.count(distinct(universe.c.sid)))
                 .select_from(universe)
                 .join(Token, Token.sentence_id == universe.c.tid)
-                .where(unit_col.in_(chunk))
-                .group_by(unit_col)
+                .where(key_col.in_(chunk))
+                .group_by(key_col)
             ).all()
         )
     totals = {
@@ -1672,6 +1761,7 @@ def _translations(db, p, corpus, scope, user, target, params):
         top=p["top"],
         min_freq=p["min_freq"],
         totals=totals,
+        spellings={k: names.all(k) for k in a} if merge else None,
     )
 
 
@@ -2037,9 +2127,9 @@ def _document_tokens(db, doc_id):
     ).all()
 
 
-def _parse_zh(rows, check=None):
+def _parse_zh(rows, check=None, tick=None):
     """Stanza zh dependencies for a document's stored jieba tokens → {token id: (head, deprel)}. Parsed in
-    chunks of nlp.BATCH sentences; check() runs before each (cancellation)."""
+    chunks of nlp.BATCH sentences; check() runs before each (cancellation), tick(sentences parsed) after each."""
     sentences = {}
     for idx, _, tid, a, b, form, pos, lemma, _, _ in rows:
         sentences.setdefault(idx, []).append((tid, em.Token(a, b, form, pos, lemma)))
@@ -2053,10 +2143,12 @@ def _parse_zh(rows, check=None):
         nlp.annotate_dependencies_zh(
             em.Document("", "zh", "", {}, sents[i : i + nlp.BATCH])
         )
+        if tick is not None:
+            tick(min(i + nlp.BATCH, len(sents)))
     return {tid: (t.head, t.deprel) for toks in sentences.values() for tid, t in toks}
 
 
-def _preannotation(kind, doc_id, language, check=None):
+def _preannotation(kind, doc_id, language, check=None, tick=None):
     """Pre-annotation rows of one document (read and, for Chinese dependencies, parsed outside any lock)
     and the Stanza values to write back into `tokens` ({token id: (head, deprel)} or None)."""
     with session() as db:
@@ -2067,7 +2159,7 @@ def _preannotation(kind, doc_id, language, check=None):
         and is_zh(language)
         and any(r.deprel is None or r.head is None for r in rows)
     ):
-        parsed, source = _parse_zh(rows, check), "model:stanza-zh"
+        parsed, source = _parse_zh(rows, check, tick), "model:stanza-zh"
     values = []
     for idx, t_idx, tid, _, _, _, pos, _, head, deprel in rows:
         if kind == "pos":
@@ -2130,8 +2222,9 @@ def _write_preannotation(db, layer_id, values, parsed, annotators):
 def run_preannotate(run):
     """Fill a layer from `tokens` (contracts/p3.md §三): pos = tokens.pos; dep = tokens.head / deprel, or for
     Chinese documents without dependencies Stanza zh over the stored jieba tokens (also written back to
-    `tokens`). Re-runs only overwrite tokens still `suggested`. One transaction per document; progress counts
-    documents."""
+    `tokens`). Re-runs only overwrite tokens still `suggested`. One transaction per document; layer.progress
+    adds each document's change and is recounted once at the end. Job progress counts sentences, also within
+    a document while Stanza parses it (a corpus of one large document shows progress too)."""
     layer_id = uuid.UUID(run.params["layer_id"])
     with session() as db:
         token_kind = _layer(db, layer_id).kind in ("pos", "dep")
@@ -2143,20 +2236,28 @@ def run_preannotate(run):
         kind = layer.kind
         annotators = layer_annotators(layer)
         ids = run.params.get("document_ids") or layer.document_ids
-        stmt = select(Document.id, Document.language).where(
+        stmt = select(Document.id, Document.language, Document.sentence_count).where(
             Document.corpus_id == layer.corpus_id
         )
         if ids:
             stmt = stmt.where(Document.id.in_(ids))
         docs = db.execute(stmt.order_by(Document.created_at, Document.id)).all()
+    total = sum(n or 0 for _, _, n in docs)
     try:
-        for i, (doc_id, language) in enumerate(docs):
-            run.progress(i, len(docs), "预标")
-            values, parsed = _preannotation(kind, doc_id, language, run.check)
+        done = 0
+        for doc_id, language, n in docs:
+            run.progress(done, total, "预标", "句")
+
+            def tick(k, base=done):
+                run.progress(base + k, total, "依存分析", "句")
+
+            values, parsed = _preannotation(kind, doc_id, language, run.check, tick)
             with transaction() as db:
                 layer = _layer(db, layer_id, lock=True)
+                before = document_counts(db, layer, doc_id)
                 _write_preannotation(db, layer_id, values, parsed, annotators)
-                refresh_progress(db, layer)
+                add_document_counts(layer, before, document_counts(db, layer, doc_id))
+            done += n or 0
         with transaction() as db:
             run.lock(db)
             layer = _layer(db, layer_id, lock=True)

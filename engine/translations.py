@@ -8,7 +8,10 @@ found by opening the search with its translation condition (Tatoeba links one se
   b(w) = sentences of U whose aligned target sentences contain w
   Dice = 2a / (n + b); LL = 2 Σ O ln(O/E) over the table a, n − a, b − a, N − n − b + a (E = row × col / N)
 Only words positively associated with the hits are listed (a/n > b/N); rows sort by the measure, then a, then
-the word. Word units are token forms as stored (case-sensitive); lemma units skip tokens without a lemma.
+the word. Word units are token forms; lemma units skip tokens without a lemma. Case variants merge by default
+(contracts/p11.md §一: the worker passes lower-cased values and `spellings`); a row then shows the most frequent
+spelling and its translation condition is the alternation of every spelling (`"The"|"the"`); case_sensitive
+counts forms as stored.
 """
 
 from collections import Counter
@@ -46,10 +49,14 @@ def dice(a, n, b):
     return 2 * a / (n + b) if n + b else 0.0
 
 
-def aligned_query(unit, value):
-    """The translation condition query of a row; None when the value cannot be written."""
+def aligned_query(unit, value, spellings=None):
+    """The translation condition query of a row (word: the alternation of its spellings); None when the value
+    cannot be written."""
     if unit == "word":
-        return None if '"' in value else f'"{value}"'
+        forms = spellings or [value]
+        return (
+            None if any('"' in v for v in forms) else "|".join(f'"{v}"' for v in forms)
+        )
     if any(ch in _ATTR_UNSAFE for ch in value):
         return None
     return f"{{lemma={value}}}"
@@ -67,7 +74,10 @@ def table(
     top=100,
     min_freq=2,
     totals: dict | None = None,
+    spellings: dict | None = None,
 ) -> Table:
+    """spellings: {merged value: its spellings, most frequent first} when case variants were merged."""
+    spellings = spellings or {}
     if measure not in MEASURES:
         raise ValueError(f"未知译法指标：{measure}")
     stats = {}
@@ -77,7 +87,7 @@ def table(
         if o * N <= n * bw:  # not more frequent among the hits than overall
             continue
         stats[w] = {
-            "item": w,
+            "item": spellings[w][0] if spellings.get(w) else w,
             "cooc": o,
             "pct": o / n * 100 if n else 0.0,
             "target_freq": bw,
@@ -85,14 +95,16 @@ def table(
             "ll": _ll2x2(o, n, bw, N),
         }
     items = sorted(
-        stats, key=lambda w: (-_rank(stats[w][measure]), -stats[w]["cooc"], w)
+        stats,
+        key=lambda w: (-_rank(stats[w][measure]), -stats[w]["cooc"], stats[w]["item"]),
     )
     rows = []
     for w in items[:top]:
-        q = aligned_query(unit, w)
+        item = stats[w]["item"]
+        q = aligned_query(unit, item, spellings.get(w))
         cond = {"op": "+", "query": q} if q else None
         rows.append(
-            _row(w, stats[w], query_text if cond else None, search_aligned=cond)
+            _row(item, stats[w], query_text if cond else None, search_aligned=cond)
         )
     columns = [
         _col("item", "译文词", "string"),

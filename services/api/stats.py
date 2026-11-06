@@ -59,7 +59,12 @@ class PunctInput(BaseModel):
     exclude_punct: bool = True
 
 
-class FrequencyInput(StatsInput, PunctInput):
+class CaseInput(BaseModel):
+    # word / lemma values: case variants merge (The / the) unless case_sensitive (contracts/p11.md §一)
+    case_sensitive: bool = False
+
+
+class FrequencyInput(StatsInput, PunctInput, CaseInput):
     """unit deprel, or unit pos with layers.pos, is counted in PostgreSQL over effective annotations;
     span_label / relation_label count effective spans of layers.span / relations of layers.relation (default:
     the corpus's most recently updated layer of that kind)."""
@@ -76,7 +81,7 @@ class FrequencyInput(StatsInput, PunctInput):
     dispersion: bool = True
 
 
-class NgramsInput(StatsInput, PunctInput):
+class NgramsInput(StatsInput, PunctInput, CaseInput):
     scope: Scope
     n: int = Field(default=2, ge=2, le=4)
     unit: Unit = "word"
@@ -93,7 +98,7 @@ class NgramsInput(StatsInput, PunctInput):
         return self
 
 
-class CollocationsInput(StatsInput, PunctInput):
+class CollocationsInput(StatsInput, PunctInput, CaseInput):
     scope: Scope
     node: str = Field(min_length=1, max_length=1000)
     window: int = Field(default=5, ge=1, le=20)
@@ -105,7 +110,7 @@ class CollocationsInput(StatsInput, PunctInput):
     min_freq: int = Field(default=3, ge=1)
 
 
-class KeywordsInput(StatsInput, PunctInput):
+class KeywordsInput(StatsInput, PunctInput, CaseInput):
     target: Scope
     reference: Scope
     unit: Unit = "word"
@@ -127,7 +132,7 @@ class DistributionInput(StatsInput):
     aligned: AlignedInput | None = None  # translation condition (contracts/p8.md §四)
 
 
-class BreakdownInput(StatsInput):
+class BreakdownInput(StatsInput, CaseInput):
     scope: Scope
     query: str = Field(min_length=1, max_length=1000)
     by: str = Field(default="word", max_length=210, pattern=_BY.pattern)
@@ -135,7 +140,7 @@ class BreakdownInput(StatsInput):
     layers: LayersInput | None = None
 
 
-class TranslationsInput(StatsInput, PunctInput):
+class TranslationsInput(StatsInput, PunctInput, CaseInput):
     scope: Scope
     query: str = Field(min_length=1, max_length=1000)
     unit: Unit = "word"

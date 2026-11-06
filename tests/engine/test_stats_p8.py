@@ -53,13 +53,15 @@ def part(d, value):
 def compute(ud, case):
     p, m = dict(case["params"]), case["method"]
     scope = stats.Scope(ud, "ud_en")
+    # the golden cases count exact spellings (case_sensitive); merged variants: test_stats.py
+    cs = {"case_sensitive": True}
     if m == "frequency":
-        return stats.frequency(scope, top=20, parts=p["parts"], dispersion=True)
+        return stats.frequency(scope, top=20, parts=p["parts"], dispersion=True, **cs)
     if m == "keywords":
-        return stats.keywords(part(ud, "a"), part(ud, "b"), top=20, **p)
+        return stats.keywords(part(ud, "a"), part(ud, "b"), top=20, **p, **cs)
     if m == "collocations":
-        return stats.collocations(scope, top=20, **p)
-    return stats.breakdown(scope, p["query"], p["by"], top=20)
+        return stats.collocations(scope, top=20, **p, **cs)
+    return stats.breakdown(scope, p["query"], p["by"], top=20, **cs)
 
 
 def close(a, b):
@@ -283,3 +285,23 @@ def test_dispersion_field_leaves_out_documents_without_it(tmp_path):
     w = next(r["values"] for r in t.rows if r["key"] == "w")
     assert w["freq"] == 16  # the frequency column still counts the whole scope
     assert w["dp"] == pytest.approx(0.5 * (abs(3 / 6 - 15 / 29) + abs(3 / 6 - 14 / 29)))
+
+
+def test_translation_rows_show_merged_spellings():
+    """P11: merged values show the most frequent spelling; the condition lists every spelling."""
+    from collections import Counter
+
+    from engine import translations
+
+    t = translations.table(
+        Counter({"the": 3}),
+        4,
+        {"the": 3},
+        10,
+        query_text="书",
+        min_freq=1,
+        spellings={"the": ["The", "the"]},
+    )
+    row = t.rows[0]
+    assert row["key"] == row["values"]["item"] == "The"
+    assert row["search_aligned"] == {"op": "+", "query": '"The"|"the"'}

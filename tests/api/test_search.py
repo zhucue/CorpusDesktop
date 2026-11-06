@@ -189,8 +189,20 @@ def test_export_csv_and_xlsx(owner, project, corpus, member):
     r = viewer.get(f"/api/jobs/{job['id']}/download")
     assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
     rows = list(csv.reader(io.StringIO(r.content.decode("utf-8-sig"))))
-    assert rows[0][:3] == ["命中 ID", "文档", "文档 ID"] and rows[0][-1] == "year"
-    assert len(rows) - 1 == 3
+    # the search line (as the source lines), a blank row, then the table (contracts/p11.md §一)
+    head = rows[0][0]
+    assert head.startswith(
+        "查询式：language；范围：作文；命中：3；句：3；文档：2；排序：按出处"
+    )
+    assert "导出时间：" in head and "索引版本：" in head
+    assert rows[1] == []
+    assert (
+        rows[2][:4] == ["命中 ID", "文档", "文档 ID", "句序"] and rows[2][-1] == "year"
+    )
+    assert len(rows) - 3 == 3
+    # 句序 from 1, as 句 n in the KWIC
+    first = search(viewer, {"corpus_id": corpus["id"]}).json()["items"][0]
+    assert rows[3][3] == str(first["sentence_index"] + 1)
 
     job = owner.post(
         "/api/search/export",
@@ -203,10 +215,10 @@ def test_export_csv_and_xlsx(owner, project, corpus, member):
     drain()
     r = owner.get(f"/api/jobs/{job['id']}/download")
     ws = load_workbook(io.BytesIO(r.content)).active
-    header = next(ws.iter_rows(min_row=1, max_row=1))
+    header = next(ws.iter_rows(min_row=3, max_row=3))
     assert all(c.font.name == "宋体" for c in header)
     assert all(c.fill.fill_type is None for row in ws.iter_rows() for c in row)
-    assert ws.max_row == 4
+    assert ws.max_row == 6  # search line, blank row, header, 3 hits
 
 
 def test_export_builtin_corpus_into_project(owner, project, make_user):
