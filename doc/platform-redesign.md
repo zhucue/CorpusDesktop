@@ -36,9 +36,9 @@ Agent 基于 Pi SDK，是系统内置能力，不以 Pi 产品形态出现。手
 | 模块 | 内容 |
 | --- | --- |
 | 语料库 | 内置 Tatoeba 中英、UD 中英树库、维基中英子集；用户上传 TXT、DOCX、CSV/TSV（列映射）、CoNLL-U、TMX，规则见第四节"语料导入"；文档级元数据（标题、语言、体裁、年代、来源、自定义字段）；按元数据筛出子库并保存 |
-| 检索 | 类 CCL 查询式（第五节）；KWIC 结果；上下文展开；排序、结果内筛选、随机抽样；保存查询；导出 |
-| 统计 | 频次与标准化频率、n-gram、搭配、关键词比较、元数据分布；图表；点击任一数字回到例句 |
-| 标注 | 分词与词性、依存句法、自定义片段与关系、双语句级和词级对齐；Agent 预标；人工校对；按标注检索与统计 |
+| 检索 | 类 CCL 查询式（第五节）；平行语料译文条件；KWIC 结果；上下文展开；排序、结果内筛选、随机抽样；保存查询；导出；从结果发起命中分解、译法统计与抽样编码 |
+| 统计 | 频次与标准化频率、离散度（range、DP、DPnorm、Juilland D）、n-gram、搭配（含 MI3、z、ΔP）、关键词比较（含 %DIFF、odds ratio、log ratio 置信区间、Bonferroni）、命中频次分解、平行语料译法、元数据分布；图表；点击任一数字回到例句；方法附录与参考文献 |
+| 标注 | 分词与词性、依存句法、自定义片段与关系、双语句级和词级对齐；Agent 预标；人工校对；检索结果抽样编码（比例与 95% 区间）；按标注检索与统计 |
 | 知识库 | 导入 PDF、DOCX、Markdown、TXT、网页；术语表；标注规范；研究笔记；混合检索；Agent 引用 |
 | Agent | 对话调用全部工具；OpenUI 渲染结果组件；会话按项目保存 |
 | 成果 | 检索结果、统计表、图、标注数据、知识条目的导出：CSV、XLSX、JSON、CoNLL-U、SVG/PNG、DOCX |
@@ -177,6 +177,24 @@ CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读�
 - 结果集总字节上限 `SEARCH_CACHE_MAX_BYTES`（默认 2 GB），与条目上限（2000 条）一起按最近最少使用淘汰；api 启动时清空 `search-cache`。索引版本变化后旧 `search_id` 返回 409 `SEARCH_EXPIRED`。
 - 只改 CWB 路径；纯属性与纯片段查询（PostgreSQL 路径）不变。契约见 [contracts/p7.md](../contracts/p7.md) 第一节。
 
+译文条件（2026 年 11 月 6 日）：
+
+- 平行语料可加"译文条件"：`POST /search` 的 `aligned: {op: "+" | "-", query}` 只保留对齐句（两个方向都取）中含（`+`）或不含（`-`）`query` 命中的命中。`query` 用同一查询式语法，按目标侧语言的标签集编译，只在目标语言一侧检索。
+- 非平行语料返回 422 `NOT_PARALLEL`；译文条件解析错误返回 422 `QUERY_INVALID`，文案为"译文条件第 N 个字符：…"，页面定位到译文条件输入框；译文条件所需标注层缺失（422 `INVALID_LAYER`）同样以"译文条件第 N 个字符"开头。
+- 计数、翻页、后台计数与结果集缓存同上，缓存键含 `aligned`；纯属性与纯片段查询（PostgreSQL 路径）也支持。译文条件查询的命中有上限，超出时返回固定文案"译文条件命中过多，请加条件"。
+- 检索导出、分布统计接受同一 `aligned`。同一查询"含"与"不含"两次计数之和等于无条件计数。
+- 页面地址参数 `aligned=<JSON {op, query}>`；统计译法行与助手链接用它打开带条件的检索。
+
+结果栏工具（2026 年 11 月 6 日）：
+
+| 入口 | 动作 |
+| --- | --- |
+| 分解 | 下拉：按词形 / 词元 / 词性 / 左一词 / 右一词 / 元数据字段；以当前查询与范围提交 `POST /stats/breakdown`，完成后跳到统计页结果（第六节）。分解不接受译文条件，有译文条件时按钮禁用，悬停"含译文条件时不可用" |
+| 统计译法 | 仅平行语料；以当前查询与范围提交 `POST /stats/translations`（词形、Dice），完成后跳到统计页结果；有译文条件时同样禁用 |
+| 抽样编码 | 计数完成后可用；选条数、随机种子、片段标签集（可新建）、层名，连同译文条件提交 `POST /projects/{id}/samples`，完成后跳到该层的抽样模式（第七节） |
+
+契约见 [contracts/p8.md](../contracts/p8.md) 第一、四、五节与第十节实现说明。
+
 ### 子库
 
 子库是"语料库 + 元数据筛选条件"，保存后可直接选用。检索和统计都接受语料库或子库作为范围。两个子库可以做关键词比较。
@@ -185,11 +203,13 @@ CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读�
 
 | 方法 | 内容 | 展示 |
 | --- | --- | --- |
-| 频次 | 原始频次、每百万词、文档频率；按词形或词性 | 表 + 柱状图 |
+| 频次 | 原始频次、每百万词、文档频率；离散度 range、DP、DPnorm、Juilland D；按词形或词性 | 表 + 柱状图 |
 | n-gram | 2 至 4 元，支持词性模式；可填“包含词”（`contains`，词形或词元等于该词的某一位置）只列含该词的组合 | 表 |
-| 搭配 | 节点词 ±5 窗口，MI、logDice、t 值、LL；可限定词性 | 表 + 搭配网络图（节点词居中，边粗为强度，点击进入检索） |
-| 关键词 | 目标库对参照库，LL、log ratio、显著性；参照库可选内置或子库 | 表 + 散点 |
-| 分布 | 按元数据字段（年代、体裁、来源）或文档位置 | 折线 / 柱状 |
+| 搭配 | 节点词 ±5 窗口，MI、logDice、t 值、LL、MI3、z、ΔP；可限定词性 | 表 + 搭配网络图（节点词居中，边粗为强度，点击进入检索） |
+| 关键词 | 目标库对参照库，LL、log ratio 及 95% 区间、%DIFF、odds ratio、显著性与 Bonferroni 校正；正向 / 负向 / 双向；指定词对比；参照库可选内置或子库 | 表 + 散点 |
+| 命中分解 | 一个查询的命中按词形、词元、词性、左一词、右一词或元数据字段分组计数 | 表 + 前 10 横向柱 |
+| 译法 | 平行语料中命中句对齐译文里的词，共现句数、Dice、LL | 表 + 前 10 横向柱 |
+| 分布 | 按元数据字段（年代、体裁、来源）或文档位置；平行语料可加译文条件 | 折线 / 柱状 |
 | 标注统计 | 标签频次、标签共现、标注者进度与一致性 | 表 + 图 |
 
 每个结果保存参数和索引版本；点击数字打开对应检索。图表用 ECharts，导出 SVG / PNG。
@@ -204,6 +224,63 @@ CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读�
 | 范围 | 统计各标签页用项目共享范围（见前端设计第二节范围规则） |
 | 导出 | CSV / XLSX 文件名“统计-方法-时间”；表格前依次写：统计方法与参数（n、单位、节点词、窗口、查询式、词性、包含词、排序指标、最低频次、显示前 N、是否排除标点和数字）、范围与总词数（含标点）、参照与其总词数、索引版本与计算时间（UTC），然后是语料来源与许可行；小数保留 2 位 |
 | 图表导出 | SVG 为合法 XML 文档，固定浅色主题、白底，与页面深浅色无关；PNG 由该 SVG 以 2 倍分辨率绘制 |
+
+研究指标与口径（2026 年 11 月 6 日，契约 [contracts/p8.md](../contracts/p8.md) 第一至四节，差异见其第十节）：
+
+命中分解 `POST /stats/breakdown {scope, query, by, top, min_freq, layers?}`：
+
+| 项 | 规则 |
+| --- | --- |
+| by | `word` / `lemma` / `pos`（命中本身，多词以空格连接）、`left1` / `right1`（左右第一个词的词形，句首、句末记"（句首）""（句末）"）、`meta:<字段>`（无该字段记"（无）"） |
+| 列 | 项、命中数 `hits`、占比 `pct`（占全部命中 %）、每百万词 `per_million`（以范围词数为分母）；`totals.hits` 为全部命中数 |
+| 命中 | 取自与检索相同的路径，受 `SEARCH_MAX_HITS` 限制；全部命中数等于同一查询在同一范围的 `counts.hits` |
+| 查询 | 单独一个 `{…}` 或 `[…]` 的查询返回 422；不接受译文条件 |
+| 回到例句 | 词形行为精确词形序列（查询带词性时点回检索的计数可能大于该行）；词元行单槽且无条件时为 `{lemma=x}`，多词或带同句条件时用该词元在范围内各词形的选项式；词性行为 `/tag` 序列；左一词 / 右一词行为 `"左词" 原查询` / `原查询 "右词"`，计数与该行一致；元数据行同分布，用 `search_scope` 临时筛选 |
+
+离散度（频次 `parts`、`dispersion`，默认 `document`、true）：
+
+| 项 | 规则 |
+| --- | --- |
+| 部分 | `document` 每篇文档一部分；`segments` 按范围内语料顺序以词数等分 10 段；`field:<字段>` 每个字段值一部分，缺该字段的文档同时排除出 f 与部分词数（频次列仍计全范围） |
+| 公式 | sᵢ = 部分词数 / 各部分词数之和；vᵢ = fᵢ / f；DP = ½ Σ\|vᵢ − sᵢ\|（Gries 2008），0 为均匀，越大越集中；DPnorm = DP / (1 − min sᵢ)（Lijffijt & Gries 2012）；Juilland D = 1 − CV / √(n − 1)，CV 为各部分相对频率 pᵢ = fᵢ / 部分词数的总体标准差 / 均值；range 为 fᵢ > 0 的部分数，range_pct = range / 部分总数 × 100 |
+| 范围 | 只对显示的前 top 行计算；部分数 < 2 时这些列为 null；`totals.parts` 为部分数；PostgreSQL 统计单位（deprel、片段标签、关系标签）不支持离散度 |
+
+效应量（关键词；a、b 为目标、参照频次，c、d 为两库词数）：
+
+| 指标 | 公式 |
+| --- | --- |
+| %DIFF | (a/c − b′/d) / (b′/d) × 100（Gabrielatos & Marchi 2012） |
+| odds ratio | (a′/(c − a′)) / (b′/(d − b′)) |
+| log ratio 95% 区间 | log₂((a′/c)/(b′/d)) ± 1.96 × √(1/a′ + 1/b′) / ln 2（自然对数尺度的 SE 换到 log₂ 尺度；Hardie 2014） |
+| Bonferroni | p = P(χ²₁ ≥ LL) × m，m = 目标与参照词型并集（`totals.types_compared`）；p < 0.05 / 0.01 / 0.001 记 `*` / `**` / `***` |
+| 平滑 | 频次为 0 时 a′、b′ 取 0.5，行带 `values.smoothed`，页面在 %DIFF、odds ratio 旁标"平滑" |
+
+- `direction`：positive（默认，目标多于参照，min_freq 作用于 a）、negative（参照多于目标，min_freq 作用于 b）、both。
+- `items`（≤ 50）：只返回这些词，按给定顺序，忽略 min_freq 与 direction，用于单项两库对比。
+- 排序按所选指标的绝对值（odds ratio 用 |ln OR|），positive 下与原排序一致；`measure` 可选 ll、log_ratio、pct_diff、odds_ratio。
+- 搭配新增 MI3 = log₂(O³/E)（Oakes 1998）、z = (O − E)/√E、ΔP（Gries 2013）：`delta_p_node` = O/R − (C − O)/(N − R)，`delta_p_coll` = O/C − (R − O)/(N − C)；选 ΔP 时两列都输出，排序按 `delta_p_node`。
+
+译法 `POST /stats/translations {scope, query, unit, target_language?, measure: dice|ll, top: 100, min_freq: 2, exclude_punct}`：
+
+| 项 | 规则 |
+| --- | --- |
+| 适用 | 只用于平行语料，否则 422 `NOT_PARALLEL`；`target_language` 缺省为与命中句语言不同的一侧，语料没有该语言时 422 |
+| 单位 | 以源侧句为单位：n = 命中句中有目标语言对齐句的句数；a = 其中对齐译文含该词的句数；N = 范围内有目标语言对齐句的源句数；b = 其中对齐译文含该词的句数。对齐取两个方向 |
+| 指标 | Dice = 2a / (n + b)；LL 为 a、n − a、b − a、N − n − b + a 的 2×2 列联表；只列 a/n > b/N 的词 |
+| 列 | 译文词 `item`、共现句数 `cooc`（= a）、占命中句 % `pct`、目标侧句数 `target_freq`（= b）、Dice、LL |
+| totals | `hits`、`hit_sentences`、`aligned_sentences`（有对齐的命中句）、`unaligned`、`target_language`、`scope_aligned_sentences`（= N） |
+| 回到例句 | 行带 `search_query` = 原查询与 `search_aligned: {op: "+", query: "\"译文词\""}`（词元单位为 `{lemma=…}`），点击打开带该译文条件的检索，命中句数等于该行共现句数 |
+
+以源侧句计数的原因：Tatoeba 一句对多句，按目标侧句计时 2×2 表不自洽，点回检索的计数也对不上。
+
+导出：统计导出另支持 DOCX（接口 `format: docx`）；DP、DPnorm、Juilland D、ΔP、Dice 保留 4 位小数，其余 2 位；译法行导出带译文条件。所有新指标与 `tests/golden/` 中的独立参考实现比对，误差 < 1e-6。
+
+方法附录 `POST /projects/{id}/method-appendix {stat_ids?, searches?, layer_ids?, evidence?, style: gbt7714|apa}` → `{markdown, citations}`，`?format=docx` 返回 DOCX（宋体标题，无底色）：
+
+- 只写实际用到的部分：语料（名称、语言、规模、来源、许可、版本、索引版本，子库写筛选条件与规模）；处理工具（jieba、Stanza 包版本、CWB 3.5.0、平台 `APP_VERSION`）；检索（查询式、范围、译文条件、三项计数、检索时间）；统计（方法、参数、指标公式与文献、totals）；标注与抽样（层、标签集、人数、条目数、一致性、抽样 n / seed / 总命中与编码结果，95% Wilson 区间）；参考文献。
+- 参考文献为 `engine/methods.py` 中的静态表，GB/T 7714 或 APA，含 DOI，已联网核对，生成时不联网。
+- `evidence: true` 时从证据篮收集统计行与命中的来源查询；文本条目忽略。
+- 权限：项目 viewer 起可生成，助手令牌（Bearer）可用；引用其他项目的统计、层或范围返回 404，不写入附录。
 
 ## 七 标注平台
 
@@ -234,6 +311,21 @@ CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读�
 - 多人层新建时默认不预标；勾选预标或对多人层点“预标注”时提示：每位标注者得到同一份模型建议，会影响独立标注和一致性。
 - 片段 / 关系层的句子完成（2026 年 10 月 28 日复测）：一句对某位标注者算完成，须该人“整句确认”过（`sentence_reviews`），或该人在句中有行且没有一条仍是建议。未动过的句子不算完成，预标没给建议的句子也一样，需整句确认（未动过的句子也可点“整句确认”或 Shift+Enter）。多人层只看自己时按本人计；负责人 / 编辑不在标注者名单里时看全部，须名单上每位标注者都完成。句子列表“待办”、句子 `done` 和文档进度（`done` / `pending` = 未完成句数）用同一规则（`services/api/spans.py` `_open`）。原因：多人片段层建好未标注时句子全部显示“已完成”、待办 0（复测 R 其他发现）。
 - 一致性（2026 年 10 月 28 日）：严格 κ / α 以片段范围为单位（某人在该范围无片段记 ∅，页面写“未标注”）；重叠宽松版先按范围成组，再把与其他标注者片段重叠、且没有共同标注者的组合并（同标签优先，其次重叠最长，`engine.agreement.overlap_units`），同一标注者的嵌套片段不合并，因此范围完全一致时宽松值等于严格值，只有边界不同才被宽容。原实现把同一人嵌套的片段串成“主谓一致+时态”一个单位，QA 数据上宽松 κ 0.57 反而低于严格 0.61，已改。κ 校正机会一致，合并会改变边际分布，个别数据上宽松值仍可能略低于严格值，属正常。按标签 κ 附 n（至少一人给出该标签的单位数）。分歧接口另给 `target_text`（争议词）与 `marks`（句内码点区间）。
+
+### 抽样编码
+
+从检索结果随机抽取命中逐条人工编码，估计各类用法的比例（2026 年 11 月 6 日，契约 [contracts/p8.md](../contracts/p8.md) 第五节）。
+
+| 项 | 规则 |
+| --- | --- |
+| 创建 | `POST /projects/{id}/samples {scope, query, aligned?, layers?, n: 1–500, seed?, layer: {name, label_set_id}}` → `{layer_id, sampled, total, seed}`，同步执行。按 `seed`（缺省随机生成并记录）从完整命中中等概率无放回抽 n 条，n 大于命中数时全取 |
+| 完整命中 | 计数已完成时用后台结果集；未完成时同步计数，20 秒内算不完或命中过多返回 409 `SEARCH_INCOMPLETE`；零命中 422 `NO_HITS`；标签集须为片段标签集 |
+| 层 | 新建单人片段层，`annotation_layers.meta.sample` 记录查询、范围、译文条件、n、seed、总命中与时间（迁移 0009）；每条抽中的命中建一个片段，`label = ""`（未编码），状态 suggested |
+| 编码 | 选标签后确认或修改；拒绝表示不计入。未编码片段直接确认返回 422 `LABEL_REQUIRED`，修改后标签仍为空同样 422；整句确认跳过未编码片段。抽样片段只能拒绝不能删除；抽样层不能运行模型建议（422 `SAMPLE_LAYER`） |
+| 不计入 | `label = ""` 的片段不进入标注统计、一致性、导出与 `[标签]` 检索 |
+| 汇总 | `GET /layers/{id}/sample-summary` → `{total_hits, sampled, coded, rejected, seed, labels: [{label, name, count, pct, ci_low, ci_high, estimate}]}`；比例以已编码（不含拒绝）为分母，比例与区间为 0–1 小数；95% Wilson 区间（Wilson 1927）；`estimate` = 比例 × 总命中（四舍五入），页面与助手写明"估计" |
+| 条目 | `GET /layers/{id}/sample-items` 按抽样顺序返回片段、文档名与所在句，供抽样模式使用 |
+| 权限 | 创建同建标注层：owner / editor，助手令牌可创建并走写操作确认；annotator、viewer 403 |
 
 ### 标注导出
 
@@ -304,19 +396,21 @@ JSON 顶层带 `scope`（口径行）、`offsets: "code points"`、`sentence_ind
 
 ### 工具
 
-共 39 个，界面按能力分组、显示中文名（`apps/web/src/components/global/tools.ts`）；带 * 的是写操作。
+共 44 个，界面按能力分组、显示中文名（`apps/web/src/components/global/tools.ts`）；带 * 的是写操作。
 
 | 分组 | 工具 |
 | --- | --- |
 | 语料与检索 | corpora.list、corpora.get、corpora.documents、subcorpora.list、subcorpora.create*、corpus.parse、corpus.search、corpus.context、corpus.sentence |
-| 统计 | stats.frequency、stats.ngrams、stats.collocations、stats.keywords、stats.distribution |
+| 统计 | stats.frequency、stats.ngrams、stats.collocations、stats.keywords、stats.distribution、stats.breakdown、stats.translations |
 | 词性与依存标注 | annot.layers、annot.create_layer*、annot.sentence、annot.diff、annot.stats、annot.suggest*、annot.export* |
-| 片段与对齐 | annot.spans、annot.suggest_spans*、align.pairs、align.suggest*、annot.agreement |
+| 片段与对齐 | annot.spans、annot.suggest_spans*、align.pairs、align.suggest*、annot.agreement、sample.create*、sample.summary |
 | 知识库 | kb.search、kb.terms、kb.documents、kb.save*、kb.extract_terms*、kb.summarize* |
-| 证据与导出 | evidence.add*、evidence.list、queries.save*、queries.list、export.create* |
+| 证据与导出 | evidence.add*、evidence.list、queries.save*、queries.list、export.create*、methods.appendix |
 | 任务 | jobs.get、jobs.cancel* |
 
 每个工具对应一个 api 接口，用 Pi `customTools` 注册；新增业务能力时同步注册工具。
+
+研究能力工具（2026 年 11 月 6 日，契约 [contracts/p8.md](../contracts/p8.md) 第七节）：stats.breakdown（命中分解）、stats.translations（译法）、methods.appendix（方法附录，返回 markdown，不生成文件）、sample.create（抽样编码，写操作确认）、sample.summary（抽样汇总）；stats.frequency 接受 `parts` 与 `dispersion`，stats.keywords 接受 `direction`、`items` 与新排序指标，stats.collocations 接受 mi3、z、delta_p，stats.distribution 与 corpus.search 接受 `aligned`。系统提示增加"统计与方法"：整范围词表与离散度用 stats.frequency，一个查询的命中构成用 stats.breakdown，译法用 stats.translations，某种译法的例句用 corpus.search 加译文条件；效应量、区间、离散度、比例与估计命中数只取工具结果，不自行换算，估计值注明"估计"；只说明统计结果显示了什么，不代写研究结论，方法部分给出 methods.appendix 原文。
 
 ### 写操作确认
 
@@ -333,7 +427,7 @@ JSON 顶层带 `scope`（口径行）、`offsets: "code points"`、`sentence_ind
 
 ### OpenUI
 
-- 前端注册组件库：KwicTable、FreqChart、CollocationTable、KeywordTable、DistributionChart、DependencyTree、AlignmentGraph、AnnotationDiff、TermCard、KbCitation、JobStatus。
+- 前端注册组件库（16 个）：KwicTable、FreqChart、CollocationTable、KeywordTable、DistributionChart、EvidenceCard、JobStatus、Callout、DependencyTree、AnnotationDiff、TermCard、KbCitation、SpanView、AlignmentGraph、BreakdownTable、TranslationTable。BreakdownTable 显示项、命中数、占比、每百万词；TranslationTable 显示译文词、共现句数、占命中句 %、所选指标，行点击带 `search_aligned` 打开检索。
 - 组件说明自动生成后写入 Pi 系统提示词；模型回复输出 OpenUI Lang，agent 服务流式转发，前端用 OpenUI React 渲染器绘制。
 - 模型只能使用已注册组件，不执行生成代码。组件内的"打开完整结果""保存为笔记"等操作调用普通接口。
 
@@ -457,6 +551,7 @@ NLP：中文分词与词性用 jieba（固定词典、关闭 HMM），英文分�
 | P5 标注二 | 自定义片段与关系标注（标签集、文本高亮、连线、LLM 预标按规范）；双语句级与词级对齐（候选生成、连线图编辑、确认）；学习者偏误与翻译策略标签集模板；多人标注一致性（kappa、alpha）与仲裁；OpenUI 组件 AlignmentGraph；导出 brat standoff、JSON、TMX；按自定义标签检索 `[标签]` | 已实现，联调通过 |
 | P6 收尾 | 前端完成度专项审查（对照设计方案、设计稿与契约逐页逐状态核对并补齐）；维基中英子集内置语料；UD 中文树库内置；权限与撤销回归；备份恢复说明；性能基线（Tatoeba 全量检索与统计耗时）；部署文档；README；两条研究流程端到端验收 | 进行中：前端审查、权限回归、备份恢复已完成；内置语料按缩减范围导入（维基中英各 1000 篇、UD 英文 EWT 与中文 GSD 全量、Tatoeba 中英第 1 批约 26 万句对，其余 7 批与性能基线按用户决定暂停）；干净环境验收已完成（新卷 Compose 两条研究流程走通，见 [验收记录](acceptance.md)） |
 | P7 批次 1：正确性与上线前 | 检索完整结果集与后台计数（翻页不重跑、排序在计数完成后生效、命中与缓存上限）；删除语料与文档的影响提示；助手抽屉页面上下文；证据篮"清空我钉的"与加载更多；账号生命周期（管理员用户页、临时密码与强制改密、停用、改密）；设置页"数据与隐私"与发送说明；`/api/health` 查库、worker 健康检查、`scripts/healthcheck.sh`；恢复脚本含 worker-light。契约 [contracts/p7.md](../contracts/p7.md)，来源[调研报告](reviews/2026-11-05-gap-research.md)第四节 | 已实现，整栈联调与独立审查通过 |
+| P8 批次 2：研究能力 P0 | 命中频次分解（检索页"分解"）；频次离散度（range、DP、DPnorm、Juilland D）；关键词效应量（%DIFF、odds ratio、log ratio 95% 区间、Bonferroni、方向、指定词对比）与搭配 MI3、z、ΔP；平行语料译法统计与检索译文条件；检索结果抽样编码（抽样层、抽样模式、Wilson 区间与估计命中数，迁移 0009）；方法附录与参考文献（Markdown / DOCX，保存为笔记）；统计导出 DOCX；Agent 新增 5 个工具（共 44）与 BreakdownTable、TranslationTable 组件（共 16）。契约 [contracts/p8.md](../contracts/p8.md)，来源[调研报告](reviews/2026-11-05-gap-research.md)第二节 B1–B6 | 已实现，整栈联调与独立审查通过 |
 | 二期 | 命名实体、句子与文档分类、语义检索、更多内置语料（报刊语料，见 `doc/corpus-collection-plan.md`）、实时多人协作 | 不在首版 |
 
 贯穿各阶段：每阶段先写 `contracts/pN.md`，三方并行实现，整栈联调后提交；设计文档、Word、change-log 同批更新；每个新业务能力同批注册 Agent 工具与 OpenUI 组件。

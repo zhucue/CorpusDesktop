@@ -27,11 +27,11 @@
 | | 模块 | 能做什么 |
 | :-: | --- | --- |
 | 🗂️ | **语料库** | 导入 TXT / DOCX / CSV / TSV / CoNLL-U / TMX / Tatoeba；中文 jieba、英文 Stanza 自动分词词性依存；元数据子库；内置语料带许可署名 |
-| 🔍 | **检索** | 类 CCL 查询式：字串、`词/n`、`$N` 间隔、`\|`、`+`/`-` 同句条件、`{pos= dep= lemma=}` 属性、`[标签]` 标注；KWIC、上下文、对齐句、分布条、导出 |
-| 📊 | **统计** | 频次 · n-gram · 搭配（MI / logDice / t / LL）· 关键词（LL / log ratio）· 分布 · 标注与对齐统计；每个数字都能回到例句 |
-| ✏️ | **标注** | 词性、依存、片段、关系、双语对齐五类层；Agent 预标 → 人工校对（弧线拖拽、拖选打标、连线对齐、全键盘）；多人一致性 κ / α 与仲裁；导出 CoNLL-U / brat / JSON / TMX / XLSX |
+| 🔍 | **检索** | 类 CCL 查询式：字串、`词/n`、`$N` 间隔、`\|`、`+`/`-` 同句条件、`{pos= dep= lemma=}` 属性、`[标签]` 标注；平行语料译文条件（对齐句含 / 不含）；KWIC、上下文、对齐句、分布条、导出；从结果一键分解命中、统计译法、抽样编码 |
+| 📊 | **统计** | 频次与离散度（range / DP / DPnorm / Juilland D）· n-gram · 搭配（MI / logDice / t / LL / MI3 / z / ΔP）· 关键词（LL / log ratio 及 95% 区间 / %DIFF / odds ratio / Bonferroni，正负双向、指定词对比）· 命中分解 · 平行语料译法（Dice / LL）· 分布 · 标注与对齐统计；每个数字都能回到例句；方法附录（参数、公式、文献，GB/T 7714 / APA，DOCX） |
+| ✏️ | **标注** | 词性、依存、片段、关系、双语对齐五类层；Agent 预标 → 人工校对（弧线拖拽、拖选打标、连线对齐、全键盘）；检索结果抽样编码（比例、95% Wilson 区间、估计命中数）；多人一致性 κ / α 与仲裁；导出 CoNLL-U / brat / JSON / TMX / XLSX |
 | 📚 | **知识库** | 文献（PDF / DOCX / MD / URL）、术语表（语料抽取、译名、TBX）、标注规范、研究笔记；向量 + 关键词混合检索，回答带出处 |
-| 🤖 | **助手** | 基于 Pi SDK 的内置 Agent，39 个业务工具；回答内嵌 KWIC 表、频次图、依存树、对齐图、术语卡、知识引用等 14 种 OpenUI 组件；独立页 + 任意页面右侧抽屉 |
+| 🤖 | **助手** | 基于 Pi SDK 的内置 Agent，44 个业务工具；回答内嵌 KWIC 表、频次图、依存树、对齐图、术语卡、知识引用、命中分解表、译法表等 16 种 OpenUI 组件；独立页 + 任意页面右侧抽屉 |
 | ⚡ | **全局** | 证据篮（钉住任何命中或数字）、命令面板 `Ctrl K`、任务托盘、快捷键 `?`、深色模式、首次引导页 |
 | 🔐 | **账号与管理** | 管理员在设置 › 用户中新建账号（一次性临时密码）、重置密码、停用 / 启用、设管理员；临时密码登录后强制改密；用户自行修改密码；"数据与隐私"列出数据存放与发送到外部模型的操作 |
 
@@ -132,7 +132,7 @@ services/worker/   任务执行器
 services/agent/    Pi 助手服务
 engine/            语料引擎
 scripts/           账号、内置语料导入、性能基线、备份恢复
-contracts/         每阶段接口契约 p1–p6
+contracts/         每阶段接口契约 p1–p8
 deploy/            Compose、Dockerfile、nginx
 doc/               设计文档（Markdown 维护源 + Word）、设计稿、审查记录
 tests/             pytest · vitest · node:test
@@ -148,7 +148,7 @@ tests/             pytest · vitest · node:test
 | [前端整体设计方案](doc/前端整体设计方案.docx) · [md](doc/frontend-design.md) | 视觉系统、页面、组件、动效、交互与各阶段实现记录；设计稿 [doc/ui-design](doc/ui-design/index.html) 可直接打开 |
 | [部署手册](doc/部署手册.docx) · [md](doc/deployment.md) | 环境、服务、变量、启动、账号管理、健康检查、升级、备份恢复、故障 |
 | [验收记录](doc/验收记录.docx) · [md](doc/acceptance.md) | 干净环境两条研究流程的步骤、耗时与截图 |
-| [contracts/](contracts/) | p1 语料与检索 · p2 统计与 Agent · p3 词性依存标注 · p4 知识库 · p5 片段对齐一致性 · p6 收尾 · p7 正确性与上线前 |
+| [contracts/](contracts/) | p1 语料与检索 · p2 统计与 Agent · p3 词性依存标注 · p4 知识库 · p5 片段对齐一致性 · p6 收尾 · p7 正确性与上线前 · p8 研究能力 P0 |
 | [doc/reviews/](doc/reviews/) · [change-log](doc/change-log.md) | 审查记录与变更原因日志；协作规范 [AGENTS.md](AGENTS.md) |
 
 ## 进度
@@ -162,5 +162,6 @@ tests/             pytest · vitest · node:test
 | P5 | 片段与关系、双语对齐、多人一致性与仲裁、brat / TMX | ✅ |
 | P6 | 前端完成度审查 ✅ · 权限回归 ✅ · 备份恢复 ✅ · 内置语料（维基、UD、Tatoeba 第 1 批）✅ · 性能基线 ⏸ · 干净环境验收 ✅ | 🔄 |
 | P7 批次 1 | 检索完整计数与稳定翻页、删除影响提示、助手页面上下文、证据篮清空本人条目、账号生命周期、数据与隐私、健康检查与告警 | ✅ |
+| P8 批次 2 | 命中分解、离散度、效应量、平行语料译法与译文条件、抽样编码、方法附录与引用、助手 5 个新工具 | ✅ |
 
 每个阶段：写契约 → 三方并行实现 → 整栈联调（真实 PostgreSQL、CWB、Stanza、真实模型）→ 验收 → 按功能提交。
