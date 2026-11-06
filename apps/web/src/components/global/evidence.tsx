@@ -11,6 +11,7 @@ import { reducedMotion } from "../../theme/motion";
 import { Tip } from "../common";
 import { Icon } from "../Icon";
 import { evidenceIcon } from "../iconSets";
+import { MethodAppendix } from "./MethodAppendix";
 
 interface EvidenceState {
   items: Evidence[];
@@ -264,6 +265,7 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
   const exportJob = useBasketExport(projectId);
   const [clearing, setClearing] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [appendix, setAppendix] = useState(false);
   if (!ev) return null;
   const n = ev.items.length;
 
@@ -358,10 +360,15 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
             <Icon name="download" size={14} />
             DOCX
           </button>
+          <button className="btn xs" type="button" disabled={!n} onClick={() => setAppendix(true)}>
+            <Icon name="filetext" size={14} />
+            生成方法附录
+          </button>
           <div className="grow" />
           <ClearButton disabled={!ev.total || clearing} onConfirm={clearMine} projectId={projectId} />
         </div>
       </div>
+      {appendix && <MethodAppendix projectId={projectId} evidence onClose={() => setAppendix(false)} />}
       <NotePicker open={picking} projectId={projectId} title={`加入笔记 · ${n} 条证据`} defaultTitle="证据摘录" onClose={() => setPicking(false)} onPick={toNote} />
       <button
         ref={ev.capsuleRef}
