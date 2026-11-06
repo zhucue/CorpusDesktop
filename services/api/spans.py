@@ -480,6 +480,8 @@ def act_span(layer_id: UUID, span_id: int, body: SpanAction, user: CurrentUser, 
     if body.action == "reject":
         span.status = "rejected"
     elif body.action == "confirm":
+        if span.label == "":  # an uncoded sample hit (contracts/p8.md §五)
+            raise ApiError(422, "LABEL_REQUIRED", "未编码，请先选择标签")
         span.status = "modified" if span.status == "modified" else "confirmed"
     else:
         changed = {
@@ -489,6 +491,8 @@ def act_span(layer_id: UUID, span_id: int, body: SpanAction, user: CurrentUser, 
         }
         if not changed:
             raise ApiError(422, "VALIDATION_ERROR", "修改须提供 label、范围或 attrs")
+        if "label" not in changed and span.label == "":  # uncoded sample hit
+            raise ApiError(422, "LABEL_REQUIRED", "未编码，请先选择标签")
         if "label" in changed:
             span.label = check_label(db, layer, body.label)
         if body.start_cp is not None or body.end_cp is not None:
@@ -832,6 +836,7 @@ def confirm_p5_sentence(db, layer, user, document_id, sentence_index):
                 SpanAnnotation.layer_id == layer.id,
                 SpanAnnotation.annotator_id == me,
                 SpanAnnotation.status == "suggested",
+                SpanAnnotation.label != "",  # uncoded sample hits stay open
                 SpanAnnotation.document_id == document_id,
                 SpanAnnotation.start_cp >= sentence.start_cp,
                 SpanAnnotation.start_cp < sentence.end_cp,
@@ -1002,7 +1007,12 @@ def p5_stats(db, layer, annotators, progress):
                 n.filter(m.status == "confirmed"),
                 n.filter(m.status == "modified"),
             )
-            .where(m.layer_id == layer.id, m.status != "rejected", *_of(m, annotators))
+            .where(
+                m.layer_id == layer.id,
+                m.status != "rejected",
+                m.label != "",  # uncoded sample hits
+                *_of(m, annotators),
+            )
             .group_by(m.label)
             .order_by(n.desc(), m.label)
         ).all()
@@ -1015,3 +1025,11 @@ def p5_stats(db, layer, annotators, progress):
         "progress": progress,
         "per_document": p5_documents(db, layer, annotators)["items"],
     }
+
+
+def sample_summary(layer_id, user, db) -> dict:
+    """Coding summary of a sample layer, as GET /layers/{id}/sample-summary (services.api.samples);
+    pct / ci_low / ci_high are proportions 0–1."""
+    from services.api.samples import sample_summary as summary_route
+
+    return summary_route(layer_id=layer_id, user=user, db=db)

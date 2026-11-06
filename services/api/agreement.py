@@ -102,7 +102,12 @@ def _with_sentence(db, spans):
 
 
 def _span_rows(db, layer, annotators):
-    rows = eff.annotator_spans(db, layer, annotators, statuses=None)
+    # label "": uncoded sample hits (contracts/p8.md §五), not part of agreement
+    rows = [
+        s
+        for s in eff.annotator_spans(db, layer, annotators, statuses=None)
+        if s.label != ""
+    ]
     return _with_sentence(
         db,
         [

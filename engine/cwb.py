@@ -526,6 +526,7 @@ def _query(
     cut: int | None,
     cancel: threading.Event | None,
     max_hits: int | None,
+    aligned: tuple[str, set] | None = None,
 ) -> tuple[RowSet, int]:
     """(filtered and sorted rows, number of anchor hits before filtering); see query_rows."""
     key = _key(corpus_key)
@@ -611,6 +612,14 @@ def _query(
             for i in rows
             if ((arr[4 * i + 2], arr[4 * i + 3]) in sents) == (op == "+")
         ]
+    if aligned is not None:  # sentences given by the caller (translation condition)
+        op, sents = aligned
+        rows = range(len(arr) // 4) if keep is None else keep
+        keep = [
+            i
+            for i in rows
+            if ((docs[arr[4 * i + 2]], arr[4 * i + 3]) in sents) == (op == "+")
+        ]
     for slot, at in zip(slots, marked):
         rows = range(len(arr) // 4) if keep is None else keep
         tokens = [
@@ -648,6 +657,7 @@ def query_rows(
     cut: int | None = None,
     cancel: threading.Event | None = None,
     max_hits: int | None = None,
+    aligned: tuple[str, set] | None = None,
 ) -> RowSet:
     """Anchor hits within s, filtered by same-sentence conditions and attribute slots, ordered by `sort`.
 
@@ -659,6 +669,9 @@ def query_rows(
     Attribute slots (`#attr` / `#target` lines, engine.query): for each slot the anchor is run again with
     the target marker on it, giving that slot's token per hit; attr_filter(slot, {(doc_id, sentence_index,
     token_index)}) returns the tokens that satisfy the slot's constraints and the other hits are dropped.
+
+    aligned: (op, {(doc_id, sentence_index)}) keeps hits whose sentence is in the set (op "+") or not in it
+    ("-"); the API passes the sentences aligned to the hits of a translation-side query.
     """
     return _query(
         index_dir,
@@ -672,6 +685,7 @@ def query_rows(
         cut=cut,
         cancel=cancel,
         max_hits=max_hits,
+        aligned=aligned,
     )[0]
 
 
@@ -685,6 +699,7 @@ def prefix_rows(
     timeout: float = 60,
     attr_filter: AttrFilter | None = None,
     max_hits: int | None = None,
+    aligned: tuple[str, set] | None = None,
 ) -> list[Row]:
     """The first `need` rows in corpus order (fewer when the query has fewer). The anchor hits are cut at
     `need` and the cut is doubled while conditions or attribute slots leave too few rows, up to `max_hits`
@@ -703,6 +718,7 @@ def prefix_rows(
         cut=cut,
         cancel=None,
         max_hits=None,
+        aligned=aligned,
     )
     while len(rows) < need and anchors >= cut and (max_hits is None or cut < max_hits):
         cut = cut * 2 if max_hits is None else min(cut * 2, max_hits)
@@ -722,6 +738,7 @@ def prefix_rows(
                 cut=cut,
                 cancel=None,
                 max_hits=None,
+                aligned=aligned,
             )
         except subprocess.TimeoutExpired:
             break
@@ -799,6 +816,7 @@ def search(
     context: Context,
     count_timeout: float = 20,
     attr_filter: AttrFilter | None = None,
+    aligned: tuple[str, set] | None = None,
 ) -> SearchResult:
     """One page of query_rows, with exact counts over all filtered hits.
 
@@ -806,7 +824,7 @@ def search(
     in corpus order (sort not applied) and counts are None with complete=False.
     """
     page, page_size = max(1, page), max(1, page_size)
-    kw = {"restrict": restrict, "attr_filter": attr_filter}
+    kw = {"restrict": restrict, "attr_filter": attr_filter, "aligned": aligned}
     try:
         rows = query_rows(
             index_dir,
@@ -928,6 +946,22 @@ def _word_cut_right(s: str, more: bool) -> str:
     if s and _wordy(extra) and _wordy(s[-1]) and (m := re.search(r"\s\S*$", s)):
         return s[: m.start()]
     return s
+
+
+def doc_starts(index_dir: Path, corpus_key: str) -> dict[str, int]:
+    """{doc_id: corpus position of its first token} of the current index ({} when empty)."""
+    key = _key(corpus_key)
+    ix = _open(str(_home(Path(index_dir), key)))
+    if ix.empty:
+        return {}
+    reg = str(Path(index_dir) / "registry")
+    out = _run(["cwb-s-decode", "-r", reg, key.upper(), "-S", "doc_id"])
+    starts = {}
+    for line in out.split("\n"):
+        if line:
+            a, _, doc_id = line.split("\t", 2)
+            starts[doc_id] = int(a)
+    return starts
 
 
 def lexicon(index_dir: Path, corpus_key: str, attr: str) -> list[str]:

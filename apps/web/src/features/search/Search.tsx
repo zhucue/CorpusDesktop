@@ -40,6 +40,7 @@ import { distributionFields, fieldLabel } from "./fields";
 import { posGroups } from "./posTags";
 import { convertScript, guessScript, scriptLabel } from "./script";
 import { sortNote, useCountPoll, type SearchCounts, type SearchPage } from "./countPoll";
+import { AlignedInput, BreakdownMenu, isAlignedError, parseAlignedParam, SampleDialog, TranslationsButton } from "./SearchTools";
 import "./search.css";
 
 const PAGE_SIZE = 50;
@@ -146,11 +147,14 @@ export function CountsCards({
   counts,
   spark,
   searching,
+  note,
 }: {
   counts: SearchCounts | null;
   spark?: { values: number[]; label: string } | null;
   /** A new search is running: the previous counts are not shown. */
   searching?: boolean;
+  /** Shown on the hit card, e.g. 含译文条件. */
+  note?: string;
 }) {
   const pending = searching ? "检索中" : counts && !counts.complete ? (counts.failed ? "未完成" : "计算中") : undefined;
   const v = (n: number | undefined) => (counts ? (n ?? 0) : null);
@@ -158,7 +162,10 @@ export function CountsCards({
     <section className="grid-3" aria-label="计数">
       <div className="card card-pad count-card">
         <div>
-          <div className="stat-label">命中</div>
+          <div className="stat-label">
+            命中
+            {note && <span className="tag t-info" style={{ marginLeft: 6 }}>{note}</span>}
+          </div>
           <Count value={v(counts?.hits)} unit="次" pending={pending} />
         </div>
         {spark && !pending && <Sparkline values={spark.values} w={88} h={28} label={spark.label} />}
@@ -443,11 +450,14 @@ export default function Search() {
   const [histOpen, setHistOpen] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory(projectId));
   const [saving, setSaving] = useState(false);
-  const [distBase, setDistBase] = useState<{ query: string; scope: SearchScope } | null>(null);
+  const [distBase, setDistBase] = useState<{ query: string; scope: SearchScope; aligned?: SearchRequest["aligned"] } | null>(null);
   const [picked, setPicked] = useState<number | null>(null);
   const [distPick, setDistPick] = useState<string | null>(null); // field chosen in the select
   const [distRuns, setDistRuns] = useState<Record<string, string>>({}); // search (query + scope) → computed field
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [alignedOp, setAlignedOp] = useState<"+" | "-">("+");
+  const [alignedQuery, setAlignedQuery] = useState("");
+  const [sampling, setSampling] = useState(false);
   const [layerPick, setLayerPick] = useState<{ corpus: string | null; pos?: string | null; dep?: string | null; span?: string | null }>({ corpus: null });
   const inputRef = useRef<HTMLInputElement>(null);
   const lastParams = useRef<string>("");
@@ -560,7 +570,10 @@ export default function Search() {
   const distKey = distBase ? JSON.stringify(distBase) : "";
   // Re-paging keeps distBase, so the same computed field (and the cached stat) is reused.
   const distField = distBase ? (distRuns[distKey] ?? null) : null;
-  const distBody = distBase && distField && result ? { scope: distBase.scope, query: distBase.query, field: distField, bins: 10, project_id: projectId } : null;
+  const distBody =
+    distBase && distField && result
+      ? { scope: distBase.scope, query: distBase.query, field: distField, bins: 10, project_id: projectId, ...(distBase.aligned ? { aligned: distBase.aligned } : {}) }
+      : null;
   const dist = useStatJob("distribution", distBody, projectId, 0, { quiet: true });
   const dRows = useMemo(() => (dist.stat ? distRows(dist.stat) : undefined), [dist.stat]);
 
@@ -577,10 +590,14 @@ export default function Search() {
     });
   }
 
-  function run(opts?: { query?: string; scope?: SearchScope | null; fromDist?: boolean; layers?: SearchRequest["layers"] }) {
+  function run(opts?: { query?: string; scope?: SearchScope | null; fromDist?: boolean; layers?: SearchRequest["layers"]; aligned?: SearchRequest["aligned"] | null }) {
     const q = (opts?.query ?? query).trim();
     const sc = opts && "scope" in opts ? opts.scope : scope;
     if (!sc || !q) return;
+    // 译文条件: an explicit value (link, re-run) is always sent (the API answers NOT_PARALLEL; corpora may not
+    // be loaded yet on a fresh page); the input applies on parallel corpora only.
+    const scParallel = !!describeScope(sc, allCorpora, allSubs).corpus?.parallel;
+    const al = opts && "aligned" in opts ? opts.aligned : scParallel && alignedQuery.trim() ? { op: alignedOp, query: alignedQuery.trim() } : null;
     const next: SearchRequest = {
       scope: sc,
       query: q,
@@ -592,6 +609,7 @@ export default function Search() {
     };
     const lay = opts?.layers ? { ...layersFor(sc), ...opts.layers } : layersFor(sc);
     if (lay) next.layers = lay;
+    if (al) next.aligned = al;
     if (sort === "random") next.seed = Math.floor(Math.random() * 1e9);
     setRunId((n) => n + 1);
     setReq(next);
@@ -600,9 +618,10 @@ export default function Search() {
     setWithin("");
     if (!opts?.fromDist) {
       setPicked(null);
-      setDistBase({ query: q, scope: sc });
+      setDistBase({ query: q, scope: sc, aligned: next.aligned });
       const p: Record<string, string> = { q };
       p.scope = JSON.stringify(sc);
+      if (next.aligned) p.aligned = JSON.stringify(next.aligned);
       lastParams.current = new URLSearchParams(p).toString();
       setParams(p, { replace: true });
       setHistory(pushHistory(projectId, { query: q, scope: sc, scopeName: describeScope(sc, allCorpora, allSubs).name, hits: null, at: new Date().toISOString() }));
@@ -636,7 +655,11 @@ export default function Search() {
       const cid = "corpus_id" in effective ? effective.corpus_id : describeScope(effective, allCorpora, allSubs).corpus?.id;
       if (cid) setLayerPick({ corpus: cid, ...urlLayers });
     }
-    if (effective) run({ query: q, scope: effective, layers: urlLayers });
+    // 译文条件 from stats rows / assistant links: ?aligned=<JSON {op, query}>
+    const urlAligned = parseAlignedParam(params.get("aligned"));
+    setAlignedOp(urlAligned?.op ?? "+");
+    setAlignedQuery(urlAligned?.query ?? "");
+    if (effective) run({ query: q, scope: effective, layers: urlLayers, aligned: urlAligned });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
@@ -651,15 +674,16 @@ export default function Search() {
 
   // Re-run when context length or sort changes.
   useEffect(() => {
-    if (req) run({ query: req.query, scope: req.scope, fromDist: true });
+    if (req) run({ query: req.query, scope: req.scope, fromDist: true, aligned: req.aligned ?? null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctxMode, sort, posLayer, depLayer, spanLayer]);
 
   function pickDist(i: number | null) {
     setPicked(i);
     if (!distBase) return;
-    if (i == null || !dRows?.[i]) run({ query: distBase.query, scope: distBase.scope, fromDist: true });
-    else run({ query: distBase.query, scope: dRows[i].scope, fromDist: true });
+    const aligned = distBase.aligned ?? null;
+    if (i == null || !dRows?.[i]) run({ query: distBase.query, scope: distBase.scope, fromDist: true, aligned });
+    else run({ query: distBase.query, scope: dRows[i].scope, fromDist: true, aligned });
   }
 
   function changePage(page: number) {
@@ -720,6 +744,7 @@ export default function Search() {
   const terms = conditionTerms(result?.parse.conditions);
   const corpusName = info.corpus?.name ?? "";
   const parallel = !!info.corpus?.parallel;
+  const alignedError = isAlignedError(search.error) ? search.error : null;
   const rows: (KwicRow & { hit: Hit })[] = (result?.items ?? [])
     .filter((h) => !within || `${h.left}${h.match}${h.right}`.includes(within))
     .map((h) => ({
@@ -919,6 +944,17 @@ export default function Search() {
               })}
             </div>
           )}
+          {parallel && (
+            <AlignedInput
+              op={alignedOp}
+              query={alignedQuery}
+              onOp={setAlignedOp}
+              onQuery={setAlignedQuery}
+              scope={scope && corpusReady ? scope : null}
+              error={alignedError}
+              onSubmit={() => !parseBad && run()}
+            />
+          )}
           {!scope && (
             <div className="alert info">
               <Icon name="info" size={14} />
@@ -946,7 +982,12 @@ export default function Search() {
         </section>
 
         {(result || search.isFetching) && (
-          <CountsCards counts={counts} spark={spark} searching={search.isFetching && search.isPlaceholderData && !req?.search_id} />
+          <CountsCards
+            counts={counts}
+            spark={spark}
+            searching={search.isFetching && search.isPlaceholderData && !req?.search_id}
+            note={req?.aligned ? `含译文条件（${req.aligned.op === "+" ? "含" : "不含"} ${req.aligned.query}）` : undefined}
+          />
         )}
 
         {result && distBase && (
@@ -1025,6 +1066,14 @@ export default function Search() {
                     {sortNote(result, counts)}
                   </span>
                 )}
+                <BreakdownMenu projectId={projectId} req={req} fields={distFields} />
+                {(parallel || !!req?.aligned) && <TranslationsButton projectId={projectId} req={req} />}
+                <Tip title={counts?.complete ? "从全部命中中抽样并逐条编码" : "计数完成后可抽样"}>
+                  <button className="btn s" type="button" disabled={!req || !counts?.complete || !counts.hits} onClick={() => setSampling(true)}>
+                    <Icon name="pen" size={14} />
+                    抽样编码
+                  </button>
+                </Tip>
                 <Tip title={exportTip("导出 CSV")}>
                   <button className="btn s" type="button" disabled={!req || exporter.busy} onClick={() => exportAs("csv")}>
                     <Icon name="download" size={14} />
@@ -1038,7 +1087,7 @@ export default function Search() {
                   </button>
                 </Tip>
               </div>
-              <ErrorAlert error={parseBad ? null : search.error} style={{ margin: 16 }} />
+              <ErrorAlert error={parseBad || alignedError ? null : search.error} style={{ margin: 16 }} />
               {pollError ? <ErrorAlert error={pollError} style={{ margin: 16 }} /> : null}
               {counts?.failed && (
                 <div className="alert warn" role="alert" style={{ margin: 16 }}>
@@ -1131,6 +1180,8 @@ export default function Search() {
           </section>
         )}
       </div>
+
+      <SampleDialog open={sampling} onClose={() => setSampling(false)} projectId={projectId} req={req} hits={counts?.complete ? counts.hits : null} />
 
       <Modal title="保存查询" open={saving} footer={null} onCancel={() => setSaving(false)} destroyOnHidden>
         <div className="col" style={{ marginBottom: 12 }}>

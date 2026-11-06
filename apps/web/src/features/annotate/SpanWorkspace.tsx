@@ -5,7 +5,7 @@ import { useSearchParams } from "react-router";
 import type { LabelDef, Layer, Relation, SentenceSpans, Span } from "../../api";
 import { DiffRows, diffCounts, type DiffKind } from "../../components/annot/DiffRows";
 import { SpanText, type FlowPiece } from "../../components/annot/SpanText";
-import { cpSlice } from "../../components/annot/spans";
+import { cpLength, cpSlice } from "../../components/annot/spans";
 import { Empty, ErrorAlert, Skeleton, Tip } from "../../components/common";
 import { PinButton } from "../../components/global/evidence";
 import { Icon } from "../../components/Icon";
@@ -13,9 +13,37 @@ import { fmt } from "../../lib/format";
 import { AgreementTab } from "./Agreement";
 import { useLabelSets, useLayerDocs } from "./data";
 import { LabelPanel } from "./LabelPanel";
-import { useAnnotatorView, useSpanActions, useSpanSentence, useSpanSentences, useSpanWindow } from "./spanData";
+import {
+  sampleOf,
+  useAnnotatorView,
+  useSampleActions,
+  useSampleItems,
+  useSampleSummary,
+  useSpanActions,
+  useSpanSentence,
+  useSpanSentences,
+  useSpanWindow,
+  type SampleItem,
+  type SampleMeta,
+  type SampleSummary,
+} from "./spanData";
 import { labelName, labelValue, sourceText } from "./model";
-import { flowRelations, flowSpans, isHumanSource, isSuggested, sortSpans, spanDiffBlocks, spanKeyCommand, spanSentenceDone, stepSpan, type SpanCommand } from "./spanModel";
+import {
+  flowRelations,
+  flowSpans,
+  isHumanSource,
+  isSuggested,
+  sampleKeyCommand,
+  sampleState,
+  sortSpans,
+  spanDiffBlocks,
+  spanKeyCommand,
+  spanSentenceDone,
+  stepSpan,
+  type SampleCommand,
+  type SpanCommand,
+} from "./spanModel";
+import { MethodAppendix } from "../../components/global/MethodAppendix";
 import { controlKey, Stream, typingTarget, useEditorFocus } from "./Stream";
 import { StatsTab } from "./Tabs";
 import { statusView } from "./Workspace";
@@ -23,8 +51,23 @@ import { statusView } from "./Workspace";
 type Tab = "edit" | "diff" | "stats" | "agreement";
 type Sel = { kind: "span" | "rel"; id: string } | null;
 
+type WorkspaceProps = {
+  layer: Layer;
+  layers: Layer[];
+  projectId: string;
+  canAnnotate: boolean;
+  readOnlyNote?: string;
+  canManage: boolean;
+  leftTop?: React.ReactNode;
+};
+
+/** Span / relation review; a sample layer (layer.meta.sample) opens in sample mode. */
+export default function SpanWorkspace(props: WorkspaceProps) {
+  return sampleOf(props.layer) ? <SampleWorkspace {...props} /> : <SpanEditor {...props} />;
+}
+
 /** Span / relation review: text flow with spans, label panel, relations between two spans. */
-export default function SpanWorkspace({
+function SpanEditor({
   layer,
   layers,
   projectId,
@@ -868,3 +911,295 @@ function SpanDiffTab({ layer, docId, keep, onOpen }: { layer: Layer; docId: stri
   );
 }
 
+
+/* ---------- sample mode (contracts/p8.md §五) ---------- */
+
+const pctText = (v: number | null | undefined) => (v == null ? "—" : `${(v * 100).toFixed(1)}%`);
+
+function sampleStateView(item: SampleItem, labels: LabelDef[] | undefined): { text: string; cls: string } {
+  const st = sampleState(item.span);
+  if (st === "rejected") return { text: "拒绝", cls: "t-err" };
+  if (st === "coded") return { text: labelName(labels, item.span.label), cls: "t-ok" };
+  return { text: item.span.label ? `${labelName(labels, item.span.label)}?` : "未编码", cls: "t-gray" };
+}
+
+/** Sample layer: hits one by one in sampling order (hit sentence only), label keys, summary with 95% Wilson intervals. */
+function SampleWorkspace({ layer, projectId, canAnnotate, readOnlyNote = "查看者只读", leftTop }: WorkspaceProps) {
+  const sample = sampleOf(layer) as SampleMeta;
+  const [params, setParams] = useSearchParams();
+  const itemsQ = useSampleItems(layer.id);
+  const summary = useSampleSummary(layer.id);
+  const labelSets = useLabelSets(projectId);
+  const set = labelSets.data?.find((x) => x.id === layer.label_set_id);
+  const labels = useMemo(() => set?.labels ?? [], [set]);
+  const items = useMemo(() => itemsQ.data ?? [], [itemsQ.data]);
+  const act = useSampleActions(layer.id, projectId);
+  const [filter, setFilter] = useState<"todo" | "all">("all");
+  const [method, setMethod] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
+
+  const nParam = Number(params.get("n") || 0);
+  const firstTodo = items.find((x) => sampleState(x.span) === "todo")?.n;
+  const cur = items.find((x) => x.n === (nParam || firstTodo)) ?? items[0];
+  const coded = items.filter((x) => sampleState(x.span) === "coded").length;
+  const rejected = items.filter((x) => sampleState(x.span) === "rejected").length;
+  const shown = filter === "todo" ? items.filter((x) => sampleState(x.span) === "todo" || x.n === cur?.n) : items;
+
+  function go(n: number) {
+    setHint(null);
+    setParams(
+      (p) => {
+        const q = new URLSearchParams(p);
+        q.set("n", String(n));
+        q.delete("doc");
+        q.delete("s");
+        return q;
+      },
+      { replace: true },
+    );
+  }
+  function move(delta: 1 | -1) {
+    if (!cur) return;
+    const i = items.findIndex((x) => x.n === cur.n);
+    const next = items[Math.max(0, Math.min(items.length - 1, i + delta))];
+    if (next) go(next.n);
+  }
+  /** After coding: the next uncoded hit after the current one (wrapping), else the next one. */
+  function advance() {
+    if (!cur) return;
+    const i = items.findIndex((x) => x.n === cur.n);
+    for (let d = 1; d < items.length; d++) {
+      const x = items[(i + d) % items.length];
+      if (sampleState(x.span) === "todo") return go(x.n);
+    }
+    move(1);
+  }
+  function pick(label: string) {
+    if (!cur || !canAnnotate) return;
+    const sp = cur.span;
+    if (sp.label === label && (sp.status === "confirmed" || sp.status === "modified")) return advance();
+    void act(cur, sp.label === label && sp.status === "suggested" ? { action: "confirm" } : { action: "modify", label });
+    advance();
+  }
+  function confirm() {
+    if (!cur || !canAnnotate) return;
+    if (cur.span.label === "") {
+      setHint("先选择标签（数字键）");
+      return;
+    }
+    if (cur.span.status === "suggested" || cur.span.status === "rejected") void act(cur, { action: "confirm" });
+    advance();
+  }
+  function reject() {
+    if (!cur || !canAnnotate) return;
+    if (cur.span.status !== "rejected") void act(cur, { action: "reject" });
+    advance();
+  }
+  function run(cmd: SampleCommand) {
+    if (cmd.type === "move") move(cmd.delta);
+    else if (cmd.type === "label") pick(cmd.label);
+    else if (cmd.type === "confirm") confirm();
+    else reject();
+  }
+  const runRef = useRef(run);
+  runRef.current = run;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || typingTarget(e.target) || controlKey(e)) return;
+      const cmd = sampleKeyCommand(e, labels);
+      if (!cmd) return;
+      e.preventDefault();
+      runRef.current(cmd);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [labels]);
+
+  const sent = cur?.sentence;
+  const a = sent && cur ? cur.span.start_cp - sent.start_cp : 0;
+  const b = sent && cur ? cur.span.end_cp - sent.start_cp : 0;
+  const view = cur ? sampleStateView(cur, labels) : null;
+
+  const list = (
+    <section className="card stream-card" aria-label="抽样命中">
+      <div className="row between" style={{ padding: "2px 6px 8px" }}>
+        <h2>抽样命中</h2>
+        <div className="seg-mini" role="tablist" aria-label="命中范围">
+          <button type="button" role="tab" aria-selected={filter === "todo"} onClick={() => setFilter("todo")}>
+            未编码
+          </button>
+          <button type="button" role="tab" aria-selected={filter === "all"} onClick={() => setFilter("all")}>
+            全部
+          </button>
+        </div>
+      </div>
+      <div className="col gap-4 stream">
+        {itemsQ.isPending ? (
+          <Skeleton rows={5} />
+        ) : shown.length === 0 ? (
+          <Empty icon="circlecheck" text={filter === "todo" ? "已全部编码" : "没有抽样命中"} />
+        ) : (
+          shown.map((x) => {
+            const on = x.n === cur?.n;
+            const v = sampleStateView(x, labels);
+            return (
+              <button
+                key={x.n}
+                className={`sent ${on ? "on" : ""} ${sampleState(x.span) !== "todo" ? "done" : ""}`}
+                type="button"
+                aria-current={on ? "true" : undefined}
+                onClick={() => go(x.n)}
+              >
+                <span className="n">{x.n}</span>
+                <span className="grow ellipsis">{x.span.text}</span>
+                <span className={`tag ${v.cls}`}>{v.text}</span>
+              </button>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+
+  const editor = (
+    <section className="card ed-card" aria-label="抽样编码">
+      <div className="card-head">
+        <h2>抽样编码</h2>
+        <span className="small">
+          已编码 <b className="num">{fmt(coded)}</b> / 抽样 <b className="num">{fmt(items.length || sample.n)}</b>
+          {rejected > 0 ? ` · 拒绝 ${fmt(rejected)}` : ""}
+        </span>
+        <div className="grow" />
+        <span className="mono small muted ellipsis" style={{ maxWidth: 260 }} title={sample.query}>
+          {sample.query}
+          {sample.aligned ? ` · 译文${sample.aligned.op === "+" ? "含" : "不含"} ${sample.aligned.query}` : ""}
+        </span>
+      </div>
+      <div className="card-pad col gap-12">
+        <ErrorAlert error={itemsQ.error ?? labelSets.error} />
+        {!cur ? (
+          itemsQ.isPending ? (
+            <Skeleton rows={3} />
+          ) : (
+            <Empty icon="squaredashed" text="没有抽样命中" />
+          )
+        ) : (
+          <>
+            <div className="row" style={{ gap: 8 }}>
+              <span className="mono small muted">
+                第 {cur.n} 条 · {cur.document_title}
+                {cur.span.sentence_index != null ? ` · 句 ${cur.span.sentence_index + 1}` : ""}
+              </span>
+              {view && <span className={`tag ${view.cls}`}>{view.text}</span>}
+            </div>
+            <p style={{ fontSize: 18, lineHeight: 1.8, margin: 0 }}>
+              {sent ? (
+                <>
+                  {cpSlice(sent.text, 0, a)}
+                  <mark>{cpSlice(sent.text, a, b)}</mark>
+                  {cpSlice(sent.text, b, cpLength(sent.text))}
+                </>
+              ) : (
+                <mark>{cur.span.text}</mark>
+              )}
+            </p>
+            <div className="act">
+              <button className="btn ok" type="button" disabled={!canAnnotate} onClick={confirm}>
+                <Icon name="check" size={14} />
+                确认<span className="kbd">Enter</span>
+              </button>
+              <button className="btn danger" type="button" disabled={!canAnnotate} onClick={reject}>
+                <Icon name="x" size={14} />
+                拒绝<span className="kbd">X</span>
+              </button>
+              <div className="grow" />
+              <button className="btn s ghost" type="button" onClick={() => move(-1)}>
+                上一条<span className="kbd">K</span>
+              </button>
+              <button className="btn s ghost" type="button" onClick={() => move(1)}>
+                下一条<span className="kbd">J</span>
+              </button>
+            </div>
+            {hint && (
+              <span className="small" role="status">
+                {hint}
+              </span>
+            )}
+            {!canAnnotate && <span className="small muted">{readOnlyNote}</span>}
+          </>
+        )}
+      </div>
+    </section>
+  );
+
+  return (
+    <div className="ws">
+      <div className="col gap-16 ws-left" style={{ minWidth: 0 }}>
+        {leftTop}
+        {list}
+      </div>
+      <div className="col gap-16 ws-center" style={{ minWidth: 0 }}>
+        {editor}
+        <SampleSummaryCard data={summary.data} error={summary.error} pending={summary.isPending} onMethod={() => setMethod(true)} />
+      </div>
+      <aside className="col gap-16" aria-label="标签">
+        <LabelPanel
+          set={set}
+          current={cur && cur.span.status !== "rejected" && cur.span.label ? cur.span.label : null}
+          disabled={!canAnnotate || !cur}
+          colorPos={false}
+          onPick={(l) => pick(labelValue(l))}
+        />
+      </aside>
+      {method && <MethodAppendix projectId={projectId} layerIds={[layer.id]} onClose={() => setMethod(false)} />}
+    </div>
+  );
+}
+
+function SampleSummaryCard({ data, error, pending, onMethod }: { data: SampleSummary | undefined; error: unknown; pending: boolean; onMethod: () => void }) {
+  return (
+    <section className="card" aria-label="抽样汇总">
+      <div className="card-head">
+        <h2>汇总</h2>
+        {data && (
+          <span className="small muted">
+            总命中 <b className="num">{fmt(data.total_hits)}</b> · 已编码 <b className="num">{fmt(data.coded)}</b> · 拒绝 <b className="num">{fmt(data.rejected)}</b>
+            {data.seed != null ? ` · seed ${data.seed}` : ""}
+          </span>
+        )}
+        <div className="grow" />
+        <button className="btn s" type="button" onClick={onMethod}>
+          <Icon name="info" size={14} />
+          方法说明
+        </button>
+      </div>
+      <ErrorAlert error={error} style={{ margin: 16 }} />
+      {pending ? (
+        <Skeleton rows={3} />
+      ) : data ? (
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>标签</th>
+              <th className="r">条数</th>
+              <th className="r">比例</th>
+              <th className="r">95% 区间（Wilson）</th>
+              <th className="r">估计命中数</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.labels.map((r) => (
+              <tr key={r.label}>
+                <td>{r.name}</td>
+                <td className="r num">{fmt(r.count)}</td>
+                <td className="r num">{pctText(r.pct)}</td>
+                <td className="r num">{r.ci_low == null ? "—" : `${pctText(r.ci_low)} – ${pctText(r.ci_high)}`}</td>
+                <td className="r num">{r.estimate == null ? "—" : `≈ ${fmt(r.estimate)}`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+    </section>
+  );
+}

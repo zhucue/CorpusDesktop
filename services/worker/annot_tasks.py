@@ -1141,6 +1141,8 @@ def _annotator_rows(db, x, doc_ids):
     common = {"status", "source", "model_label", "label"}
     if x.kind == "span":
         for s in eff.annotator_spans(db, x, annotators, doc_ids, statuses=None):
+            if s.label == "":  # uncoded sample hit (contracts/p8.md §五)
+                continue
             out[s.annotator_id].append(
                 {
                     **_str_ids(eff._span_dict(s)),

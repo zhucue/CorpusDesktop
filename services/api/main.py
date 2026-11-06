@@ -17,7 +17,9 @@ from services.api import (
     kb,
     kb_terms,
     label_sets,
+    methods,
     projects,
+    samples,
     search,
     spans,
     stats,
@@ -72,6 +74,8 @@ for module in (
     agreement,
     kb,
     kb_terms,
+    methods,
+    samples,
 ):
     app.include_router(module.router)
 app.include_router(auth.users_router)

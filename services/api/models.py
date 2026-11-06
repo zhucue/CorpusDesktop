@@ -420,6 +420,8 @@ class AnnotationLayer(Base):
     guideline_document_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("kb_documents.id", ondelete="SET NULL")
     )
+    # P8: {"sample": {query, scope, aligned, n, seed, total_hits, created_at}} on sample layers
+    meta: Mapped[dict] = mapped_column(JSONB, server_default="{}")
 
 
 class Annotation(Base):

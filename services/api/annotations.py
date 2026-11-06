@@ -194,6 +194,7 @@ def layer_view(db, layer):
         "tgt_corpus_id": layer.tgt_corpus_id,
         "level": layer.level,
         "guideline_document_id": layer.guideline_document_id,
+        "meta": layer.meta or {},
     }
 
 
@@ -706,6 +707,8 @@ def delete_layer(layer_id: UUID, user: CurrentUser, db: Db):
 @router.post("/layers/{layer_id}/preannotate")
 def preannotate(layer_id: UUID, body: PreannotateInput, user: CurrentUser, db: Db):
     layer = load_layer(db, layer_id, user, WRITE, lock=True)
+    if (layer.meta or {}).get("sample"):  # a re-run would delete the uncoded sample hits
+        raise ApiError(422, "SAMPLE_LAYER", "抽样层不能预标注")
     if _active_job(db, layer.id):
         raise ApiError(409, "JOB_IN_PROGRESS", "该层正在预标")
     ids = _check_documents(db, layer.corpus_id, body.document_ids)

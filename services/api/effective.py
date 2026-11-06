@@ -295,13 +295,50 @@ def scope_clauses(corpus, filt, fields):
 
 
 def pg_search(
-    db, corpus, filt, fields, atom, constraints, layers, req, page, page_size
+    db, corpus, filt, fields, atom, constraints, layers, req, page, page_size, keep=None
 ):
-    """Hits of a pure attribute query from `tokens`; same semantics as engine.cwb.search."""
+    """Hits of a pure attribute query from `tokens`; same semantics as engine.cwb.search. keep: (op,
+    {(document id str, sentence index)}) of a translation condition, as cwb.query_rows(aligned=)."""
+    rows = pg_rows(db, corpus, filt, fields, atom, constraints, layers, req.sort, keep)
+    if req.sort == "random":
+        random.Random(req.seed or 0).shuffle(rows)
+    counts = Counts(
+        len(rows), len({(r[0], r[1]) for r in rows}), len({r[0] for r in rows}), True
+    )
+    lo = (page - 1) * page_size
+    return SearchResult(
+        counts, _hits(db, rows[lo : lo + page_size], req.context), page, page_size
+    )
+
+
+def keep_rows(rows, keep):
+    """Rows (document id, sentence index, …) left by a translation condition (op, sentence set)."""
+    if keep is None:
+        return rows
+    op, sents = keep
+    return [r for r in rows if ((str(r[0]), r[1]) in sents) == (op == "+")]
+
+
+def pg_rows(
+    db,
+    corpus,
+    filt,
+    fields,
+    atom,
+    constraints,
+    layers,
+    sort="position",
+    keep=None,
+    languages=None,
+    limit=None,
+):
+    """(document id, sentence index, start_cp, end_cp, …) of a pure attribute query in corpus order
+    (sort left / right: by the neighbouring words). languages: only documents in these languages ("" =
+    none recorded); limit: at most that many rows (translation conditions)."""
     order = (Sentence.idx, Token.idx)
     extra = []
-    if req.sort in ("left", "right"):
-        fn = func.lag if req.sort == "left" else func.lead
+    if sort in ("left", "right"):
+        fn = func.lag if sort == "left" else func.lead
         extra = [
             fn(Token.form, k)
             .over(partition_by=Sentence.document_id, order_by=order)
@@ -316,6 +353,13 @@ def pg_search(
     )
     stmt, cols = effective(stmt, layers)
     where = scope_clauses(corpus, filt, fields)
+    if languages:
+        known = [x for x in languages if x]
+        where.append(
+            or_(Document.language.in_(known), Document.language.is_(None))
+            if "" in languages
+            else Document.language.in_(known)
+        )
     if extra:  # neighbours are taken before filtering, inside each document
         inner = stmt.add_columns(
             Document.created_at.label("dc"),
@@ -342,18 +386,12 @@ def pg_search(
         if atom.pos:
             where.append(Token.pos.in_(atom.pos))
         stmt = stmt.where(*where).order_by(Document.created_at, Document.id, *order)
-    rows = db.execute(stmt).all()
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    rows = keep_rows(db.execute(stmt).all(), keep)
     if extra:
         rows.sort(key=lambda r: [(w or "").casefold() for w in r[4:7]])
-    elif req.sort == "random":
-        random.Random(req.seed or 0).shuffle(rows)
-    counts = Counts(
-        len(rows), len({(r[0], r[1]) for r in rows}), len({r[0] for r in rows}), True
-    )
-    lo = (page - 1) * page_size
-    return SearchResult(
-        counts, _hits(db, rows[lo : lo + page_size], req.context), page, page_size
-    )
+    return rows
 
 
 def _hits(db, rows, ctx):
@@ -887,14 +925,19 @@ def scope_spans(db, corpus, filt, fields, layer, constraint) -> list:
     return spans
 
 
-def span_search(db, corpus, filt, fields, layer, constraint, req, page, page_size):
+def span_search(
+    db, corpus, filt, fields, layer, constraint, req, page, page_size, keep=None
+):
     """Hits of a pure span query: one per effective span, hit = the span; counts, sort and context as
-    cwb.search (left / right sort compare the 40 code points before / after the span)."""
+    cwb.search (left / right sort compare the 40 code points before / after the span). keep: as pg_search."""
     spans = scope_spans(db, corpus, filt, fields, layer, constraint)
-    rows = [
-        (s["document_id"], s["sentence_index"], s["start_cp"], s["end_cp"])
-        for s in spans
-    ]
+    rows = keep_rows(
+        [
+            (s["document_id"], s["sentence_index"], s["start_cp"], s["end_cp"])
+            for s in spans
+        ],
+        keep,
+    )
     if req.sort in ("left", "right"):
         texts = _texts(db, {r[0] for r in rows})
         if req.sort == "left":

@@ -366,3 +366,90 @@ export function useAnnotatorView(layer: Layer, canManage: boolean, projectId: st
   return { multi, value, setValue: (v: string | null) => setPick(v), options, keep, email };
 }
 
+
+/* ---------- sample layers (contracts/p8.md §五) ---------- */
+
+/** layer.meta.sample of a sample layer (types.ts has no `meta` yet; kept here until merged). */
+export interface SampleMeta {
+  query: string;
+  scope: Record<string, unknown>;
+  aligned: { op: "+" | "-"; query: string } | null;
+  n: number;
+  seed: number;
+  total_hits: number;
+  created_at: string;
+}
+
+export function sampleOf(layer: Layer): SampleMeta | null {
+  const meta = (layer as Layer & { meta?: { sample?: SampleMeta } }).meta;
+  return layer.kind === "span" && meta?.sample ? meta.sample : null;
+}
+
+export interface SampleItem {
+  n: number;
+  span: Span & { document_id: string; sentence_index: number | null };
+  document_title: string;
+  sentence: { start_cp: number; end_cp: number; text: string } | null;
+}
+
+export interface SampleSummaryRow {
+  label: string;
+  name: string;
+  count: number;
+  /** Proportions 0–1 of the coded hits (rejected excluded); null before anything is coded. */
+  pct: number | null;
+  ci_low: number | null;
+  ci_high: number | null;
+  estimate: number | null;
+}
+
+export interface SampleSummary {
+  total_hits: number;
+  sampled: number;
+  coded: number;
+  rejected: number;
+  seed: number | null;
+  labels: SampleSummaryRow[];
+}
+
+export function useSampleItems(layerId: string) {
+  return useQuery({
+    queryKey: ["sample-items", layerId],
+    queryFn: async () => {
+      const r = await api.get<{ items: SampleItem[] }>(`/layers/${layerId}/sample-items`);
+      return r.items.map((x) => ({ ...x, span: { ...x.span, id: String(x.span.id) } }));
+    },
+    staleTime: Infinity,
+  });
+}
+
+export function useSampleSummary(layerId: string) {
+  return useQuery({
+    queryKey: ["sample-summary", layerId],
+    queryFn: () => api.get<SampleSummary>(`/layers/${layerId}/sample-summary`),
+    staleTime: 30 * 1000,
+  });
+}
+
+/** Coding a sample hit: modify to a label, confirm, or reject; the item list updates at once, the summary after. */
+export function useSampleActions(layerId: string, projectId: string) {
+  const qc = useQueryClient();
+  const { message } = App.useApp();
+  const refresh = useRefresh([layerId], projectId);
+  const put = (span: SampleItem["span"]) =>
+    qc.setQueryData<SampleItem[]>(["sample-items", layerId], (d) => d?.map((x) => (x.span.id === span.id ? { ...x, span: { ...x.span, ...span } } : x)));
+  return async function act(item: SampleItem, body: SpanPatch): Promise<boolean> {
+    put({ ...item.span, ...patchedSpan(item.span, body) });
+    try {
+      const r = await api.patch<Span>(`/layers/${layerId}/spans/${item.span.id}`, body);
+      put({ ...item.span, ...r, id: String(r.id) });
+      qc.invalidateQueries({ queryKey: ["sample-summary", layerId] });
+      refresh();
+      return true;
+    } catch (e) {
+      message.error(errorText(e));
+      qc.invalidateQueries({ queryKey: ["sample-items", layerId] });
+      return false;
+    }
+  };
+}

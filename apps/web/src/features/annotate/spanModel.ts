@@ -198,3 +198,35 @@ export function kappaBand(v: number | null | undefined): { text: string; cls: ""
   if (v >= 0.4) return { text: "一致性中等", cls: "mid" };
   return { text: "一致性低", cls: "low" };
 }
+
+/* ---------- sample coding (contracts/p8.md §五) ---------- */
+
+export type SampleCommand = { type: "label"; label: string } | { type: "confirm" } | { type: "reject" } | { type: "move"; delta: 1 | -1 };
+
+/** Sample mode keys: digits / letters pick a label, Enter confirms, X / Del rejects, J / K or ↓ / ↑ move. */
+export function sampleKeyCommand(e: KeyLike, labels: LabelDef[]): SampleCommand | null {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return null;
+  switch (e.key) {
+    case "Enter":
+      return { type: "confirm" };
+    case "Delete":
+    case "Backspace":
+      return { type: "reject" };
+    case "ArrowDown":
+      return { type: "move", delta: 1 };
+    case "ArrowUp":
+      return { type: "move", delta: -1 };
+  }
+  const k = e.key.toLowerCase();
+  if (k === "x") return { type: "reject" };
+  if (k === "j") return { type: "move", delta: 1 };
+  if (k === "k") return { type: "move", delta: -1 };
+  const l = labelForKey(e.key, labels);
+  return l ? { type: "label", label: labelValue(l) } : null;
+}
+
+/** A sample hit is coded once it has a label and is no longer a suggestion; rejected hits are not counted. */
+export function sampleState(s: { label: string; status: AnnotStatus }): "todo" | "coded" | "rejected" {
+  if (s.status === "rejected") return "rejected";
+  return s.label !== "" && s.status !== "suggested" ? "coded" : "todo";
+}
