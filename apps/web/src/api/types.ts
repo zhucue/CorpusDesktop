@@ -139,6 +139,14 @@ export interface SearchRequest {
   include_tokens?: boolean;
   /** P3: resolve {pos=} / {dep=} against these annotation layers' effective values. */
   layers?: { pos?: string; dep?: string; span?: string };
+  /** P8: keep only hits whose aligned sentence contains (+) / lacks (-) a match of `query` (parallel corpora). */
+  aligned?: AlignedCondition;
+}
+
+/** P8 译文条件 (contracts/p8.md §四); also the stats row `search_aligned`. */
+export interface AlignedCondition {
+  op: "+" | "-";
+  query: string;
 }
 
 export interface ParseResult {
@@ -260,7 +268,40 @@ export interface Page<T> {
 
 // ---------- P2: statistics ----------
 
-export type StatMethod = "frequency" | "ngrams" | "collocations" | "keywords" | "distribution";
+/** P2 methods plus P8 breakdown (命中分解) and translations (译法), contracts/p8.md §一、§四. */
+export type StatMethod = "frequency" | "ngrams" | "collocations" | "keywords" | "distribution" | "breakdown" | "translations";
+
+/** POST /stats/breakdown `by`: the hit itself, its left / right neighbour, or a document metadata field. */
+export type BreakdownBy = "word" | "lemma" | "pos" | "left1" | "right1" | `meta:${string}`;
+/** POST /stats/frequency `parts` for dispersion: per document, 10 equal segments, or per metadata field value. */
+export type FrequencyParts = "document" | "segments" | `field:${string}`;
+/** POST /stats/keywords `direction`: positive = more in target (default), negative = more in reference. */
+export type KeywordDirection = "positive" | "negative" | "both";
+export type KeywordMeasure = "ll" | "log_ratio" | "pct_diff" | "odds_ratio";
+/** POST /stats/collocations `measures`; delta_p yields two columns, delta_p_node and delta_p_coll. */
+export type CollocationMeasure = "logdice" | "mi" | "t" | "ll" | "mi3" | "delta_p" | "z";
+
+export interface BreakdownRequest {
+  project_id: string;
+  scope: SearchScope;
+  query: string;
+  by: BreakdownBy;
+  top?: number;
+  min_freq?: number;
+  layers?: SearchRequest["layers"];
+}
+
+export interface TranslationsRequest {
+  project_id: string;
+  scope: SearchScope;
+  query: string;
+  unit: "word" | "lemma";
+  target_language?: string;
+  measure: "dice" | "ll";
+  top?: number;
+  min_freq?: number;
+  exclude_punct?: boolean;
+}
 
 export interface StatColumn {
   key: string;
@@ -271,11 +312,13 @@ export interface StatColumn {
 
 export interface StatRow {
   key: string;
-  values: Record<string, string | number | null>;
+  values: Record<string, string | number | boolean | null>;
   search_query: string | null;
   /** collocations: collocate on the left of the node */
   search_query_reverse?: string | null;
   search_scope: SearchScope;
+  /** P8 translations rows: the translation condition to open the search with. */
+  search_aligned?: AlignedCondition | null;
 }
 
 export interface StatResult {
@@ -286,7 +329,23 @@ export interface StatResult {
   scope: { corpus_id: string; subcorpus_id: string | null; name: string };
   index_version: number | string | null;
   /** tokens count every token, punctuation included; excluded_tokens = punctuation / digits left out (frequency). */
-  totals: Stats & { node_hits?: number; window_tokens?: number; hits?: number | null; reference?: Stats; excluded_tokens?: number };
+  totals: Stats & {
+    node_hits?: number;
+    window_tokens?: number;
+    hits?: number | null;
+    reference?: Stats;
+    excluded_tokens?: number;
+    /** P8 frequency with dispersion: number of parts. */
+    parts?: number;
+    /** P8 translations: hit sentences, those with / without an aligned sentence; the target side. */
+    hit_sentences?: number;
+    aligned_sentences?: number;
+    unaligned?: number;
+    target_language?: string;
+    scope_aligned_sentences?: number;
+    /** P8 keywords: word types tested (Bonferroni). */
+    types_compared?: number;
+  };
   created_at: string;
   columns: StatColumn[];
   rows: StatRow[];

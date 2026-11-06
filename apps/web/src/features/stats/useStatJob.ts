@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { ApiError, api, type Job, type StatMethod, type StatResult } from "../../api";
+import { ApiError, api, type StatMethod, type Job, type StatResult } from "../../api";
 import { quietJobs, useJob, useJobCreated } from "../../lib/data";
 
 /**

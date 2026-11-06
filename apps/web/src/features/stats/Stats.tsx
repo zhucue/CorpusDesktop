@@ -2,10 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, App, Checkbox, Drawer, Form, Input, InputNumber, Popconfirm, Select, Tabs } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { MAX_PAGE_SIZE, api, errorText, type Corpus, type MetadataField, type Page, type Scope, type StatMethod, type StatResult } from "../../api";
+import { MAX_PAGE_SIZE, api, errorText, type StatMethod, type Corpus, type MetadataField, type Page, type Scope, type StatResult } from "../../api";
 import { Empty, ErrorAlert, exportTip, Skeleton, Tip } from "../../components/common";
 import { ScopeSelect } from "../../components/common/ScopeSelect";
-import { Icon } from "../../components/Icon";
+import { Icon, type IconName } from "../../components/Icon";
+import { MethodAppendix } from "../../components/global/MethodAppendix";
 import { statIcon } from "../../components/iconSets";
 import { download, downloadText, type EChartHandle } from "../../components/results/EChart";
 import { PageHeader } from "../../components/shell/AppShell";
@@ -13,6 +14,7 @@ import { useShell } from "../../components/shell/shell";
 import { describeScope, sameScope, useCorpora, useProjectId, useSubcorpora } from "../../lib/data";
 import { useExportJob } from "../../lib/exportJob";
 import { fmt, fmtRelative, fmtShortTime } from "../../lib/format";
+import { measureKey } from "./columns";
 import { MEASURE_LABELS, StatChart } from "./StatChart";
 import { methodLabels, StatTable } from "./StatTable";
 import "./stats.css";
@@ -20,9 +22,13 @@ import { useStatJob, useStatResult } from "./useStatJob";
 import { useLayers } from "../annotate/data";
 import { AlignmentStatsCard } from "../annotate/AlignStats";
 
-const METHODS: StatMethod[] = ["frequency", "ngrams", "collocations", "keywords", "distribution"];
+const METHODS: StatMethod[] = ["frequency", "ngrams", "collocations", "keywords", "distribution", "breakdown", "translations"];
 /** Methods with the 排除标点和数字 option (word / lemma units). */
-const PUNCT_METHODS: StatMethod[] = ["frequency", "ngrams", "collocations", "keywords"];
+const PUNCT_METHODS: StatMethod[] = ["frequency", "ngrams", "collocations", "keywords", "translations"];
+/** Methods whose form offers the corpus's metadata fields. */
+const FIELD_METHODS: StatMethod[] = ["frequency", "distribution", "breakdown", "translations"];
+
+const methodIcon = (m: StatMethod): IconName => statIcon[m] ?? "barchart";
 
 const UNIT_OPTIONS = [
   { value: "word", label: "词形" },
@@ -39,7 +45,28 @@ const POS_OPTIONS = [
   ["PROPN", "专名"],
 ].map(([v, l]) => ({ value: v, label: `${l} ${v}` }));
 const TOP_OPTIONS = [50, 100, 200].map((n) => ({ value: n, label: `前 ${n}` }));
-const MEASURES = ["logdice", "mi", "t", "ll"].map((m) => ({ value: m, label: MEASURE_LABELS[m] }));
+const MEASURES = ["logdice", "mi", "t", "ll", "mi3", "delta_p", "z"].map((m) => ({ value: m, label: MEASURE_LABELS[m] }));
+const DEFAULT_MEASURES = ["logdice", "mi", "t", "ll"];
+const KEYWORD_MEASURES = [
+  { value: "ll", label: "LL" },
+  { value: "log_ratio", label: "Log Ratio" },
+  { value: "pct_diff", label: "%DIFF" },
+  { value: "odds_ratio", label: "Odds Ratio" },
+];
+const DIRECTIONS = [
+  { value: "positive", label: "正（目标多）" },
+  { value: "negative", label: "负（参照多）" },
+  { value: "both", label: "双向" },
+];
+const BREAKDOWN_BY = [
+  { value: "word", label: "词形" },
+  { value: "lemma", label: "词元" },
+  { value: "pos", label: "词性" },
+  { value: "left1", label: "左一词" },
+  { value: "right1", label: "右一词" },
+  { value: "meta", label: "元数据字段" },
+];
+const fieldLabel = (f: string) => (f === "year" ? "年份 year" : f);
 
 type Body = Record<string, unknown>;
 
@@ -53,11 +80,24 @@ function corpusScript(c: Corpus | null | undefined): "简体" | "繁体" | null 
   return null;
 }
 
-function ParamsCard({ children, onSubmit, running, form }: { children: React.ReactNode; onSubmit: () => void; running: boolean; form: ReturnType<typeof Form.useForm>[0] }) {
+function ParamsCard({
+  children,
+  onSubmit,
+  running,
+  blocked,
+  form,
+}: {
+  children: React.ReactNode;
+  onSubmit: () => void;
+  running: boolean;
+  /** The range does not suit the method (译法 on a non-parallel corpus). */
+  blocked?: boolean;
+  form: ReturnType<typeof Form.useForm>[0];
+}) {
   return (
     <Form form={form} className="card params" layout="vertical" onFinish={onSubmit} requiredMark={false}>
       <div className="params-fields">{children}</div>
-      <button className="btn p params-run" type="submit" disabled={running}>
+      <button className="btn p params-run" type="submit" disabled={running || blocked}>
         {running ? <span className="spin" /> : <Icon name="play" size={14} />}
         计算
       </button>
@@ -90,8 +130,16 @@ function formValues(stat: StatResult): Body {
   if (stat.method === "keywords") Object.assign(v, { target: toScope(p.target) ?? toScope(stat.scope), reference: toScope(p.reference), measure: p.measure });
   else v.scope = toScope(p.scope) ?? toScope(stat.scope);
   if (stat.method === "ngrams") Object.assign(v, { n: p.n, pos_pattern: Array.isArray(p.pos_pattern) ? p.pos_pattern.join(" ") : undefined, contains: p.contains ?? undefined });
-  if (stat.method === "collocations") Object.assign(v, { node: p.node, window: p.window, measure: Array.isArray(p.measures) ? p.measures[0] : undefined });
+  if (stat.method === "collocations")
+    Object.assign(v, { node: p.node, window: p.window, measure: Array.isArray(p.measures) ? p.measures[0] : undefined, measures: Array.isArray(p.measures) ? p.measures : undefined });
   if (stat.method === "distribution") Object.assign(v, { query: p.query ?? undefined, field: p.field, bins: p.bins });
+  if (stat.method === "frequency" && typeof p.parts === "string") v.parts = p.parts;
+  if (stat.method === "keywords") Object.assign(v, { direction: p.direction ?? undefined, items: Array.isArray(p.items) && p.items.length ? p.items : undefined });
+  if (stat.method === "breakdown") {
+    const by = String(p.by ?? "word");
+    Object.assign(v, { query: p.query ?? undefined, by: by.startsWith("meta:") ? "meta" : by, by_field: by.startsWith("meta:") ? by.slice(5) : undefined });
+  }
+  if (stat.method === "translations") Object.assign(v, { query: p.query ?? undefined, measure: p.measure, target_language: p.target_language ?? undefined });
   return Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined && x !== null));
 }
 
@@ -139,14 +187,24 @@ function MethodForm({
   const scopeKey = method === "keywords" ? "target" : "scope";
   const formScope = Form.useWatch(scopeKey, form) as Scope | undefined;
   const ref = Form.useWatch("reference", form) as Scope | undefined;
-  const corpusId = describeScope(formScope ?? null, corpora.data?.items ?? [], subs.data?.items ?? []).corpus?.id;
+  const scopeCorpus = describeScope(formScope ?? null, corpora.data?.items ?? [], subs.data?.items ?? []).corpus;
+  const corpusId = scopeCorpus?.id;
+  // 译法 needs a parallel corpus; until the corpora load the range is not judged.
+  const notParallel = method === "translations" && !!scopeCorpus && !scopeCorpus.parallel;
   const fields = useQuery({
     queryKey: ["metadata-fields", corpusId],
     queryFn: () => api.get<MetadataField[]>(`/corpora/${corpusId}/metadata-fields`),
-    enabled: method === "distribution" && !!corpusId,
+    enabled: FIELD_METHODS.includes(method) && !!corpusId,
   });
+  const fieldOptions = (fields.data ?? []).map((f) => ({ value: f.field, label: fieldLabel(f.field) }));
+  const languages = (fields.data ?? []).find((f) => f.field === "language")?.values ?? [];
   const field = Form.useWatch("field", form);
   const unit = Form.useWatch("unit", form) as string | undefined;
+  const by = Form.useWatch("by", form) as string | undefined;
+  const kwItems = Form.useWatch("items", form) as string[] | undefined;
+  const chosenMeasures = (Form.useWatch("measures", form) as string[] | undefined) ?? DEFAULT_MEASURES;
+  const itemsMode = method === "keywords" && !!kwItems?.length;
+  const dispersion = method === "frequency" && (unit === undefined || unit === "word" || unit === "lemma" || unit === "pos");
   const layers = useLayers(projectId);
   const labelUnit = method === "frequency" && (unit === "span_label" || unit === "relation_label");
   const unitLayers = (layers.data ?? []).filter((l) => l.kind === (unit === "relation_label" ? "relation" : "span") && l.status === "ready" && (!corpusId || l.corpus_id === corpusId));
@@ -172,6 +230,12 @@ function MethodForm({
     }
   }, [method, formScope, ref]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The sort measure is one of the chosen measures.
+  const sortMeasure = Form.useWatch("measure", form) as string | undefined;
+  useEffect(() => {
+    if (method === "collocations" && sortMeasure && chosenMeasures.length && !chosenMeasures.includes(sortMeasure)) form.setFieldValue("measure", chosenMeasures[0]);
+  }, [method, sortMeasure, chosenMeasures.join(" ")]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const submit = () => {
     const v = form.getFieldsValue(true) as Body;
     const body: Body = { project_id: projectId };
@@ -180,6 +244,7 @@ function MethodForm({
       const spanUnit = v.unit === "span_label" || v.unit === "relation_label";
       Object.assign(body, { scope: v.scope, unit: v.unit, pos: spanUnit ? undefined : v.pos || undefined, top: v.top, min_freq: v.min_freq, exclude_punct: punct });
       if (spanUnit && v.layer_id) body.layers = { [v.unit === "span_label" ? "span" : "relation"]: v.layer_id };
+      if (dispersion) Object.assign(body, { parts: v.parts ?? "document", dispersion: true });
     }
     if (method === "ngrams")
       Object.assign(body, {
@@ -193,28 +258,54 @@ function MethodForm({
         exclude_punct: punct,
       });
     if (method === "collocations") {
-      const order = [v.measure as string, ...MEASURES.map((m) => m.value).filter((m) => m !== v.measure)];
+      const chosen = (v.measures as string[] | undefined)?.length ? (v.measures as string[]) : DEFAULT_MEASURES;
+      const sortBy = chosen.includes(v.measure as string) ? (v.measure as string) : chosen[0];
+      // The first measure orders the rows (contracts/p2.md §三).
+      const order = [sortBy, ...chosen.filter((m) => m !== sortBy)];
       Object.assign(body, { scope: v.scope, node: String(v.node).trim(), window: v.window, unit: v.unit, pos: v.pos || undefined, measures: order, min_freq: v.min_freq, top: v.top, exclude_punct: punct });
     }
-    if (method === "keywords") Object.assign(body, { target: v.target, reference: v.reference, unit: v.unit, measure: v.measure, min_freq: v.min_freq, top: v.top, exclude_punct: punct });
+    if (method === "keywords") {
+      const items = (v.items as string[] | undefined)?.map((x) => x.trim()).filter(Boolean) ?? [];
+      Object.assign(body, { target: v.target, reference: v.reference, unit: v.unit, measure: v.measure, min_freq: v.min_freq, top: v.top, exclude_punct: punct, direction: v.direction ?? "positive" });
+      if (items.length) body.items = items;
+    }
     if (method === "distribution") Object.assign(body, { scope: v.scope, query: String(v.query).trim(), field: v.field, bins: v.field === "position" ? v.bins : undefined });
+    if (method === "breakdown")
+      Object.assign(body, { scope: v.scope, query: String(v.query).trim(), by: v.by === "meta" ? `meta:${v.by_field}` : v.by, top: v.top, min_freq: v.min_freq });
+    if (method === "translations")
+      Object.assign(body, {
+        scope: v.scope,
+        query: String(v.query).trim(),
+        unit: v.unit,
+        measure: v.measure,
+        target_language: v.target_language || undefined,
+        top: v.top,
+        min_freq: v.min_freq,
+        exclude_punct: punct,
+      });
     onRun(body);
   };
 
   const minFreq = (n: number) => (
     <Form.Item name="min_freq" label="最低频次" initialValue={n}>
-      <InputNumber min={1} className="mono" style={{ width: 96 }} />
+      <InputNumber min={1} className="mono" style={{ width: 96 }} disabled={itemsMode} />
     </Form.Item>
   );
-  const top = (
-    <Form.Item name="top" label="显示" initialValue={200}>
+  const top = (n: number) => (
+    <Form.Item name="top" label="显示" initialValue={n}>
       <Select options={TOP_OPTIONS} style={{ width: 96 }} />
     </Form.Item>
   );
+  const queryField = (placeholder: string) => (
+    <Form.Item name="query" label="查询式" rules={[{ required: true, whitespace: true, message: "请输入查询式" }]}>
+      <Input className="mono" style={{ width: 200 }} placeholder={placeholder} />
+    </Form.Item>
+  );
+  const defaultMinFreq = method === "frequency" || method === "breakdown" ? 1 : method === "ngrams" || method === "translations" ? 2 : 3;
 
   return (
     <>
-      <ParamsCard form={form} onSubmit={submit} running={running}>
+      <ParamsCard form={form} onSubmit={submit} running={running} blocked={notParallel}>
         {method === "keywords" ? (
           <>
             <Form.Item name="target" label="目标" rules={scopeRule("请选择目标")}>
@@ -232,7 +323,7 @@ function MethodForm({
             </Form.Item>
           </>
         ) : (
-          <Form.Item name="scope" label="范围" rules={scopeRule()}>
+          <Form.Item name="scope" label="范围" rules={scopeRule()} validateStatus={notParallel ? "error" : undefined} help={notParallel ? "仅平行语料" : undefined}>
             <ScopeSelect projectId={projectId} value={form.getFieldValue("scope")} onChange={onScope} />
           </Form.Item>
         )}
@@ -241,17 +332,27 @@ function MethodForm({
             <Input className="mono" style={{ width: 150 }} placeholder="翻译/v" />
           </Form.Item>
         )}
-        {method === "distribution" && (
-          <Form.Item name="query" label="查询式" rules={[{ required: true, whitespace: true, message: "请输入查询式" }]}>
-            <Input className="mono" style={{ width: 200 }} placeholder="翻译/v +文化" />
-          </Form.Item>
+        {method === "distribution" && queryField("翻译/v +文化")}
+        {method === "breakdown" && queryField("翻译/v")}
+        {method === "translations" && queryField("翻译")}
+        {method === "breakdown" && (
+          <>
+            <Form.Item name="by" label="按" initialValue="word">
+              <Select options={BREAKDOWN_BY} style={{ width: 120 }} />
+            </Form.Item>
+            {by === "meta" && (
+              <Form.Item name="by_field" label="字段" rules={[{ required: true, message: "请选择字段" }]}>
+                <Select style={{ width: 140 }} loading={fields.isFetching} options={fieldOptions} />
+              </Form.Item>
+            )}
+          </>
         )}
         {method === "ngrams" && (
           <Form.Item name="n" label="n" initialValue={2}>
             <Select options={[2, 3, 4].map((n) => ({ value: n, label: String(n) }))} style={{ width: 72 }} />
           </Form.Item>
         )}
-        {method !== "distribution" && (
+        {method !== "distribution" && method !== "breakdown" && (
           <Form.Item name="unit" label="单位" initialValue="word">
             <Select
               options={method === "frequency" ? [...UNIT_OPTIONS, { value: "pos", label: "词性" }, { value: "span_label", label: "片段标签" }, { value: "relation_label", label: "关系标签" }] : UNIT_OPTIONS}
@@ -269,6 +370,19 @@ function MethodForm({
             <Select allowClear placeholder="全部" options={POS_OPTIONS} style={{ width: 136 }} />
           </Form.Item>
         )}
+        {dispersion && (
+          <Form.Item name="parts" label="部分" initialValue="document">
+            <Select
+              style={{ width: 140 }}
+              loading={fields.isFetching}
+              options={[
+                { value: "document", label: "文档" },
+                { value: "segments", label: "等分 10 段" },
+                ...(fieldOptions.length ? [{ label: "元数据字段", options: fieldOptions.map((o) => ({ value: `field:${o.value}`, label: o.label })) }] : []),
+              ]}
+            />
+          </Form.Item>
+        )}
         {method === "ngrams" && (
           <>
             <Form.Item name="contains" label="包含词">
@@ -284,24 +398,62 @@ function MethodForm({
             <Form.Item name="window" label="窗口 ±" initialValue={5}>
               <InputNumber min={1} max={10} className="mono" style={{ width: 80 }} />
             </Form.Item>
+            <Form.Item name="measures" label="指标" initialValue={DEFAULT_MEASURES} rules={[{ required: true, message: "至少选一个指标" }]}>
+              <Select mode="multiple" options={MEASURES} style={{ minWidth: 200, maxWidth: 360 }} maxTagCount="responsive" />
+            </Form.Item>
             <Form.Item name="measure" label="排序指标" initialValue="logdice">
-              <Select options={MEASURES} style={{ width: 104 }} />
+              <Select options={MEASURES.filter((m) => chosenMeasures.includes(m.value))} style={{ width: 104 }} />
             </Form.Item>
           </>
         )}
         {method === "keywords" && (
-          <Form.Item name="measure" label="指标" initialValue="ll">
-            <Select options={[{ value: "ll", label: "LL" }, { value: "log_ratio", label: "Log Ratio" }]} style={{ width: 110 }} />
-          </Form.Item>
+          <>
+            <Form.Item name="measure" label="排序指标" initialValue="ll">
+              <Select options={KEYWORD_MEASURES} style={{ width: 120 }} />
+            </Form.Item>
+            <Form.Item name="direction" label="方向" initialValue="positive">
+              <Select options={DIRECTIONS} style={{ width: 128 }} disabled={itemsMode} />
+            </Form.Item>
+            <Form.Item
+              name="items"
+              label="指定词对比"
+              rules={[{ validator: (_, v?: string[]) => ((v?.length ?? 0) > 50 ? Promise.reject(new Error("最多 50 个词")) : Promise.resolve()) }]}
+            >
+              <Select
+                mode="tags"
+                open={false}
+                suffixIcon={null}
+                tokenSeparators={[" ", ",", "，", "、"]}
+                placeholder="输入词后回车"
+                style={{ minWidth: 180, maxWidth: 320 }}
+                maxTagCount="responsive"
+                aria-label="指定词对比"
+              />
+            </Form.Item>
+          </>
+        )}
+        {method === "translations" && (
+          <>
+            <Form.Item name="measure" label="指标" initialValue="dice">
+              <Select
+                options={[
+                  { value: "dice", label: "Dice" },
+                  { value: "ll", label: "LL" },
+                ]}
+                style={{ width: 96 }}
+              />
+            </Form.Item>
+            {languages.length > 0 && (
+              <Form.Item name="target_language" label="译文语言">
+                <Select allowClear placeholder="另一侧" style={{ width: 112 }} options={languages.map((l) => ({ value: String(l), label: String(l) }))} />
+              </Form.Item>
+            )}
+          </>
         )}
         {method === "distribution" && (
           <>
             <Form.Item name="field" label="按" initialValue="position" rules={[{ required: true }]}>
-              <Select
-                style={{ width: 150 }}
-                loading={fields.isFetching}
-                options={[{ value: "position", label: "文档位置" }, ...(fields.data ?? []).map((f) => ({ value: f.field, label: f.field === "year" ? "年份 year" : f.field }))]}
-              />
+              <Select style={{ width: 150 }} loading={fields.isFetching} options={[{ value: "position", label: "文档位置" }, ...fieldOptions]} />
             </Form.Item>
             {field === "position" && (
               <Form.Item name="bins" label="区间" initialValue={10}>
@@ -310,8 +462,8 @@ function MethodForm({
             )}
           </>
         )}
-        {method !== "distribution" && minFreq(method === "frequency" ? 1 : method === "ngrams" ? 2 : 3)}
-        {method !== "distribution" && top}
+        {method !== "distribution" && minFreq(defaultMinFreq)}
+        {method !== "distribution" && top(method === "translations" ? 100 : 200)}
         {punctOption && (
           <Form.Item name="exclude_punct" valuePropName="checked" initialValue={true} className="chk">
             <Checkbox>排除标点和数字</Checkbox>
@@ -326,11 +478,17 @@ function MethodForm({
 function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId: string; chartRef: React.Ref<EChartHandle> }) {
   const [view, setView] = useState<"network" | "bar">("network");
   const [picked, setPicked] = useState<number | null>(null);
+  const [appendix, setAppendix] = useState(false);
   const exporter = useExportJob(projectId);
   const corpora = useCorpora(projectId);
   const corpus = corpora.data?.items.find((c) => c.id === stat.scope.corpus_id);
   const p = stat.params as Body;
-  const measure = stat.method === "collocations" ? String(((p as { measures?: string[] }).measures ?? ["logdice"])[0]) : undefined;
+  const measure =
+    stat.method === "collocations"
+      ? String(((p as { measures?: string[] }).measures ?? ["logdice"])[0])
+      : stat.method === "translations"
+        ? String(p.measure ?? "dice")
+        : undefined;
   const runExport = (format: "csv" | "xlsx") => exporter.start({ url: `/stats/${stat.id}/export`, body: { format }, label: format.toUpperCase() });
 
   const t = stat.totals;
@@ -344,7 +502,17 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
     </>,
   ];
   if (stat.method === "collocations" && t.node_hits != null) parts.push(<>节点 {n(t.node_hits)} 次</>);
-  if (stat.method === "distribution" && t.hits != null) parts.push(<>{n(t.hits)} 命中</>);
+  if ((stat.method === "distribution" || stat.method === "breakdown") && t.hits != null) parts.push(<>{n(t.hits)} 命中</>);
+  if (stat.method === "breakdown" && typeof p.by === "string") parts.push(`按${breakdownByLabel(p.by)}`);
+  if (stat.method === "frequency" && t.parts != null) parts.push(<>{n(t.parts)} 部分（{partsLabel(String(p.parts ?? "document"))}）</>);
+  if (stat.method === "keywords" && Array.isArray(p.items) && p.items.length) parts.push(`指定 ${p.items.length} 词`);
+  else if (stat.method === "keywords" && p.direction && p.direction !== "positive") parts.push(DIRECTIONS.find((d) => d.value === p.direction)?.label ?? String(p.direction));
+  if (stat.method === "translations") {
+    if (t.target_language) parts.push(`译文 ${t.target_language}`);
+    if (t.hit_sentences != null) parts.push(<>命中句 {n(t.hit_sentences)}</>);
+    if (t.aligned_sentences != null) parts.push(<>有对齐 {n(t.aligned_sentences)}</>);
+    if (t.unaligned) parts.push(<>无对齐 {n(t.unaligned)}</>);
+  }
   if (stat.method === "ngrams" && typeof p.contains === "string" && p.contains) parts.push(`含“${p.contains}”`);
   if (p.exclude_punct === true) parts.push(<>已排除标点和数字{t.excluded_tokens != null && <> {n(t.excluded_tokens)} 词</>}</>);
   // Data version in words (the index hash means nothing to users): computed on an older index, or when the index was built.
@@ -378,6 +546,9 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
         {meta}
         <div className="grow" />
         <span className="head-btns">
+          <button className="btn xs" type="button" onClick={() => setAppendix(true)}>
+            方法说明
+          </button>
           <Tip title={exportTip("导出 CSV")}>
             <button className="btn xs" type="button" disabled={exporter.busy} onClick={() => runExport("csv")}>
               CSV
@@ -394,9 +565,10 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
         <Empty icon="barchart" text={`当前参数下无结果${(p as { min_freq?: number }).min_freq ? `（最低频次 ${(p as { min_freq?: number }).min_freq}）` : ""}`} />
       ) : (
         <div className="stat-scroll">
-          <StatTable stat={stat} projectId={projectId} highlight={measure} selected={picked} cellBar={stat.method === "ngrams" ? "freq" : undefined} />
+          <StatTable stat={stat} projectId={projectId} highlight={measure && measureKey(measure)} selected={picked} cellBar={stat.method === "ngrams" ? "freq" : undefined} />
         </div>
       )}
+      {appendix && <MethodAppendix projectId={projectId} statIds={[stat.id]} onClose={() => setAppendix(false)} />}
     </div>
   );
   if (stat.method === "ngrams" || stat.rows.length === 0) return table;
@@ -408,7 +580,11 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
         ? "搭配强度"
         : stat.method === "keywords"
           ? "Log Ratio × LL"
-          : distTitle(stat);
+          : stat.method === "breakdown"
+            ? "前 10 · 命中数"
+            : stat.method === "translations"
+              ? `前 10 · ${MEASURE_LABELS[measure ?? "dice"] ?? measure}`
+              : distTitle(stat);
   const chart = (
     <div className="card card-pad col gap-16 chart-card" key="chart">
       <div className="row between">
@@ -433,6 +609,17 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
     </div>
   );
   return <div className={`res ${stat.method === "distribution" ? "dist" : ""}`}>{stat.method === "distribution" ? [chart, table] : [table, chart]}</div>;
+}
+
+function breakdownByLabel(by: string): string {
+  if (by.startsWith("meta:")) return ` ${by.slice(5)}`;
+  return BREAKDOWN_BY.find((b) => b.value === by)?.label ?? by;
+}
+
+function partsLabel(parts: string): string {
+  if (parts === "segments") return "等分 10 段";
+  if (parts.startsWith("field:")) return `按 ${parts.slice(6)}`;
+  return "文档";
 }
 
 function distTitle(stat: StatResult): string {
@@ -463,7 +650,7 @@ function SavedResults({ open, onClose, projectId, onOpen }: { open: boolean; onC
         {list.data?.items.map((s) => (
           <div key={s.id} className="list-item" role="button" tabIndex={0} onClick={() => onOpen(s)} onKeyDown={(e) => e.key === "Enter" && onOpen(s)}>
             <span className="tag t-info">
-              <Icon name={statIcon[s.method] ?? "barchart"} size={12} />
+              <Icon name={methodIcon(s.method)} size={12} />
               {methodLabels[s.method]}
             </span>
             <div className="grow col" style={{ gap: 2 }}>
@@ -489,7 +676,9 @@ function summary(s: StatResult): string {
   if (s.method === "collocations") return `${p.node ?? ""} · ±${p.window ?? ""}`;
   if (s.method === "distribution") return `${p.query ?? "全部"} · ${p.field ?? ""}`;
   if (s.method === "ngrams") return `${p.n ?? ""}-gram · ${p.unit ?? ""}${p.contains ? ` · 含 ${p.contains}` : ""}`;
-  if (s.method === "keywords") return `${p.measure ?? ""} · ${p.unit ?? ""}`;
+  if (s.method === "keywords") return `${p.measure ?? ""} · ${p.unit ?? ""}${Array.isArray(p.items) && p.items.length ? ` · 指定 ${p.items.length} 词` : ""}`;
+  if (s.method === "breakdown") return `${p.query ?? ""} · 按${breakdownByLabel(String(p.by ?? ""))}`;
+  if (s.method === "translations") return `${p.query ?? ""} · ${p.unit ?? ""} · ${p.measure ?? ""}`;
   return `${p.unit ?? ""}${p.pos ? ` · ${p.pos}` : ""}`;
 }
 
@@ -510,6 +699,12 @@ export default function Stats() {
   const [tab, setTab] = useState<StatMethod>("frequency");
   const [runs, setRuns] = useState<Partial<Record<StatMethod, { body: Body; n: number }>>>({});
   const [opened, setOpened] = useState<Partial<Record<StatMethod, string>>>({});
+  const corpora = useCorpora(projectId);
+  const subs = useSubcorpora(projectId);
+  // 译法 only on a parallel corpus: the tab is off while the shared range is a known non-parallel one.
+  const scopeCorpus = describeScope(shell.scope, corpora.data?.items ?? [], subs.data?.items ?? []).corpus;
+  const noParallel = !!scopeCorpus && !scopeCorpus.parallel;
+  const disabledTab = (m: StatMethod) => m === "translations" && noParallel && tab !== "translations";
   const [reference, setReference] = useState<Scope | null>(null);
   const [savedOpen, setSavedOpen] = useState(false);
   const chartRef = useRef<EChartHandle>(null);
@@ -536,13 +731,15 @@ export default function Stats() {
   const running = !savedId && live.running;
   const error = savedId ? saved.error : (live.error ?? (params.get("stat") && !linked.data ? linked.error : null));
 
-  // 1–5 switch method.
+  const disabledRef = useRef(disabledTab);
+  disabledRef.current = disabledTab;
+  // 1–7 switch method.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select, .ant-select")) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const n = Number(e.key);
-      if (n >= 1 && n <= 5) setTab(METHODS[n - 1]);
+      if (n >= 1 && n <= METHODS.length && !disabledRef.current(METHODS[n - 1])) setTab(METHODS[n - 1]);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -596,7 +793,18 @@ export default function Stats() {
         <Tabs
           activeKey={tab}
           onChange={(k) => setTab(k as StatMethod)}
-          items={METHODS.map((m) => ({ key: m, label: methodLabels[m], icon: <Icon name={statIcon[m]} size={14} /> }))}
+          items={METHODS.map((m) => ({
+            key: m,
+            disabled: disabledTab(m),
+            label: disabledTab(m) ? (
+              <Tip title="仅平行语料">
+                <span>{methodLabels[m]}</span>
+              </Tip>
+            ) : (
+              methodLabels[m]
+            ),
+            icon: <Icon name={methodIcon(m)} size={14} />,
+          }))}
           className="stat-tabs"
         />
         <div className="col gap-20 panel-in" key={tab}>

@@ -22,3 +22,4 @@
 .back[disabled] { opacity: .4; cursor: not-allowed; }
 .stat-tabs .ant-tabs-nav { margin-bottom: 0; }
 .chart-card { position: sticky; top: 76px; }
+.col-tip { cursor: help; border-bottom: 1px dotted var(--line); }

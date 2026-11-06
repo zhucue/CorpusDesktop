@@ -3,10 +3,10 @@ import type { StatResult } from "../../api";
 import { baseOption, EChart, type ChartTokens, type EChartHandle, type EChartsOption } from "../../components/results/EChart";
 import { posCat } from "../../lib/pos";
 import { fmtValue } from "../../lib/format";
-import { distRows, num, rowLabel } from "./columns";
+import { distRows, measureKey, num, rowLabel } from "./columns";
 
 /** Display names of collocation measures (engine.stats.MEASURE_LABELS). */
-export const MEASURE_LABELS: Record<string, string> = { logdice: "logDice", mi: "MI", t: "t 值", ll: "LL" };
+export const MEASURE_LABELS: Record<string, string> = { logdice: "logDice", mi: "MI", t: "t 值", ll: "LL", mi3: "MI3", delta_p: "ΔP", z: "z 值", dice: "Dice" };
 
 /** Rough rendered width of a label: CJK characters are about one em, others about 0.6 em. */
 export function textWidth(s: string, fontSize: number): number {
@@ -94,7 +94,7 @@ function scatterOption(t: ChartTokens, stat: StatResult): EChartsOption {
 function networkOption(t: ChartTokens, stat: StatResult, measure: string): EChartsOption {
   const rows = stat.rows.slice(0, 12);
   const node = String((stat.params as { node?: string }).node ?? "节点");
-  const vals = rows.map((r) => num(r.values[measure]) ?? 0);
+  const vals = rows.map((r) => num(r.values[measureKey(measure)]) ?? 0);
   const max = Math.max(...vals, 1);
   const min = Math.min(...vals, 0);
   const posOf = (r: (typeof rows)[number]) => {
@@ -167,8 +167,19 @@ export const StatChart = forwardRef<
         const m = measure ?? "logdice";
         if (view !== "bar") return networkOption(t, stat, m);
         const rows = stat.rows.slice(0, 10);
-        const vals = rows.map((r) => num(r.values[m]) ?? 0);
+        const vals = rows.map((r) => num(r.values[measureKey(m)]) ?? 0);
         return hbarOption(t, rows.map((r) => rowLabel(stat, r)), vals, (i) => `${fmtValue(vals[i])} · ${fmtValue(rows[i].values.freq)}`);
+      }
+      if (stat.method === "translations") {
+        const m = measure ?? "dice";
+        const rows = stat.rows.slice(0, 10);
+        const vals = rows.map((r) => num(r.values[m]) ?? 0);
+        return hbarOption(t, rows.map((r) => rowLabel(stat, r)), vals, (i) => `${fmtValue(vals[i])} · ${fmtValue(rows[i].values.cooc)}`);
+      }
+      if (stat.method === "breakdown") {
+        const rows = stat.rows.slice(0, 10);
+        const vals = rows.map((r) => num(r.values.hits) ?? 0);
+        return hbarOption(t, rows.map((r) => rowLabel(stat, r)), vals, (i) => `${fmtValue(vals[i])} · ${fmtValue(rows[i].values.pct, 1)}%`);
       }
       const rows = stat.rows.slice(0, 10);
       const key = stat.columns.some((c) => c.key === "per_million") ? "per_million" : "freq";

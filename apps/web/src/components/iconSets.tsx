@@ -39,6 +39,8 @@ export const statIcon: Record<StatMethod, IconName> = {
   collocations: "chartnetwork",
   keywords: "chartscatter",
   distribution: "barchart",
+  breakdown: "listtree",
+  translations: "languages",
 };
 
 export const layerIcon: Record<LayerKind, IconName> = {

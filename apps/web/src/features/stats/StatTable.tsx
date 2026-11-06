@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router";
-import type { EvidenceInput, SearchRequest, SearchScope, StatColumn, StatResult, StatRow } from "../../api";
+import type { AlignedCondition, EvidenceInput, SearchRequest, SearchScope, StatColumn, StatResult, StatRow } from "../../api";
+import { Tip } from "../../components/common";
 import { PinButton } from "../../components/global/evidence";
 import { Icon } from "../../components/Icon";
 import { fmtValue } from "../../lib/format";
-import { num, rowLabel } from "./columns";
+import { COLUMN_TIPS, num, rowLabel, SIGNED_COLUMNS } from "./columns";
 
 export const methodLabels: Record<StatResult["method"], string> = {
   frequency: "频次",
@@ -11,13 +12,19 @@ export const methodLabels: Record<StatResult["method"], string> = {
   collocations: "搭配",
   keywords: "关键词",
   distribution: "分布",
+  breakdown: "命中分解",
+  translations: "译法",
 };
 
-/** URL of the search page for a stat row ("回到例句"). */
-export function rowSearchHref(projectId: string, query: string, scope: SearchScope, layers?: SearchRequest["layers"]): string {
+/**
+ * URL of the search page for a stat row ("回到例句"): ?q=查询式&scope=<JSON>[&layers=<JSON>][&aligned=<JSON {op, query}>].
+ * aligned is the translation condition of translations rows (contracts/p8.md §四); the search page applies it.
+ */
+export function rowSearchHref(projectId: string, query: string, scope: SearchScope, layers?: SearchRequest["layers"], aligned?: AlignedCondition | null): string {
   const p = new URLSearchParams({ q: query, scope: JSON.stringify(scope) });
   // rows counted on annotation layers ({pos=}, {dep=}, [标签]) must search the same layers
   if (layers && Object.keys(layers).length) p.set("layers", JSON.stringify(layers));
+  if (aligned?.query) p.set("aligned", JSON.stringify({ op: aligned.op, query: aligned.query }));
   return `/p/${projectId}/search?${p.toString()}`;
 }
 
@@ -32,6 +39,8 @@ export function statLayers(stat: StatResult): SearchRequest["layers"] | undefine
 
 /** Column whose number links to the examples (frequency-like). */
 function linkColumn(stat: StatResult): string | undefined {
+  // 译法: the co-occurring sentences open the search with the translation condition (target_freq is the target side).
+  if (stat.method === "translations") return stat.columns.find((c) => c.key === "cooc")?.key;
   const keys = ["freq", "target_freq", "hits"];
   return stat.columns.find((c) => keys.includes(c.key))?.key ?? stat.columns.find((c) => c.type === "number")?.key;
 }
@@ -47,11 +56,14 @@ export function rowEvidence(stat: StatResult, row: StatRow): EvidenceInput {
   };
 }
 
+/** Keyword columns computed with 0.5 smoothing when a count is 0 (row.values.smoothed). */
+const SMOOTHED_COLUMNS = new Set(["pct_diff", "odds_ratio"]);
+
 function Cell({ col, value }: { col: StatColumn; value: unknown }) {
   if (value == null || value === "") return <span className="muted">—</span>;
   if (col.type === "number") {
     const n = num(value);
-    if (col.key === "log_ratio" && n != null) return <>{(n < 0 ? "−" : "") + fmtValue(Math.abs(n))}</>;
+    if (SIGNED_COLUMNS.has(col.key) && n != null) return <>{(n < 0 ? "−" : "") + fmtValue(Math.abs(n))}</>;
     return <>{fmtValue(n ?? value)}</>;
   }
   return <>{String(value)}</>;
@@ -74,7 +86,7 @@ export function StatTable({
   const navigate = useNavigate();
   const link = linkColumn(stat);
   const barMax = cellBar ? Math.max(...stat.rows.map((r) => num(r.values[cellBar]) ?? 0), 1) : 1;
-  const go = (q: string | null | undefined, row: StatRow) => q && navigate(rowSearchHref(projectId, q, row.search_scope, statLayers(stat)));
+  const go = (q: string | null | undefined, row: StatRow) => q && navigate(rowSearchHref(projectId, q, row.search_scope, statLayers(stat), row.search_aligned));
   const coll = stat.method === "collocations";
 
   return (
@@ -84,7 +96,13 @@ export function StatTable({
           <th style={{ width: 44 }}>#</th>
           {stat.columns.map((c) => (
             <th key={c.key} className={c.type === "number" ? "r" : undefined}>
-              {c.label}
+              {COLUMN_TIPS[c.key] ? (
+                <Tip title={COLUMN_TIPS[c.key]}>
+                  <span className="col-tip">{c.label}</span>
+                </Tip>
+              ) : (
+                c.label
+              )}
               {c.unit ? <span className="muted"> · {c.unit}</span> : null}
             </th>
           ))}
@@ -111,6 +129,7 @@ export function StatTable({
                   ) : (
                     <Cell col={c} value={v} />
                   )}
+                  {SMOOTHED_COLUMNS.has(c.key) && row.values.smoothed && v != null ? <span className="muted"> 平滑</span> : null}
                   {c.key === cellBar && (
                     <span className="cell-bar" style={{ ["--i" as string]: i }}>
                       <i style={{ ["--v" as string]: `${(((num(v) ?? 0) / barMax) * 100).toFixed(0)}%` }} />
