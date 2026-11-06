@@ -16,6 +16,9 @@ x-python-env: &python-env
   # 一次检索的命中上限，超过则计数失败；检索结果集（DATA_DIR/search-cache）总字节上限
   SEARCH_MAX_HITS: ${SEARCH_MAX_HITS:-2000000}
   SEARCH_CACHE_MAX_BYTES: ${SEARCH_CACHE_MAX_BYTES:-2147483648}
+  # worker 同时加载的 Stanza 语言管线数（每种约 330 MB 内存）；语义索引句数上限
+  STANZA_MAX_PIPELINES: ${STANZA_MAX_PIPELINES:-2}
+  SEMANTIC_MAX_SENTENCES: ${SEMANTIC_MAX_SENTENCES:-300000}
   # 短任务门槛：上传小于此字节数的导入、词数小于此值的建索引算短任务（worker-light 也处理，各 worker 优先取短任务）
   LIGHT_IMPORT_BYTES: ${LIGHT_IMPORT_BYTES:-5242880}
   LIGHT_INDEX_TOKENS: ${LIGHT_INDEX_TOKENS:-1000000}
