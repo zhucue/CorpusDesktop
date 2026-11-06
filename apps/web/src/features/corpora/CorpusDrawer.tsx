@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { App, Drawer, Form, Input, Modal, Popconfirm, Select, Table, Tabs, type UploadFile } from "antd";
+import { App, Drawer, Form, Input, Modal, Select, Table, Tabs, type UploadFile } from "antd";
 import { useState } from "react";
 import { Link } from "react-router";
 import { api, errorText, type Doc, type DocSentence, type Job, type MetadataField, type Page } from "../../api";
@@ -8,6 +8,7 @@ import { Icon } from "../../components/Icon";
 import { canEdit, useCorpus, useJobCreated, useMe, useProject, useProjectId } from "../../lib/data";
 import { fmt, fmtRelative, fmtTime, fmtVersion, metadataText } from "../../lib/format";
 import { CorpusMetaList, corpusProfile } from "./CorpusMeta";
+import { DeleteConfirm, type DeleteTarget } from "./DeleteConfirm";
 import { draftFrom, emptyMeta, MetadataInput, metadataFromDraft, metaDraftRule, type MetaDraft } from "./MetadataInput";
 import { StatusCell } from "./StatusCell";
 import { TableMappingFields, useTableMapping } from "./TableMapping";
@@ -120,9 +121,13 @@ function Documents({ corpusId, editable }: { corpusId: string; editable: boolean
     qc.invalidateQueries({ queryKey: ["corpus", corpusId] });
     qc.invalidateQueries({ queryKey: ["corpora", projectId] });
   };
+  const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
   const remove = useMutation({
     mutationFn: (docId: string) => api.del(`/corpora/${corpusId}/documents/${docId}`),
-    onSuccess: refresh,
+    onSuccess: () => {
+      setDeleting(null);
+      refresh();
+    },
     onError: (e) => message.error(errorText(e)),
   });
 
@@ -167,18 +172,17 @@ function Documents({ corpusId, editable }: { corpusId: string; editable: boolean
                       <Icon name="edit" size={14} />
                     </button>
                   </Tip>
-                  <Popconfirm title={`删除「${d.title}」？删除后需重建索引。`} okText="删除" cancelText="取消" onConfirm={() => remove.mutate(d.id)}>
-                    <Tip title="删除文档">
-                      <button className="btn ghost icon danger" type="button" aria-label={`删除文档「${d.title}」`}>
-                        <Icon name="trash" size={14} />
-                      </button>
-                    </Tip>
-                  </Popconfirm>
+                  <Tip title="删除文档">
+                    <button className="btn ghost icon danger" type="button" aria-label={`删除文档「${d.title}」`} onClick={() => setDeleting({ kind: "document", id: d.id, name: d.title })}>
+                      <Icon name="trash" size={14} />
+                    </button>
+                  </Tip>
                 </span>
               ),
           },
         ]}
       />
+      <DeleteConfirm target={deleting} pending={remove.isPending} onConfirm={() => deleting && remove.mutate(deleting.id)} onClose={() => setDeleting(null)} />
       <Modal title={viewing?.title} open={!!viewing} footer={null} onCancel={() => setViewing(null)} width={760} destroyOnHidden>
         {viewing && <DocumentView doc={viewing} />}
       </Modal>

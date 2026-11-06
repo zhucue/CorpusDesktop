@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy import or_, select, update
+from sqlalchemy import Text, and_, cast, func, or_, select, update
 
 from services.api.access import (
     WRITE,
@@ -29,11 +29,18 @@ from services.api.jobs import (
 )
 from services.api.metadata import metadata_fields
 from services.api.models import (
+    AlignmentAnnotation,
+    Annotation,
+    AnnotationLayer,
     Corpus,
     Document,
+    Evidence,
     Job,
+    NoteRef,
+    RelationAnnotation,
     Sentence,
     SentenceAlignment,
+    SpanAnnotation,
     Token,
 )
 from services.api.storage import corpus_dir, upload_dir
@@ -131,6 +138,132 @@ def create_builtin_corpus(body: CorpusInput, user: CurrentUser, db: Db):
 @router.get("/corpora/{corpus_id}")
 def get_corpus(corpus_id: UUID, user: CurrentUser, db: Db):
     return corpus_view(load_corpus(db, corpus_id, user))
+
+
+# Statuses only a person sets: the model writes `suggested`; confirming, editing, rejecting or drawing by hand
+# changes it (services/api/annotations.py, spans.py, alignments.py).
+HUMAN_STATUSES = ("confirmed", "modified", "rejected")
+REVIEWED = (Annotation, SpanAnnotation, RelationAnnotation, AlignmentAnnotation)
+
+
+def _layer_counts(db, conditions):
+    """{layer_id: (rows, human rows)} over the annotation tables, each filtered by its condition."""
+    counts = {}
+    for model, cond in conditions:
+        stmt = (
+            select(
+                model.layer_id,
+                func.count(),
+                func.count().filter(model.status.in_(HUMAN_STATUSES)),
+            )
+            .where(cond)
+            .group_by(model.layer_id)
+        )
+        for layer_id, n, human in db.execute(stmt):
+            a, b = counts.get(layer_id, (0, 0))
+            counts[layer_id] = (a + n, b + human)
+    return counts
+
+
+def _impact(db, docs, layers, counts):
+    """docs: select of the affected document ids; layers: the affected AnnotationLayer rows."""
+    doc_ids = select(cast(Document.id, Text)).where(Document.id.in_(docs))
+    pinned = Evidence.ref["document_id"].astext.in_(doc_ids)
+    # an evidence ref in a note may carry only evidence_id (assistant kb_save); it points at the same sentence
+    evidence_ids = select(cast(Evidence.id, Text)).where(pinned)
+
+    def count(model, *where):
+        return db.scalar(select(func.count()).select_from(model).where(*where))
+
+    items = [
+        {
+            "id": layer.id,
+            "name": layer.name,
+            "kind": layer.kind,
+            "human": counts.get(layer.id, (0, 0))[1],
+        }
+        for layer in layers
+    ]
+    return {
+        "documents": count(Document, Document.id.in_(docs)),
+        "sentences": count(Sentence, Sentence.document_id.in_(docs)),
+        "layers": items,
+        "human_annotations": sum(x["human"] for x in items),
+        "evidence": count(Evidence, pinned),
+        "kb_refs": count(
+            NoteRef,
+            NoteRef.kind != "chunk",  # chunk refs carry a knowledge-base document_id
+            or_(
+                NoteRef.ref["document_id"].astext.in_(doc_ids),
+                func.split_part(NoteRef.ref["hit_id"].astext, ":", 1).in_(doc_ids),
+                and_(
+                    NoteRef.kind == "evidence",
+                    NoteRef.ref["evidence_id"].astext.in_(evidence_ids),
+                ),
+            ),
+        ),
+    }
+
+
+@router.get("/corpora/{corpus_id}/delete-impact")
+def corpus_delete_impact(corpus_id: UUID, user: CurrentUser, db: Db):
+    """What deleting the corpus removes with it (cascade): its documents and every layer on it, whole."""
+    human_only(user)
+    load_corpus(db, corpus_id, user, write=True)
+    layers = db.scalars(
+        select(AnnotationLayer)
+        .where(
+            or_(
+                AnnotationLayer.corpus_id == corpus_id,
+                AnnotationLayer.tgt_corpus_id == corpus_id,
+            )
+        )
+        .order_by(AnnotationLayer.created_at, AnnotationLayer.id)
+    ).all()
+    ids = [layer.id for layer in layers]
+    counts = _layer_counts(db, [(m, m.layer_id.in_(ids)) for m in REVIEWED])
+    docs = select(Document.id).where(Document.corpus_id == corpus_id)
+    return _impact(db, docs, layers, counts)
+
+
+@router.get("/documents/{document_id}/delete-impact")
+def document_delete_impact(document_id: UUID, user: CurrentUser, db: Db):
+    """What deleting one document removes: its rows in each layer (relations touching its spans, alignment
+    rows on either side); the layers themselves stay."""
+    human_only(user)
+    doc = db.get(Document, document_id)
+    if not doc:
+        raise not_found("文档")
+    load_corpus(db, doc.corpus_id, user, write=True)
+    spans = select(SpanAnnotation.id).where(SpanAnnotation.document_id == document_id)
+    counts = _layer_counts(
+        db,
+        [
+            (Annotation, Annotation.document_id == document_id),
+            (SpanAnnotation, SpanAnnotation.document_id == document_id),
+            (
+                RelationAnnotation,
+                or_(
+                    RelationAnnotation.from_span_id.in_(spans),
+                    RelationAnnotation.to_span_id.in_(spans),
+                ),
+            ),
+            (
+                AlignmentAnnotation,
+                or_(
+                    AlignmentAnnotation.src_document_id == document_id,
+                    AlignmentAnnotation.tgt_document_id == document_id,
+                ),
+            ),
+        ],
+    )
+    layers = db.scalars(
+        select(AnnotationLayer)
+        .where(AnnotationLayer.id.in_(list(counts)))
+        .order_by(AnnotationLayer.created_at, AnnotationLayer.id)
+    ).all()
+    docs = select(Document.id).where(Document.id == document_id)
+    return _impact(db, docs, layers, counts)
 
 
 @router.delete("/corpora/{corpus_id}", status_code=204)

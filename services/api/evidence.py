@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from services.api.access import (
     WRITE,
@@ -16,7 +16,7 @@ from services.api.access import (
     require_project,
 )
 from services.api.auth import CurrentUser, Db
-from services.api.errors import forbidden, not_found
+from services.api.errors import ApiError, forbidden, not_found
 from services.api.jobs import enqueue
 from services.api.models import Corpus, Document, Evidence, Sentence, StatResult
 from services.api.search import aligned_texts
@@ -213,6 +213,22 @@ def delete_evidence(evidence_id: UUID, user: CurrentUser, db: Db):
         raise forbidden()
     db.delete(item)
     db.commit()
+
+
+@router.delete("/projects/{project_id}/evidence")
+def clear_my_evidence(project_id: UUID, user: CurrentUser, db: Db, mine: bool = False):
+    """Delete every item the current user pinned in the project; others' items stay (contracts/p7.md §四)."""
+    human_only(user)
+    require_project(db, project_id, user)
+    if not mine:
+        raise ApiError(422, "MINE_REQUIRED", "只能清空自己钉的证据（mine=true）")
+    result = db.execute(
+        delete(Evidence).where(
+            Evidence.project_id == project_id, Evidence.created_by == user.id
+        )
+    )
+    db.commit()
+    return {"deleted": result.rowcount}
 
 
 @router.post("/projects/{project_id}/evidence/export")

@@ -14,6 +14,10 @@ import { evidenceIcon } from "../iconSets";
 
 interface EvidenceState {
   items: Evidence[];
+  /** Items in the project; more than items.length while only the first pages are loaded. */
+  total: number;
+  loadMore: () => void;
+  loading: boolean;
   find: (input: EvidenceInput) => Evidence | undefined;
   toggle: (input: EvidenceInput, from?: HTMLElement | null) => void;
   remove: (id: string) => void;
@@ -64,11 +68,27 @@ export function EvidenceProvider({ projectId, children }: { projectId: string; c
   const capsuleRef = useRef<HTMLButtonElement | null>(null);
   const [bump, setBump] = useState(0);
   const key = ["evidence", projectId];
+  // pages of MAX_PAGE_SIZE loaded so far; 加载更多 raises it and refetches pages 1..n under the same key
+  const pages = useRef(1);
   const list = useQuery({
     queryKey: key,
-    queryFn: () => api.get<Page<Evidence>>(`/projects/${projectId}/evidence`, { page_size: MAX_PAGE_SIZE }),
+    queryFn: async () => {
+      let out: Page<Evidence> = { items: [], total: 0 };
+      for (let page = 1; page <= pages.current; page++) {
+        const p = await api.get<Page<Evidence>>(`/projects/${projectId}/evidence`, { page, page_size: MAX_PAGE_SIZE });
+        const seen = new Set(out.items.map((x) => x.id));
+        out = { items: [...out.items, ...p.items.filter((x) => !seen.has(x.id))], total: p.total };
+        if (page * MAX_PAGE_SIZE >= p.total) break;
+      }
+      return out;
+    },
   });
   const items = useMemo(() => list.data?.items ?? [], [list.data]);
+  const total = list.data?.total ?? 0;
+  const loadMore = useCallback(() => {
+    pages.current = Math.max(pages.current, Math.ceil(items.length / MAX_PAGE_SIZE)) + 1;
+    void qc.invalidateQueries({ queryKey: ["evidence", projectId] });
+  }, [items.length, qc, projectId]);
 
   const add = useMutation({
     mutationFn: (input: EvidenceInput) => api.post<Evidence>(`/projects/${projectId}/evidence`, input),
@@ -82,7 +102,7 @@ export function EvidenceProvider({ projectId, children }: { projectId: string; c
   const del = useMutation({
     mutationFn: (id: string) => api.del(`/evidence/${id}`),
     onSuccess: (_, id) => {
-      qc.setQueryData<Page<Evidence>>(key, (old) => (old ? { items: old.items.filter((x) => x.id !== id), total: old.total - 1 } : old));
+      qc.setQueryData<Page<Evidence>>(key, (old) => (old?.items.some((x) => x.id === id) ? { items: old.items.filter((x) => x.id !== id), total: old.total - 1 } : old));
     },
     onError: (e) => message.error(errorText(e)),
   });
@@ -104,7 +124,7 @@ export function EvidenceProvider({ projectId, children }: { projectId: string; c
     [find, add, del, message],
   );
 
-  const value: EvidenceState = { items, find, toggle, remove: (id) => del.mutate(id), capsuleRef, bump, error: list.error };
+  const value: EvidenceState = { items, total, loadMore, loading: list.isFetching, find, toggle, remove: (id) => del.mutate(id), capsuleRef, bump, error: list.error };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
@@ -257,11 +277,11 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
     );
   }
 
-  async function clearAll() {
-    if (!ev) return;
+  /** Only the current user's items (DELETE ?mine=true); other members' pins stay. */
+  async function clearMine() {
     setClearing(true);
     try {
-      for (const it of ev.items) await api.del(`/evidence/${it.id}`);
+      await api.del(`/projects/${projectId}/evidence?mine=true`);
     } catch (e) {
       message.error(errorText(e));
     } finally {
@@ -275,7 +295,7 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
         <div className="dp-head">
           <Icon name="basket" size={14} />
           <b className="grow">证据篮</b>
-          <span className="small muted num">{n} 条</span>
+          <span className="small muted num">{ev.total > n ? `显示 ${n} / 共 ${ev.total}` : `${n} 条`}</span>
         </div>
         <div className="dp-body">
           {ev.error ? (
@@ -317,6 +337,13 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
               </div>
             ))
           )}
+          {!ev.error && ev.total > n && (
+            <div className="row" style={{ justifyContent: "center", padding: 8 }}>
+              <button className="btn xs" type="button" disabled={ev.loading} onClick={ev.loadMore}>
+                加载更多
+              </button>
+            </div>
+          )}
         </div>
         <div className="dp-foot">
           <button className="btn xs" type="button" disabled={!n} onClick={() => setPicking(true)}>
@@ -332,7 +359,7 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
             DOCX
           </button>
           <div className="grow" />
-          <ClearButton disabled={!n || clearing} onConfirm={clearAll} projectId={projectId} />
+          <ClearButton disabled={!ev.total || clearing} onConfirm={clearMine} projectId={projectId} />
         </div>
       </div>
       <NotePicker open={picking} projectId={projectId} title={`加入笔记 · ${n} 条证据`} defaultTitle="证据摘录" onClose={() => setPicking(false)} onPick={toNote} />
@@ -347,7 +374,7 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
         <Icon name="basket" />
         证据篮
         <span className="cnt bump" key={ev.bump}>
-          {n}
+          {ev.total}
         </span>
       </button>
     </div>
@@ -373,7 +400,7 @@ function ClearButton({ disabled, onConfirm, projectId }: { disabled: boolean; on
         qc.invalidateQueries({ queryKey: ["evidence", projectId] });
       }}
     >
-      {armed ? "确认清空" : "清空"}
+      {armed ? "确认清空我钉的" : "清空我钉的"}
     </button>
   );
 }

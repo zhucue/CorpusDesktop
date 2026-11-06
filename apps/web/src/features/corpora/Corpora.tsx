@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { App, Form, Input, Modal, Popconfirm, Segmented, Select, Table } from "antd";
+import { App, Form, Input, Modal, Segmented, Select, Table } from "antd";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { api, errorText, type Corpus, type CorpusMeta, type Job } from "../../api";
@@ -11,6 +11,7 @@ import { canEdit, useCorpora, useJobCreated, useMe, useProject, useProjectId } f
 import { fmt } from "../../lib/format";
 import "./corpora.css";
 import CorpusDrawer from "./CorpusDrawer";
+import { DeleteConfirm, type DeleteTarget } from "./DeleteConfirm";
 import { corpusLanguages, metaEntries, metaFromForm, scriptLabels, tagsetLabels } from "./CorpusMeta";
 import { StatusCell } from "./StatusCell";
 import Subcorpora from "./Subcorpora";
@@ -41,9 +42,13 @@ export default function Corpora() {
   const builtin = items.filter((c) => c.project_id === null);
   const shown = filter === "builtin" ? builtin : filter === "project" ? own : items;
 
+  const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
   const remove = useMutation({
     mutationFn: (id: string) => api.del(`/corpora/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["corpora", projectId] }),
+    onSuccess: () => {
+      setDeleting(null);
+      qc.invalidateQueries({ queryKey: ["corpora", projectId] });
+    },
     onError: (e) => message.error(errorText(e)),
   });
   const reindex = useMutation({
@@ -270,13 +275,11 @@ export default function Corpora() {
                         </button>
                       )}
                       {c.project_id !== null && (
-                        <Popconfirm title={`删除语料库「${c.name}」？`} okText="删除" cancelText="取消" onConfirm={() => remove.mutate(c.id)}>
-                          <Tip title="删除语料库">
-                            <button className="btn ghost icon danger" type="button" aria-label={`删除语料库「${c.name}」`}>
-                              <Icon name="trash" size={14} />
-                            </button>
-                          </Tip>
-                        </Popconfirm>
+                        <Tip title="删除语料库">
+                          <button className="btn ghost icon danger" type="button" aria-label={`删除语料库「${c.name}」`} onClick={() => setDeleting({ kind: "corpus", id: c.id, name: c.name })}>
+                            <Icon name="trash" size={14} />
+                          </button>
+                        </Tip>
                       )}
                     </span>
                   );
@@ -291,6 +294,7 @@ export default function Corpora() {
 
       <UploadDialog open={uploading} projectId={projectId} corpora={items} corpusId={corpusId} isAdmin={isAdmin} onClose={() => setUploading(false)} />
       <CorpusDrawer corpusId={corpusId ?? null} onClose={() => navigate(`/p/${projectId}/corpora`)} />
+      <DeleteConfirm target={deleting} pending={remove.isPending} onConfirm={() => deleting && remove.mutate(deleting.id)} onClose={() => setDeleting(null)} />
       <Modal title="新建内置语料" open={creatingBuiltin} onCancel={() => setCreatingBuiltin(false)} footer={null} destroyOnHidden>
         <Form layout="vertical" onFinish={(v) => createBuiltin.mutate(v)} initialValues={{ language: "zh" }} requiredMark={false}>
           <Form.Item name="name" label="名称" rules={[{ required: true, whitespace: true, message: "请输入名称" }]}>
