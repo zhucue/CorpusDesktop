@@ -10,7 +10,7 @@
 | Docker | Engine 24+ 与 Compose v2 |
 | 资源 | 4 CPU、16 GiB 内存起（api、worker、worker-light 各加载向量模型，常驻约 800 MB；Stanza 英文标注时每个正在导入的 worker 峰值约 2 GiB；每多保留一种语言管线约多 330 MB，见第四节"语言模型"）；磁盘：镜像约 8 GiB，模型缓存约 1.5 GiB（每多一种 Stanza 语言约 315–340 MB），语料与索引按数据量（完整 Tatoeba 中英约 2 GiB），语义索引每句约 3.5 KB |
 | 小内存（≤ 4 GiB） | 只跑一个 worker：`docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --scale worker-light=0`；或设 `EMBED_PROVIDER=openai`，不在三个容器各加载一份本地向量模型；并设 `STANZA_MAX_PIPELINES=1`。都不做时导入会被内核 OOM 终止 |
-| 网络 | 首次启动需访问 Hugging Face（向量模型）、Stanza 模型源、对话模型服务；向量模型已在 `models` 卷缓存时离线加载，缓存缺失才联网下载；离线部署先在联网机器拉取 `models`、`stanza` 卷内容（第四节） |
+| 网络 | 首次启动需访问 Hugging Face（向量模型）、Stanza 模型源、对话模型服务；向量模型已在 `models` 卷缓存时离线加载，缓存缺失才联网下载；离线部署先在联网机器拉取 `models`、`stanza` 卷内容（第四节）。知识库网页导入由 worker 直接连接目标站点，不使用 `HTTP_PROXY` / `HTTPS_PROXY` 等代理变量：只能经代理出网的服务器无法用网页导入，改为上传文件 |
 | 域名与证书 | 对外访问需域名和 HTTPS，由宿主机 Caddy 或 nginx 终止（第五节） |
 
 ## 二 服务
@@ -42,7 +42,7 @@
 | POSTGRES_PORT、HTTP_PORT | 宿主端口，默认 15432、8080；端口被占用时同时改 HTTP_PORT 与 PUBLIC_ORIGIN |
 | PUBLIC_ORIGIN | 浏览器访问地址，逗号分隔多个；非 GET 请求的 Origin 须匹配（api 与 agent 都校验） |
 | MODEL_BASE_URL、MODEL_API_KEY、MODEL_ID、MODEL_API | 对话模型（OpenAI 兼容；`MODEL_API` 为 `openai-completions` 或 `openai-responses`）。未配置时助手与依赖模型的预标、摘要、抽取不可用，其余功能正常。api 只读 `MODEL_BASE_URL`、`MODEL_ID`，用于在设置页"数据与隐私"显示模型主机与模型名，不调用模型 |
-| MODEL_CONTEXT_WINDOW、MODEL_MAX_TOKENS、MODEL_TIMEOUT_MS、MODEL_REASONING | 可选 |
+| MODEL_CONTEXT_WINDOW、MODEL_MAX_TOKENS、MODEL_TIMEOUT_MS、MODEL_REASONING | 可选。`MODEL_TIMEOUT_MS`（默认 120000）是 agent 单次模型请求超时；Pi 对超时也会重试，一条消息最坏等待 3 × `MODEL_TIMEOUT_MS`（第六节"模型请求重试"） |
 | EMBED_PROVIDER、EMBED_MODEL、EMBED_BASE_URL、EMBED_API_KEY、EMBED_DIM | 向量模型；默认本地 `paraphrase-multilingual-MiniLM-L12-v2`（384 维），远程须 384 维 |
 | MODELS_DIR、HF_HOME | 模型缓存目录（容器内 `/models`） |
 | SEARCH_COUNT_TIMEOUT | 首次检索的同步超时秒数，默认 20；在此之内完成直接返回完整计数，超时后转后台完整计数，页面显示"计算中"并轮询 |
@@ -53,6 +53,7 @@
 | ALERT_WEBHOOK_URL | `scripts/healthcheck.sh` 失败时 POST `{"text": "..."}` 的地址；留空只打印并以非零退出（第六节） |
 | STANZA_MAX_PIPELINES | 每个 worker 进程同时保留的 Stanza 语言管线数，默认 2（中文依存算一个）；超过时按最近使用淘汰并释放内存。小内存机器设 1 |
 | SEMANTIC_MAX_SENTENCES | 一个语料（或所选语言）可建语义索引的句数上限，默认 300000；超过时建索引返回 422 `TOO_LARGE` |
+| MAX_UNPACKED_BYTES、MAX_UNPACKED_FILES、MAX_PDF_PAGES | 上传文件解压上限，默认 524288000 字节（500 MB）、10000 个文件、5000 页；语料导入与知识库的 DOCX / XLSX / PDF / Tatoeba `.bz2` 共用，超过时导入失败"文件解压后过大"。在 `.env` 中设置即可（compose 已透传给 api 与 worker） |
 | LIGHT_IMPORT_BYTES、LIGHT_INDEX_TOKENS | 短任务门槛，默认 5242880 字节、1000000 词（见第二节队列规则）；api 与 worker 读同一值 |
 | TZ | 服务器时区，默认 `Asia/Shanghai`；api、worker、agent 共用，模型用量按此时区的自然月统计 |
 | LLM_MONTHLY_TOKENS_PER_USER | 每位用户每月对话模型 token 上限，默认 0（不限）；达到后助手新消息、重新生成、确认执行，LLM 预标、文献摘要、术语抽取及其重试返回 429 `LLM_QUOTA_EXCEEDED`；api 与 agent 读同一值 |
@@ -215,8 +216,20 @@ server {
 | 安全响应头 | 页面与接口都带 `X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`、`Referrer-Policy: same-origin`、`Permissions-Policy: camera=(), microphone=(), geolocation=()`（`always`，错误响应也带；`/index.html` 单独重复一遍）；不加 CSP | `deploy/nginx.conf` |
 | 每日维护 | 见下方“维护任务” | worker-light |
 | 模型用量上限 | `LLM_MONTHLY_TOKENS_PER_USER`、`AGENT_MAX_RUNS_PER_USER`；用量在设置 › 管理 › 用量按用户 / 项目、月份查看 | `deploy/.env` |
+| 账号查找限流 | `GET /api/users`（加成员时按邮箱查找）仅项目负责人，每人每分钟 20 次，超出 429 `RATE_LIMITED`；计数在 api 进程内存，重启清零 | `services/api/auth.py` |
+| 网页导入 | 只连公网地址：每跳解析一次域名并直接连接检查过的 IP（保留 Host 与 SNI），重定向逐跳检查，最多 5 跳，响应 ≤ 10 MB；不走代理变量 | `engine/kb/parse.py` |
 
 nginx 把 `/api/` 反代到 api、`/agent/` 反代到 agent（SSE：关闭缓冲，600 秒超时），`index.html` 不缓存。
+
+### 模型请求重试
+
+| 调用方 | 行为 |
+| --- | --- |
+| worker（预标、对齐、文献摘要、术语抽取） | 连接错误、429、5xx 最多重试 2 次，等待 2 秒、6 秒；服务端给 `Retry-After` 时按它等待，最多 60 秒；等待期间任务可取消（1 秒内停止）。读超时（300 秒）不重试，直接失败"对话模型 300 秒内没有响应"。仍失败时任务错误写实际原因，如"对话模型返回 HTTP 503：…" |
+| agent（助手对话） | 用 Pi 自带重试，最多 2 次：429、408、409、5xx 与连接错误，按 `Retry-After`（超过 60 秒直接失败并写明等待时间），否则 Pi 退避 0.5 秒、1 秒。Pi 只在拿到响应头之前重试，流式输出中途断开不重试，前端不会收到重复文本。Pi 不能对超时关闭重试，一条消息最坏等待 3 × `MODEL_TIMEOUT_MS` |
+| 用量 | 只在成功作答后记一次，重试的失败请求不计 |
+
+模型服务限流频繁时，先在服务商侧提高限额；重试不会绕过 `LLM_MONTHLY_TOKENS_PER_USER`。
 
 ### 维护任务
 
@@ -275,6 +288,14 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
 | `0012` | 新表 `vocab_lists`、`vocab_entries`；内置 NGSL 词表首次使用时写入 | 秒级 |
 
 升级后按需在 `.env` 设置 `STANZA_MAX_PIPELINES`、`SEMANTIC_MAX_SENTENCES`；已有语料不会自动建语义索引。向量模型版本变更时知识库需重新向量化（文献页"重新导入"或后台任务），已建的语义索引须在语料详情重建。
+
+从 P11 之前的版本升级：
+
+| 项 | 内容 |
+| --- | --- |
+| 迁移 `0013` | 证据表加两个部分唯一索引（命中：项目 + 文档 + 起止码点；统计行：项目 + `stat_id` + `md5(row_key)`）。建索引前合并存量重复：保留最早一条，备注按时间拼接，笔记引用改指保留的一条，删除其余。证据条数不多时秒级；同样先 `up -d api` 等健康后再启动 worker 与 agent |
+| 新依赖 | `opencc-python-reimplemented`（简繁通查，纯 Python，Apache-2.0，含 OpenCC 词典），已写入 `pyproject.toml` / `uv.lock`，`up -d --build` 重建 api 与 worker 镜像即安装，不需联网下载词典 |
+| 网页导入 | 不再读取代理变量；原先靠容器代理出网做网页导入的部署，升级后网页导入会失败，改用文件上传 |
 
 ## 八 备份与恢复
 
@@ -359,6 +380,10 @@ HTTP_PORT=18088 POSTGRES_PORT=25432 docker compose -f deploy/compose.yaml -p cor
 | 助手报 MODEL_AUTH_FAILED / RATE_LIMITED / TIMEOUT | 模型服务密钥、限额或网络；agent 日志有细节 |
 | 知识库检索提示向量未就绪 | worker 尚未下载完模型或 `models` 卷不可写；看 worker 日志 |
 | 网页导入返回 403 / 失败 | 目标站点拒绝容器访问（如维基百科）；改用文件导入 |
+| 网页导入连接失败，服务器只能经代理出网 | 网页导入不使用代理变量（防 DNS 重绑定）；改用文件导入 |
+| 网页导入提示"只能导入公网地址" | 域名解析到私网、回环或链路本地地址（含重定向后的地址）；只能导入公网网页 |
+| 导入失败"文件解压后过大" | DOCX / XLSX / `.bz2` 解压后超过 500 MB 或文件数超过 10000，PDF 超过 5000 页；拆分文件，或在 `.env` 中调高 `MAX_UNPACKED_*` / `MAX_PDF_PAGES` |
+| 预标或摘要任务比平时慢 | 模型服务返回 429 / 5xx，worker 正按 2 秒、6 秒或 `Retry-After` 重试；三次都失败时任务失败并写 HTTP 状态 |
 | 导入很慢 | Stanza 英文解析与中文依存为 CPU 密集；大语料用管理员脚本后台导入；小于 5 MB 的导入与短任务由 worker-light 处理，不排在大导入后面；需要更多导入并发时 `--scale worker=2` |
 | 内置语料追加导入期间 | 语料保持可检索并显示"更新中"，旧索引继续服务，新索引建好后替换 |
 | 升级后 worker 报错 | 新镜像需要最新迁移，先 `up -d api` 再启动 worker |
