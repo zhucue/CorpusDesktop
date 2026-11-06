@@ -372,6 +372,18 @@ def world():
         json={"name": "q", "query": "language", "scope": scope},
     )["id"]
     ids["stat"] = run_stat(o, scope)
+    # P8 sample layer (contracts/p8.md §五); the corpus is parallel (sample.tmx)
+    ids["layer_sample"] = o.ok(
+        "POST",
+        f"/api/projects/{p}/samples",
+        json={
+            "scope": scope,
+            "query": "language",
+            "n": 2,
+            "seed": 1,
+            "layer": {"name": "抽样", "label_set_id": ids["ls_span"]},
+        },
+    )["layer_id"]
     ids["evidence"] = o.ok(
         "POST",
         f"/api/projects/{p}/evidence",
@@ -984,6 +996,61 @@ def build_cases(w: World):
             READ,
             lambda c, x, r: c.post(
                 "/api/stats/alignment", json={"layer_id": i["layer_align"]}
+            ),
+        ),
+        # P8 (contracts/p8.md): breakdown, translations (the world corpus is a TMX parallel corpus),
+        # sampling (create = the layer rule, WRITE incl. Bearer), method appendix (read)
+        C(
+            "统计",
+            "POST /stats/breakdown",
+            READ,
+            lambda c, x, r: c.post(
+                "/api/stats/breakdown",
+                json={"scope": scope, "query": "language", "by": "word"},
+            ),
+        ),
+        C(
+            "统计",
+            "POST /stats/translations",
+            READ,
+            lambda c, x, r: c.post(
+                "/api/stats/translations",
+                json={"scope": scope, "query": "language", "min_freq": 1},
+            ),
+        ),
+        C(
+            "抽样",
+            "POST /projects/{id}/samples",
+            WRITE,
+            lambda c, x, r: c.post(
+                f"/api/projects/{p}/samples",
+                json={
+                    "scope": scope,
+                    "query": "language",
+                    "n": 1,
+                    "layer": {"name": f"抽样-{r}", "label_set_id": i["ls_span"]},
+                },
+            ),
+        ),
+        C(
+            "抽样",
+            "GET /layers/{id}/sample-summary",
+            READ,
+            lambda c, x, r: c.get(f"/api/layers/{i['layer_sample']}/sample-summary"),
+        ),
+        C(
+            "抽样",
+            "GET /layers/{id}/sample-items",
+            READ,
+            lambda c, x, r: c.get(f"/api/layers/{i['layer_sample']}/sample-items"),
+        ),
+        C(
+            "统计",
+            "POST /projects/{id}/method-appendix",
+            READ,
+            lambda c, x, r: c.post(
+                f"/api/projects/{p}/method-appendix",
+                json={"stat_ids": [i["stat"]], "layer_ids": [i["layer_sample"]]},
             ),
         ),
         # evidence
