@@ -41,11 +41,16 @@
 | POSTGRES_PASSWORD | 必填 |
 | POSTGRES_PORT、HTTP_PORT | 宿主端口，默认 15432、8080；端口被占用时同时改 HTTP_PORT 与 PUBLIC_ORIGIN |
 | PUBLIC_ORIGIN | 浏览器访问地址，逗号分隔多个；非 GET 请求的 Origin 须匹配（api 与 agent 都校验） |
-| MODEL_BASE_URL、MODEL_API_KEY、MODEL_ID、MODEL_API | 对话模型（OpenAI 兼容；`MODEL_API` 为 `openai-completions` 或 `openai-responses`）。未配置时助手与依赖模型的预标、摘要、抽取不可用，其余功能正常 |
+| MODEL_BASE_URL、MODEL_API_KEY、MODEL_ID、MODEL_API | 对话模型（OpenAI 兼容；`MODEL_API` 为 `openai-completions` 或 `openai-responses`）。未配置时助手与依赖模型的预标、摘要、抽取不可用，其余功能正常。api 只读 `MODEL_BASE_URL`、`MODEL_ID`，用于在设置页"数据与隐私"显示模型主机与模型名，不调用模型 |
 | MODEL_CONTEXT_WINDOW、MODEL_MAX_TOKENS、MODEL_TIMEOUT_MS、MODEL_REASONING | 可选 |
 | EMBED_PROVIDER、EMBED_MODEL、EMBED_BASE_URL、EMBED_API_KEY、EMBED_DIM | 向量模型；默认本地 `paraphrase-multilingual-MiniLM-L12-v2`（384 维），远程须 384 维 |
 | MODELS_DIR、HF_HOME | 模型缓存目录（容器内 `/models`） |
-| SEARCH_COUNT_TIMEOUT | 检索完整计数的超时秒数，默认 20；超时后页面显示"计算中"并可重取 |
+| SEARCH_COUNT_TIMEOUT | 首次检索的同步超时秒数，默认 20；在此之内完成直接返回完整计数，超时后转后台完整计数，页面显示"计算中"并轮询 |
+| SEARCH_FULL_TIMEOUT | 后台完整计数的超时秒数，默认 300；超时后页面显示"计数超时"，不再轮询。全进程同时最多 2 个后台计数 |
+| SEARCH_MAX_HITS | 一次检索的命中上限，默认 2000000；超过时后台计数失败并提示命中过多 |
+| SEARCH_CACHE_MAX_BYTES | 检索结果集（`DATA_DIR/search-cache/`）总字节上限，默认 2 GB；超出按最近最少使用淘汰；api 启动时清空该目录 |
+| APP_VERSION | 版本号，设置页"数据与隐私"显示；留空为 `dev` |
+| ALERT_WEBHOOK_URL | `scripts/healthcheck.sh` 失败时 POST `{"text": "..."}` 的地址；留空只打印并以非零退出（第六节） |
 | LIGHT_IMPORT_BYTES、LIGHT_INDEX_TOKENS | 短任务门槛，默认 5242880 字节、1000000 词（见第二节队列规则）；api 与 worker 读同一值 |
 
 密钥只放在 `deploy/.env`，不入库、不放 `tmp/`。
@@ -59,7 +64,7 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
 docker compose --env-file deploy/.env -f deploy/compose.yaml exec api python scripts/create_account.py --email admin@example.edu --admin
 ```
 
-api 启动时执行 Alembic 迁移并写入内置标签集；worker 首次启动下载向量模型（约 458 MB）；首次导入英文语料时下载 Stanza 英文模型（约 320 MB）。`GET /api/health`、`GET /agent/health` 可确认就绪；`/agent/health` 返回 `MODEL_NOT_CONFIGURED` 表示未配模型。
+api 启动时执行 Alembic 迁移并写入内置标签集；worker 首次启动下载向量模型（约 458 MB）；首次导入英文语料时下载 Stanza 英文模型（约 320 MB）。`GET /api/health`（查询数据库，失败 503）、`GET /agent/health` 可确认就绪；`/agent/health` 返回 `MODEL_NOT_CONFIGURED` 表示未配模型。
 
 ### 预先填充模型卷
 
@@ -167,11 +172,37 @@ server {
 | --- | --- | --- |
 | 自动重启 | postgres、api、worker、worker-light、agent、web 为 `restart: unless-stopped`；手动 `stop` 后不自动拉起 | `deploy/compose.yaml` |
 | 日志上限 | json-file，单文件 20 MB，每容器保留 5 个 | `deploy/compose.yaml` |
-| 登录限流 | `POST /api/auth/login` 每个客户端 IP 每分钟 10 次，可突发 5 次；超出返回 429 `LOGIN_RATE_LIMITED`（"登录尝试过多，请 1 分钟后再试"） | `deploy/nginx.conf` |
+| 登录限流 | `POST /api/auth/login` 与 `POST /api/auth/password`（修改密码）共用一个限流区：每个客户端 IP 每分钟 10 次，可突发 5 次；超出返回 429 `LOGIN_RATE_LIMITED`（"登录尝试过多，请 1 分钟后再试"） | `deploy/nginx.conf` |
+| 容器健康检查 | api 请求 `/api/health`（含数据库）；worker、worker-light 检查 `/data/worker-health/<WORKER_ID>` 在 90 秒内更新过（每轮主循环与任务心跳更新），每 30 秒一次，启动宽限 60 秒 | `deploy/compose.yaml` |
 | 真实 IP | 来自 127.0.0.1 与私网段（10/8、172.16/12、192.168/16）的请求取 `X-Forwarded-For` 最后一个地址 | `deploy/nginx.conf` |
 | 接口文档 | `/api/docs`、`/api/openapi.json` 在 nginx 返回 404 | `deploy/nginx.conf` |
 
 nginx 把 `/api/` 反代到 api、`/agent/` 反代到 agent（SSE：关闭缓冲，600 秒超时），`index.html` 不缓存。
+
+### 账号管理
+
+| 操作 | 网页（设置 › 用户，仅平台管理员） | 命令行 |
+| --- | --- | --- |
+| 新建账号 | "新建"：邮箱、姓名、是否管理员；弹窗显示一次 16 位临时密码 | `create_account.py --email … [--name …] [--admin]` |
+| 重置密码 | "重置密码"：显示一次临时密码，该用户全部会话与助手令牌失效 | `create_account.py --email … --reset`（不带 `--password-stdin` 时生成临时密码并打印） |
+| 停用 / 启用 | 停用后登录返回"账号已停用，请联系管理员"，已登录的会话下一次请求失效 | — |
+| 设 / 撤管理员 | 不能停用自己；不能停用或撤销最后一个可用管理员 | `--admin` 只在新建时生效 |
+
+临时密码登录后必须先修改密码（12–1024 字符），之前其他接口返回 403 `PASSWORD_CHANGE_REQUIRED`。管理员忘记密码时在服务器上执行：
+
+```bash
+docker compose --env-file deploy/.env -f deploy/compose.yaml exec api python scripts/create_account.py --email admin@example.edu --reset
+```
+
+### 运行状态检查
+
+`scripts/healthcheck.sh` 在宿主机检查：`/api/health`、api / worker / worker-light 容器健康状态、数据盘剩余空间低于 10%、最近一次备份超过 26 小时。任一项失败时，若设置了 `ALERT_WEBHOOK_URL`（环境变量或 `deploy/.env`）则 POST `{"text": "..."}` 到该地址，退出码 1。可选环境变量：`HEALTH_URL`、`DATA_PATH`（检查剩余空间的目录，默认 Docker 数据目录）、`BACKUP_DIR`（默认 `tmp/backups`，与定时备份目录不同时须设置）、`BACKUP_MAX_HOURS`、`DISK_MIN_FREE`；非默认 Compose 项目名用 `-p`。
+
+cron 每 5 分钟执行：
+
+```text
+*/5 * * * * cd /opt/CorpusDesktop && BACKUP_DIR=/backup/corpus scripts/healthcheck.sh >> /var/log/corpus-health.log 2>&1
+```
 
 ## 七 升级
 
@@ -181,7 +212,7 @@ npm run web:build
 docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
 ```
 
-迁移随 api 启动自动执行；升级前先备份（第八节）。向量模型版本变更时知识库需重新向量化（文献页"重新导入"或后台任务）。
+迁移随 api 启动自动执行；升级前先备份（第八节）。从 2026 年 11 月 5 日之前的版本升级会执行迁移 `0008_account_lifecycle`（`users` 加 `disabled_at`、`must_change_password`、`last_login_at`），先 `up -d api` 等健康后再启动 worker；升级后设置 `APP_VERSION`，按需配置 `ALERT_WEBHOOK_URL` 与第六节的健康检查 cron。向量模型版本变更时知识库需重新向量化（文献页"重新导入"或后台任务）。
 
 ## 八 备份与恢复
 
@@ -225,7 +256,7 @@ cron 用户须能执行 docker；`/backup` 宜在另一块磁盘或定期同步�
 scripts/restore.sh tmp/backups/<时间戳>
 ```
 
-步骤：校验 SHA256 → 确认（`--yes` 跳过）→ 停止 api / worker / agent / web → 启动 postgres → 删除并重建 `corpus` 库后 `pg_restore` → 清空并解包备份中的各个卷 → `docker compose up -d` → 冒烟。
+步骤：校验 SHA256 → 确认（`--yes` 跳过）→ 停止 api / worker / worker-light / agent / web → 启动 postgres → 删除并重建 `corpus` 库后 `pg_restore` → 清空并解包备份中的各个卷 → `docker compose up -d` → 冒烟。
 
 冒烟检查健康；设置 `SMOKE_EMAIL`、`SMOKE_PASSWORD` 后，还会登录并执行一次检索、读取一个标注层、执行一次知识库关键词检索。`SMOKE_QUERY` 设定检索词（默认 `the`）。密码只从环境变量读取，不写入文件。
 
@@ -275,10 +306,12 @@ HTTP_PORT=18088 POSTGRES_PORT=25432 docker compose -f deploy/compose.yaml -p cor
 
 | 项目 | 检查 |
 | --- | --- |
-| `.env` | `POSTGRES_PASSWORD` 为强密码；`MODEL_*` 已填；文件不入库 |
+| `.env` | `POSTGRES_PASSWORD` 为强密码；`MODEL_*` 已填；文件不入库；`chmod 600 deploy/.env` |
+| 模型费用 | 在模型服务商侧设消费上限 |
 | HTTPS | 宿主反代已配证书，http 跳转 https；防火墙只开 80、443 |
 | PUBLIC_ORIGIN | 只含 `https://域名`，没有 http 地址 |
-| 管理员账号 | `create_account.py --admin` 已建，密码已妥善保管 |
+| 管理员账号 | `create_account.py --admin` 已建，密码已妥善保管；其他用户在设置 › 用户中新建 |
 | 模型卷 | worker 日志有 `embedding model … ready`；Stanza 英文与中文依存已下载 |
-| 备份 cron | 已配置，手动跑过一次 `scripts/backup.sh` 且恢复演练通过 |
-| 健康检查 | `https://域名/api/health` 正常；`/agent/health` 不是 `MODEL_NOT_CONFIGURED`；`/api/docs` 返回 404 |
+| 备份 cron | 已配置，手动跑过一次 `scripts/backup.sh` 且恢复演练通过；备份复制到另一台机器 |
+| 健康检查 | `https://域名/api/health` 正常；`docker compose ps` 中 api、worker、worker-light 为 healthy；`/agent/health` 不是 `MODEL_NOT_CONFIGURED`；`/api/docs` 返回 404 |
+| 告警 | `scripts/healthcheck.sh` 手动执行通过，cron 每 5 分钟执行；`ALERT_WEBHOOK_URL` 已设并收到过一次测试告警 |
