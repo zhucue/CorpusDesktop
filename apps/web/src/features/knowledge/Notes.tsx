@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { App, Dropdown, Popconfirm } from "antd";
 import { useRef, useState } from "react";
 import { Link } from "react-router";
-import { api, errorText, type Evidence, type Job, type KbDocument, type KbLocator, type NoteRef } from "../../api";
+import { api, errorCode, errorText, type Evidence, type Job, type KbDocument, type KbLocator, type NoteRef } from "../../api";
 import { Empty, ErrorAlert, QueryChip, Skeleton } from "../../components/common";
 import { Markdown } from "../../components/common/Markdown";
 import { searchHref } from "../../components/global/CommandPalette";
@@ -62,6 +62,9 @@ export function NoteEditor({ note, editable }: { note: KbDocument; editable: boo
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body ?? "");
   const [preview, setPreview] = useState(!editable);
+  // the updated_at this editor's content is based on (409 NOTE_CONFLICT when the note changed since)
+  const version = useRef(note.updated_at);
+  const [conflict, setConflict] = useState<{ title: string; body: string; loaded: boolean } | null>(null);
   const ev = useEvidence();
   const textRef = useRef<HTMLTextAreaElement>(null);
   /** The quote is already in the body (dropped or inserted here): the ref only records it. */
@@ -84,11 +87,47 @@ export function NoteEditor({ note, editable }: { note: KbDocument; editable: boo
     auto.change({ title, body: next });
     void recordRef(it);
   }
-  const auto = useAutosave(async (v: { title: string; body: string }) => {
-    const saved = await api.patch<KbDocument>(`/kb/documents/${note.id}`, { title: v.title.trim() || "未命名笔记", body: v.body });
-    qc.setQueryData<KbDocument>(["kb-doc", note.id], (old) => (old ? { ...old, ...saved, body: v.body } : old));
-    qc.setQueryData<KbDocument[]>(["kb-docs", note.project_id], (old) => old?.map((d) => (d.id === note.id ? { ...d, title: saved.title ?? v.title, updated_at: saved.updated_at ?? d.updated_at } : d)));
-  }, 1000);
+  const auto = useAutosave(
+    async (v: { title: string; body: string }) => {
+      let saved: KbDocument;
+      try {
+        saved = await api.patch<KbDocument>(`/kb/documents/${note.id}`, { title: v.title.trim() || "未命名笔记", body: v.body, base_updated_at: version.current });
+      } catch (e) {
+        if (errorCode(e) === "NOTE_CONFLICT") setConflict({ ...v, loaded: false });
+        throw e;
+      }
+      version.current = saved.updated_at;
+      qc.setQueryData<KbDocument>(["kb-doc", note.id], (old) => (old ? { ...old, ...saved, body: v.body } : old));
+      qc.setQueryData<KbDocument[]>(["kb-docs", note.project_id], (old) => old?.map((d) => (d.id === note.id ? { ...d, title: saved.title ?? v.title, updated_at: saved.updated_at ?? d.updated_at } : d)));
+    },
+    1000,
+    !!conflict && !conflict.loaded,
+  );
+  /** The other version replaces the editor's content; the local one stays in the conflict box to copy from. */
+  async function loadLatest() {
+    const mine = { title, body };
+    try {
+      const latest = await api.get<KbDocument>(`/kb/documents/${note.id}`);
+      auto.discard();
+      version.current = latest.updated_at;
+      setTitle(latest.title);
+      setBody(latest.body ?? "");
+      qc.setQueryData<KbDocument>(["kb-doc", note.id], latest);
+      setConflict({ ...mine, loaded: true });
+    } catch (e) {
+      message.error(errorText(e));
+    }
+  }
+  async function copyLocal() {
+    if (!conflict) return;
+    try {
+      // before the other version is loaded the editor still holds the local text
+      await navigator.clipboard.writeText(conflict.loaded ? conflict.body : body);
+      message.success("已复制本地内容");
+    } catch (e) {
+      message.error(errorText(e));
+    }
+  }
   const exportJob = useMutation({
     mutationFn: async (format: "docx" | "md") => {
       await auto.flush();
@@ -160,6 +199,27 @@ export function NoteEditor({ note, editable }: { note: KbDocument; editable: boo
             </button>
           </div>
         </div>
+        {conflict && (
+          <div className="card-pad col" style={{ gap: 8, paddingBottom: 0 }}>
+            <div className="alert err" role="alert">
+              <span className="grow">{conflict.loaded ? "已载入最新版本，本地内容如下，可复制后合并" : "笔记已被更新（他人编辑或助手 / 证据篮追加），请载入最新版本后合并"}</span>
+              <button className="btn xs" type="button" onClick={() => void copyLocal()}>
+                <Icon name="copy" size={14} />
+                复制本地内容
+              </button>
+              {conflict.loaded ? (
+                <button className="btn xs" type="button" onClick={() => setConflict(null)}>
+                  关闭
+                </button>
+              ) : (
+                <button className="btn xs" type="button" onClick={() => void loadLatest()}>
+                  载入最新版本
+                </button>
+              )}
+            </div>
+            {conflict.loaded && <textarea className="md-input" aria-label="本地内容" readOnly rows={8} value={conflict.body} />}
+          </div>
+        )}
         <div className="card-pad">
           {preview ? (
             body.trim() ? <Markdown text={body} /> : <span className="muted sm">空笔记</span>

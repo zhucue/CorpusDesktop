@@ -8,6 +8,7 @@ add note refs and start summaries; uploads, URL imports, guidelines, re-imports 
 
 import json
 import shutil
+import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import PurePath
@@ -16,6 +17,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, Request
 from fastapi.concurrency import run_in_threadpool
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import exists, func, literal_column, or_, select, text, update
 from starlette.datastructures import UploadFile
@@ -54,6 +57,9 @@ EDIT = ("owner", "editor", "annotator")
 MAX_FILE = 50 * 1024 * 1024
 MAX_FILES = 20
 PREVIEW = 2000
+NOTE_REINDEX_DELAY = (
+    30  # seconds without a new body change before a note / guideline is re-indexed
+)
 CANDIDATES = 50
 RRF_K = 60
 TEXT_KINDS = ("note", "guideline")
@@ -117,9 +123,24 @@ def enqueue_import(db, doc, user_id):
 
 
 def reindex_text(db, doc, user_id):
-    """After a note / guideline body change: one queued re-index is enough."""
-    if not active_job(db, doc.id, ["kb_import"], ["queued"]):
-        enqueue_import(db, doc, user_id)
+    """After a note / guideline body change: one queued re-index, run NOTE_REINDEX_DELAY seconds after the
+    last change (params.not_before, epoch seconds; the worker skips the job until then). A change while it is
+    queued moves that time on instead of adding a job; a change while it runs queues one more."""
+    due = time.time() + NOTE_REINDEX_DELAY
+    job = db.scalar(
+        select(Job)
+        .where(
+            Job.kind == "kb_import",
+            Job.state == "queued",
+            Job.params["document_id"].astext == str(doc.id),
+        )
+        .order_by(Job.created_at)
+        .limit(1)
+        .with_for_update()
+    )
+    if job is None:
+        job = enqueue_import(db, doc, user_id)
+    job.params = {**job.params, "not_before": due}
 
 
 # ---- documents ----
@@ -142,7 +163,11 @@ class TextInput(BaseModel):
 
 
 class DocumentPatch(BaseModel):
+    """base_updated_at: the updated_at the editor started from; when the document changed since, 409
+    NOTE_CONFLICT and nothing is written (omitted: no check, e.g. the assistant appending to a note)."""
+
     model_config = ConfigDict(extra="forbid")
+    base_updated_at: datetime | None = None
     title: str | None = Field(default=None, min_length=1, max_length=500)
     body: str | None = Field(default=None, max_length=1_000_000)
     meta: dict | None = None  # merged into meta; a null value removes the key
@@ -400,6 +425,15 @@ def patch_document(document_id: UUID, body: DocumentPatch, user: CurrentUser, db
     doc, _ = load_document(db, document_id, user, EDIT, lock=True)
     if is_bearer(user) and doc.kind != "note":
         raise forbidden()
+    base = body.base_updated_at
+    if base is not None and base.tzinfo is None:
+        base = base.replace(tzinfo=UTC)
+    if base is not None and base != doc.updated_at:
+        raise ApiError(
+            409,
+            "NOTE_CONFLICT",
+            "笔记已被更新（他人编辑或助手 / 证据篮追加），请载入最新版本后合并",
+        )
     if body.kind is not None and body.kind != doc.kind:
         if (
             doc.kind != "literature"
@@ -464,6 +498,21 @@ def delete_document(document_id: UUID, request: Request, user: CurrentUser, db: 
 def reimport(document_id: UUID, user: CurrentUser, db: Db):
     doc, _ = load_document(db, document_id, user, EDIT, lock=True)
     cookie_only(user)
+    queued = db.scalar(
+        select(Job)
+        .where(
+            Job.kind == "kb_import",
+            Job.state == "queued",
+            Job.params["document_id"].astext == str(doc.id),
+        )
+        .order_by(Job.created_at)
+        .limit(1)
+        .with_for_update()
+    )
+    if queued is not None:  # e.g. a note re-index waiting for quiet: run it now
+        queued.params = {**queued.params, "not_before": 0}
+        db.commit()
+        return JSONResponse(status_code=202, content=jsonable_encoder(job_view(queued)))
     if active_job(db, doc.id, ["kb_import"]):
         raise ApiError(409, "JOB_IN_PROGRESS", "文档正在导入")
     job = enqueue_import(db, doc, user.id)

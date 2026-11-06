@@ -84,7 +84,7 @@ function LayerItem({
               {busy ? (
                 <span className="row gap-4">
                   <span className="spin" style={{ width: 10, height: 10, color: "var(--accent)" }} />
-                  预标中{jp?.total ? ` ${fmt(jp.done)} / ${fmt(jp.total)} 篇` : ""}
+                  预标中{jp?.total ? ` ${fmt(jp.done)} / ${fmt(jp.total)} ${jp.unit ?? "篇"}` : ""}
                 </span>
               ) : layer.status === "failed" ? (
                 <span className="err-text">预标失败</span>

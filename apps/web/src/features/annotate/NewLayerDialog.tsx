@@ -1,11 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Checkbox, Form, Input, Modal, Select } from "antd";
-import { useEffect } from "react";
-import { MAX_PAGE_SIZE, api, errorText, type Doc, type LabelSet, type Layer, type LayerKind, type Page } from "../../api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api, errorText, type Doc, type LabelSet, type Layer, type LayerKind, type Page } from "../../api";
 import { ErrorAlert } from "../../components/common";
 import { Icon } from "../../components/Icon";
 import { layerIcon } from "../../components/iconSets";
-import { useCorpora, useJobCreated } from "../../lib/data";
+import { useCorpora, useJobCreated, useSubcorpora } from "../../lib/data";
+import { fmt } from "../../lib/format";
 import { useKbDocuments } from "../knowledge/data";
 import { SendNotice, useModelHost } from "../knowledge/SendNotice";
 import { useLabelSets, useLayers } from "./data";
@@ -16,6 +17,8 @@ interface Values {
   kind: LayerKind;
   name?: string;
   label_set_id?: string;
+  scope?: "all" | "subcorpus" | "documents";
+  subcorpus_id?: string;
   document_ids?: string[];
   base_layer_id?: string;
   tgt_corpus_id?: string;
@@ -44,6 +47,75 @@ export function defaultLabelSetName(kind: LayerKind, language: string | undefine
   return language?.toLowerCase().startsWith("zh") ? "jieba" : "upos";
 }
 
+/** POST /projects/{id}/layers/estimate: what pre-annotation of the chosen scope would send to the chat model. */
+interface Estimate {
+  documents: number;
+  sentences: number;
+  units: number;
+  batch_size: number;
+  model_calls: number;
+  basis: string;
+}
+
+const DOC_PAGE = 50;
+
+/** Documents of a corpus searched by title on the server, 50 at a time (scroll for more). */
+function DocumentPicker({ corpusId, value, onChange }: { corpusId?: string; value?: string[]; onChange?: (v: string[]) => void }) {
+  const [input, setInput] = useState("");
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setQ(input.trim()), 300);
+    return () => clearTimeout(t);
+  }, [input]);
+  const docs = useInfiniteQuery({
+    queryKey: ["layer-doc-picker", corpusId, q],
+    queryFn: ({ pageParam }) => api.get<Page<Doc>>(`/corpora/${corpusId}/documents`, { page: pageParam, page_size: DOC_PAGE, ...(q ? { q } : {}) }),
+    initialPageParam: 1,
+    getNextPageParam: (last, all) => (all.length * DOC_PAGE < last.total ? all.length + 1 : undefined),
+    enabled: !!corpusId,
+  });
+  // titles of chosen documents stay known when a later search no longer lists them
+  const titles = useRef(new Map<string, string>());
+  const loaded = useMemo(() => docs.data?.pages.flatMap((p) => p.items) ?? [], [docs.data]);
+  for (const d of loaded) titles.current.set(d.id, d.title);
+  const total = docs.data?.pages[0]?.total;
+  const options = [
+    ...(value ?? []).filter((id) => !loaded.some((d) => d.id === id)).map((id) => ({ value: id, label: titles.current.get(id) ?? id })),
+    ...loaded.map((d) => ({ value: d.id, label: d.title })),
+  ];
+  return (
+    <Select
+      mode="multiple"
+      allowClear
+      showSearch
+      filterOption={false}
+      searchValue={input}
+      onSearch={setInput}
+      placeholder="按标题搜索文档"
+      loading={docs.isFetching}
+      value={value}
+      onChange={(v: string[]) => onChange?.(v)}
+      options={options}
+      maxTagCount="responsive"
+      notFoundContent={docs.isFetching ? "加载中" : "没有匹配的文档"}
+      onPopupScroll={(e) => {
+        const el = e.currentTarget;
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 24 && docs.hasNextPage && !docs.isFetchingNextPage) void docs.fetchNextPage();
+      }}
+      popupRender={(menu) => (
+        <>
+          {menu}
+          {total != null && (
+            <div className="small muted" style={{ padding: "4px 12px" }}>
+              已列出 {fmt(loaded.length)} / {fmt(total)} 篇
+            </div>
+          )}
+        </>
+      )}
+    />
+  );
+}
+
 export default function NewLayerDialog({
   open,
   projectId,
@@ -66,6 +138,7 @@ export default function NewLayerDialog({
   const layers = useLayers(projectId);
   const kb = useKbDocuments(open ? projectId : undefined);
   const members = useMembers(open ? projectId : undefined);
+  const subcorpora = useSubcorpora(open ? projectId : undefined);
   const corpusId = Form.useWatch("corpus_id", form);
   const kind: LayerKind = Form.useWatch("kind", form) ?? "pos";
   const mode = Form.useWatch("mode", form) ?? "single";
@@ -73,6 +146,10 @@ export default function NewLayerDialog({
   const level = Form.useWatch("level", form) ?? "sentence";
   const preannotateMulti = !!Form.useWatch("preannotate", form);
   const labelSetId = Form.useWatch("label_set_id", form);
+  const scope = Form.useWatch("scope", form) ?? "all";
+  const subcorpusId = Form.useWatch("subcorpus_id", form);
+  const documentIds = Form.useWatch("document_ids", form);
+  const baseLayerId = Form.useWatch("base_layer_id", form);
   const usable = (corpora.data?.items ?? []).filter((c) => c.status === "ready" || c.status === "stale");
   const corpus = usable.find((c) => c.id === corpusId);
   const tgt = usable.find((c) => c.id === tgtId);
@@ -82,10 +159,25 @@ export default function NewLayerDialog({
   const usesModel = (kind === "span" || kind === "relation" || (kind === "alignment" && level === "word")) && (mode !== "multi" || preannotateMulti);
   const modelHost = useModelHost(open);
 
-  const docs = useQuery({
-    queryKey: ["documents", corpusId, "", 1, "all"],
-    queryFn: () => api.get<Page<Doc>>(`/corpora/${corpusId}/documents`, { page: 1, page_size: MAX_PAGE_SIZE }),
-    enabled: open && !!corpusId,
+  // relation layers cover the documents of their span layer's corpus
+  const scopeCorpusId = kind === "relation" ? (layers.data ?? []).find((l) => l.id === baseLayerId)?.corpus_id : corpusId;
+  const subs = (subcorpora.data?.items ?? []).filter((x) => x.corpus_id === scopeCorpusId);
+  const scopeBody = () =>
+    scope === "subcorpus" && subcorpusId ? { subcorpus_id: subcorpusId } : scope === "documents" && documentIds?.length ? { document_ids: documentIds } : {};
+
+  // Model calls of the pre-annotation for the chosen scope (sentences / batch size), before anything is sent.
+  const estimate = useQuery({
+    queryKey: ["layer-estimate", projectId, corpusId, kind, level, tgtId, baseLayerId, scope, subcorpusId, documentIds],
+    queryFn: () =>
+      api.post<Estimate>(`/projects/${projectId}/layers/estimate`, {
+        corpus_id: corpusId,
+        kind,
+        ...(kind === "alignment" ? { level, tgt_corpus_id: tgtId } : {}),
+        ...(kind === "relation" ? { base_layer_id: baseLayerId } : {}),
+        ...scopeBody(),
+      }),
+    enabled: open && usesModel && !!corpusId && (kind !== "relation" || !!baseLayerId) && (scope !== "subcorpus" || !!subcorpusId),
+    staleTime: 60 * 1000,
   });
 
   const sets = (labelSets.data ?? []).filter((s) => s.kind === kind);
@@ -131,6 +223,7 @@ export default function NewLayerDialog({
 
   useEffect(() => {
     form.setFieldValue("document_ids", []);
+    form.setFieldValue("subcorpus_id", undefined);
     form.setFieldValue("base_layer_id", undefined);
   }, [corpusId, form]);
 
@@ -161,7 +254,8 @@ export default function NewLayerDialog({
         corpus_id: v.corpus_id,
         kind: v.kind,
         name: v.name?.trim() || defaultName(),
-        ...(v.document_ids?.length ? { document_ids: v.document_ids } : {}),
+        ...(v.scope === "subcorpus" && v.subcorpus_id ? { subcorpus_id: v.subcorpus_id } : {}),
+        ...(v.scope === "documents" && v.document_ids?.length ? { document_ids: v.document_ids } : {}),
       };
       if (v.kind !== "alignment") body.label_set_id = v.label_set_id;
       if (!tokenKind) {
@@ -201,7 +295,7 @@ export default function NewLayerDialog({
       focusTriggerAfterClose={false}
       width={560}
     >
-      <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "pos", mode: "single", level: "sentence", preannotate: false }} onFinish={(v) => create.mutate(v)}>
+      <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "pos", mode: "single", level: "sentence", preannotate: false, scope: "all" }} onFinish={(v) => create.mutate(v)}>
         <Form.Item name="kind" hidden>
           <Input />
         </Form.Item>
@@ -311,17 +405,44 @@ export default function NewLayerDialog({
             <Checkbox>预标（每位标注者得到同一份模型建议，会影响独立标注和一致性）</Checkbox>
           </Form.Item>
         )}
-        <Form.Item name="document_ids" label="文档（不选为全部）">
-          <Select
-            mode="multiple"
-            allowClear
-            placeholder="全部文档"
-            loading={docs.isFetching}
-            optionFilterProp="label"
-            options={(docs.data?.items ?? []).map((d) => ({ value: d.id, label: d.title }))}
-            maxTagCount="responsive"
-          />
-        </Form.Item>
+        <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
+          <Form.Item name="scope" label="范围" style={{ width: 140 }}>
+            <Select
+              options={[
+                { value: "all", label: "全部文档" },
+                { value: "subcorpus", label: "子库" },
+                { value: "documents", label: "指定文档" },
+              ]}
+            />
+          </Form.Item>
+          {scope === "subcorpus" && (
+            <Form.Item name="subcorpus_id" label="子库" style={{ flex: 1, minWidth: 0 }} rules={[{ required: true, message: "选择子库" }]}>
+              <Select
+                placeholder={subs.length ? "选择子库" : "该语料库没有子库"}
+                loading={subcorpora.isPending}
+                options={subs.map((x) => ({ value: x.id, label: `${x.name} · ${fmt(x.stats.documents)} 篇` }))}
+              />
+            </Form.Item>
+          )}
+          {scope === "documents" && (
+            <Form.Item name="document_ids" label="文档" style={{ flex: 1, minWidth: 0 }} rules={[{ required: true, message: "选择文档" }]}>
+              <DocumentPicker corpusId={scopeCorpusId} />
+            </Form.Item>
+          )}
+        </div>
+        {usesModel && (
+          <div className="small" style={{ marginBottom: 8 }} aria-live="polite">
+            {estimate.data ? (
+              <>
+                约 <b className="num">{fmt(estimate.data.sentences)}</b> 句，将调用模型约 <b className="num">{fmt(estimate.data.model_calls)}</b> 次（{estimate.data.basis}，每批 {estimate.data.batch_size} 句）
+              </>
+            ) : estimate.error ? (
+              <span className="err-text">{errorText(estimate.error)}</span>
+            ) : estimate.isFetching ? (
+              "正在估算模型调用次数"
+            ) : null}
+          </div>
+        )}
         {usesModel && <SendNotice what="所选句子" host={modelHost} style={{ marginBottom: 12 }} />}
         <ErrorAlert error={create.error ?? labelSets.error} style={{ marginBottom: 12 }} />
         <div className="row" style={{ justifyContent: "flex-end" }}>

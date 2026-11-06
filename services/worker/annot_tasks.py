@@ -30,7 +30,7 @@ from engine import align
 from engine import annotate as ann
 from engine.kb import embed
 from services.api import effective as eff
-from services.api.annotations import refresh_progress
+from services.api.annotations import LLM_BATCH, refresh_progress
 from services.api.annotators import layer_annotators
 from services.api.db import session, transaction
 from services.api.models import (
@@ -51,7 +51,10 @@ from services.api.storage import export_path
 from services.worker import llm
 from services.worker.main import Cancelled, JobFailed, log
 
-BATCH = 10
+BATCH = LLM_BATCH  # sentences per chat model call (the new-layer estimate uses the same number)
+RECOUNT_EVERY = (
+    20  # batches (sentence alignment: documents) between recounts of layer.progress
+)
 GUIDELINE_CHARS = 2000
 FAILED_KEEP = 500
 EMBED_SOURCE = "model:minilm"
@@ -121,6 +124,13 @@ def _ask(system, prompt, run_label):
 
 
 # ---- layer info ----
+
+
+def _recount(db, layer, step):
+    """Recount layer.progress every RECOUNT_EVERY batches while a run writes (the run recounts once more at
+    the end); reviewers' writes in between keep it current incrementally."""
+    if step % RECOUNT_EVERY == 0:
+        refresh_progress(db, layer)
 
 
 def _layer_info(db, layer):
@@ -268,7 +278,7 @@ def _span_job(run, info, docs, rng):
             if layer is None:
                 raise JobFailed("LAYER_DELETED", "标注层已删除")
             stats["written"] += _write_spans(db, info, batch, found, model, bool(rng))
-            refresh_progress(db, layer)
+            _recount(db, layer, i // BATCH)
     return stats, failed, errors, llm.model_id()
 
 
@@ -401,7 +411,7 @@ def _relation_job(run, info, docs, rng):
             if rows:
                 db.execute(insert(RelationAnnotation), rows)
             stats["written"] += len(rows)
-            refresh_progress(db, layer)
+            _recount(db, layer, i // BATCH)
     return stats, failed, errors, llm.model_id()
 
 
@@ -569,7 +579,7 @@ def _sentence_alignment(run, info, docs, rng):
             if rows:
                 db.execute(insert(AlignmentAnnotation), rows)
             written += len(rows)
-            refresh_progress(db, layer)
+            _recount(db, layer, k)
     return written, used
 
 
@@ -708,7 +718,7 @@ def _word_alignment(run, info, docs, rng):
             if rows:
                 db.execute(insert(A), rows)
             stats["written"] += len(rows)
-            refresh_progress(db, layer)
+            _recount(db, layer, i // BATCH)
     return stats, [(p[0], p[1]) for p in failed], errors
 
 
@@ -790,6 +800,8 @@ def run_preannotate_p5(run):
         with transaction() as db:
             layer = db.get(AnnotationLayer, layer_id, with_for_update=True)
             if layer:
+                # batches written since the last recount (_recount) count too
+                refresh_progress(db, layer)
                 layer.status, layer.error = "failed", message
         raise
 

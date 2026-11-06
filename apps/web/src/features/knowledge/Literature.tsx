@@ -354,6 +354,7 @@ function Summary({ doc, editable }: { doc: KbDocument; editable: boolean }) {
     <section className="col" style={{ gap: 8 }}>
       <div className="row">
         <span className="label grow">摘要</span>
+        {summary && Number(doc.meta?.summary_parts ?? 1) > 1 && <span className="tag t-gray">按 {fmt(Number(doc.meta?.summary_parts))} 段摘要</span>}
         {summary && doc.meta?.summary_source === "model" && <span className="tag t-info">模型生成</span>}
         {editable && doc.status === "ready" && (
           // with a configured model the click asks first, naming where the text goes
@@ -374,6 +375,7 @@ function Summary({ doc, editable }: { doc: KbDocument; editable: boolean }) {
       </div>
       <ErrorAlert error={start.error} />
       {state === "failed" && <div className="alert err">{job.data?.error?.message ?? "摘要失败"}</div>}
+      {summary && doc.meta?.summary_truncated === true && typeof doc.meta?.summary_note === "string" && <div className="alert warn">{doc.meta.summary_note}</div>}
       {summary ? <Markdown text={summary} /> : !running && <span className="muted sm">暂无摘要</span>}
     </section>
   );

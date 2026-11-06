@@ -93,9 +93,10 @@ export function EvidenceProvider({ projectId, children }: { projectId: string; c
   }, [items.length, qc, projectId]);
 
   const add = useMutation({
-    mutationFn: (input: EvidenceInput) => api.post<Evidence>(`/projects/${projectId}/evidence`, input),
+    mutationFn: (input: EvidenceInput) => api.post<Evidence & { existing?: boolean }>(`/projects/${projectId}/evidence`, input),
     onSuccess: (ev) => {
       // The api returns the existing item when this hit is already in the basket (e.g. added by the assistant).
+      if (ev.existing) message.info("已在证据篮中");
       qc.setQueryData<Page<Evidence>>(key, (old) => (old && !old.items.some((x) => x.id === ev.id) ? { items: [...old.items, ev], total: old.total + 1 } : old));
       setBump((n) => n + 1);
     },

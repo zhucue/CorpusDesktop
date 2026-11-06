@@ -206,7 +206,9 @@ def test_layer_lifecycle_and_preannotation(owner, project, corpus):
     assert pos["documents"] == {"total": 1, "done": 0}
     job = owner.get(f"/api/jobs/{pos['job_id']}").json()
     assert job["kind"] == "preannotate" and job["state"] == "succeeded"
-    assert job["progress"]["done"] == job["progress"]["total"] == 1
+    # job progress counts sentences (contracts/p11.md §二.3)
+    assert job["progress"]["done"] == job["progress"]["total"] == 3
+    assert job["progress"]["unit"] == "句"
 
     dep = make_layer(owner, project, corpus, "dep")
     doc = corpus["document_id"]

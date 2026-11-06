@@ -21,6 +21,7 @@ from sqlalchemy import and_, exists, false, func, literal, or_, select, tuple_, 
 
 from services.api.annotations import (
     ANNOTATE,
+    Progress,
     load_layer,
     parse_cursor,
     refresh_progress,
@@ -302,7 +303,9 @@ def _open(layer, annotators):
         if layer.kind == "relation":
             rows = (
                 select(RelationAnnotation.id)
-                .join(SpanAnnotation, SpanAnnotation.id == RelationAnnotation.from_span_id)
+                .join(
+                    SpanAnnotation, SpanAnnotation.id == RelationAnnotation.from_span_id
+                )
                 .where(
                     RelationAnnotation.layer_id == layer.id,
                     RelationAnnotation.annotator_id == w,
@@ -439,6 +442,8 @@ def create_span(layer_id: UUID, body: SpanInput, user: CurrentUser, db: Db):
         )
     ):
         raise ApiError(409, "SPAN_EXISTS", "已有相同范围与标签的片段")
+    progress = Progress(db, layer)
+    progress.move(doc.id, None, "confirmed")
     span = SpanAnnotation(
         layer_id=layer.id,
         annotator_id=me,
@@ -455,8 +460,7 @@ def create_span(layer_id: UUID, body: SpanInput, user: CurrentUser, db: Db):
         updated_at=now(),
     )
     db.add(span)
-    db.flush()
-    refresh_progress(db, layer)
+    progress.apply()
     db.commit()
     return span_view(span, doc_texts(db, [doc.id])[doc.id])
 
@@ -477,6 +481,8 @@ def act_span(layer_id: UUID, span_id: int, body: SpanAction, user: CurrentUser, 
     human_only(user)
     layer = _span_layer(db, layer_id, user)
     span = _own_span(db, layer, span_id, user)
+    progress = Progress(db, layer)
+    progress.move(span.document_id, span.status, None)
     if body.action == "reject":
         span.status = "rejected"
     elif body.action == "confirm":
@@ -506,8 +512,8 @@ def act_span(layer_id: UUID, span_id: int, body: SpanAction, user: CurrentUser, 
         span.status = "modified"
     span.source, span.revision = f"human:{user.id}", span.revision + 1
     span.updated_by, span.updated_at = user.id, now()
-    db.flush()
-    refresh_progress(db, layer)
+    progress.move(span.document_id, None, span.status)
+    progress.apply()
     db.commit()
     return span_view(span, doc_texts(db, [span.document_id])[span.document_id])
 
@@ -519,9 +525,28 @@ def delete_span(layer_id: UUID, span_id: int, user: CurrentUser, db: Db):
     span = _own_span(db, layer, span_id, user)
     if span.model_label is not None:
         raise ApiError(409, "NOT_DELETABLE", "模型建议的片段不能删除，请拒绝")
+    progress = Progress(db, layer)
+    progress.move(span.document_id, span.status, None)
+    # its relations go with it (ON DELETE CASCADE): those relation layers are recounted
+    rel_layers = db.scalars(
+        select(RelationAnnotation.layer_id)
+        .where(
+            or_(
+                RelationAnnotation.from_span_id == span.id,
+                RelationAnnotation.to_span_id == span.id,
+            )
+        )
+        .distinct()
+    ).all()
     db.delete(span)
-    db.flush()
-    refresh_progress(db, layer)
+    progress.apply()
+    for rel_layer in db.scalars(
+        select(AnnotationLayer)
+        .where(AnnotationLayer.id.in_(rel_layers))
+        .order_by(AnnotationLayer.id)
+        .with_for_update()
+    ):
+        refresh_progress(db, rel_layer)
     db.commit()
 
 
@@ -600,13 +625,21 @@ def create_relation(layer_id: UUID, body: RelationInput, user: CurrentUser, db: 
         )
     ):
         raise ApiError(409, "RELATION_EXISTS", "已有相同的关系")
+    progress = Progress(db, layer)
+    progress.move(a.document_id, None, "confirmed")
     rel = _new_relation(
         db, layer, me, a, b, label, f"human:{user.id}", "confirmed", user
     )
-    db.flush()
-    refresh_progress(db, layer)
+    progress.apply()
     db.commit()
     return relation_view(rel)
+
+
+def _relation_document(db, rel):
+    """The document a relation counts under: its first span's."""
+    return db.scalar(
+        select(SpanAnnotation.document_id).where(SpanAnnotation.id == rel.from_span_id)
+    )
 
 
 def _own_relation(db, layer, rel_id, user) -> RelationAnnotation:
@@ -623,6 +656,9 @@ def act_relation(
     human_only(user)
     layer = _relation_layer(db, layer_id, user)
     rel = _own_relation(db, layer, rel_id, user)
+    doc = _relation_document(db, rel)
+    progress = Progress(db, layer)
+    progress.move(doc, rel.status, None)
     if body.action == "reject":
         rel.status = "rejected"
     elif body.action == "confirm":
@@ -634,8 +670,8 @@ def act_relation(
         rel.status = "modified"
     rel.source, rel.revision = f"human:{user.id}", rel.revision + 1
     rel.updated_by, rel.updated_at = user.id, now()
-    db.flush()
-    refresh_progress(db, layer)
+    progress.move(doc, None, rel.status)
+    progress.apply()
     db.commit()
     return relation_view(rel)
 
@@ -647,9 +683,10 @@ def delete_relation(layer_id: UUID, rel_id: int, user: CurrentUser, db: Db):
     rel = _own_relation(db, layer, rel_id, user)
     if rel.model_label is not None:
         raise ApiError(409, "NOT_DELETABLE", "模型建议的关系不能删除，请拒绝")
+    progress = Progress(db, layer)
+    progress.move(_relation_document(db, rel), rel.status, None)
     db.delete(rel)
-    db.flush()
-    refresh_progress(db, layer)
+    progress.apply()
     db.commit()
 
 
@@ -687,7 +724,7 @@ def suggest_spans(layer_id: UUID, body: SpanSuggestInput, user: CurrentUser, db:
     """Suggested spans and relations of one sentence. Spans go to the span layer (the layer itself, or the base
     of a relation layer); relations go to the relation layer (the layer itself, or the only relation layer on a
     span layer). Identical existing rows are returned and reported in skipped; reviewed rows never change."""
-    layer = load_layer(db, layer_id, user, ANNOTATE, lock=True)
+    layer = load_layer(db, layer_id, user, ANNOTATE)
     span_layer = span_layer_of(db, layer)
     rel_layer = layer if layer.kind == "relation" else None
     if body.relations and rel_layer is None:
@@ -702,6 +739,10 @@ def suggest_spans(layer_id: UUID, body: SpanSuggestInput, user: CurrentUser, db:
                 422, "INVALID_LAYER", "关系建议须写入关系层（该片段层没有唯一的关系层）"
             )
         rel_layer = found[0]
+    # both counters change: lock the span layer first, then its relation layer (same order everywhere)
+    for locked in (span_layer, rel_layer if body.relations else None):
+        if locked is not None:
+            db.refresh(locked, with_for_update=True)
     sentence = db.scalar(
         select(Sentence).where(
             Sentence.document_id == body.document_id,
@@ -716,6 +757,7 @@ def suggest_spans(layer_id: UUID, body: SpanSuggestInput, user: CurrentUser, db:
     if body.spans:
         me = writer(span_layer, user)
         labels = label_ids(db, span_layer)
+        new_spans = 0
         existing = {
             (s.start_cp, s.end_cp, s.label): s
             for s in db.scalars(
@@ -759,12 +801,15 @@ def suggest_spans(layer_id: UUID, body: SpanSuggestInput, user: CurrentUser, db:
             db.add(span)
             existing[key] = span
             created.append(span)
-        db.flush()
-        refresh_progress(db, span_layer)
+            new_spans += 1
+        progress = Progress(db, span_layer)
+        progress.move(body.document_id, None, "suggested", new_spans)
+        progress.apply()
     relations = []
     if body.relations:
         me = writer(rel_layer, user)
         labels = label_ids(db, rel_layer)
+        progress = Progress(db, rel_layer)
 
         def endpoint(ref):
             if isinstance(ref, int) and 0 <= ref < len(created):
@@ -790,13 +835,13 @@ def suggest_spans(layer_id: UUID, body: SpanSuggestInput, user: CurrentUser, db:
                 skipped.append({"relation": i, "reason": dup.status})
                 relations.append(dup)
                 continue
+            progress.move(a.document_id, None, "suggested")
             relations.append(
                 _new_relation(
                     db, rel_layer, me, a, b, label, source, "suggested", user, label
                 )
             )
-        db.flush()
-        refresh_progress(db, rel_layer)
+        progress.apply()
     db.commit()
     texts = doc_texts(db, [body.document_id])
     return {
@@ -855,13 +900,14 @@ def confirm_p5_sentence(db, layer, user, document_id, sentence_index):
                 SpanAnnotation.start_cp < sentence.end_cp,
             )
         ).all()
+    progress = Progress(db, layer)
+    progress.move(document_id, "suggested", "confirmed", len(rows))
     for r in rows:
         for k, v in values.items():
             setattr(r, k, v)
         r.revision += 1
     mark_reviewed(db, layer, me, document_id, sentence_index)
-    db.flush()
-    refresh_progress(db, layer)
+    progress.apply()
     db.commit()
     row = (
         sentence.document_id,

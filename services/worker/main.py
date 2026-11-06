@@ -144,6 +144,12 @@ def claim(kinds=None, small_imports=None):
                     other.params["corpus_id"].astext == Job.params["corpus_id"].astext,
                 ),
             ),
+            # params.not_before (epoch seconds): a delayed job, e.g. a note re-index after the last edit
+            or_(
+                ~Job.params.has_key("not_before"),
+                Job.params["not_before"].as_float()
+                <= func.extract("epoch", func.now()),
+            ),
         )
         if kinds:
             allowed = Job.kind.in_(kinds)

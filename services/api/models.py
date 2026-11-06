@@ -303,6 +303,24 @@ class Evidence(Base):
     __tablename__ = "evidence"
     __table_args__ = (
         CheckConstraint(_in("kind", EVIDENCE_KINDS), name="ck_evidence_kind"),
+        # one item per pinned hit (document + match offsets) and per stat row in a project (migration 0013)
+        Index(
+            "uq_evidence_hit",
+            "project_id",
+            text("(ref ->> 'document_id')"),
+            text("(ref ->> 'start_cp')"),
+            text("(ref ->> 'end_cp')"),
+            unique=True,
+            postgresql_where=text("kind = 'hit'"),
+        ),
+        Index(
+            "uq_evidence_stat_row",
+            "project_id",
+            text("(ref ->> 'stat_id')"),
+            text("md5(ref ->> 'row_key')"),
+            unique=True,
+            postgresql_where=text("kind = 'stat_row'"),
+        ),
     )
     id: Mapped[uuid.UUID] = _id()
     project_id: Mapped[uuid.UUID] = mapped_column(

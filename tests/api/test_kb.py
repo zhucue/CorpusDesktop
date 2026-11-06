@@ -40,6 +40,14 @@ def fake_vector(text):
 
 
 @pytest.fixture(autouse=True)
+def reindex_now(monkeypatch):
+    """Notes are re-indexed 30 s after the last change (tests/api/test_p11_annot_kb.py); here at once."""
+    from services.api import kb
+
+    monkeypatch.setattr(kb, "NOTE_REINDEX_DELAY", -1)
+
+
+@pytest.fixture(autouse=True)
 def fake_embed(monkeypatch):
     from engine.kb import embed
 
@@ -172,7 +180,9 @@ def test_document_lifecycle(owner, project, fake_llm):
 
     job = owner.post(f"/api/kb/documents/{items[0]['id']}/reimport").json()
     assert job["kind"] == "kb_import"
-    assert owner.post(f"/api/kb/documents/{items[0]['id']}/reimport").status_code == 409
+    # already queued: the same job, not a second one (contracts/p11.md §二.5)
+    r = owner.post(f"/api/kb/documents/{items[0]['id']}/reimport")
+    assert r.status_code == 202 and r.json()["id"] == job["id"]
     drain()
     again = owner.get(f"/api/kb/documents/{items[0]['id']}").json()
     assert again["status"] == "ready" and again["chunk_count"] == 2

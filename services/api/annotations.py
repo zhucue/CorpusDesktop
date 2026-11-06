@@ -12,10 +12,14 @@ P5: layers also have kind span / relation / alignment (review routes in services
 services.api.alignments) and mode single / multi (services.api.annotators: in multi mode every listed annotator
 has an own copy of the pre-annotation and reads / writes only it; owner / editor read all with `annotator_id`).
 
-Layer.progress is recomputed with SQL aggregates after every change, inside a transaction that holds the
-layer row lock, so concurrent reviewers never drift the counters.
+Layer.progress is maintained incrementally (contracts/p11.md §二.3): every write moves its rows' status counts
+and re-checks only the touched documents (Progress), inside a transaction that holds the layer row lock, so
+concurrent reviewers never drift the counters. refresh_progress recomputes them from scratch (end of a
+pre-annotation run, sample layers, repair).
 """
 
+import math
+from collections import Counter
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from typing import Annotated, Literal
@@ -25,13 +29,20 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import case, exists, func, literal, select, tuple_, update
 
-from services.api.access import READ, WRITE, Paging, require_project
+from services.api.access import (
+    READ,
+    WRITE,
+    Paging,
+    load_subcorpus,
+    require_project,
+)
 from services.api.annotators import layer_annotators, visible, writer
 from services.api.audit import record
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, not_found
 from services.api.jobs import ACTIVE, enqueue, layer_uses_llm
 from services.api.label_sets import human_only, load_label_set
+from services.api.metadata import field_types, filter_clause
 from services.api.models import (
     TOKEN_KINDS,
     AlignmentAnnotation,
@@ -60,6 +71,8 @@ ANNOTATE = ("owner", "editor", "annotator")
 STATUSES = ("suggested", "confirmed", "modified", "rejected")
 PROGRESS_KEYS = ("total", *STATUSES)
 CHANGED = ("modified", "rejected")
+LLM_BATCH = 10  # sentences per chat model call in span / relation / word-alignment pre-annotation
+MAX_LAYER_DOCUMENTS = 10000
 
 
 def now():
@@ -114,7 +127,9 @@ ROW_MODELS = {
 
 
 def refresh_progress(db, layer):
-    """Row counts by status (all annotators) and documents without pending rows; keeps failed_sentences."""
+    """Recompute layer.progress from all rows (one aggregate over the layer): row counts by status (all
+    annotators) and documents that have rows and none pending; keeps failed_sentences. Used once per
+    pre-annotation run, for sample layers and to repair counters (e.g. `for layer in …: refresh_progress`)."""
     model = ROW_MODELS[layer.kind]
     counts = dict(
         db.execute(
@@ -156,6 +171,100 @@ def refresh_progress(db, layer):
 
 def empty_progress():
     return {k: 0 for k in PROGRESS_KEYS} | {"documents_done": 0}
+
+
+def _document_rows(layer, document_id):
+    """SELECT 1 over the layer's rows of one document (relation rows: by their first span's document)."""
+    model = ROW_MODELS[layer.kind]
+    stmt = select(literal(1)).select_from(model).where(model.layer_id == layer.id)
+    if layer.kind == "relation":
+        return stmt.join(
+            SpanAnnotation, SpanAnnotation.id == RelationAnnotation.from_span_id
+        ).where(SpanAnnotation.document_id == document_id)
+    if layer.kind == "alignment":
+        return stmt.where(AlignmentAnnotation.src_document_id == document_id)
+    return stmt.where(model.document_id == document_id)
+
+
+def document_done(db, layer, document_id) -> bool:
+    """The document has rows in the layer and none is still suggested (as refresh_progress counts it)."""
+    rows = _document_rows(layer, document_id)
+    model = ROW_MODELS[layer.kind]
+    with db.no_autoflush:
+        if not db.scalar(select(rows.exists())):
+            return False
+        return not db.scalar(select(rows.where(model.status == "suggested").exists()))
+
+
+class Progress:
+    """Incremental layer.progress for one request. Call move(document, old, new, n) for row changes — old None =
+    a new row, new None = a deleted row — before they are flushed (the first move of a document records whether
+    it was done), then apply() before commit. The caller holds the layer row lock."""
+
+    def __init__(self, db, layer):
+        self.db, self.layer = db, layer
+        self.delta = Counter()
+        self.before = {}
+        self.pending = set()  # documents that certainly keep / get a suggested row
+
+    def move(self, document_id, old, new, n=1):
+        if not n:
+            return
+        if old:
+            self.delta[old] -= n
+        if new:
+            self.delta[new] += n
+        if document_id not in self.before:
+            self.before[document_id] = old != "suggested" and document_done(
+                self.db, self.layer, document_id
+            )
+        if new == "suggested":
+            self.pending.add(document_id)
+
+    def apply(self):
+        self.db.flush()
+        p = {**empty_progress(), **(self.layer.progress or {})}
+        for s, n in self.delta.items():
+            p[s] = max(p.get(s, 0) + n, 0)
+        p["total"] = sum(p[s] for s in STATUSES)
+        for d, was in self.before.items():
+            done = d not in self.pending and document_done(self.db, self.layer, d)
+            p["documents_done"] = max(p["documents_done"] + int(done) - int(was), 0)
+        self.layer.progress = p
+        self.layer.updated_at = now()
+
+
+def document_counts(db, layer, document_id) -> Counter:
+    """Status counts of a token layer's rows in one document (pre-annotation writes a document at a time)."""
+    return Counter(
+        dict(
+            db.execute(
+                select(Annotation.status, func.count())
+                .where(
+                    Annotation.layer_id == layer.id,
+                    Annotation.document_id == document_id,
+                )
+                .group_by(Annotation.status)
+            ).all()
+        )
+    )
+
+
+def add_document_counts(layer, before: Counter, after: Counter):
+    """layer.progress += one document's change (document_counts before and after the write)."""
+
+    def done(c):
+        return sum(c.values()) > 0 and not c["suggested"]
+
+    p = {**empty_progress(), **(layer.progress or {})}
+    for s in STATUSES:
+        p[s] = max(p.get(s, 0) + after[s] - before[s], 0)
+    p["total"] = sum(p[s] for s in STATUSES)
+    p["documents_done"] = max(
+        p["documents_done"] + int(done(after)) - int(done(before)), 0
+    )
+    layer.progress = p
+    layer.updated_at = now()
 
 
 def layer_view(db, layer):
@@ -239,6 +348,43 @@ def _check_documents(db, corpus_id, document_ids):
     if found != len(ids):
         raise ApiError(422, "INVALID_DOCUMENTS", "document_ids 含不属于该语料库的文档")
     return [str(i) for i in ids]
+
+
+def _subcorpus_documents(db, project_id, corpus, subcorpus_id, user):
+    """(subcorpus, its documents as str ids in corpus order): the subcorpus filter expanded once."""
+    sub = load_subcorpus(db, subcorpus_id, user)
+    if sub.project_id != project_id or sub.corpus_id != corpus.id:
+        raise ApiError(422, "INVALID_SUBCORPUS", "子库不属于该项目的这个语料库")
+    stmt = select(Document.id).where(Document.corpus_id == corpus.id)
+    if sub.filter:
+        try:
+            stmt = stmt.where(filter_clause(sub.filter, field_types(db, corpus.id)))
+        except (KeyError, ValueError, TypeError) as e:
+            raise ApiError(409, "INVALID_FILTER", f"子库筛选条件已失效：{e}") from None
+    ids = db.scalars(
+        stmt.order_by(Document.created_at, Document.id).limit(MAX_LAYER_DOCUMENTS + 1)
+    ).all()
+    if not ids:
+        raise ApiError(422, "EMPTY_SUBCORPUS", "子库没有文档")
+    if len(ids) > MAX_LAYER_DOCUMENTS:
+        raise ApiError(
+            422,
+            "TOO_MANY_DOCUMENTS",
+            f"子库超过 {MAX_LAYER_DOCUMENTS} 篇文档，请缩小范围或对整个语料库建层",
+        )
+    return sub, [str(i) for i in ids]
+
+
+def scope_documents(db, project_id, corpus, document_ids, subcorpus_id, user):
+    """(document ids or None for the whole corpus, subcorpus or None): explicit documents or a subcorpus."""
+    if subcorpus_id is None:
+        return _check_documents(db, corpus.id, document_ids), None
+    if document_ids:
+        raise ApiError(
+            422, "VALIDATION_ERROR", "document_ids 与 subcorpus_id 只能选一个"
+        )
+    sub, ids = _subcorpus_documents(db, project_id, corpus, subcorpus_id, user)
+    return ids, sub
 
 
 def _active_job(db, layer_id):
@@ -401,13 +547,15 @@ def _status_counts(db, layer, document_id=None, annotators=None):
 
 class LayerInput(BaseModel):
     """corpus_id: the corpus (alignment: the source corpus, also accepted as src_corpus_id; relation: taken from
-    the base layer). label_set_id: required except for alignment layers. preannotate false: no model run."""
+    the base layer). label_set_id: required except for alignment layers. preannotate false: no model run.
+    subcorpus_id: instead of document_ids, the subcorpus's documents (expanded when the layer is created)."""
 
     corpus_id: UUID | None = None
     kind: Literal["pos", "dep", "span", "relation", "alignment"]
     name: str = Field(min_length=1, max_length=200)
     label_set_id: UUID | None = None
     document_ids: list[UUID] | None = Field(default=None, max_length=10000)
+    subcorpus_id: UUID | None = None
     mode: Literal["single", "multi"] = "single"
     annotators: list[UUID] | None = Field(default=None, max_length=50)
     base_layer_id: UUID | None = None
@@ -650,6 +798,9 @@ def create_layer(project_id: UUID, body: LayerInput, user: CurrentUser, db: Db):
     guideline = _check_guideline(db, project_id, body.guideline_document_id)
     if guideline and kind not in ("span", "relation"):
         raise ApiError(422, "INVALID_GUIDELINE", "只有片段层与关系层可关联标注规范")
+    document_ids, sub = scope_documents(
+        db, project_id, corpus, body.document_ids, body.subcorpus_id, user
+    )
     if kind in TOKEN_KINDS:
         model = source_model(db, corpus, kind)
     elif not body.preannotate:
@@ -667,7 +818,7 @@ def create_layer(project_id: UUID, body: LayerInput, user: CurrentUser, db: Db):
         source_model=model,
         status="created" if body.preannotate else "ready",
         progress=empty_progress(),
-        document_ids=_check_documents(db, corpus.id, body.document_ids),
+        document_ids=document_ids,
         created_by=user.id,
         mode=body.mode,
         annotators=_check_annotators(db, project_id, body, user),
@@ -675,8 +826,9 @@ def create_layer(project_id: UUID, body: LayerInput, user: CurrentUser, db: Db):
         tgt_corpus_id=tgt_corpus_id,
         level=level,
         guideline_document_id=guideline,
+        meta={"subcorpus": {"id": str(sub.id), "name": sub.name}} if sub else {},
     )
-    if kind == "alignment" and tgt_corpus_id == corpus.id and not body.document_ids:
+    if kind == "alignment" and tgt_corpus_id == corpus.id and not document_ids:
         layer.document_ids = _source_documents(db, corpus.id)
     db.add(layer)
     db.flush()
@@ -684,6 +836,88 @@ def create_layer(project_id: UUID, body: LayerInput, user: CurrentUser, db: Db):
         _enqueue_preannotate(db, layer, user, None)
     db.commit()
     return layer_view(db, layer)
+
+
+class EstimateInput(BaseModel):
+    """The scope fields of LayerInput: what a new layer would cover and how many model calls it would take."""
+
+    corpus_id: UUID | None = None
+    kind: Literal["pos", "dep", "span", "relation", "alignment"]
+    level: Literal["sentence", "word"] | None = None
+    document_ids: list[UUID] | None = Field(default=None, max_length=10000)
+    subcorpus_id: UUID | None = None
+    base_layer_id: UUID | None = None
+    tgt_corpus_id: UUID | None = None
+
+
+@router.post("/projects/{project_id}/layers/estimate")
+def estimate_layer(project_id: UUID, body: EstimateInput, user: CurrentUser, db: Db):
+    """{documents, sentences, units, batch_size, model_calls, basis}: model_calls = ⌈units / batch_size⌉ chat
+    model calls of the pre-annotation, units = sentences (span), sentences with ≥ 2 base spans per annotator
+    copy (relation) or source sentences (word alignment); 0 for POS / dependency and sentence alignment (no chat
+    model). Failed batches are asked once more, so a run can take up to twice as many calls."""
+    require_project(db, project_id, user, WRITE)
+    base = None
+    if body.kind == "relation":
+        base = (
+            db.get(AnnotationLayer, body.base_layer_id) if body.base_layer_id else None
+        )
+        if not base or base.project_id != project_id or base.kind != "span":
+            raise ApiError(422, "INVALID_LAYER", "base_layer_id 须为本项目的片段层")
+        corpus_id = base.corpus_id
+    else:
+        corpus_id = body.corpus_id
+    if corpus_id is None:
+        raise ApiError(422, "VALIDATION_ERROR", "须提供 corpus_id")
+    corpus = project_corpus(db, project_id, corpus_id)
+    ids, _ = scope_documents(
+        db, project_id, corpus, body.document_ids, body.subcorpus_id, user
+    )
+    if body.kind == "alignment" and body.tgt_corpus_id in (None, corpus.id) and not ids:
+        ids = _source_documents(db, corpus.id)
+    where = [Document.corpus_id == corpus.id]
+    if ids:
+        where.append(Document.id.in_([UUID(i) for i in ids]))
+    documents, sentences = db.execute(
+        select(func.count(), func.coalesce(func.sum(Document.sentence_count), 0)).where(
+            *where
+        )
+    ).one()
+    units, basis = 0, "无需调用对话模型"
+    if body.kind == "span":
+        units, basis = int(sentences), "按句数估算"
+    elif body.kind == "alignment" and (body.level or "sentence") == "word":
+        units, basis = int(sentences), "按源语句数估算"
+    elif body.kind == "relation":
+        # one copy per annotator on a multi base layer, else the shared spans (worker: _base_spans)
+        multi = base.mode == "multi"
+        owner = [SpanAnnotation.annotator_id] if multi else []
+        cond = [] if multi else [SpanAnnotation.annotator_id == base.created_by]
+        if ids:
+            cond.append(SpanAnnotation.document_id.in_([UUID(i) for i in ids]))
+        keys = [*owner, SpanAnnotation.document_id, SpanAnnotation.sentence_index]
+        per_sentence = (
+            select(*keys)
+            .where(
+                SpanAnnotation.layer_id == base.id,
+                SpanAnnotation.status != "rejected",
+                SpanAnnotation.sentence_index.is_not(None),
+                *cond,
+            )
+            .group_by(*keys)
+            .having(func.count() >= 2)
+            .subquery()
+        )
+        units = db.scalar(select(func.count()).select_from(per_sentence)) or 0
+        basis = "按含两个以上片段的句数估算"
+    return {
+        "documents": documents,
+        "sentences": int(sentences),
+        "units": units,
+        "batch_size": LLM_BATCH,
+        "model_calls": math.ceil(units / LLM_BATCH),
+        "basis": basis,
+    }
 
 
 @router.get("/layers/{layer_id}")
@@ -836,6 +1070,7 @@ def annotate(layer_id: UUID, body: ActionInput, user: CurrentUser, db: Db):
     )
     if a is None:
         raise not_found("标注")
+    progress, old = Progress(db, layer), a.status
     if body.action == "reject":
         if layer.kind == "dep":
             raise ApiError(422, "REJECT_NOT_ALLOWED", "依存层不能拒绝，只能修改")
@@ -855,31 +1090,40 @@ def annotate(layer_id: UUID, body: ActionInput, user: CurrentUser, db: Db):
         a.status = _final_status(a)
     a.source, a.revision = f"human:{user.id}", a.revision + 1
     a.updated_by, a.updated_at = user.id, now()
-    db.flush()
-    refresh_progress(db, layer)
+    progress.move(a.document_id, old, a.status)
+    progress.apply()
     db.commit()
     return annotation_view(a)
 
 
 def _sentence_update(db, layer, user, document_id, sentence_index, values, where=()):
     me = writer(layer, user)
-    db.execute(
+    rows = (
+        Annotation.layer_id == layer.id,
+        Annotation.annotator_id == me,
+        Annotation.document_id == document_id,
+        Annotation.sentence_index == sentence_index,
+        *where,
+    )
+    progress = Progress(db, layer)
+    for status, n in db.execute(
+        select(Annotation.status, func.count()).where(*rows).group_by(Annotation.status)
+    ).all():
+        progress.move(document_id, status, None, n)
+    new = db.scalars(
         update(Annotation)
-        .where(
-            Annotation.layer_id == layer.id,
-            Annotation.annotator_id == me,
-            Annotation.document_id == document_id,
-            Annotation.sentence_index == sentence_index,
-            *where,
-        )
+        .where(*rows)
         .values(
             revision=Annotation.revision + 1,
             updated_by=user.id,
             updated_at=now(),
             **values,
         )
-    )
-    refresh_progress(db, layer)
+        .returning(Annotation.status)
+    ).all()
+    for status, n in Counter(new).items():
+        progress.move(document_id, None, status, n)
+    progress.apply()
     db.commit()
     return _sentence(db, layer, document_id, sentence_index, [me])
 
@@ -1100,8 +1344,8 @@ def suggest(layer_id: UUID, body: SuggestInput, user: CurrentUser, db: Db):
         raise ApiError(
             409, "ANNOTATION_REVIEWED", f"该 token 已人工处理（{reason}），建议未写入"
         )
-    db.flush()
-    refresh_progress(db, layer)
+    # suggestions only change suggested rows: the status counts stay as they are
+    layer.updated_at = now()
     db.commit()
     if body.single:
         return annotation_view(items[0])

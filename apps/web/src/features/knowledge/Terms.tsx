@@ -409,6 +409,9 @@ export function extractSummary(r: Record<string, unknown>): string {
   if (n("skipped")) parts.push(`跳过 ${fmt(n("skipped"))} 条（术语表中已有${existing.length ? `：${existing.slice(0, 5).join("、")}${existing.length > 5 ? " 等" : ""}` : ""}）`);
   if (r.pool === 0) parts.push(`范围内没有出现 ${fmt(n("min_freq") || 2)} 次及以上的词性模式组合`);
   else if (r.pool != null && n("candidates") < n("pool")) parts.push(`模型从 ${fmt(n("pool"))} 条候选中保留 ${fmt(n("candidates"))} 条`);
+  if (r.segments != null) parts.push(`文献按 ${fmt(n("segments"))} 段读取`);
+  // documents longer than the segment limit: only their first segments were read
+  if (Array.isArray(r.truncated)) parts.push(...(r.truncated as string[]));
   return `抽取完成：${parts.join("；")}`;
 }
 

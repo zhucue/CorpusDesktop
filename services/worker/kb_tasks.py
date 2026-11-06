@@ -42,9 +42,10 @@ from services.worker import llm
 from services.worker.main import JobFailed, log
 
 INSERT_BATCH = 200
+# characters per model call (summary part, term extraction segment)
 SUMMARY_PART = 12000
-SUMMARY_PARTS = 8
-LITERATURE_CHARS = 15000
+SUMMARY_PARTS = 20  # at most this many parts / segments of one document are read
+LITERATURE_CHARS = SUMMARY_PART
 ALIGN_BATCH = 5000
 EXAMPLE_LOOKUPS = 100
 
@@ -194,7 +195,32 @@ PART_PROMPT = "下面是一篇{what}的第 {i}/{n} 部分。请用中文列出�
 COMBINE_PROMPT = "下面是一篇{what}各部分的要点。请据此用中文写一段 200–400 字的整体摘要，概括研究问题、方法、材料和主要结论。\n\n标题：{title}\n\n{text}"
 
 
+def segments(text, size=SUMMARY_PART):
+    """The text in pieces of about `size` characters, cut after a line break where one is near the end."""
+    out, i = [], 0
+    while i < len(text):
+        end = min(i + size, len(text))
+        if end < len(text):
+            cut = text.rfind("\n", i + size // 2, end)
+            end = cut + 1 if cut > 0 else end
+        out.append(text[i:end])
+        i = end
+    return out
+
+
+def read_note(parts, total, chars, total_chars, what):
+    """按 N 段<what> for the job result and the page; says when only the first SUMMARY_PARTS parts were read."""
+    text = f"按 {parts} 段{what}"
+    if total > parts:
+        text += (
+            f"（全文 {total} 段约 {total_chars} 字，只读取前 {parts} 段约 {chars} 字）"
+        )
+    return text
+
+
 def run_kb_summarize(run):
+    """One model call for a short text; a longer one is summarized per part (at most SUMMARY_PARTS) and the
+    part notes are merged in one more call (map-reduce). meta records how many parts were read."""
     doc_id = uuid.UUID(run.params["document_id"])
     with session() as db:
         doc = _kb_doc(db, doc_id)
@@ -211,9 +237,9 @@ def run_kb_summarize(run):
     if not text.strip():
         raise JobFailed("DOCUMENT_NOT_READY", "文档没有可摘要的文字")
     what = {"note": "研究笔记", "guideline": "标注规范"}.get(kind, "文献")
-    parts = [text[i : i + SUMMARY_PART] for i in range(0, len(text), SUMMARY_PART)][
-        :SUMMARY_PARTS
-    ]
+    pieces = segments(text)
+    parts = pieces[:SUMMARY_PARTS]
+    read = sum(len(x) for x in parts)
     run.progress(0, len(parts) + (len(parts) > 1), "摘要")
     if len(parts) == 1:
         summary = llm.chat(
@@ -238,14 +264,30 @@ def run_kb_summarize(run):
     with transaction() as db:
         run.lock(db)
         doc = _kb_doc(db, doc_id, lock=True)
+        note = read_note(len(parts), len(pieces), read, len(text), "摘要")
         doc.meta = {
             **doc.meta,
             "summary": summary,
             "summary_source": "model",
             "summary_model": llm.model_id(),
-            "summary_truncated": len(text) > SUMMARY_PART * SUMMARY_PARTS,
+            "summary_parts": len(parts),
+            "summary_total_parts": len(pieces),
+            "summary_chars": read,
+            "summary_text_chars": len(text),
+            "summary_truncated": len(pieces) > len(parts),
+            "summary_note": note,
         }
-        run.succeed(db, {"document_id": str(doc_id), "chars": len(summary)})
+        run.succeed(
+            db,
+            {
+                "document_id": str(doc_id),
+                "chars": len(summary),
+                "parts": len(parts),
+                "total_parts": len(pieces),
+                "truncated": len(pieces) > len(parts),
+                "message": note,
+            },
+        )
 
 
 # ---- term extraction ----
@@ -447,6 +489,9 @@ def _candidate_draft(c, info, name):
 
 
 def _literature_drafts(run, p):
+    """Terms of each document, extracted per segment (at most SUMMARY_PARTS segments of LITERATURE_CHARS) and
+    merged: terms found in more segments first, then in reading order, at most `top` per document.
+    → (drafts, reading: [{title, segments, total_segments, chars, total_chars}])."""
     with session() as db:
         docs = [
             (d.title, _doc_text(d))
@@ -454,25 +499,49 @@ def _literature_drafts(run, p):
                 select(KbDocument).where(KbDocument.id.in_(p["document_ids"]))
             )
         ]
-    drafts = []
-    for i, (title, text) in enumerate(docs):
-        run.progress(i, len(docs), "抽取术语")
-        answer = llm.chat(
-            TERMS_SYSTEM,
-            LITERATURE_PROMPT.format(
-                top=min(p["top"], 50), title=title, text=text[:LITERATURE_CHARS]
-            ),
+    plans = [(title, segments(text, LITERATURE_CHARS)) for title, text in docs]
+    steps = sum(min(len(pieces), SUMMARY_PARTS) for _, pieces in plans)
+    drafts, reading, step = [], [], 0
+    for (title, pieces), (_, text) in zip(plans, docs):
+        read = pieces[:SUMMARY_PARTS]
+        found, seen = {}, {}
+        for k, piece in enumerate(read, 1):
+            run.progress(step, steps, "抽取术语")
+            step += 1
+            part = f"（第 {k}/{len(read)} 段）" if len(read) > 1 else ""
+            answer = llm.chat(
+                TERMS_SYSTEM,
+                LITERATURE_PROMPT.format(
+                    top=min(p["top"], 50), title=title + part, text=piece
+                ),
+            )
+            for d in _clean_drafts(llm.json_array(answer), "model"):
+                key = (d["term"].lower(), d["language"])
+                found.setdefault(key, d)
+                seen[key] = seen.get(key, 0) + 1
+        order = sorted(
+            found, key=lambda key: -seen[key]
+        )  # stable: reading order within a count
+        drafts += [found[key] for key in order[: p["top"]]]
+        reading.append(
+            {
+                "title": title,
+                "segments": len(read),
+                "total_segments": len(pieces),
+                "chars": sum(len(x) for x in read),
+                "total_chars": len(text),
+            }
         )
-        drafts += _clean_drafts(llm.json_array(answer), "model")
-    return drafts
+    return drafts, reading
 
 
 def run_kb_extract(run):
     p = run.params
     project_id = uuid.UUID(p["project_id"])
     pool = None  # corpus candidates before the model picks
+    reading = None  # literature: segments read per document
     if p["source"] == "literature":
-        drafts = _literature_drafts(run, p)
+        drafts, reading = _literature_drafts(run, p)
     else:
         cands, info, where = _corpus_candidates(run, p)
         pool = len(cands)
@@ -541,6 +610,19 @@ def run_kb_extract(run):
                 else {}
             ),
         }
+        if reading is not None:
+            result["segments"] = sum(r["segments"] for r in reading)
+            result["truncated"] = [
+                read_note(
+                    r["segments"],
+                    r["total_segments"],
+                    r["chars"],
+                    r["total_chars"],
+                    f"读取《{r['title']}》",
+                )
+                for r in reading
+                if r["total_segments"] > r["segments"]
+            ]
         run.succeed(db, result)
 
 

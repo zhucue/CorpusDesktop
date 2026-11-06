@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert
 
 from services.api.access import (
     WRITE,
@@ -163,18 +164,29 @@ def create_evidence(project_id: UUID, body: EvidenceInput, user: CurrentUser, db
         )
     if existing := _existing(db, project_id, body.kind, ref):
         return evidence_view(existing) | {"existing": True}
-    item = Evidence(
-        project_id=project_id,
-        kind=body.kind,
-        ref=ref.model_dump(mode="json", exclude_none=True) | extra,
-        text=text,
-        source=source,
-        note=body.note,
-        created_by=user.id,
+    # a concurrent pin of the same hit / stat row may win the unique index (uq_evidence_hit,
+    # uq_evidence_stat_row): then that item is returned
+    new_id = db.scalar(
+        insert(Evidence)
+        .values(
+            project_id=project_id,
+            kind=body.kind,
+            ref=ref.model_dump(mode="json", exclude_none=True) | extra,
+            text=text,
+            source=source,
+            note=body.note,
+            created_by=user.id,
+        )
+        .on_conflict_do_nothing()
+        .returning(Evidence.id)
     )
-    db.add(item)
     db.commit()
-    return evidence_view(item) | {"existing": False}
+    if new_id is None:
+        existing = _existing(db, project_id, body.kind, ref)
+        if existing is None:  # the other item was deleted meanwhile
+            raise ApiError(409, "EVIDENCE_CONFLICT", "证据篮刚有变动，请重试")
+        return evidence_view(existing) | {"existing": True}
+    return evidence_view(db.get(Evidence, new_id)) | {"existing": False}
 
 
 def _existing(db, project_id, kind, ref):

@@ -16,7 +16,7 @@ from sqlalchemy import exists, func, select, tuple_
 
 from engine import align
 from services.api import effective
-from services.api.annotations import ANNOTATE, load_layer, refresh_progress
+from services.api.annotations import ANNOTATE, Progress, load_layer
 from services.api.annotators import visible, writer
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, not_found
@@ -177,21 +177,44 @@ def list_alignments(
     }
 
 
-TARGET_SENTENCES_MAX = 5000
-
-
 @router.get("/layers/{layer_id}/target-sentences")
-def target_sentences(layer_id: UUID, document_id: UUID, user: CurrentUser, db: Db):
-    """Sentences of a target document (choices for sentence pairs: 1:n, n:1 or none), at most 5000."""
+def target_sentences(
+    layer_id: UUID,
+    document_id: UUID,
+    user: CurrentUser,
+    db: Db,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    start: Annotated[int, Query(ge=0)] = 0,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 100,
+):
+    """Sentences of a target document (choices for sentence pairs: 1:n, n:1 or none), a page at a time in
+    sentence order from index `start` (0-based). q: a sentence number (1-based) lists from that sentence; other
+    text keeps the sentences containing it. → {items, total (matching sentences), next_start (null at the end)}."""
     layer = _alignment_layer(db, layer_id, user)
     _check_target(db, layer, document_id)
+    where = [Sentence.document_id == document_id]
+    q = (q or "").strip()
+    if q.isdigit():
+        start = max(start, int(q) - 1)
+    elif q:
+        pattern = (
+            "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        )
+        where.append(Sentence.text.ilike(pattern))
+    total = db.scalar(select(func.count()).where(*where))
     rows = db.execute(
         select(Sentence.idx, Sentence.text)
-        .where(Sentence.document_id == document_id)
+        .where(*where, Sentence.idx >= start)
         .order_by(Sentence.idx)
-        .limit(TARGET_SENTENCES_MAX)
+        .limit(page_size + 1)
     ).all()
-    return {"items": [{"sentence_index": i, "text": t} for i, t in rows]}
+    more = len(rows) > page_size
+    rows = rows[:page_size]
+    return {
+        "items": [{"sentence_index": i, "text": t} for i, t in rows],
+        "total": total,
+        "next_start": rows[-1][0] + 1 if more else None,
+    }
 
 
 def _sentence_length(db, document_id, idx):
@@ -308,7 +331,10 @@ def create_alignment(layer_id: UUID, body: AlignmentInput, user: CurrentUser, db
     if found and found.status != "rejected":
         raise ApiError(409, "ALIGNMENT_EXISTS", "已有相同的对齐")
     source = f"human:{user.id}"
+    progress = Progress(db, layer)
+    progress.move(src[0], found.status if found else None, "confirmed")
     if s_tok and not _find(db, layer, me, src, tgt, (), ()):
+        progress.move(src[0], None, "confirmed")
         _new(db, layer, me, src, tgt, (), (), source, "confirmed", user)
     if found:  # a rejected identical row comes back
         found.status, found.source, found.revision = (
@@ -320,8 +346,7 @@ def create_alignment(layer_id: UUID, body: AlignmentInput, user: CurrentUser, db
         row = found
     else:
         row = _new(db, layer, me, src, tgt, s_tok, t_tok, source, "confirmed", user)
-    db.flush()
-    refresh_progress(db, layer)
+    progress.apply()
     db.commit()
     return alignment_view(row)
 
@@ -336,6 +361,8 @@ def act_alignment(
     if not row or row.layer_id != layer.id or row.annotator_id != writer(layer, user):
         raise not_found("对齐")
     src = (row.src_document_id, row.src_sentence_index)
+    progress = Progress(db, layer)
+    progress.move(src[0], row.status, None)
     if body.action == "reject":
         row.status = "rejected"
     elif body.action == "confirm":
@@ -358,8 +385,10 @@ def act_alignment(
                 )
             ):  # links of the old pair no longer apply
                 if link.status == "suggested":
+                    progress.move(src[0], "suggested", None)
                     db.delete(link)
                 else:
+                    progress.move(src[0], link.status, "rejected")
                     link.status, link.updated_at = "rejected", now()
             row.tgt_sentence_index = body.tgt_sentence_index
         if body.src_tokens is not None or body.tgt_tokens is not None:
@@ -386,8 +415,8 @@ def act_alignment(
         row.status = "modified"
     row.source, row.revision = f"human:{user.id}", row.revision + 1
     row.updated_by, row.updated_at = user.id, now()
-    db.flush()
-    refresh_progress(db, layer)
+    progress.move(src[0], None, row.status)
+    progress.apply()
     db.commit()
     return alignment_view(row)
 
@@ -430,7 +459,9 @@ def suggest_alignments(
             f"token 序号须在 1–{n_src}（源）与 1–{n_tgt}（目标）之间",
         )
     source = f"model:{body.model}"
+    progress = Progress(db, layer)
     if not _find(db, layer, me, src, tgt, (), ()):
+        progress.move(src[0], None, "suggested")
         _new(db, layer, me, src, tgt, (), (), source, "suggested", user)
     items, skipped = [], []
     for s_tok, t_tok in links:
@@ -440,11 +471,11 @@ def suggest_alignments(
                 {"src": list(s_tok), "tgt": list(t_tok), "reason": found.status}
             )
             continue
+        progress.move(src[0], None, "suggested")
         items.append(
             _new(db, layer, me, src, tgt, s_tok, t_tok, source, "suggested", user)
         )
-    db.flush()
-    refresh_progress(db, layer)
+    progress.apply()
     db.commit()
     return {"items": [alignment_view(a) for a in items], "skipped": skipped}
 
@@ -454,6 +485,7 @@ def confirm_alignment_sentence(db, layer, user, document_id, sentence_index):
     me = writer(layer, user)
     check_document(db, layer, document_id)
     _sentence_length(db, document_id, sentence_index)
+    progress = Progress(db, layer)
     for row in db.scalars(
         select(A).where(
             A.layer_id == layer.id,
@@ -463,12 +495,12 @@ def confirm_alignment_sentence(db, layer, user, document_id, sentence_index):
             A.src_sentence_index == sentence_index,
         )
     ):
+        progress.move(document_id, "suggested", "confirmed")
         row.status, row.source = "confirmed", f"human:{user.id}"
         row.revision += 1
         row.updated_by, row.updated_at = user.id, now()
     mark_reviewed(db, layer, me, document_id, sentence_index)
-    db.flush()
-    refresh_progress(db, layer)
+    progress.apply()
     db.commit()
     return {"items": sentence_pairs(db, layer, [(document_id, sentence_index)], [me])}
 

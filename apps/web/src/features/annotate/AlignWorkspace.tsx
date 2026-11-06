@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { Select, Tabs } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -20,6 +20,15 @@ import { StatsTab } from "./Tabs";
 import { sourceText, statusView } from "./Workspace";
 
 type Tab = "edit" | "stats" | "agreement";
+
+/** GET /layers/{id}/target-sentences: a page of the target document's sentences in order. */
+interface TargetPage {
+  items: { sentence_index: number; text: string }[];
+  total: number;
+  next_start: number | null;
+}
+
+const TARGET_PAGE = 100;
 
 const groupsOf = (alignments: Alignment[]): LinkGroup[] =>
   alignments.filter((a) => a.level !== "sentence").map((a) => ({ id: a.id, src: a.src_tokens ?? [], tgt: a.tgt_tokens ?? [], status: a.status }));
@@ -158,12 +167,28 @@ export default function AlignWorkspace({
   /** Target sentences of the current source sentence that are aligned (pair row not rejected). */
   const activeTargets = pairs.filter((p) => p.tgt && sentRow(p) && sentRow(p)!.status !== "rejected").map((p) => p.tgt!.sentence_index);
   const tgtDoc = pairs.find((p) => p.tgt)?.tgt?.document_id ?? fallbackTgtDoc;
-  const targets = useQuery({
-    queryKey: ["align-targets", layer.id, tgtDoc],
-    queryFn: () => api.get<{ items: { sentence_index: number; text: string }[] }>(`/layers/${layer.id}/target-sentences`, { document_id: tgtDoc }),
+  // Target choices: a page from a little before the current targets (or the source position); a number typed in the
+  // box jumps to that sentence, other text searches the target document.
+  const [tInput, setTInput] = useState("");
+  const [tq, setTq] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setTq(tInput.trim()), 300);
+    return () => clearTimeout(t);
+  }, [tInput]);
+  const near = Math.max(0, (activeTargets.length ? Math.min(...activeTargets) : (sIdx ?? 0)) - 20);
+  const jump = /^\d+$/.test(tq) ? Math.max(Number(tq) - 1, 0) : null;
+  const firstStart = jump ?? (tq ? 0 : near);
+  const targets = useInfiniteQuery({
+    queryKey: ["align-targets", layer.id, tgtDoc, jump == null ? tq : "", firstStart],
+    queryFn: ({ pageParam }) =>
+      api.get<TargetPage>(`/layers/${layer.id}/target-sentences`, { document_id: tgtDoc, start: pageParam, page_size: TARGET_PAGE, ...(tq && jump == null ? { q: tq } : {}) }),
+    initialPageParam: firstStart,
+    getNextPageParam: (last) => last.next_start ?? undefined,
     enabled: !word && !!tgtDoc && tab === "edit",
     staleTime: 5 * 60 * 1000,
   });
+  const targetItems = targets.data?.pages.flatMap((p) => p.items) ?? [];
+  const targetTotal = targets.data?.pages[0]?.total;
 
   /**
    * Sentence level: the source sentence's targets become `next` — 1:1, 1:n (several), none (empty); n:1 is the same
@@ -212,11 +237,12 @@ export default function AlignWorkspace({
     return () => document.removeEventListener("keydown", onKey);
   }, [tab]);
 
-  /** Target sentence choices: every sentence of the target document (the loaded pairs' targets until it arrives). */
+  /** Target sentence choices: the loaded pages of the target document, plus the chosen targets (always shown). */
   function targetOptions() {
     const seen = new Map<number, string>();
-    for (const p of items) if (p.tgt && p.tgt.document_id === tgtDoc) seen.set(p.tgt.sentence_index, p.tgt.text);
-    for (const t of targets.data?.items ?? []) seen.set(t.sentence_index, t.text);
+    if (!tq) for (const p of items) if (p.tgt && p.tgt.document_id === tgtDoc) seen.set(p.tgt.sentence_index, p.tgt.text);
+    for (const p of pairs) if (p.tgt && p.tgt.document_id === tgtDoc) seen.set(p.tgt.sentence_index, p.tgt.text);
+    for (const t of targetItems) seen.set(t.sentence_index, t.text);
     return [...seen.entries()].sort((a, b) => a[0] - b[0]).map(([i, t]) => ({ value: i, label: `句 ${i + 1} · ${t}`, short: `句 ${i + 1}` }));
   }
 
@@ -341,8 +367,27 @@ export default function AlignWorkspace({
               value={activeTargets}
               options={targetOptions()}
               optionLabelProp="short"
-              optionFilterProp="label"
+              showSearch
+              filterOption={false}
+              searchValue={tInput}
+              onSearch={setTInput}
+              onBlur={() => setTInput("")}
+              notFoundContent={targets.isFetching ? "加载中" : "没有匹配的句子"}
               onChange={(v: number[]) => setTargets(v)}
+              onPopupScroll={(e) => {
+                const el = e.currentTarget;
+                if (el.scrollTop + el.clientHeight >= el.scrollHeight - 24 && targets.hasNextPage && !targets.isFetchingNextPage) void targets.fetchNextPage();
+              }}
+              popupRender={(menu) => (
+                <>
+                  {menu}
+                  {targetTotal != null && (
+                    <div className="small muted" style={{ padding: "4px 12px" }}>
+                      {tq && jump == null ? `匹配 ${fmt(targetTotal)} 句` : `共 ${fmt(targetTotal)} 句，输入句号跳转或输入文字查找`}
+                    </div>
+                  )}
+                </>
+              )}
             />
           </div>
         )}

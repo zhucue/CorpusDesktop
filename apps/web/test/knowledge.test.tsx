@@ -173,7 +173,9 @@ describe("note autosave", () => {
     await act(async () => void vi.advanceTimersByTime(999));
     expect(calls).toHaveLength(0);
     await act(async () => void vi.advanceTimersByTime(1));
-    expect(calls).toEqual([{ method: "PATCH", path: "/api/kb/documents/n1", body: { title: "把字句英译", body: "初稿 ab" } }]);
+    await act(async () => void (await Promise.resolve()));
+    // the save carries the version it started from (409 NOTE_CONFLICT when someone saved in between)
+    expect(calls).toEqual([{ method: "PATCH", path: "/api/kb/documents/n1", body: { title: "把字句英译", body: "初稿 ab", base_updated_at: NOTE.updated_at } }]);
     await act(async () => void (await Promise.resolve()));
     expect(screen.getByTestId("save-state").textContent).toBe("已保存");
     // Refs panel links the stored search back to the search page.
@@ -192,6 +194,28 @@ describe("note autosave", () => {
     expect((calls[0].body as { body: string }).body).toBe("立即保存");
     await act(async () => void vi.advanceTimersByTime(2000));
     expect(calls).toHaveLength(1);
+  });
+
+  it("a save conflict keeps the local text to copy and stops saving", async () => {
+    const calls: Call[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), "http://x");
+      calls.push({ method: init?.method ?? "GET", path: url.pathname, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (init?.method === "PATCH")
+        return new Response(JSON.stringify({ error: { code: "NOTE_CONFLICT", message: "笔记已被更新（他人编辑或助手 / 证据篮追加），请载入最新版本后合并" } }), { status: 409, headers: { "Content-Type": "application/json" } });
+      return json({ ...NOTE, body: "他人的版本", updated_at: "2026-10-27T02:00:00Z" });
+    });
+    wrap(<NoteEditor note={NOTE} editable />);
+    fireEvent.change(screen.getByLabelText("笔记正文"), { target: { value: "我的修改" } });
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "保存" })));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("笔记已被更新（他人编辑或助手 / 证据篮追加），请载入最新版本后合并"));
+    fireEvent.change(screen.getByLabelText("笔记正文"), { target: { value: "我的修改 2" } });
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "保存" })));
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "载入最新版本" }));
+    await waitFor(() => expect((screen.getByLabelText("笔记正文") as HTMLTextAreaElement).value).toBe("他人的版本"));
+    expect((screen.getByLabelText("本地内容") as HTMLTextAreaElement).value).toBe("我的修改 2");
+    expect(screen.getByRole("button", { name: /复制本地内容/ })).toBeTruthy();
   });
 });
 
