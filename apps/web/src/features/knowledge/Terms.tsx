@@ -13,6 +13,7 @@ import { fmt, fmtShortTime } from "../../lib/format";
 import { useDebounced } from "../../lib/useDebounced";
 import { languageOptions } from "../corpora/UploadDialog";
 import { useTermUpdated, useTerms } from "./data";
+import { SendNotice, useModelHost } from "./SendNotice";
 
 const PAGE = 50;
 
@@ -348,6 +349,7 @@ function ExtractDialog({
     },
   });
   const ok = source === "corpus" ? !!scope : docIds.length > 0;
+  const modelHost = useModelHost(open);
   return (
     <Modal title="抽取术语" open={open} onCancel={onClose} okText="开始抽取" cancelText="取消" onOk={() => start.mutate()} okButtonProps={{ disabled: !ok, loading: start.isPending }} destroyOnHidden>
       <div className="col" style={{ gap: 14 }}>
@@ -392,6 +394,7 @@ function ExtractDialog({
             <div className="small muted">方法：对话模型</div>
           </>
         )}
+        {source === "literature" ? <SendNotice what="文献文本" host={modelHost} /> : method === "model" && <SendNotice what="候选术语列表" host={modelHost} />}
         <ErrorAlert error={start.error} />
       </div>
     </Modal>

@@ -9,6 +9,7 @@ import { Icon } from "../../components/Icon";
 import { kbDocIcon } from "../../components/iconSets";
 import { useJob, useJobCreated } from "../../lib/data";
 import { fmt, fmtBytes, fmtShortTime, fmtTime } from "../../lib/format";
+import { SendNotice, useModelHost } from "./SendNotice";
 import {
   ACCEPT_KB,
   MAX_KB_BYTES,
@@ -348,16 +349,27 @@ function Summary({ doc, editable }: { doc: KbDocument; editable: boolean }) {
   }, [state, qc, doc.id, doc.project_id]);
   const running = start.isPending || state === "queued" || state === "running";
   const summary = doc.meta?.summary;
+  const modelHost = useModelHost(editable);
   return (
     <section className="col" style={{ gap: 8 }}>
       <div className="row">
         <span className="label grow">摘要</span>
         {summary && doc.meta?.summary_source === "model" && <span className="tag t-info">模型生成</span>}
         {editable && doc.status === "ready" && (
-          <button className="btn xs" type="button" disabled={running} onClick={() => start.mutate()}>
-            {running ? <span className="spin" style={{ width: 10, height: 10 }} /> : <Icon name="spark" size={14} />}
-            {running ? "生成中" : summary ? "重新生成" : "生成摘要"}
-          </button>
+          // with a configured model the click asks first, naming where the text goes
+          <Popconfirm
+            title={summary ? "重新生成摘要？" : "生成摘要？"}
+            description={<SendNotice what="文献文本" host={modelHost} />}
+            okText="生成"
+            cancelText="取消"
+            disabled={!modelHost || running}
+            onConfirm={() => start.mutate()}
+          >
+            <button className="btn xs" type="button" disabled={running} onClick={() => !modelHost && start.mutate()}>
+              {running ? <span className="spin" style={{ width: 10, height: 10 }} /> : <Icon name="spark" size={14} />}
+              {running ? "生成中" : summary ? "重新生成" : "生成摘要"}
+            </button>
+          </Popconfirm>
         )}
       </div>
       <ErrorAlert error={start.error} />

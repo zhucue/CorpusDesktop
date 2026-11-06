@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 从 scripts/backup.sh 的备份目录恢复：停 api / worker / agent / web → 重建数据库并 pg_restore → 解包数据卷 → 启动 → 冒烟。
+# 从 scripts/backup.sh 的备份目录恢复：停 api / worker / worker-light / agent / web → 重建数据库并 pg_restore → 解包数据卷 → 启动 → 冒烟。
 #   scripts/restore.sh [-p 项目名] [--yes] 备份目录
 # 会清空目标项目的数据库与对应卷（data、agentdata，备份中含 models、stanza 时一并恢复）。
 # 恢复到另一套环境演练：HTTP_PORT=18088 POSTGRES_PORT=25432 scripts/restore.sh -p corpus-restore --yes 备份目录
@@ -29,8 +29,8 @@ COMPOSE=(docker compose -f deploy/compose.yaml -p "$PROJECT")
 HELPER=pgvector/pgvector:pg16
 start=$(date +%s)
 
-echo "停止 api / worker / agent / web"
-"${COMPOSE[@]}" stop api worker agent web 2>/dev/null || true
+echo "停止 api / worker / worker-light / agent / web"
+"${COMPOSE[@]}" stop api worker worker-light agent web 2>/dev/null || true
 
 echo "启动 postgres"
 "${COMPOSE[@]}" up -d postgres

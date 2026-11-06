@@ -9,6 +9,11 @@ x-python-env: &python-env
   PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
   # 检索命中计数超时（秒），超时后返回不完整计数
   SEARCH_COUNT_TIMEOUT: ${SEARCH_COUNT_TIMEOUT:-20}
+  # 首次超时后后台完整计数的上限（秒），超过则计数失败
+  SEARCH_FULL_TIMEOUT: ${SEARCH_FULL_TIMEOUT:-300}
+  # 一次检索的命中上限，超过则计数失败；检索结果集（DATA_DIR/search-cache）总字节上限
+  SEARCH_MAX_HITS: ${SEARCH_MAX_HITS:-2000000}
+  SEARCH_CACHE_MAX_BYTES: ${SEARCH_CACHE_MAX_BYTES:-2147483648}
   # 短任务门槛：上传小于此字节数的导入、词数小于此值的建索引算短任务（worker-light 也处理，各 worker 优先取短任务）
   LIGHT_IMPORT_BYTES: ${LIGHT_IMPORT_BYTES:-5242880}
   LIGHT_INDEX_TOKENS: ${LIGHT_INDEX_TOKENS:-1000000}
@@ -51,7 +56,13 @@ services:
   api:
     <<: *service
     build: { context: .., dockerfile: deploy/Dockerfile.api, target: api }
-    environment: *python-env
+    environment:
+      <<: *python-env
+      # 设置页与 /system/info 显示的版本号
+      APP_VERSION: ${APP_VERSION:-dev}
+      # 只用于 /system/info 显示模型主机与模型名（密钥不进 api）
+      MODEL_BASE_URL: ${MODEL_BASE_URL:-}
+      MODEL_ID: ${MODEL_ID:-}
     volumes:
       - data:/data
       - models:/models
@@ -79,6 +90,13 @@ services:
       - models:/models
     depends_on:
       api: { condition: service_healthy }
+    # 主循环（空闲轮询与任务心跳）更新 /data/worker-health/<WORKER_ID>，90 秒内未更新判为不健康
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, socket, sys, time; p = '/data/worker-health/' + (os.environ.get('WORKER_ID') or socket.gethostname()); sys.exit(0 if os.path.exists(p) and time.time() - os.path.getmtime(p) < 90 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # 只处理短任务：统计、导出、预标注、知识库，以及小文件导入和小语料建索引；大导入运行时它们不排队
   worker-light:

@@ -5,7 +5,8 @@ WORKER_SMALL_IMPORTS=1 lets a worker limited by WORKER_KINDS also take small imp
 (services.api.jobs.small_heavy). Every worker takes short-lane jobs first, then the oldest; an index
 job waits while another index build of the same corpus runs. A running job's heartbeat_at is refreshed every HEARTBEAT_SECONDS, and jobs whose heartbeat went
 stale (their worker died) are failed at startup and by a periodic reaper. At startup a worker also fails
-running jobs carrying its own WORKER_ID: a restarted container keeps its hostname, so they are dead."""
+running jobs carrying its own WORKER_ID: a restarted container keeps its hostname, so they are dead.
+The compose healthcheck reads DATA_DIR/worker-health/<WORKER_ID> (touch_health)."""
 
 import logging
 import os
@@ -17,7 +18,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import and_, exists, func, or_, select, update
 from sqlalchemy.orm import aliased
 
-from services.api.db import transaction
+from services.api.db import data_dir, transaction
 from services.api.errors import ApiError
 from services.api.jobs import (
     HEAVY_KINDS,
@@ -142,8 +143,20 @@ def heartbeat(job_id):
         )
 
 
+def touch_health():
+    """DATA_DIR/worker-health/<WORKER_ID> mtime = last sign of life; the compose healthcheck wants it
+    fresher than 90 s. Touched every main-loop round and, during a job, with each heartbeat."""
+    try:
+        path = data_dir() / "worker-health" / WORKER_ID
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    except OSError:
+        log.exception("health file update failed")
+
+
 def _beat(job_id, stop):
     while not stop.wait(HEARTBEAT_SECONDS):
+        touch_health()
         try:
             heartbeat(job_id)
         except Exception:
@@ -279,6 +292,7 @@ def main():
     threading.Thread(target=warm_embeddings, daemon=True).start()
     log.info("worker %s ready, kinds: %s", WORKER_ID, ",".join(worker_kinds()) or "all")
     while True:
+        touch_health()
         if not run_once():
             time.sleep(POLL_SECONDS)
 

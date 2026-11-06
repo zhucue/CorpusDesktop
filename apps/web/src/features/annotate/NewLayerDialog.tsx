@@ -7,6 +7,7 @@ import { Icon } from "../../components/Icon";
 import { layerIcon } from "../../components/iconSets";
 import { useCorpora, useJobCreated } from "../../lib/data";
 import { useKbDocuments } from "../knowledge/data";
+import { SendNotice, useModelHost } from "../knowledge/SendNotice";
 import { useLabelSets, useLayers } from "./data";
 import { useMembers } from "./spanData";
 
@@ -77,6 +78,9 @@ export default function NewLayerDialog({
   const tgt = usable.find((c) => c.id === tgtId);
   const tokenKind = kind === "pos" || kind === "dep";
   const usesLabels = kind !== "alignment";
+  // the chat model preannotates span / relation layers and word alignments (sentence pairs use the local vector model)
+  const usesModel = (kind === "span" || kind === "relation" || (kind === "alignment" && level === "word")) && (mode !== "multi" || preannotateMulti);
+  const modelHost = useModelHost(open);
 
   const docs = useQuery({
     queryKey: ["documents", corpusId, "", 1, "all"],
@@ -318,6 +322,7 @@ export default function NewLayerDialog({
             maxTagCount="responsive"
           />
         </Form.Item>
+        {usesModel && <SendNotice what="所选句子" host={modelHost} style={{ marginBottom: 12 }} />}
         <ErrorAlert error={create.error ?? labelSets.error} style={{ marginBottom: 12 }} />
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button className="btn" type="button" onClick={onClose}>
