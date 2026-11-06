@@ -645,6 +645,23 @@ def build_cases(w: World):
     def fresh_feedback(_w, role):
         return o.ok("POST", "/api/feedback", json={"text": f"tmp-{role}", "page": "/"})
 
+    vocab_csv = b"word,level\nlanguage,A\nthought,B\n"
+
+    def vocab_upload(c, role):
+        return c.post(
+            f"/api/projects/{p}/vocab-lists",
+            data={"name": f"tmp-{TAG}-{role}", "language": "en"},
+            files=[("file", ("list.csv", vocab_csv, "text/csv"))],
+        )
+
+    def fresh_vocab(_w, role):
+        r = vocab_upload(o, f"fresh-{role}")
+        assert r.status_code == 201, r.text
+        return r.json()
+
+    ngsl = "5e7f0c1a-0b5a-4c1e-9a10-000000000012"  # services.api.vocab.NGSL_ID
+    sketch = {"scope": scope, "min_freq": 1}
+
     md = (FIX / "kb-sample.md").read_bytes()
     span_body = lambda role: {
         "document_id": sents[0][0],
@@ -1032,6 +1049,114 @@ def build_cases(w: World):
             lambda c, x, r: c.post(
                 "/api/stats/translations",
                 json={"scope": scope, "query": "language", "min_freq": 1},
+            ),
+        ),
+        # P10 (contracts/p10.md): statistics follow the statistics rule (READ starts a job), vocabulary lists
+        # (upload / delete: owner / editor, cookie only), semantic index (build: owner / editor, cookie only;
+        # built-in corpora: admins) and semantic search (READ)
+        C(
+            "统计",
+            "POST /stats/text_metrics",
+            READ,
+            lambda c, x, r: c.post("/api/stats/text_metrics", json={"scope": scope}),
+        ),
+        C(
+            "统计",
+            "POST /stats/vocab_profile",
+            READ,
+            lambda c, x, r: c.post(
+                "/api/stats/vocab_profile", json={"scope": scope, "list_id": ngsl}
+            ),
+        ),
+        C(
+            "统计",
+            "POST /stats/compare",
+            READ,
+            lambda c, x, r: c.post(
+                "/api/stats/compare",
+                json={
+                    "items": [
+                        {"label": "a", "scope": scope, "query": "language"},
+                        {"label": "b", "scope": scope, "query": "thought"},
+                    ]
+                },
+            ),
+        ),
+        C(
+            "统计",
+            "POST /stats/word_sketch",
+            READ,
+            lambda c, x, r: c.post(
+                "/api/stats/word_sketch", json={**sketch, "lemma": "language"}
+            ),
+        ),
+        C(
+            "统计",
+            "POST /stats/sketch_diff",
+            READ,
+            lambda c, x, r: c.post(
+                "/api/stats/sketch_diff",
+                json={**sketch, "lemma_a": "language", "lemma_b": "thought"},
+            ),
+        ),
+        C(
+            "统计",
+            "POST /stats/tidy_export",
+            READ,
+            lambda c, x, r: c.post(
+                "/api/stats/tidy_export",
+                json={"scope": scope, "queries": ["language"], "format": "csv"},
+            ),
+        ),
+        C(
+            "词表",
+            "GET /projects/{id}/vocab-lists",
+            READ,
+            lambda c, x, r: c.get(f"/api/projects/{p}/vocab-lists"),
+        ),
+        C(
+            "词表",
+            "POST /projects/{id}/vocab-lists",
+            WRITE_H,
+            lambda c, x, r: vocab_upload(c, r),
+        ),
+        C(
+            "词表",
+            "DELETE /vocab-lists/{id}",
+            WRITE_H,
+            lambda c, x, r: c.delete(f"/api/vocab-lists/{x['id']}"),
+            fresh_vocab,
+        ),
+        C(
+            "语义",
+            "GET /corpora/{id}/semantic-index",
+            READ,
+            lambda c, x, r: c.get(f"/api/corpora/{i['corpus']}/semantic-index"),
+        ),
+        C(
+            "语义",
+            "POST /corpora/{id}/semantic-index",
+            WRITE_H,
+            lambda c, x, r: c.post(f"/api/corpora/{i['corpus']}/semantic-index"),
+        ),
+        C(
+            "语义",
+            "GET 内置 semantic-index",
+            ANYONE,
+            lambda c, x, r: c.get(f"/api/corpora/{i['builtin']}/semantic-index"),
+        ),
+        C(
+            "语义",
+            "POST 内置 semantic-index",
+            ADMIN,  # the built-in corpus has no documents: 409 CORPUS_NOT_READY for admins
+            lambda c, x, r: c.post(f"/api/corpora/{i['builtin']}/semantic-index"),
+        ),
+        C(
+            "语义",
+            "POST /search/semantic",
+            READ,  # 409 SEMANTIC_NOT_READY until a build finishes
+            lambda c, x, r: c.post(
+                "/api/search/semantic", json={"scope": scope, "text": "language"}
             ),
         ),
         C(
