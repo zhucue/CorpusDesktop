@@ -6,7 +6,9 @@ WORKER_SMALL_IMPORTS=1 lets a worker limited by WORKER_KINDS also take small imp
 job waits while another index build of the same corpus runs. A running job's heartbeat_at is refreshed every HEARTBEAT_SECONDS, and jobs whose heartbeat went
 stale (their worker died) are failed at startup and by a periodic reaper. At startup a worker also fails
 running jobs carrying its own WORKER_ID: a restarted container keeps its hostname, so they are dead.
-The compose healthcheck reads DATA_DIR/worker-health/<WORKER_ID> (touch_health)."""
+The compose healthcheck reads DATA_DIR/worker-health/<WORKER_ID> (touch_health).
+A cancelled job stops within about CANCEL_POLL_SECONDS + 1 s (Run.cancel). The worker taking small imports
+(worker-light) also runs the daily maintenance (services.worker.maintenance)."""
 
 import logging
 import os
@@ -18,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import and_, exists, func, or_, select, update
 from sqlalchemy.orm import aliased
 
-from services.api.db import data_dir, transaction
+from services.api.db import data_dir, session, transaction
 from services.api.errors import ApiError
 from services.api.jobs import (
     HEAVY_KINDS,
@@ -35,6 +37,8 @@ log = logging.getLogger("worker")
 POLL_SECONDS = 1.0
 HEARTBEAT_SECONDS = 30
 REAP_SECONDS = 300
+CANCEL_POLL_SECONDS = 2.0  # a running job's state is read at most this often (Run.poll)
+MAINTENANCE_CHECK_SECONDS = 3600
 STALE_AFTER = timedelta(minutes=10)
 LEGACY_STALE_AFTER = timedelta(hours=24)
 WORKER_ID = os.environ.get("WORKER_ID") or socket.gethostname()
@@ -51,11 +55,17 @@ class JobFailed(Exception):
 
 
 class Run:
-    """Handle passed to tasks: progress updates double as cancellation checks."""
+    """Handle passed to tasks: progress updates double as cancellation checks.
+
+    `cancel` (threading.Event) is set once the job is no longer running (cancelled): by progress(), and while
+    the job runs under run_once by a watcher reading Job.state every CANCEL_POLL_SECONDS. check() raises
+    Cancelled when it is set (no database round trip); engine calls take the event itself (CQP and CWB tools
+    are killed, see engine.stats.cancellable)."""
 
     def __init__(self, job):
         self.id, self.kind, self.params = job.id, job.kind, job.params
         self.owner_id, self.project_id = job.owner_id, job.project_id
+        self.cancel = threading.Event()
 
     def progress(self, done, total=None, message="", unit=None):
         """unit: what done/total count (字 / 个文件 / 篇), shown next to the numbers."""
@@ -70,6 +80,20 @@ class Run:
                 .returning(Job.state)
             )
         if state != "running":
+            self.cancel.set()
+            raise Cancelled
+
+    def poll(self):
+        """Read Job.state; sets `cancel` when the job is no longer running. Returns whether it is set."""
+        with session() as db:
+            state = db.scalar(select(Job.state).where(Job.id == self.id))
+        if state != "running":
+            self.cancel.set()
+        return self.cancel.is_set()
+
+    def check(self):
+        """Between blocks of work (Stanza chunks, model batches, export pages)."""
+        if self.cancel.is_set():
             raise Cancelled
 
     def lock(self, db):
@@ -163,6 +187,16 @@ def _beat(job_id, stop):
             log.exception("heartbeat for job %s failed", job_id)
 
 
+def _watch(run, stop):
+    """Set run.cancel soon after the job is cancelled, also while a task is inside one long engine call."""
+    while not stop.wait(CANCEL_POLL_SECONDS):
+        try:
+            if run.poll():
+                return
+        except Exception:
+            log.exception("cancel check for job %s failed", run.id)
+
+
 def recover(own=False):
     """Fail running jobs whose worker is gone: heartbeat older than STALE_AFTER, or (jobs claimed
     before heartbeats existed) no heartbeat and started more than LEGACY_STALE_AFTER ago.
@@ -224,12 +258,14 @@ def _fail(run, error):
 
 
 def execute(run):
-    from services.worker import tasks
+    from engine import cwb
+    from services.worker import llm, tasks
 
     log.info("job %s %s start", run.id, run.kind)
     try:
-        tasks.HANDLERS[run.kind](run)
-    except Cancelled:
+        with llm.job(run):
+            tasks.HANDLERS[run.kind](run)
+    except (Cancelled, cwb.Cancelled):
         log.info("job %s cancelled", run.id)
         if run.kind in ("import", "index"):
             with transaction() as db:
@@ -250,13 +286,18 @@ def run_once():
     run = claim()
     if run:
         stop = threading.Event()
-        beat = threading.Thread(target=_beat, args=(run.id, stop), daemon=True)
-        beat.start()
+        threads = [
+            threading.Thread(target=_beat, args=(run.id, stop), daemon=True),
+            threading.Thread(target=_watch, args=(run, stop), daemon=True),
+        ]
+        for t in threads:
+            t.start()
         try:
             execute(run)
         finally:
             stop.set()
-            beat.join()
+            for t in threads:
+                t.join()
     return run is not None
 
 
@@ -285,11 +326,32 @@ def warm_embeddings():
         log.warning("embedding model unavailable: %s", e)
 
 
+def maintenance_enabled():
+    """WORKER_MAINTENANCE=1/0; by default the worker taking small imports (worker-light) runs maintenance."""
+    flag = os.environ.get("WORKER_MAINTENANCE") or os.environ.get(
+        "WORKER_SMALL_IMPORTS", "0"
+    )
+    return flag == "1"
+
+
+def maintain():
+    from services.worker import maintenance
+
+    while True:
+        try:
+            maintenance.run_if_due()
+        except Exception:
+            log.exception("maintenance failed")
+        time.sleep(MAINTENANCE_CHECK_SECONDS)
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     recover(own=True)
     threading.Thread(target=reap, daemon=True).start()
     threading.Thread(target=warm_embeddings, daemon=True).start()
+    if maintenance_enabled():
+        threading.Thread(target=maintain, daemon=True).start()
     log.info("worker %s ready, kinds: %s", WORKER_ID, ",".join(worker_kinds()) or "all")
     while True:
         touch_health()

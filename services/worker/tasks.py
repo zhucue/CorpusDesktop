@@ -2,6 +2,7 @@
 writes results and marks the job succeeded, so a cancel either wins entirely or not at all."""
 
 import csv
+import itertools
 import json
 import shutil
 import time
@@ -112,11 +113,64 @@ def _parse_batch(run):
         except Exception as e:  # a malformed file must not surface as INTERNAL
             log.exception("parsing %s failed", path)
             raise JobFailed("PARSE_ERROR", f"{path.name} 无法解析：{e}"[:500]) from e
+        if path.suffix.lower() == ".tmx":
+            other = _unsupported(docs)
+            if other:
+                raise JobFailed(
+                    "LANGUAGE_UNSUPPORTED", f"TMX 含暂不支持的语言：{'、'.join(other)}"
+                )
         documents += docs
         alignments += links
     if not documents:
         raise JobFailed("EMPTY_IMPORT", "文件中没有可导入的文本")
     return documents, alignments
+
+
+LANGUAGE_UNSUPPORTED = "暂只支持中文与英文语料"
+
+
+def _tokenized(doc):
+    """CoNLL-U: tokens and annotation come with the file, so any language is stored as is."""
+    return bool(doc.sentences) and all(s.tokens for s in doc.sentences)
+
+
+def _unsupported(documents):
+    """Language codes other than zh / en among documents that need annotation, sorted."""
+    return sorted(
+        {
+            nlp.lang_code(d.language)
+            for d in documents
+            if d.language and not _tokenized(d)
+        }
+        - set(nlp.SUPPORTED)
+    )
+
+
+def _check_upload_language(params):
+    """An upload whose given language is not zh / en fails at once, unless every file is CoNLL-U."""
+    language = params.get("language")
+    if not language or nlp.lang_code(language) in nlp.SUPPORTED:
+        return
+    if all(n.lower().endswith(".conllu") for n in params["files"]):
+        return
+    raise JobFailed("LANGUAGE_UNSUPPORTED", LANGUAGE_UNSUPPORTED)
+
+
+def _check_languages(documents):
+    """Documents to annotate: a language other than zh / en fails the import; documents without a language
+    are detected (engine.nlp.language_problem: script share, and English function words), as is the script of
+    documents given as zh / en."""
+    other = _unsupported(documents)
+    if other:
+        raise JobFailed(
+            "LANGUAGE_UNSUPPORTED", f"{LANGUAGE_UNSUPPORTED}（{'、'.join(other)}）"
+        )
+    for d in documents:
+        if _tokenized(d):
+            continue
+        problem = nlp.language_problem(d.text, check_english=not d.language)
+        if problem:
+            raise JobFailed("LANGUAGE_UNSUPPORTED", f"{d.title}：{problem}")
 
 
 def _write_documents(db, corpus_id, documents, written):
@@ -183,7 +237,9 @@ def _write_documents(db, corpus_id, documents, written):
 
 def run_import(run):
     corpus_id = uuid.UUID(run.params["corpus_id"])
+    _check_upload_language(run.params)
     documents, alignments = _parse_batch(run)
+    _check_languages(documents)
     total = len(documents)
     # progress in characters so one large document (Tatoeba: one per language) still advances
     chars = sum(len(d.text) for d in documents)
@@ -191,6 +247,7 @@ def run_import(run):
 
     def report(offset):
         nonlocal last
+        run.check()  # between Stanza chunks
         if time.monotonic() - last >= PROGRESS_SECONDS:
             last = time.monotonic()
             run.progress(done + offset, chars, "分句与标注", "字")
@@ -201,9 +258,7 @@ def run_import(run):
             d.language = nlp.detect_language(d.text)
 
     # CoNLL-U arrives tokenized and is stored as is, whatever its language
-    todo = [
-        d for d in documents if not (d.sentences and all(s.tokens for s in d.sentences))
-    ]
+    todo = [d for d in documents if not _tokenized(d)]
     done = chars - sum(len(d.text) for d in todo)
     report(0)
     try:  # Stanza batches paragraphs across documents (many short CSV rows)
@@ -291,8 +346,9 @@ def _load_batches(docs):
 
 
 def _load_documents(docs, run):
-    """Stream engine Documents from the database in the given order, one load round at a time.
-    Rows are read as plain tuples; ORM objects for millions of tokens would not fit in memory."""
+    """Stream (document id, engine Document) from the database in the given order, one load round at a time.
+    Rows are read as plain tuples; ORM objects for millions of tokens would not fit in memory. A document
+    deleted since the list was read is left out: the deletion queued another index build."""
     total = len(docs)
     done = 0
     for batch in _load_batches(docs):
@@ -347,15 +403,23 @@ def _load_documents(docs, run):
         del sentences
         for doc_id in batch:
             d = rows.get(doc_id)
-            if d is None:
-                raise JobFailed("DOCUMENTS_CHANGED", "建索引期间文档被删除，请重试")
-            yield em.Document(
-                title=d.title,
-                language=d.language,
-                text=Path(d.text_path).read_text(encoding="utf-8"),
-                metadata=d.meta,
-                sentences=by_doc.pop(doc_id, []),
-                external_id=d.external_id,
+            try:
+                text = d and Path(d.text_path).read_text(encoding="utf-8")
+            except FileNotFoundError:
+                text = None
+            if d is None or text is None:
+                log.info("index: document %s deleted meanwhile, left out", doc_id)
+                continue
+            yield (
+                str(doc_id),
+                em.Document(
+                    title=d.title,
+                    language=d.language,
+                    text=text,
+                    metadata=d.meta,
+                    sentences=by_doc.pop(doc_id, []),
+                    external_id=d.external_id,
+                ),
             )
         done += len(batch)
 
@@ -372,12 +436,16 @@ def run_index(run):
             .order_by(Document.created_at, Document.id)
         ).all()
     info = None
-    if docs:
+    stream = _load_documents(docs, run)
+    first = next(stream, None)  # None: no documents, or all deleted meanwhile
+    if first is not None:
+        # documents and their ids from one stream (tee keeps the two in step)
+        a, b = itertools.tee(itertools.chain([first], stream))
         info = cwb.build(
             index_dir(corpus_id),
             corpus_key(corpus_id),
-            _load_documents(docs, run),
-            [str(i) for i, _ in docs],
+            (doc for _, doc in a),
+            (i for i, _ in b),
         )
     with transaction() as db:
         run.lock(db)
@@ -563,6 +631,7 @@ def run_export(run):
             if len(result.items) < size:
                 break
             page += 1
+    run.check()
     header, rows = _rows(items)
     _finish_export(run, "检索结果", header, rows, {"hits": hits}, notice)
 
@@ -753,6 +822,7 @@ def run_export_stats(run):
         head.append(f"参照：{reference.get('name', '')}，{ref_tokens:,} 词（含标点）")
     at = created.astimezone(UTC)
     head.append(f"索引版本：{index_version or '—'}；计算时间：{at:%Y-%m-%d %H:%M} UTC")
+    run.check()
     data = json.loads(path.read_text(encoding="utf-8"))["rows"]
     header = [c["label"] for c in columns] + ["查询式"]
     aligned = method == "translations"
@@ -798,6 +868,7 @@ def run_export_evidence(run):
                         reference.get("corpus_id"),
                     ]
         notice = source_notice(db, corpus_ids)
+    run.check()
     # hits pinned with their sentence (services.api.evidence.sentence_evidence): 原文 is that sentence alone,
     # 命中 the matched text, 译文 the aligned sentences; older items and other kinds keep their text
     header = ["原文", "命中", "译文", "出处", "查询式", "备注"]
@@ -1119,6 +1190,7 @@ def _aligned_positions(db, p, corpus, scope, user):
             timeout=EXPORT_COUNT_TIMEOUT,
             attr_filter=attr_filter_for(db, cqp, layers),
             aligned=keep,
+            cancel=stats.cancel_event(),
         )
     except subprocess.TimeoutExpired as e:
         raise JobFailed("TIMEOUT", "检索超时，请缩小范围或加条件") from e
@@ -1334,6 +1406,12 @@ def _translations(db, p, corpus, scope, user, target, params):
 
 
 def run_stats(run):
+    """CWB scans, CQP runs and the engine's loops stop soon after a cancel (run.cancel, contracts/p9.md §七)."""
+    with stats.cancellable(run.cancel):
+        _run_stats(run)
+
+
+def _run_stats(run):
     p = run.params
     method = p["method"]
     scope = Scope.model_validate(p["target"] if method == "keywords" else p["scope"])
@@ -1440,26 +1518,26 @@ def _document_tokens(db, doc_id):
     ).all()
 
 
-def _parse_zh(rows):
-    """Stanza zh dependencies for a document's stored jieba tokens → {token id: (head, deprel)}."""
+def _parse_zh(rows, check=None):
+    """Stanza zh dependencies for a document's stored jieba tokens → {token id: (head, deprel)}. Parsed in
+    chunks of nlp.BATCH sentences; check() runs before each (cancellation)."""
     sentences = {}
     for idx, _, tid, a, b, form, pos, lemma, _, _ in rows:
         sentences.setdefault(idx, []).append((tid, em.Token(a, b, form, pos, lemma)))
-    doc = em.Document(
-        "",
-        "zh",
-        "",
-        {},
-        [
-            em.Sentence(t[0][1].start, t[-1][1].end, [x for _, x in t])
-            for t in sentences.values()
-        ],
-    )
-    nlp.annotate_dependencies_zh(doc)
+    sents = [
+        em.Sentence(t[0][1].start, t[-1][1].end, [x for _, x in t])
+        for t in sentences.values()
+    ]
+    for i in range(0, len(sents), nlp.BATCH):
+        if check is not None:
+            check()
+        nlp.annotate_dependencies_zh(
+            em.Document("", "zh", "", {}, sents[i : i + nlp.BATCH])
+        )
     return {tid: (t.head, t.deprel) for toks in sentences.values() for tid, t in toks}
 
 
-def _preannotation(kind, doc_id, language):
+def _preannotation(kind, doc_id, language, check=None):
     """Pre-annotation rows of one document (read and, for Chinese dependencies, parsed outside any lock)
     and the Stanza values to write back into `tokens` ({token id: (head, deprel)} or None)."""
     with session() as db:
@@ -1470,7 +1548,7 @@ def _preannotation(kind, doc_id, language):
         and is_zh(language)
         and any(r.deprel is None or r.head is None for r in rows)
     ):
-        parsed, source = _parse_zh(rows), "model:stanza-zh"
+        parsed, source = _parse_zh(rows, check), "model:stanza-zh"
     values = []
     for idx, t_idx, tid, _, _, _, pos, _, head, deprel in rows:
         if kind == "pos":
@@ -1555,7 +1633,7 @@ def run_preannotate(run):
     try:
         for i, (doc_id, language) in enumerate(docs):
             run.progress(i, len(docs), "预标")
-            values, parsed = _preannotation(kind, doc_id, language)
+            values, parsed = _preannotation(kind, doc_id, language, run.check)
             with transaction() as db:
                 layer = _layer(db, layer_id, lock=True)
                 _write_preannotation(db, layer_id, values, parsed, annotators)

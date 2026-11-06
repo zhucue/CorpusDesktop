@@ -47,12 +47,17 @@ search_query (engine.query.parse accepts every generated string):
   search_query_reverse = `"coll" $K node` (left); the grammar has no top-level alternation, so the two
   directions are two queries. A form containing `"` cannot be quoted: search_query is null.
 
+cancellation: inside `with cancellable(event)` (the worker's job cancel flag) CWB tools and CQP are killed within
+  about 0.2 s of the event being set, and loops over scans and hits check it every CHECK_EVERY items; both raise
+  cwb.Cancelled.
+
 exclude_punct (word / lemma units): leave out items made only of punctuation, symbols and digits (`，`, `(`,
   `1990`, `3.5%`); an n-gram is left out when any slot is such an item. N and every measure still count all tokens,
   punctuation included (totals.tokens); frequency reports the left-out tokens as totals.excluded_tokens.
 """
 
 import contextlib
+import contextvars
 import math
 import mmap
 import re
@@ -87,6 +92,35 @@ BREAKDOWN_BY = ("word", "lemma", "pos", "left1", "right1")
 SENT_START, SENT_END, NO_VALUE = "（句首）", "（句末）", "（无）"
 _PUNCT = re.compile(r"[\W\d_]+")
 _ATTR_UNSAFE = set(' ,{}[]|=/"')
+CHECK_EVERY = 10_000
+_CANCEL = contextvars.ContextVar("stats_cancel", default=None)
+
+
+@contextlib.contextmanager
+def cancellable(cancel):
+    """Statistics computed inside the block stop with cwb.Cancelled once `cancel` (threading.Event) is set."""
+    token = _CANCEL.set(cancel)
+    try:
+        yield
+    finally:
+        _CANCEL.reset(token)
+
+
+def cancel_event():
+    """The cancel event of the enclosing cancellable block (None outside one)."""
+    return _CANCEL.get()
+
+
+def _checked(items):
+    """items, raising cwb.Cancelled (checked every CHECK_EVERY items) once the block's cancel event is set."""
+    cancel = _CANCEL.get()
+    if cancel is None:
+        yield from items
+        return
+    for i, x in enumerate(items):
+        if i % CHECK_EVERY == 0 and cancel.is_set():
+            raise cwb.Cancelled("统计已取消")
+        yield x
 
 
 def is_punct(value: str) -> bool:
@@ -151,6 +185,7 @@ class _Corpus:
         self.restrict = scope.restrict
         self.tagset = scope.tagset or cwb.tagset(self.index_dir, self.key)
         self.reg = str(self.index_dir / "registry")
+        self.cancel = _CANCEL.get()
         ix = cwb._open(str(cwb._home(self.index_dir, self.key)))
         docs = []
         if not ix.empty:
@@ -177,7 +212,7 @@ class _Corpus:
 
     def _decode(self, att, values=False):
         args = ["cwb-s-decode", "-r", self.reg] + ([] if values else ["-v"])
-        out = cwb._run([*args, self.key.upper(), "-S", att])
+        out = cwb._run([*args, self.key.upper(), "-S", att], cancel=self.cancel)
         return [line.split("\t") for line in out.split("\n") if line]
 
     def _cqp(self, commands):
@@ -186,7 +221,7 @@ class _Corpus:
             cmds.append(c)
             if c.startswith("tabulate"):
                 cmds.append(".EOL.;")
-        return cwb._cqp(self.index_dir, self.key, cmds, TIMEOUT)
+        return cwb._cqp(self.index_dir, self.key, cmds, TIMEOUT, self.cancel)
 
     def pm(self, f):
         return f / self.tokens * 1e6 if self.tokens else 0.0
@@ -202,8 +237,9 @@ class _Corpus:
         out = cwb._run(
             [*args, self.key.upper(), *keys],
             input="".join(f"{a}\t{b}\n" for a, b in ranges),
+            cancel=self.cancel,
         )
-        for line in out.split("\n"):
+        for line in _checked(out.split("\n")):
             if line:
                 f, *vals = line.split("\t")
                 counts[tuple(vals)] += int(f)
@@ -256,6 +292,7 @@ class _Corpus:
                 timeout=TIMEOUT,
                 attr_filter=attr_filter,
                 max_hits=max_hits,
+                cancel=self.cancel,
             )
         except cwb.TooManyHits as e:
             raise ValueError(f"命中超过 {e.limit}，请缩小范围或加条件") from None
@@ -416,7 +453,7 @@ def _part_counts(c: _Corpus, keys, parts, shown, scanned):
     for a, b, d in c.docs:
         if d in doc_part:
             sizes[doc_part[d]] += b - a + 1
-    for (value, d), f in scanned.items():
+    for (value, d), f in _checked(scanned.items()):
         if value in want and d in doc_part:
             counts[value][doc_part[d]] += f
     return dict(sizes), counts
@@ -440,7 +477,7 @@ def frequency(
     freq, docs, excluded = Counter(), Counter(), 0
     pos_keys = _pos_keys([pos], c.tagset)
     scanned = c.scan([unit, "doc_id", *pos_keys])
-    for (value, _), f in scanned.items():
+    for (value, _), f in _checked(scanned.items()):
         if skip and is_punct(value):
             excluded += f
         elif unit == "word" or value != MISSING:
@@ -507,7 +544,7 @@ def ngrams(
     )
     counts = {
         k: f
-        for k, f in c.scan(keys, within_s=True).items()
+        for k, f in _checked(c.scan(keys, within_s=True).items())
         if f >= min_freq
         and (unit == "word" or MISSING not in k)
         and (contains is None or contains in k)
@@ -560,7 +597,7 @@ def collocations(
     hits = c.hits(node)
     starts, ends = c.sentences() if hits else ([], [])
     spans = []
-    for m, me in hits:
+    for m, me in _checked(hits):
         k = bisect_right(starts, m) - 1
         if m > starts[k]:
             spans.append((max(starts[k], m - window), m - 1))
@@ -573,7 +610,7 @@ def collocations(
     totals = c.scan(keys) if observed else Counter()
     n, f_node = c.tokens, len(hits)
     stats = {}
-    for (y,), o in observed.items():
+    for (y,), o in _checked(observed.items()):
         if (
             o < min_freq
             or (unit == "lemma" and y == MISSING)
@@ -705,7 +742,7 @@ def keywords(
         words = list(dict.fromkeys(items))
     else:
         words = []
-        for w in types:
+        for w in _checked(types):
             a, b = ft.get((w,), 0), fr.get((w,), 0)
             pos_ok = a / c > b / d and a >= min_freq
             neg_ok = b / d > a / c and b >= min_freq
@@ -786,7 +823,7 @@ def distribution(
             n = b - a + 1
             for k in range(bins):
                 tokens[k] += -(-(k + 1) * n // bins) - -(-k * n // bins)
-        for m, _ in hits:
+        for m, _ in _checked(hits):
             a, b, _ = c.docs[bisect_right(starts, m) - 1]
             counts[(m - a) * bins // (b - a + 1)] += 1
         order = list(range(bins))
@@ -809,7 +846,7 @@ def distribution(
             doc_bin[a] = raw
             bin_values[raw], labels[raw] = value, str(value)
             tokens[raw] += b - a + 1
-        for m, _ in hits:
+        for m, _ in _checked(hits):
             a = starts[bisect_right(starts, m) - 1]
             if a in doc_bin:
                 counts[doc_bin[a]] += 1
@@ -899,12 +936,12 @@ def breakdown(
     counts = Counter()
     if kind in ("word", "lemma", "pos"):
         with c.attr(kind) as att:
-            for m, me, _, _ in hits:
+            for m, me, _, _ in _checked(hits):
                 counts[tuple(att(p) for p in range(m, me + 1))] += 1
     elif kind in ("left1", "right1"):
         starts, ends = c.sentences() if len(hits) else ([], [])
         with c.attr("word") as att:
-            for m, me, _, _ in hits:
+            for m, me, _, _ in _checked(hits):
                 k = bisect_right(starts, m) - 1
                 if kind == "left1":
                     v = att(m - 1) if m > starts[k] else SENT_START
@@ -913,7 +950,7 @@ def breakdown(
                 counts[(v,)] += 1
     else:
         doc_value = c.doc_values(field)
-        for _, _, d, _ in hits:
+        for _, _, d, _ in _checked(hits):
             counts[(doc_value.get(d),)] += 1
     total = len(hits)
     tail = "".join(f" {cond.op}{cond.query.text}" for cond in ast.conditions)

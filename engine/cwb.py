@@ -103,13 +103,46 @@ def _key(corpus_key: str) -> str:
     return key
 
 
-def _run(args: list[str], **kw) -> str:
-    r = subprocess.run(
-        args, capture_output=True, text=True, encoding="utf-8", check=False, **kw
-    )
-    if r.returncode != 0:
-        raise CQPError(f"{args[0]} 失败：{r.stderr.strip() or r.stdout.strip()}")
-    return r.stdout
+def _run(args: list[str], input: str | None = None, cancel=None) -> str:
+    """Run a CWB tool and return its stdout. cancel (threading.Event): the tool is killed and Cancelled raised
+    within about 0.2 s of it being set (long cwb-scan-corpus runs of statistics jobs)."""
+    if cancel is None:
+        r = subprocess.run(
+            args,
+            input=input,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        code, out, err = r.returncode, r.stdout, r.stderr
+    else:
+        if cancel.is_set():
+            raise Cancelled("已取消")
+        p = subprocess.Popen(
+            args,
+            stdin=subprocess.DEVNULL if input is None else subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+        )
+        pending = input
+        while True:
+            try:
+                out, err = p.communicate(pending, timeout=0.2)
+                break
+            except subprocess.TimeoutExpired:
+                # the input was handed over; a retry must not send it again
+                pending = None
+                if cancel.is_set():
+                    p.kill()
+                    p.communicate()
+                    raise Cancelled("已取消") from None
+        code = p.returncode
+    if code != 0:
+        raise CQPError(f"{args[0]} 失败：{err.strip() or out.strip()}")
+    return out
 
 
 @functools.cache

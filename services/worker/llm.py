@@ -3,19 +3,102 @@
 MODEL_BASE_URL / MODEL_API_KEY / MODEL_ID; MODEL_API openai-completions (default, POST /chat/completions) or
 openai-responses (POST /responses). One retry on timeouts, 429 and 5xx. Reasoning blocks (<think>…</think>)
 are removed. Errors never include the key.
+
+Usage (contracts/p9.md §二): every answered call inserts one llm_usage row with the response `usage` (chat
+completions prompt / completion tokens, responses input / output tokens). Without usage the tokens are
+estimated as characters / 2 and the source gets ":estimated". The row carries the job bound with job(run):
+job_id, user_id = job owner, project_id; source = the job kind (preannotate, kb_summarize, kb_extract) or the
+one set with source() (align), "other" outside a job. A failed insert is logged and does not fail the job.
 """
 
+import contextlib
+import contextvars
 import json
+import logging
 import os
 import re
 import time
 
 import httpx
+from sqlalchemy import text as sql
 
+from services.api.db import transaction
 from services.worker.main import JobFailed
+
+log = logging.getLogger("worker")
 
 TIMEOUT = 300
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
+SOURCES = ("preannotate", "kb_summarize", "kb_extract")
+_RUN = contextvars.ContextVar("llm_run", default=None)
+_SOURCE = contextvars.ContextVar("llm_source", default=None)
+
+
+@contextlib.contextmanager
+def job(run):
+    """Model calls inside the block are recorded for this job (services.worker.main.Run)."""
+    token = _RUN.set(run)
+    try:
+        yield
+    finally:
+        _RUN.reset(token)
+
+
+@contextlib.contextmanager
+def source(name):
+    """Model calls inside the block are recorded under this source (e.g. align)."""
+    token = _SOURCE.set(name)
+    try:
+        yield
+    finally:
+        _SOURCE.reset(token)
+
+
+def _tokens(usage):
+    """(prompt, completion, total) from a usage object, or None without usable numbers."""
+    if not isinstance(usage, dict):
+        return None
+    prompt = usage.get("prompt_tokens", usage.get("input_tokens"))
+    completion = usage.get("completion_tokens", usage.get("output_tokens"))
+    total = usage.get("total_tokens")
+    if not isinstance(prompt, int) or not isinstance(completion, int):
+        return None
+    return prompt, completion, total if isinstance(total, int) else prompt + completion
+
+
+def record_usage(data, prompt_text, answer):
+    """Insert the llm_usage row of one answered call."""
+    run = _RUN.get()
+    name = _SOURCE.get() or (
+        run.kind if run is not None and run.kind in SOURCES else "other"
+    )
+    counts = _tokens(data.get("usage") if isinstance(data, dict) else None)
+    if counts is None:
+        prompt, completion = -(-len(prompt_text) // 2), -(-len(answer) // 2)
+        counts, name = (prompt, completion, prompt + completion), f"{name}:estimated"
+    row = {
+        "user_id": run.owner_id if run else None,
+        "project_id": run.project_id if run else None,
+        "job_id": run.id if run else None,
+        "source": name,
+        "model": model_id(),
+        "prompt": counts[0],
+        "completion": counts[1],
+        "total": counts[2],
+    }
+    try:
+        with transaction() as db:
+            db.execute(
+                sql(
+                    "INSERT INTO llm_usage (user_id, project_id, job_id, source, model,"
+                    " prompt_tokens, completion_tokens, total_tokens)"
+                    " VALUES (:user_id, :project_id, :job_id, :source, :model,"
+                    " :prompt, :completion, :total)"
+                ),
+                row,
+            )
+    except Exception:
+        log.exception("recording model usage failed: %s", row)
 
 
 def _env(name):
@@ -90,7 +173,9 @@ def chat(system: str, user: str, temperature=0.2) -> str:
             )
             text = data["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError, AttributeError) as e:
+        record_usage(data, system + user, "")  # answered, so the tokens were spent
         raise JobFailed("MODEL_ERROR", "对话模型返回格式不正确") from e
+    record_usage(data, system + user, text)
     text = _THINK.sub("", text).strip()
     if not text:
         raise JobFailed("MODEL_ERROR", "对话模型没有返回内容")

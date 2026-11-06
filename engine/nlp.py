@@ -51,6 +51,89 @@ def detect_language(text: str) -> str:
     )
 
 
+# Language check at import (contracts/p9.md §九): only Chinese and English are annotated.
+SUPPORTED = ("zh", "en")
+OTHER_SCRIPT_MAX = 0.3  # share of letters neither Han nor Latin
+EN_FUNCTION_MIN = 0.03  # share of English function words among Latin words
+EN_MIN_WORDS = 200  # fewer Latin words: the function-word test is skipped
+ACCENTED_MIN = (
+    0.01  # share of accented Latin letters (é, ü, ñ, ß…) for the function-word test
+)
+MIXED_HAN_MIN = (
+    0.1  # share of Han letters from which a text counts as Chinese-English mixed
+)
+CHECK_CHARS = 50_000  # characters of a document sampled
+NOT_ZH_EN = "未识别为中文或英文，请确认语言；暂只支持中英"
+NOT_EN = "可能不是英文，请确认语言；暂只支持中英，可指定 zh 或 en 后重试"
+
+
+def _class(*ranges):
+    return "[" + "".join(f"{chr(a)}-{chr(b)}" for a, b in ranges) + "]"
+
+
+_HAN = re.compile(
+    _class((0x3400, 0x4DBF), (0x4E00, 0x9FFF), (0xF900, 0xFAFF), (0x20000, 0x3134F))
+)
+# Latin with IPA, spacing modifier letters, phonetic extensions and full-width letters
+_LATIN = re.compile(
+    _class(
+        (0x41, 0x5A),
+        (0x61, 0x7A),
+        (0xC0, 0x24F),
+        (0x250, 0x2FF),
+        (0x1D00, 0x1DBF),
+        (0x1E00, 0x1EFF),
+        (0xFF21, 0xFF3A),
+        (0xFF41, 0xFF5A),
+    )
+)
+# accented letters of Latin-1 Supplement / Extended-A / B; letters also used in IPA (æ ð þ ø ŋ ħ, clicks) are left out
+_ACCENTED = re.compile(_class((0xC0, 0xD6), (0xD8, 0xF6), (0xF8, 0x24F)))
+_NOT_ACCENTED = set("æÆðÐþÞøØŋŊħĦǀǁǂǃ")
+_LATIN_WORD = re.compile(_class((0x41, 0x5A), (0x61, 0x7A), (0xC0, 0x24F)) + "+")
+# the 50 most frequent English words (function words), as in common frequency lists
+_EN_TOP50 = (
+    "the of and to a in is that for it as was with be by on not he i this are or his from at which but have"
+    " an had they you were their one all we can her has there been if more when will would who so no"
+)
+EN_FUNCTION_WORDS = frozenset(_EN_TOP50.split())
+
+
+def language_problem(text: str, check_english: bool = True) -> str | None:
+    """Why a text is not taken as Chinese or English, None when it is. Over the first CHECK_CHARS characters:
+    letters (punctuation, digits, symbols and spaces left out) that are neither Han nor Latin (Latin includes
+    IPA; Cyrillic, kana, Hangul, Arabic… are other) above OTHER_SCRIPT_MAX → NOT_ZH_EN. With check_english, a
+    Latin text (Han below MIXED_HAN_MIN of the letters) with accented letters above ACCENTED_MIN and at least
+    EN_MIN_WORDS words of which fewer than EN_FUNCTION_MIN are EN_FUNCTION_WORDS → NOT_EN. English glossaries,
+    reference lists and title lists have few function words but hardly any accented letters, so they pass."""
+    sample = text[:CHECK_CHARS]
+    letters = other = han = accented = 0
+    for c in sample:
+        if c.isalpha():
+            letters += 1
+            if _HAN.match(c):
+                han += 1
+            elif not _LATIN.match(c):
+                other += 1
+            elif _ACCENTED.match(c) and c not in _NOT_ACCENTED:
+                accented += 1
+    if not letters:
+        return None
+    if other / letters > OTHER_SCRIPT_MAX:
+        return NOT_ZH_EN
+    if (
+        check_english
+        and han / letters < MIXED_HAN_MIN
+        and accented / letters > ACCENTED_MIN
+    ):
+        words = [w.lower() for w in _LATIN_WORD.findall(sample)]
+        if len(words) >= EN_MIN_WORDS:
+            hits = sum(w in EN_FUNCTION_WORDS for w in words)
+            if hits / len(words) < EN_FUNCTION_MIN:
+                return NOT_EN
+    return None
+
+
 def lang_code(language: str | None) -> str:
     """Primary language code: zh-Hans / cmn / zho → zh, eng → en; other codes lower-cased as given."""
     code = (language or "").lower().replace("_", "-").split("-")[0]

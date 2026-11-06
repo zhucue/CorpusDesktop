@@ -717,7 +717,8 @@ def _alignment_job(run, info, docs, rng):
     stats = {"pairs_written": written}
     failed, errors, model = [], [], " + ".join(sorted(used)) or "none"
     if info["level"] == "word":
-        word, failed, errors = _word_alignment(run, info, docs, rng)
+        with llm.source("align"):
+            word, failed, errors = _word_alignment(run, info, docs, rng)
         stats.update({"word_" + k: v for k, v in word.items()})
         model = f"{model} + {llm.model_id()}"
     return stats, failed, errors, model
@@ -1022,6 +1023,7 @@ def run_export_xlsx(run, layer_id):
         }
         name = span_layer.name
         notice = _notice(db, span_layer.corpus_id)
+    run.check()
     counts = defaultdict(lambda: defaultdict(int))
     for s in spans:
         counts[s["label"]][s["document_id"]] += 1
@@ -1247,6 +1249,7 @@ def run_export_json(run, layer_id):
         if notice:
             data = {"source": notice, **data}
         name = layer.name
+    run.check()
     path = export_path(run.id, "json")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -1291,6 +1294,7 @@ def run_export_tmx(run, layer_id):
         )
         name = layer.name
         notice = _notice(db, layer.corpus_id, layer.tgt_corpus_id)
+    run.check()
     src_lang = langs.get(pairs[0]["src_document_id"], "und") if pairs else "und"
     root = etree.Element("tmx", version="1.4")
     header = etree.SubElement(

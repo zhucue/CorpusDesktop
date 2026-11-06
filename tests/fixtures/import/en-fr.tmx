@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tmx version="1.4">
+  <header srclang="en" datatype="plaintext" segtype="sentence" adminlang="en" creationtool="test" creationtoolversion="1" o-tmf="test"/>
+  <body>
+    <tu>
+      <tuv xml:lang="en"><seg>Translation connects cultures.</seg></tuv>
+      <tuv xml:lang="zh-CN"><seg>翻译连接不同的文化。</seg></tuv>
+      <tuv xml:lang="fr-FR"><seg>La traduction relie les cultures.</seg></tuv>
+    </tu>
+    <tu>
+      <tuv xml:lang="en"><seg>Students compare their versions.</seg></tuv>
+      <tuv xml:lang="fr-FR"><seg>Les étudiants comparent leurs versions.</seg></tuv>
+    </tu>
+  </body>
+</tmx>
