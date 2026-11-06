@@ -22,6 +22,7 @@ from services.api.jobs import enqueue
 from services.api.kb import EDIT, cookie_only, is_bearer
 from services.api.models import Document, KbDocument, KbTerm, Subcorpus
 from services.api.search import Scope, resolve_scope
+from services.api.usage import check_quota
 from services.api.views import job_view, term_view
 
 router = APIRouter(prefix="/api")
@@ -265,6 +266,8 @@ def extract(project_id: UUID, body: ExtractInput, user: CurrentUser, db: Db):
             raise not_found("文档")
         if any(not d.chunk_count for d in docs):
             raise ApiError(409, "DOCUMENT_NOT_READY", "文档尚未导入完成")
+    if body.source == "literature" or body.method == "model":
+        check_quota(db, user)
     params = {"project_id": str(project_id), **body.model_dump(mode="json")}
     job = enqueue(db, "kb_extract", params, user.id, project_id)
     db.commit()

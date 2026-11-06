@@ -103,18 +103,40 @@ class LoginInput(BaseModel):
     password: str = Field(min_length=1, max_length=1024)
 
 
+def _login_failed(db, request, email, reason):
+    from services.api.audit import record  # audit imports this module
+
+    record(
+        db,
+        None,
+        "login_failed",
+        "user",
+        None,
+        None,
+        detail={"email": email[:254], "reason": reason},
+        request=request,
+    )
+    db.commit()
+
+
 @router.post("/login")
-def login(body: LoginInput, response: Response, db: Db):
-    user = db.scalar(select(User).where(User.email == body.email.strip().lower()))
+def login(body: LoginInput, request: Request, response: Response, db: Db):
+    from services.api.audit import record
+
+    email = body.email.strip().lower()
+    user = db.scalar(select(User).where(User.email == email))
     try:
         HASHER.verify(user.password_hash if user else DUMMY_HASH, body.password)
     except (VerificationError, InvalidHashError):
         user = None
     if not user:
+        _login_failed(db, request, email, "invalid_credentials")
         raise ApiError(401, "INVALID_CREDENTIALS", "邮箱或密码错误")
     if user.disabled_at is not None:
+        _login_failed(db, request, email, "account_disabled")
         raise ApiError(403, "ACCOUNT_DISABLED", "账号已停用，请联系管理员")
     user.last_login_at = datetime.now(UTC)
+    record(db, user, "login", "user", user.id, user.email, request=request)
     token = secrets.token_urlsafe(32)
     db.add(
         LoginSession(
@@ -188,9 +210,12 @@ def change_password(body: PasswordInput, request: Request, user: CurrentUser, db
     check_password_length(body.new_password)
     if body.new_password == body.old_password:
         raise ApiError(422, "VALIDATION_ERROR", "新密码不能与原密码相同")
+    from services.api.audit import record
+
     user.password_hash = HASHER.hash(body.new_password)
     user.must_change_password = False
     revoke(db, user.id, keep_session=token_hash(request.cookies[COOKIE]))
+    record(db, user, "password_change", "user", user.id, user.email, request=request)
     db.commit()
     return me_view(user)
 

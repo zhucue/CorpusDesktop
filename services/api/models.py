@@ -48,6 +48,7 @@ KB_STATUSES = ("queued", "parsing", "embedding", "ready", "failed")
 TERM_SOURCES = ("manual", "corpus", "literature", "model")
 TERM_STATUSES = ("draft", "confirmed")
 NOTE_REF_KINDS = ("search", "stat", "evidence", "chunk", "term")
+FEEDBACK_STATUSES = ("open", "done")
 EMBED_DIM = 384  # engine.kb.embed.DIM
 
 
@@ -97,6 +98,8 @@ class Project(Base):
     name: Mapped[str] = mapped_column(Text)
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = _created()
+    # soft delete (0010): the project answers 404 everywhere; purged after PROJECT_PURGE_DAYS
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ProjectMember(Base):
@@ -698,3 +701,77 @@ class SentenceReview(Base):
     )
     sentence_index: Mapped[int] = mapped_column(Integer, primary_key=True)
     reviewed_at: Mapped[datetime] = _created()
+
+
+# ---- operations (0010, contracts/p9.md §一) ----
+
+
+def _user_fk(**kw):
+    return mapped_column(ForeignKey("users.id", ondelete="SET NULL"), **kw)
+
+
+def _project_fk():
+    return mapped_column(ForeignKey("projects.id", ondelete="SET NULL"))
+
+
+class LlmUsage(Base):
+    """One chat-model call: source agent | preannotate | kb_summarize | kb_extract | align | other
+    (":estimated" appended when the response had no usage)."""
+
+    __tablename__ = "llm_usage"
+    __table_args__ = (
+        Index("ix_llm_usage_user_created", "user_id", "created_at"),
+        Index("ix_llm_usage_project_created", "project_id", "created_at"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    created_at: Mapped[datetime] = _created()
+    user_id: Mapped[uuid.UUID | None] = _user_fk()
+    project_id: Mapped[uuid.UUID | None] = _project_fk()
+    source: Mapped[str] = mapped_column(Text)
+    model: Mapped[str | None] = mapped_column(Text)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, server_default="0")
+    completion_tokens: Mapped[int] = mapped_column(Integer, server_default="0")
+    total_tokens: Mapped[int] = mapped_column(Integer, server_default="0")
+    job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    session_id: Mapped[str | None] = mapped_column(Text)
+
+
+class AuditLog(Base):
+    """Sensitive operations (services/api/audit.py). project_id has no foreign key: entries outlive a purge."""
+
+    __tablename__ = "audit_logs"
+    __table_args__ = (
+        Index("ix_audit_logs_at", "at"),
+        Index("ix_audit_logs_project_at", "project_id", "at"),
+        Index("ix_audit_logs_actor_at", "actor_id", "at"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+    actor_id: Mapped[uuid.UUID | None] = _user_fk()
+    actor_email: Mapped[str | None] = mapped_column(Text)
+    action: Mapped[str] = mapped_column(Text)
+    target_type: Mapped[str | None] = mapped_column(Text)
+    target_id: Mapped[str | None] = mapped_column(Text)
+    target_name: Mapped[str | None] = mapped_column(Text)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    detail: Mapped[dict] = mapped_column(JSONB, server_default="{}")
+    ip: Mapped[str | None] = mapped_column(Text)
+
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+    __table_args__ = (
+        CheckConstraint(_in("status", FEEDBACK_STATUSES), name="ck_feedback_status"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    created_at: Mapped[datetime] = _created()
+    user_id: Mapped[uuid.UUID | None] = _user_fk()
+    project_id: Mapped[uuid.UUID | None] = _project_fk()
+    page: Mapped[str] = mapped_column(Text, server_default="")
+    app_version: Mapped[str] = mapped_column(Text, server_default="")
+    text: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, server_default="open")
+    admin_note: Mapped[str] = mapped_column(Text, server_default="")
+    handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

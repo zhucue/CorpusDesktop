@@ -24,6 +24,7 @@ from engine.kb import embed
 from engine.kb import parse as kbparse
 from engine.kb import text as kbtext
 from services.api.access import READ, WRITE, Paging, require_project, token_project
+from services.api.audit import record
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
 from services.api.jobs import ACTIVE, enqueue
@@ -38,6 +39,7 @@ from services.api.models import (
     StatResult,
 )
 from services.api.storage import kb_dir
+from services.api.usage import check_quota
 from services.api.views import (
     chunk_view,
     job_view,
@@ -144,7 +146,9 @@ class DocumentPatch(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=500)
     body: str | None = Field(default=None, max_length=1_000_000)
     meta: dict | None = None  # merged into meta; a null value removes the key
-    kind: Literal["guideline"] | None = None  # an imported Markdown / TXT literature file becomes a guideline
+    kind: Literal["guideline"] | None = (
+        None  # an imported Markdown / TXT literature file becomes a guideline
+    )
 
 
 def _file_body(path, name):
@@ -157,7 +161,9 @@ def _file_body(path, name):
         except UnicodeDecodeError:
             continue
     else:
-        raise ApiError(422, "UNSUPPORTED_ENCODING", f"{name} 不是 UTF-8 或 GB18030 编码")
+        raise ApiError(
+            422, "UNSUPPORTED_ENCODING", f"{name} 不是 UTF-8 或 GB18030 编码"
+        )
     text_ = text_.replace("\r\n", "\n").replace("\r", "\n")
     if len(text_) > 1_000_000:
         raise ApiError(413, "TOO_LARGE", f"{name} 超过 100 万字，不能作为规范")
@@ -218,7 +224,11 @@ def _upload(db, project_id, user, files, kind):
         if not kbparse.kind_of(f.filename):
             raise ApiError(422, "UNSUPPORTED_FORMAT", f"不支持的文件格式：{f.filename}")
         if kind == "guideline" and kbparse.kind_of(f.filename) not in ("md", "txt"):
-            raise ApiError(422, "UNSUPPORTED_FORMAT", f"规范只能从 Markdown 或 TXT 导入：{f.filename}")
+            raise ApiError(
+                422,
+                "UNSUPPORTED_FORMAT",
+                f"规范只能从 Markdown 或 TXT 导入：{f.filename}",
+            )
         if (f.size or 0) > MAX_FILE:
             raise ApiError(413, "TOO_LARGE", f"{f.filename} 超过 50 MB")
     items, written = [], []
@@ -391,8 +401,14 @@ def patch_document(document_id: UUID, body: DocumentPatch, user: CurrentUser, db
     if is_bearer(user) and doc.kind != "note":
         raise forbidden()
     if body.kind is not None and body.kind != doc.kind:
-        if doc.kind != "literature" or kbparse.kind_of(doc.source or "") not in ("md", "txt") or not doc.file_path:
-            raise ApiError(422, "VALIDATION_ERROR", "只有导入的 Markdown / TXT 文献可以设为规范")
+        if (
+            doc.kind != "literature"
+            or kbparse.kind_of(doc.source or "") not in ("md", "txt")
+            or not doc.file_path
+        ):
+            raise ApiError(
+                422, "VALIDATION_ERROR", "只有导入的 Markdown / TXT 文献可以设为规范"
+            )
         if active_job(db, doc.id, ["kb_import"]):
             raise ApiError(409, "JOB_IN_PROGRESS", "文档正在导入")
         # same text, same chunks: the body comes from the file and the document keeps its index
@@ -418,11 +434,22 @@ def patch_document(document_id: UUID, body: DocumentPatch, user: CurrentUser, db
 
 
 @router.delete("/kb/documents/{document_id}", status_code=204)
-def delete_document(document_id: UUID, user: CurrentUser, db: Db):
+def delete_document(document_id: UUID, request: Request, user: CurrentUser, db: Db):
     doc, role = load_document(db, document_id, user)
     cookie_only(user)
     if role not in WRITE and doc.created_by != user.id:
         raise forbidden()
+    record(
+        db,
+        user,
+        "kb_document_delete",
+        "kb_document",
+        doc.id,
+        doc.title,
+        doc.project_id,
+        {"kind": doc.kind},
+        request,
+    )
     db.execute(
         update(Job)
         .where(Job.state.in_(ACTIVE), Job.params["document_id"].astext == str(doc.id))
@@ -462,6 +489,7 @@ def summarize(document_id: UUID, user: CurrentUser, db: Db):
         raise ApiError(409, "DOCUMENT_NOT_READY", "文档尚未导入完成")
     if active_job(db, doc.id, ["kb_summarize"]):
         raise ApiError(409, "JOB_IN_PROGRESS", "摘要任务正在进行")
+    check_quota(db, user)
     job = enqueue(
         db, "kb_summarize", {"document_id": str(doc.id)}, user.id, doc.project_id
     )
@@ -654,7 +682,10 @@ def match_terms(db, project_id, q, limit=5):
     return db.scalars(stmt).all()
 
 
-REL_HIGH, REL_MEDIUM = 0.6, 0.45  # cosine similarity of the default multilingual MiniLM model
+REL_HIGH, REL_MEDIUM = (
+    0.6,
+    0.45,
+)  # cosine similarity of the default multilingual MiniLM model
 
 
 def relevance(text_, words, similarity=None):

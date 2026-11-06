@@ -9,10 +9,12 @@ from services.api import (
     agreement,
     alignments,
     annotations,
+    audit,
     auth,
     corpora,
     errors,
     evidence,
+    feedback,
     jobs,
     kb,
     kb_terms,
@@ -25,6 +27,7 @@ from services.api import (
     stats,
     subcorpora,
     system,
+    usage,
 )
 
 
@@ -76,6 +79,11 @@ for module in (
     kb_terms,
     methods,
     samples,
+    audit,
+    usage,
+    feedback,
 ):
     app.include_router(module.router)
 app.include_router(auth.users_router)
+app.include_router(admin.ops_router)
+app.include_router(projects.me_router)

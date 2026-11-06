@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -11,6 +11,7 @@ from services.api.access import (
     load_subcorpus,
     require_project,
 )
+from services.api.audit import record
 from services.api.auth import CurrentUser, Db
 from services.api.errors import not_found
 from services.api.metadata import field_types, subcorpus_stats, validate_filter
@@ -78,7 +79,19 @@ def get_subcorpus(subcorpus_id: UUID, user: CurrentUser, db: Db):
 
 
 @router.delete("/subcorpora/{subcorpus_id}", status_code=204)
-def delete_subcorpus(subcorpus_id: UUID, user: CurrentUser, db: Db):
+def delete_subcorpus(subcorpus_id: UUID, request: Request, user: CurrentUser, db: Db):
     human_only(user)
-    db.delete(load_subcorpus(db, subcorpus_id, user, write=True))
+    sub = load_subcorpus(db, subcorpus_id, user, write=True)
+    record(
+        db,
+        user,
+        "subcorpus_delete",
+        "subcorpus",
+        sub.id,
+        sub.name,
+        sub.project_id,
+        {"corpus_id": str(sub.corpus_id)},
+        request,
+    )
+    db.delete(sub)
     db.commit()

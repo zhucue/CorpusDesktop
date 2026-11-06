@@ -21,15 +21,16 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import case, exists, func, literal, select, tuple_, update
 
 from services.api.access import READ, WRITE, Paging, require_project
 from services.api.annotators import layer_annotators, visible, writer
+from services.api.audit import record
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, not_found
-from services.api.jobs import ACTIVE, enqueue
+from services.api.jobs import ACTIVE, enqueue, layer_uses_llm
 from services.api.label_sets import human_only, load_label_set
 from services.api.models import (
     TOKEN_KINDS,
@@ -50,6 +51,7 @@ from services.api.models import (
 )
 from services.api.search import corpus_tagset
 from services.api.subcorpora import project_corpus
+from services.api.usage import check_quota
 from services.api.views import job_view
 
 router = APIRouter(prefix="/api")
@@ -250,6 +252,8 @@ def _active_job(db, layer_id):
 
 
 def _enqueue_preannotate(db, layer, user, document_ids, sentence_range=None):
+    if layer_uses_llm(layer):
+        check_quota(db, user)
     params = {
         "layer_id": str(layer.id),
         "corpus_id": str(layer.corpus_id),
@@ -688,9 +692,20 @@ def get_layer(layer_id: UUID, user: CurrentUser, db: Db):
 
 
 @router.delete("/layers/{layer_id}", status_code=204)
-def delete_layer(layer_id: UUID, user: CurrentUser, db: Db):
+def delete_layer(layer_id: UUID, request: Request, user: CurrentUser, db: Db):
     human_only(user)
     layer = load_layer(db, layer_id, user, WRITE)
+    record(
+        db,
+        user,
+        "layer_delete",
+        "layer",
+        layer.id,
+        layer.name,
+        layer.project_id,
+        {"kind": layer.kind, "corpus_id": str(layer.corpus_id)},
+        request,
+    )
     db.execute(
         update(Job)
         .where(
@@ -707,7 +722,9 @@ def delete_layer(layer_id: UUID, user: CurrentUser, db: Db):
 @router.post("/layers/{layer_id}/preannotate")
 def preannotate(layer_id: UUID, body: PreannotateInput, user: CurrentUser, db: Db):
     layer = load_layer(db, layer_id, user, WRITE, lock=True)
-    if (layer.meta or {}).get("sample"):  # a re-run would delete the uncoded sample hits
+    if (layer.meta or {}).get(
+        "sample"
+    ):  # a re-run would delete the uncoded sample hits
         raise ApiError(422, "SAMPLE_LAYER", "抽样层不能预标注")
     if _active_job(db, layer.id):
         raise ApiError(409, "JOB_IN_PROGRESS", "该层正在预标")

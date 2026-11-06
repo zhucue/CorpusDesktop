@@ -81,7 +81,7 @@ def clean(database):
                 " sentences, tokens, sentence_alignments, subcorpora, saved_queries, jobs,"
                 " stat_results, evidence, agent_sessions, agent_messages, agent_tokens,"
                 " label_sets, annotation_layers, annotations, kb_documents, kb_chunks, kb_terms,"
-                " note_refs CASCADE"
+                " note_refs, llm_usage, audit_logs, feedback CASCADE"
             )
         )
     with transaction() as db:
