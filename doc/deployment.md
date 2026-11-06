@@ -18,9 +18,9 @@
 | 服务 | 镜像 | 端口 | 卷 |
 | --- | --- | --- | --- |
 | postgres | pgvector/pgvector:pg16 | 127.0.0.1:${POSTGRES_PORT} | postgres |
-| api | deploy/Dockerfile.api | 内部 8000 | data、models、stanza |
+| api | deploy/Dockerfile.api | 内部 8000 | data、models；宿主机 `BACKUP_DIR` 只读挂载到 `/backups` |
 | worker | deploy/Dockerfile.worker | — | data、models、stanza；处理全部任务，先取短任务；`--scale worker=N` 可加导入容量 |
-| worker-light | 同 worker | — | 只处理短任务（导出、统计、预标、知识库，以及小文件导入和小语料建索引），不被大导入阻塞；见下方队列规则 |
+| worker-light | 同 worker | — | 只处理短任务（导出、统计、预标、知识库，以及小文件导入和小语料建索引），不被大导入阻塞；见下方队列规则；另执行每日维护（第六节） |
 | agent | deploy/Dockerfile.agent | 内部 8700 | agentdata |
 | web | deploy/Dockerfile.web（nginx） | 127.0.0.1:${HTTP_PORT} | — |
 | test | api 镜像 | — | 同 api |
@@ -52,6 +52,13 @@
 | APP_VERSION | 版本号，设置页"数据与隐私"显示；留空为 `dev` |
 | ALERT_WEBHOOK_URL | `scripts/healthcheck.sh` 失败时 POST `{"text": "..."}` 的地址；留空只打印并以非零退出（第六节） |
 | LIGHT_IMPORT_BYTES、LIGHT_INDEX_TOKENS | 短任务门槛，默认 5242880 字节、1000000 词（见第二节队列规则）；api 与 worker 读同一值 |
+| TZ | 服务器时区，默认 `Asia/Shanghai`；api、worker、agent 共用，模型用量按此时区的自然月统计 |
+| LLM_MONTHLY_TOKENS_PER_USER | 每位用户每月对话模型 token 上限，默认 0（不限）；达到后助手新消息、重新生成、确认执行，LLM 预标、文献摘要、术语抽取及其重试返回 429 `LLM_QUOTA_EXCEEDED`；api 与 agent 读同一值 |
+| AGENT_MAX_RUNS_PER_USER | 每位用户同时运行的助手对话数，默认 2；超出返回 429 `TOO_MANY_RUNS` |
+| PROJECT_PURGE_DAYS | 删除的项目可恢复天数，默认 7；之后由维护任务清除数据与文件 |
+| EXPORT_RETENTION_DAYS | 导出文件与上传目录保留天数，默认 30；之后由维护任务删除，下载返回 410 `EXPORT_EXPIRED` |
+| WORKER_MAINTENANCE | worker-light 是否执行每日维护，默认 1；worker 固定为 0。设 0 后不再自动清除项目与过期文件 |
+| BACKUP_DIR | 宿主机备份目录（`scripts/backup.sh` 输出位置，绝对路径），默认仓库 `tmp/backups`；只读挂载到 api 的 `/backups`，管理 · 系统显示最近备份时间；`scripts/healthcheck.sh` 也读此变量 |
 
 密钥只放在 `deploy/.env`，不入库、不放 `tmp/`。
 
@@ -176,12 +183,27 @@ server {
 | 容器健康检查 | api 请求 `/api/health`（含数据库）；worker、worker-light 检查 `/data/worker-health/<WORKER_ID>` 在 90 秒内更新过（每轮主循环与任务心跳更新），每 30 秒一次，启动宽限 60 秒 | `deploy/compose.yaml` |
 | 真实 IP | 来自 127.0.0.1 与私网段（10/8、172.16/12、192.168/16）的请求取 `X-Forwarded-For` 最后一个地址 | `deploy/nginx.conf` |
 | 接口文档 | `/api/docs`、`/api/openapi.json` 在 nginx 返回 404 | `deploy/nginx.conf` |
+| 安全响应头 | 页面与接口都带 `X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`、`Referrer-Policy: same-origin`、`Permissions-Policy: camera=(), microphone=(), geolocation=()`（`always`，错误响应也带；`/index.html` 单独重复一遍）；不加 CSP | `deploy/nginx.conf` |
+| 每日维护 | 见下方“维护任务” | worker-light |
+| 模型用量上限 | `LLM_MONTHLY_TOKENS_PER_USER`、`AGENT_MAX_RUNS_PER_USER`；用量在设置 › 管理 › 用量按用户 / 项目、月份查看 | `deploy/.env` |
 
 nginx 把 `/api/` 反代到 api、`/agent/` 反代到 agent（SSE：关闭缓冲，600 秒超时），`index.html` 不缓存。
 
+### 维护任务
+
+worker-light 启动时与之后每小时检查 `/data/maintenance/last-run`，距上次运行超过 24 小时即执行一次：
+
+| 步骤 | 内容 |
+| --- | --- |
+| 清除项目 | 删除超过 `PROJECT_PURGE_DAYS` 天的已删除项目：数据库记录级联删除，语料、索引、知识库、上传与导出文件一并删除；记审计 `project_purge` |
+| 过期导出 | 删除 `EXPORT_RETENTION_DAYS` 天前成功完成的导出文件；之后下载提示“导出文件已过期，请重新导出” |
+| 上传目录 | 引用同一上传目录的任务全部结束、其中有失败或取消的，且最晚结束时间早于 `EXPORT_RETENTION_DAYS` 天前时删除该目录（之后这些任务不能再重试） |
+
+每次运行在 worker-light 日志写一行 `maintenance: purged N projects, removed N export files and N upload folders`；某步失败记 `failed:`，其他步骤照常，次日重试。要立即执行：删除数据卷中的 `maintenance/last-run` 后重启 worker-light。
+
 ### 账号管理
 
-| 操作 | 网页（设置 › 用户，仅平台管理员） | 命令行 |
+| 操作 | 网页（设置 › 管理 › 用户，仅平台管理员） | 命令行 |
 | --- | --- | --- |
 | 新建账号 | "新建"：邮箱、姓名、是否管理员；弹窗显示一次 16 位临时密码 | `create_account.py --email … [--name …] [--admin]` |
 | 重置密码 | "重置密码"：显示一次临时密码，该用户全部会话与助手令牌失效 | `create_account.py --email … --reset`（不带 `--password-stdin` 时生成临时密码并打印） |
@@ -198,6 +220,8 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml exec api python scr
 
 `scripts/healthcheck.sh` 在宿主机检查：`/api/health`、api / worker / worker-light 容器健康状态、数据盘剩余空间低于 10%、最近一次备份超过 26 小时。任一项失败时，若设置了 `ALERT_WEBHOOK_URL`（环境变量或 `deploy/.env`）则 POST `{"text": "..."}` 到该地址，退出码 1。可选环境变量：`HEALTH_URL`、`DATA_PATH`（检查剩余空间的目录，默认 Docker 数据目录）、`BACKUP_DIR`（默认 `tmp/backups`，与定时备份目录不同时须设置）、`BACKUP_MAX_HOURS`、`DISK_MIN_FREE`；非默认 Compose 项目名用 `-p`。
 
+管理员也可在设置 › 管理 › 系统查看各 worker 最近上报与健康、数据盘剩余、数据目录与检索缓存大小、最近备份时间（`BACKUP_DIR` 未挂载或为空时写“未找到”）。
+
 cron 每 5 分钟执行：
 
 ```text
@@ -212,7 +236,7 @@ npm run web:build
 docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
 ```
 
-迁移随 api 启动自动执行；升级前先备份（第八节）。从 2026 年 11 月 5 日之前的版本升级会执行迁移 `0008_account_lifecycle`（`users` 加 `disabled_at`、`must_change_password`、`last_login_at`），先 `up -d api` 等健康后再启动 worker；升级后设置 `APP_VERSION`，按需配置 `ALERT_WEBHOOK_URL` 与第六节的健康检查 cron。向量模型版本变更时知识库需重新向量化（文献页"重新导入"或后台任务）。
+迁移随 api 启动自动执行；升级前先备份（第八节）。从 2026 年 11 月 5 日之前的版本升级会执行迁移 `0008_account_lifecycle`（`users` 加 `disabled_at`、`must_change_password`、`last_login_at`），先 `up -d api` 等健康后再启动 worker；升级后设置 `APP_VERSION`，按需配置 `ALERT_WEBHOOK_URL` 与第六节的健康检查 cron。从 2026 年 11 月 6 日之前的版本升级会执行迁移 `0010_operations`（新表 `llm_usage`、`audit_logs`、`feedback`，`projects` 加 `deleted_at`），同样先 `up -d api` 等健康后再启动 worker 与 agent；按需在 `.env` 设置 `LLM_MONTHLY_TOKENS_PER_USER`、`BACKUP_DIR`、`TZ`。向量模型版本变更时知识库需重新向量化（文献页"重新导入"或后台任务）。
 
 ## 八 备份与恢复
 
@@ -307,11 +331,11 @@ HTTP_PORT=18088 POSTGRES_PORT=25432 docker compose -f deploy/compose.yaml -p cor
 | 项目 | 检查 |
 | --- | --- |
 | `.env` | `POSTGRES_PASSWORD` 为强密码；`MODEL_*` 已填；文件不入库；`chmod 600 deploy/.env` |
-| 模型费用 | 在模型服务商侧设消费上限 |
+| 模型费用 | 在模型服务商侧设消费上限；`.env` 设置 `LLM_MONTHLY_TOKENS_PER_USER`（每人月度模型用量上限，默认不限） |
 | HTTPS | 宿主反代已配证书，http 跳转 https；防火墙只开 80、443 |
 | PUBLIC_ORIGIN | 只含 `https://域名`，没有 http 地址 |
-| 管理员账号 | `create_account.py --admin` 已建，密码已妥善保管；其他用户在设置 › 用户中新建 |
+| 管理员账号 | `create_account.py --admin` 已建，密码已妥善保管；其他用户在设置 › 管理 › 用户中新建 |
 | 模型卷 | worker 日志有 `embedding model … ready`；Stanza 英文与中文依存已下载 |
 | 备份 cron | 已配置，手动跑过一次 `scripts/backup.sh` 且恢复演练通过；备份复制到另一台机器 |
-| 健康检查 | `https://域名/api/health` 正常；`docker compose ps` 中 api、worker、worker-light 为 healthy；`/agent/health` 不是 `MODEL_NOT_CONFIGURED`；`/api/docs` 返回 404 |
+| 健康检查 | `https://域名/api/health` 正常；`docker compose ps` 中 api、worker、worker-light 为 healthy；`/agent/health` 不是 `MODEL_NOT_CONFIGURED`；`/api/docs` 返回 404；`curl -I https://域名/` 可见四个安全响应头；设置 › 管理 › 系统显示最近备份时间 |
 | 告警 | `scripts/healthcheck.sh` 手动执行通过，cron 每 5 分钟执行；`ALERT_WEBHOOK_URL` 已设并收到过一次测试告警 |
