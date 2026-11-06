@@ -62,7 +62,7 @@ import math
 import mmap
 import re
 import struct
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -881,6 +881,61 @@ def hit_rows(scope: Scope, query_text, attr_filter=None, max_hits=None):
     """(hit rows as search counts them, scope totals); see _Corpus.rows."""
     c = _Corpus(scope)
     return c.rows(query_text, attr_filter, max_hits), c.totals
+
+
+def doc_hits(scope: Scope, query_text, attr_filter=None, max_hits=None):
+    """(hits per document id as search counts them, tokens per document id of the scope, scope totals);
+    query_text None: no hits (the caller counts pure attribute / span queries in PostgreSQL)."""
+    c = _Corpus(scope)
+    rows = c.rows(query_text, attr_filter, max_hits) if query_text else []
+    hits = Counter(d for _, _, d, _ in rows)
+    return hits, {d: b - a + 1 for a, b, d in c.docs}, c.totals
+
+
+def _value(v):
+    return None if v == MISSING else v
+
+
+def _head(v):
+    try:
+        return int(v)
+    except ValueError:
+        return None
+
+
+def documents(scope: Scope):
+    """(document id, sentences) of the scope's documents in corpus order, read from the index's attribute
+    files; a sentence is a list of (form, pos, lemma, head, deprel) with "_" read as None and head as int
+    (1-based in the sentence, 0 = root). Stops with cwb.Cancelled inside a cancelled block."""
+    c = _Corpus(scope)
+    if not c.docs:
+        return
+    starts, ends = c.sentences()
+    cancel = _CANCEL.get()
+    with contextlib.ExitStack() as stack:
+        word, pos, lemma, head, dep = (
+            stack.enter_context(c.attr(a))
+            for a in ("word", "pos", "lemma", "head", "deprel")
+        )
+        for a, b, doc_id in c.docs:
+            if cancel is not None and cancel.is_set():
+                raise cwb.Cancelled("统计已取消")
+            k, sents = bisect_left(starts, a), []
+            while k < len(starts) and starts[k] <= b:
+                sents.append(
+                    [
+                        (
+                            word(x),
+                            _value(pos(x)),
+                            _value(lemma(x)),
+                            _head(head(x)),
+                            _value(dep(x)),
+                        )
+                        for x in range(starts[k], ends[k] + 1)
+                    ]
+                )
+                k += 1
+            yield doc_id, sents
 
 
 def _plain_value(v):

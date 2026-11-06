@@ -1,0 +1,1144 @@
+{
+ "fixture": "tests/fixtures/ud-en-ewt-sample.conllu",
+ "notes": "part = a for documents 1-8 (d0-d7), b for 9-16; n = document number; compare: `the` in part a vs part b; Mann-Whitney / Spearman values from SciPy (mannwhitneyu method=asymptotic, spearmanr)",
+ "text_metrics": [
+  {
+   "window": 1000,
+   "documents": {
+    "d0": {
+     "words": 31,
+     "sentences": 3,
+     "ttr": 0.8709677419354839,
+     "sttr": null,
+     "mtld": null,
+     "lexical_density": 0.6129032258064516,
+     "mean_sentence_length": 10.333333333333334,
+     "mean_dependency_distance": 3.861111111111111,
+     "flesch_reading_ease": 57.166021505376364,
+     "flesch_kincaid_grade": 7.852903225806454
+    },
+    "d1": {
+     "words": 77,
+     "sentences": 7,
+     "ttr": 0.7792207792207793,
+     "sttr": null,
+     "mtld": null,
+     "lexical_density": 0.4805194805194805,
+     "mean_sentence_length": 11.0,
+     "mean_dependency_distance": 3.6,
+     "flesch_reading_ease": 77.01025974025977,
+     "flesch_kincaid_grade": 5.250649350649351
+    },
+    "d2": {
+     "words": 126,
+     "sentences": 9,
+     "ttr": 0.6746031746031746,
+     "sttr": null,
+     "mtld": 79.6675857108607,
+     "lexical_density": 0.49206349206349204,
+     "mean_sentence_length": 14.0,
+     "mean_dependency_distance": 3.09375,
+     "flesch_reading_ease": 75.12500000000001,
+     "flesch_kincaid_grade": 6.25888888888889
+    },
+    "d3": {
+     "words": 132,
+     "sentences": 5,
+     "ttr": 0.7272727272727273,
+     "sttr": null,
+     "mtld": 115.86412147505425,
+     "lexical_density": 0.49242424242424243,
+     "mean_sentence_length": 26.4,
+     "mean_dependency_distance": 5.1610738255033555,
+     "flesch_reading_ease": 64.03445454545457,
+     "flesch_kincaid_grade": 10.886303030303036
+    },
+    "d4": {
+     "words": 185,
+     "sentences": 16,
+     "ttr": 0.6270270270270271,
+     "sttr": null,
+     "mtld": 98.51744186046511,
+     "lexical_density": 0.518918918918919,
+     "mean_sentence_length": 11.5625,
+     "mean_dependency_distance": 2.7945945945945945,
+     "flesch_reading_ease": 57.90987331081081,
+     "flesch_kincaid_grade": 8.054510135135136
+    },
+    "d5": {
+     "words": 203,
+     "sentences": 9,
+     "ttr": 0.6354679802955665,
+     "sttr": null,
+     "mtld": 90.98549723756906,
+     "lexical_density": 0.5763546798029556,
+     "mean_sentence_length": 22.555555555555557,
+     "mean_dependency_distance": 3.827272727272727,
+     "flesch_reading_ease": 35.99529830322936,
+     "flesch_kincaid_grade": 13.842134646962233
+    },
+    "d6": {
+     "words": 225,
+     "sentences": 10,
+     "ttr": 0.4266666666666667,
+     "sttr": null,
+     "mtld": 47.40727856633862,
+     "lexical_density": 0.5155555555555555,
+     "mean_sentence_length": 22.5,
+     "mean_dependency_distance": 4.109022556390977,
+     "flesch_reading_ease": 54.27750000000003,
+     "flesch_kincaid_grade": 11.278333333333332
+    },
+    "d7": {
+     "words": 248,
+     "sentences": 10,
+     "ttr": 0.6491935483870968,
+     "sttr": null,
+     "mtld": 109.52409339294584,
+     "lexical_density": 0.5524193548387096,
+     "mean_sentence_length": 24.8,
+     "mean_dependency_distance": 4.168458781362007,
+     "flesch_reading_ease": 49.30493548387099,
+     "flesch_kincaid_grade": 12.54329032258065
+    },
+    "d8": {
+     "words": 326,
+     "sentences": 14,
+     "ttr": 0.5398773006134969,
+     "sttr": null,
+     "mtld": 100.88809353376283,
+     "lexical_density": 0.5061349693251533,
+     "mean_sentence_length": 23.285714285714285,
+     "mean_dependency_distance": 3.9573863636363638,
+     "flesch_reading_ease": 59.15460122699389,
+     "flesch_kincaid_grade": 10.79326906222612
+    },
+    "d9": {
+     "words": 336,
+     "sentences": 15,
+     "ttr": 0.5952380952380952,
+     "sttr": null,
+     "mtld": 96.6973977587171,
+     "lexical_density": 0.5505952380952381,
+     "mean_sentence_length": 22.4,
+     "mean_dependency_distance": 3.591666666666667,
+     "flesch_reading_ease": 33.531142857142896,
+     "flesch_kincaid_grade": 14.147190476190477
+    },
+    "d10": {
+     "words": 371,
+     "sentences": 13,
+     "ttr": 0.5121293800539084,
+     "sttr": null,
+     "mtld": 79.8283851866392,
+     "lexical_density": 0.5444743935309974,
+     "mean_sentence_length": 28.53846153846154,
+     "mean_dependency_distance": 4.017412935323383,
+     "flesch_reading_ease": 34.66414886999797,
+     "flesch_kincaid_grade": 15.51412398921833
+    },
+    "d11": {
+     "words": 386,
+     "sentences": 42,
+     "ttr": 0.616580310880829,
+     "sttr": null,
+     "mtld": 120.64833642736303,
+     "lexical_density": 0.689119170984456,
+     "mean_sentence_length": 9.19047619047619,
+     "mean_dependency_distance": 3.274949083503055,
+     "flesch_reading_ease": 52.85381692573404,
+     "flesch_kincaid_grade": 8.170451517394522
+    },
+    "d12": {
+     "words": 522,
+     "sentences": 21,
+     "ttr": 0.5076628352490421,
+     "sttr": null,
+     "mtld": 101.12384937238494,
+     "lexical_density": 0.5613026819923371,
+     "mean_sentence_length": 24.857142857142858,
+     "mean_dependency_distance": 3.78125,
+     "flesch_reading_ease": 38.984310344827605,
+     "flesch_kincaid_grade": 13.997006020799127
+    },
+    "d13": {
+     "words": 682,
+     "sentences": 40,
+     "ttr": 0.4750733137829912,
+     "sttr": null,
+     "mtld": 113.5203126554395,
+     "lexical_density": 0.5366568914956011,
+     "mean_sentence_length": 17.05,
+     "mean_dependency_distance": 3.533244680851064,
+     "flesch_reading_ease": 60.52045234604108,
+     "flesch_kincaid_grade": 9.053634897360702
+    },
+    "d14": {
+     "words": 22,
+     "sentences": 3,
+     "ttr": 0.7727272727272727,
+     "sttr": null,
+     "mtld": null,
+     "lexical_density": 0.3181818181818182,
+     "mean_sentence_length": 7.333333333333333,
+     "mean_dependency_distance": 2.1363636363636362,
+     "flesch_reading_ease": 110.94621212121214,
+     "flesch_kincaid_grade": -0.3936363636363627
+    },
+    "d15": {
+     "words": 22,
+     "sentences": 4,
+     "ttr": 0.9545454545454546,
+     "sttr": null,
+     "mtld": null,
+     "lexical_density": 0.5454545454545454,
+     "mean_sentence_length": 5.5,
+     "mean_dependency_distance": 2.6363636363636362,
+     "flesch_reading_ease": 93.57977272727274,
+     "flesch_kincaid_grade": 1.5731818181818191
+    }
+   },
+   "groups": {
+    "words": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 153.375,
+      "sd": 75.17776551994233
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 333.375,
+      "sd": 225.2851764193235
+     }
+    ],
+    "sentences": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 8.625,
+      "sd": 3.8890872965260113
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 19.0,
+      "sd": 14.793821103999564
+     }
+    ],
+    "ttr": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 0.6738024556760652,
+      "sd": 0.12993737689221785
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 0.6217292453863863,
+      "sd": 0.1636748979107476
+     }
+    ],
+    "sttr": [
+     {
+      "value": "a",
+      "documents": 0,
+      "mean": null,
+      "sd": null
+     },
+     {
+      "value": "b",
+      "documents": 0,
+      "mean": null,
+      "sd": null
+     }
+    ],
+    "mtld": [
+     {
+      "value": "a",
+      "documents": 6,
+      "mean": 90.3276697072056,
+      "sd": 24.673530443332425
+     },
+     {
+      "value": "b",
+      "documents": 6,
+      "mean": 102.11772915571777,
+      "sd": 14.15695563414527
+     }
+    ],
+    "lexical_density": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 0.5301448687412258,
+      "sd": 0.04652960823515892
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 0.5314899636325183,
+      "sd": 0.10186427907440394
+     }
+    ],
+    "mean_sentence_length": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 17.893923611111113,
+      "sd": 6.792140971586134
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 17.269391025641024,
+      "sd": 8.861199749567422
+     }
+    ],
+    "mean_dependency_distance": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 3.8269104495293464,
+      "sd": 0.7203265980802529
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 3.3660796253384757,
+      "sd": 0.6631171478285416
+     }
+    ],
+    "flesch_reading_ease": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 58.852917861125235,
+      "sd": 13.414396232266888
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 60.5293071774028,
+      "sd": 28.17571092292179
+     }
+    ],
+    "flesch_kincaid_grade": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 9.495876616707385,
+      "sd": 3.0836914267181927
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 9.106902677216842,
+      "sd": 5.868936367648999
+     }
+    ]
+   }
+  },
+  {
+   "window": 50,
+   "documents": {
+    "d0": {
+     "words": 31,
+     "sentences": 3,
+     "ttr": 0.8709677419354839,
+     "sttr": null,
+     "mtld": null,
+     "lexical_density": 0.6129032258064516,
+     "mean_sentence_length": 10.333333333333334,
+     "mean_dependency_distance": 3.861111111111111,
+     "flesch_reading_ease": 57.166021505376364,
+     "flesch_kincaid_grade": 7.852903225806454
+    },
+    "d1": {
+     "words": 77,
+     "sentences": 7,
+     "ttr": 0.7792207792207793,
+     "sttr": null,
+     "mtld": null,
+     "lexical_density": 0.4805194805194805,
+     "mean_sentence_length": 11.0,
+     "mean_dependency_distance": 3.6,
+     "flesch_reading_ease": 77.01025974025977,
+     "flesch_kincaid_grade": 5.250649350649351
+    },
+    "d2": {
+     "words": 126,
+     "sentences": 9,
+     "ttr": 0.6746031746031746,
+     "sttr": 0.81,
+     "mtld": 79.6675857108607,
+     "lexical_density": 0.49206349206349204,
+     "mean_sentence_length": 14.0,
+     "mean_dependency_distance": 3.09375,
+     "flesch_reading_ease": 75.12500000000001,
+     "flesch_kincaid_grade": 6.25888888888889
+    },
+    "d3": {
+     "words": 132,
+     "sentences": 5,
+     "ttr": 0.7272727272727273,
+     "sttr": 0.8200000000000001,
+     "mtld": 115.86412147505425,
+     "lexical_density": 0.49242424242424243,
+     "mean_sentence_length": 26.4,
+     "mean_dependency_distance": 5.1610738255033555,
+     "flesch_reading_ease": 64.03445454545457,
+     "flesch_kincaid_grade": 10.886303030303036
+    },
+    "d4": {
+     "words": 185,
+     "sentences": 16,
+     "ttr": 0.6270270270270271,
+     "sttr": 0.8266666666666667,
+     "mtld": 98.51744186046511,
+     "lexical_density": 0.518918918918919,
+     "mean_sentence_length": 11.5625,
+     "mean_dependency_distance": 2.7945945945945945,
+     "flesch_reading_ease": 57.90987331081081,
+     "flesch_kincaid_grade": 8.054510135135136
+    },
+    "d5": {
+     "words": 203,
+     "sentences": 9,
+     "ttr": 0.6354679802955665,
+     "sttr": 0.8099999999999999,
+     "mtld": 90.98549723756906,
+     "lexical_density": 0.5763546798029556,
+     "mean_sentence_length": 22.555555555555557,
+     "mean_dependency_distance": 3.827272727272727,
+     "flesch_reading_ease": 35.99529830322936,
+     "flesch_kincaid_grade": 13.842134646962233
+    },
+    "d6": {
+     "words": 225,
+     "sentences": 10,
+     "ttr": 0.4266666666666667,
+     "sttr": 0.635,
+     "mtld": 47.40727856633862,
+     "lexical_density": 0.5155555555555555,
+     "mean_sentence_length": 22.5,
+     "mean_dependency_distance": 4.109022556390977,
+     "flesch_reading_ease": 54.27750000000003,
+     "flesch_kincaid_grade": 11.278333333333332
+    },
+    "d7": {
+     "words": 248,
+     "sentences": 10,
+     "ttr": 0.6491935483870968,
+     "sttr": 0.85,
+     "mtld": 109.52409339294584,
+     "lexical_density": 0.5524193548387096,
+     "mean_sentence_length": 24.8,
+     "mean_dependency_distance": 4.168458781362007,
+     "flesch_reading_ease": 49.30493548387099,
+     "flesch_kincaid_grade": 12.54329032258065
+    },
+    "d8": {
+     "words": 326,
+     "sentences": 14,
+     "ttr": 0.5398773006134969,
+     "sttr": 0.82,
+     "mtld": 100.88809353376283,
+     "lexical_density": 0.5061349693251533,
+     "mean_sentence_length": 23.285714285714285,
+     "mean_dependency_distance": 3.9573863636363638,
+     "flesch_reading_ease": 59.15460122699389,
+     "flesch_kincaid_grade": 10.79326906222612
+    },
+    "d9": {
+     "words": 336,
+     "sentences": 15,
+     "ttr": 0.5952380952380952,
+     "sttr": 0.8066666666666666,
+     "mtld": 96.6973977587171,
+     "lexical_density": 0.5505952380952381,
+     "mean_sentence_length": 22.4,
+     "mean_dependency_distance": 3.591666666666667,
+     "flesch_reading_ease": 33.531142857142896,
+     "flesch_kincaid_grade": 14.147190476190477
+    },
+    "d10": {
+     "words": 371,
+     "sentences": 13,
+     "ttr": 0.5121293800539084,
+     "sttr": 0.7914285714285715,
+     "mtld": 79.8283851866392,
+     "lexical_density": 0.5444743935309974,
+     "mean_sentence_length": 28.53846153846154,
+     "mean_dependency_distance": 4.017412935323383,
+     "flesch_reading_ease": 34.66414886999797,
+     "flesch_kincaid_grade": 15.51412398921833
+    },
+    "d11": {
+     "words": 386,
+     "sentences": 42,
+     "ttr": 0.616580310880829,
+     "sttr": 0.8142857142857143,
+     "mtld": 120.64833642736303,
+     "lexical_density": 0.689119170984456,
+     "mean_sentence_length": 9.19047619047619,
+     "mean_dependency_distance": 3.274949083503055,
+     "flesch_reading_ease": 52.85381692573404,
+     "flesch_kincaid_grade": 8.170451517394522
+    },
+    "d12": {
+     "words": 522,
+     "sentences": 21,
+     "ttr": 0.5076628352490421,
+     "sttr": 0.818,
+     "mtld": 101.12384937238494,
+     "lexical_density": 0.5613026819923371,
+     "mean_sentence_length": 24.857142857142858,
+     "mean_dependency_distance": 3.78125,
+     "flesch_reading_ease": 38.984310344827605,
+     "flesch_kincaid_grade": 13.997006020799127
+    },
+    "d13": {
+     "words": 682,
+     "sentences": 40,
+     "ttr": 0.4750733137829912,
+     "sttr": 0.8292307692307692,
+     "mtld": 113.5203126554395,
+     "lexical_density": 0.5366568914956011,
+     "mean_sentence_length": 17.05,
+     "mean_dependency_distance": 3.533244680851064,
+     "flesch_reading_ease": 60.52045234604108,
+     "flesch_kincaid_grade": 9.053634897360702
+    },
+    "d14": {
+     "words": 22,
+     "sentences": 3,
+     "ttr": 0.7727272727272727,
+     "sttr": null,
+     "mtld": null,
+     "lexical_density": 0.3181818181818182,
+     "mean_sentence_length": 7.333333333333333,
+     "mean_dependency_distance": 2.1363636363636362,
+     "flesch_reading_ease": 110.94621212121214,
+     "flesch_kincaid_grade": -0.3936363636363627
+    },
+    "d15": {
+     "words": 22,
+     "sentences": 4,
+     "ttr": 0.9545454545454546,
+     "sttr": null,
+     "mtld": null,
+     "lexical_density": 0.5454545454545454,
+     "mean_sentence_length": 5.5,
+     "mean_dependency_distance": 2.6363636363636362,
+     "flesch_reading_ease": 93.57977272727274,
+     "flesch_kincaid_grade": 1.5731818181818191
+    }
+   },
+   "groups": {
+    "words": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 153.375,
+      "sd": 75.17776551994233
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 333.375,
+      "sd": 225.2851764193235
+     }
+    ],
+    "sentences": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 8.625,
+      "sd": 3.8890872965260113
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 19.0,
+      "sd": 14.793821103999564
+     }
+    ],
+    "ttr": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 0.6738024556760652,
+      "sd": 0.12993737689221785
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 0.6217292453863863,
+      "sd": 0.1636748979107476
+     }
+    ],
+    "sttr": [
+     {
+      "value": "a",
+      "documents": 6,
+      "mean": 0.7919444444444445,
+      "sd": 0.07829017723732558
+     },
+     {
+      "value": "b",
+      "documents": 6,
+      "mean": 0.8132686202686202,
+      "sd": 0.01299304145824253
+     }
+    ],
+    "mtld": [
+     {
+      "value": "a",
+      "documents": 6,
+      "mean": 90.3276697072056,
+      "sd": 24.673530443332425
+     },
+     {
+      "value": "b",
+      "documents": 6,
+      "mean": 102.11772915571777,
+      "sd": 14.15695563414527
+     }
+    ],
+    "lexical_density": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 0.5301448687412258,
+      "sd": 0.04652960823515892
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 0.5314899636325183,
+      "sd": 0.10186427907440394
+     }
+    ],
+    "mean_sentence_length": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 17.893923611111113,
+      "sd": 6.792140971586134
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 17.269391025641024,
+      "sd": 8.861199749567422
+     }
+    ],
+    "mean_dependency_distance": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 3.8269104495293464,
+      "sd": 0.7203265980802529
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 3.3660796253384757,
+      "sd": 0.6631171478285416
+     }
+    ],
+    "flesch_reading_ease": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 58.852917861125235,
+      "sd": 13.414396232266888
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 60.5293071774028,
+      "sd": 28.17571092292179
+     }
+    ],
+    "flesch_kincaid_grade": [
+     {
+      "value": "a",
+      "documents": 8,
+      "mean": 9.495876616707385,
+      "sd": 3.0836914267181927
+     },
+     {
+      "value": "b",
+      "documents": 8,
+      "mean": 9.106902677216842,
+      "sd": 5.868936367648999
+     }
+    ]
+   }
+  }
+ ],
+ "vocab": {
+  "words": 3894,
+  "corpus": {
+   "频率排名 1–1000": {
+    "tokens": 2616,
+    "types": 465,
+    "coverage": 67.18027734976889
+   },
+   "频率排名 1001–2000": {
+    "tokens": 209,
+    "types": 154,
+    "coverage": 5.367231638418079
+   },
+   "频率排名 2001–2809": {
+    "tokens": 93,
+    "types": 61,
+    "coverage": 2.3882896764252695
+   },
+   "表外": {
+    "tokens": 976,
+    "types": 531,
+    "coverage": 25.064201335387775
+   }
+  },
+  "documents": {
+   "d0": {
+    "频率排名 1–1000": 48.38709677419355,
+    "频率排名 1001–2000": 9.67741935483871,
+    "频率排名 2001–2809": 0.0,
+    "表外": 41.935483870967744
+   },
+   "d1": {
+    "频率排名 1–1000": 83.11688311688312,
+    "频率排名 1001–2000": 5.194805194805195,
+    "频率排名 2001–2809": 1.2987012987012987,
+    "表外": 10.38961038961039
+   },
+   "d2": {
+    "频率排名 1–1000": 80.15873015873017,
+    "频率排名 1001–2000": 3.968253968253968,
+    "频率排名 2001–2809": 3.1746031746031744,
+    "表外": 12.698412698412698
+   },
+   "d3": {
+    "频率排名 1–1000": 81.06060606060606,
+    "频率排名 1001–2000": 4.545454545454546,
+    "频率排名 2001–2809": 0.0,
+    "表外": 14.393939393939394
+   },
+   "d4": {
+    "频率排名 1–1000": 77.83783783783784,
+    "频率排名 1001–2000": 9.18918918918919,
+    "频率排名 2001–2809": 2.1621621621621623,
+    "表外": 10.81081081081081
+   },
+   "d5": {
+    "频率排名 1–1000": 65.51724137931035,
+    "频率排名 1001–2000": 7.389162561576355,
+    "频率排名 2001–2809": 2.955665024630542,
+    "表外": 24.137931034482758
+   },
+   "d6": {
+    "频率排名 1–1000": 64.44444444444444,
+    "频率排名 1001–2000": 2.666666666666667,
+    "频率排名 2001–2809": 0.8888888888888888,
+    "表外": 32.0
+   },
+   "d7": {
+    "频率排名 1–1000": 72.58064516129032,
+    "频率排名 1001–2000": 6.854838709677419,
+    "频率排名 2001–2809": 2.4193548387096775,
+    "表外": 18.14516129032258
+   },
+   "d8": {
+    "频率排名 1–1000": 78.22085889570552,
+    "频率排名 1001–2000": 4.601226993865031,
+    "频率排名 2001–2809": 3.374233128834356,
+    "表外": 13.803680981595093
+   },
+   "d9": {
+    "频率排名 1–1000": 68.75,
+    "频率排名 1001–2000": 6.547619047619048,
+    "频率排名 2001–2809": 3.869047619047619,
+    "表外": 20.833333333333336
+   },
+   "d10": {
+    "频率排名 1–1000": 64.95956873315365,
+    "频率排名 1001–2000": 5.929919137466308,
+    "频率排名 2001–2809": 1.6172506738544474,
+    "表外": 27.49326145552561
+   },
+   "d11": {
+    "频率排名 1–1000": 44.81865284974093,
+    "频率排名 1001–2000": 4.404145077720207,
+    "频率排名 2001–2809": 1.8134715025906734,
+    "表外": 48.96373056994819
+   },
+   "d12": {
+    "频率排名 1–1000": 60.91954022988506,
+    "频率排名 1001–2000": 4.21455938697318,
+    "频率排名 2001–2809": 2.8735632183908044,
+    "表外": 31.992337164750957
+   },
+   "d13": {
+    "频率排名 1–1000": 69.20821114369502,
+    "频率排名 1001–2000": 4.9853372434017595,
+    "频率排名 2001–2809": 2.6392961876832843,
+    "表外": 23.16715542521994
+   },
+   "d14": {
+    "频率排名 1–1000": 90.9090909090909,
+    "频率排名 1001–2000": 9.090909090909092,
+    "频率排名 2001–2809": 0.0,
+    "表外": 0.0
+   },
+   "d15": {
+    "频率排名 1–1000": 77.27272727272727,
+    "频率排名 1001–2000": 9.090909090909092,
+    "频率排名 2001–2809": 0.0,
+    "表外": 13.636363636363635
+   }
+  }
+ },
+ "compare": {
+  "query": "the",
+  "doc_hits": {
+   "d0": 0,
+   "d1": 3,
+   "d2": 10,
+   "d3": 4,
+   "d4": 12,
+   "d5": 16,
+   "d6": 8,
+   "d7": 21,
+   "d8": 19,
+   "d9": 35,
+   "d10": 41,
+   "d11": 10,
+   "d12": 35,
+   "d13": 38,
+   "d14": 2,
+   "d15": 0
+  },
+  "items": [
+   {
+    "hits": 74,
+    "tokens": 1417,
+    "per_million": 52223.00635144672,
+    "documents": 8,
+    "doc_freq_pct": 87.5
+   },
+   {
+    "hits": 180,
+    "tokens": 3129,
+    "per_million": 57526.366251198466,
+    "documents": 8,
+    "doc_freq_pct": 87.5
+   }
+  ],
+  "ll": 0.4970795158021417,
+  "log_ratio": -0.1395378303778215,
+  "mann_whitney": {
+   "u": 26.5,
+   "p": 0.5992415158356712
+  },
+  "spearman": [
+   {
+    "rho": 0.4047619047619048,
+    "p": 0.3198886412288163,
+    "n": 8
+   },
+   {
+    "rho": -0.4523809523809524,
+    "p": 0.2604047674368853,
+    "n": 8
+   }
+  ]
+ },
+ "sketch": [
+  {
+   "lemma": "make",
+   "min_freq": 1,
+   "node_freq": 7,
+   "relations": {
+    "subject": 5,
+    "object": 7,
+    "conj": 3,
+    "compound": 1,
+    "advmod": 2,
+    "pp:at": 1,
+    "pp:in": 1
+   },
+   "rows": {
+    "subject\the": {
+     "freq": 1,
+     "coll_freq": 25,
+     "logdice": 10.09310940439148
+    },
+    "object\tobservation": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 12.0
+    },
+    "conj\tcommit": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 13.0
+    },
+    "compound\tup": {
+     "freq": 1,
+     "coll_freq": 5,
+     "logdice": 12.415037499278844
+    },
+    "object\tone": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 12.0
+    },
+    "advmod\tbesides": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 13.415037499278844
+    },
+    "subject\tIranian": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 12.415037499278844
+    },
+    "advmod\tfrequently": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 13.415037499278844
+    },
+    "object\tstatement": {
+     "freq": 1,
+     "coll_freq": 2,
+     "logdice": 11.830074998557688
+    },
+    "conj\thide": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 13.0
+    },
+    "conj\tpretend": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 13.0
+    },
+    "object\ttravel": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 12.0
+    },
+    "pp:at\twhich": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 14.0
+    },
+    "subject\tUS": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 12.415037499278844
+    },
+    "object\tmistake": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 12.0
+    },
+    "subject\thubris": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 12.415037499278844
+    },
+    "object\tcase": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 12.0
+    },
+    "pp:in\tfall": {
+     "freq": 1,
+     "coll_freq": 2,
+     "logdice": 13.415037499278844
+    },
+    "subject\tPervez": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 12.415037499278844
+    },
+    "object\tcoup": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 12.0
+    }
+   }
+  },
+  {
+   "lemma": "say",
+   "min_freq": 1,
+   "node_freq": 14,
+   "relations": {
+    "subject": 9,
+    "advmod": 2,
+    "pp:in": 1,
+    "conj": 2,
+    "object": 1
+   },
+   "rows": {
+    "subject\tIran": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 11.678071905112638
+    },
+    "subject\tPresident": {
+     "freq": 1,
+     "coll_freq": 2,
+     "logdice": 11.540568381362704
+    },
+    "advmod\talso": {
+     "freq": 1,
+     "coll_freq": 5,
+     "logdice": 12.192645077942396
+    },
+    "subject\the": {
+     "freq": 2,
+     "coll_freq": 25,
+     "logdice": 10.912537158749661
+    },
+    "pp:in\tcommunique": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 14.0
+    },
+    "subject\tAMS": {
+     "freq": 1,
+     "coll_freq": 2,
+     "logdice": 11.540568381362704
+    },
+    "subject\tstatement": {
+     "freq": 1,
+     "coll_freq": 3,
+     "logdice": 11.415037499278844
+    },
+    "subject\tofficial": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 11.678071905112638
+    },
+    "subject\tNihad": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 11.678071905112638
+    },
+    "advmod\tnot": {
+     "freq": 1,
+     "coll_freq": 36,
+     "logdice": 9.752072486556415
+    },
+    "subject\tAbu": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 11.678071905112638
+    },
+    "conj\tcome": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 13.415037499278844
+    },
+    "conj\tlie": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 13.415037499278844
+    },
+    "object\tthing": {
+     "freq": 1,
+     "coll_freq": 2,
+     "logdice": 13.415037499278844
+    }
+   }
+  },
+  {
+   "lemma": "people",
+   "min_freq": 1,
+   "node_freq": 7,
+   "relations": {
+    "amod": 3,
+    "subject_of": 3,
+    "nmod_of": 3,
+    "nmod": 3,
+    "pp:of": 2,
+    "pp:in": 1
+   },
+   "rows": {
+    "amod\tmany": {
+     "freq": 1,
+     "coll_freq": 2,
+     "logdice": 12.678071905112638
+    },
+    "subject_of\twant": {
+     "freq": 1,
+     "coll_freq": 5,
+     "logdice": 12.0
+    },
+    "nmod_of\tdeclaration": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 13.0
+    },
+    "nmod\tFallujah": {
+     "freq": 2,
+     "coll_freq": 9,
+     "logdice": 12.415037499278844
+    },
+    "pp:of\tFallujah": {
+     "freq": 2,
+     "coll_freq": 4,
+     "logdice": 13.415037499278844
+    },
+    "subject_of\tcondemn": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 13.0
+    },
+    "amod\tdedicated": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 13.0
+    },
+    "subject_of\tdead": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 13.0
+    },
+    "amod\tIslamic": {
+     "freq": 1,
+     "coll_freq": 9,
+     "logdice": 11.415037499278844
+    },
+    "nmod_of\twar": {
+     "freq": 1,
+     "coll_freq": 4,
+     "logdice": 12.192645077942396
+    },
+    "nmod_of\tlot": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 13.0
+    },
+    "nmod\tCIA": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 13.0
+    },
+    "pp:in\tCIA": {
+     "freq": 1,
+     "coll_freq": 1,
+     "logdice": 14.0
+    }
+   }
+  }
+ ]
+}

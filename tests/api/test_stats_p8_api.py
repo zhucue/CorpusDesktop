@@ -278,7 +278,7 @@ def test_translations(owner, parallel, corpus):
     )
     head = next(i for i, r in enumerate(lines) if r and r[0] == "译文词")
     assert lines[head][-2:] == ["查询式", "译文条件"]
-    assert any(r[-1] == '+"translate"' for r in lines[head + 1 :])
+    assert any(r[-1] == '\'+"translate"' for r in lines[head + 1 :])
 
     lemma = run_stat(
         owner,

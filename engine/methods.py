@@ -260,6 +260,129 @@ REFERENCES = {
             "Computational Linguistics."
         ),
     ),
+    # P10 (contracts/p10.md §一~§五)
+    "mccarthy2010": (
+        "McCarthy 2010",
+        "McCarthy & Jarvis 2010",
+        (
+            "MCCARTHY P M, JARVIS S. MTLD, vocd-D, and HD-D: a validation study of sophisticated approaches to "
+            "lexical diversity assessment[J]. Behavior Research Methods, 2010, 42(2): 381-392."
+        ),
+        (
+            "McCarthy, P. M., & Jarvis, S. (2010). MTLD, vocd-D, and HD-D: A validation study of sophisticated "
+            "approaches to lexical diversity assessment. Behavior Research Methods, 42(2), 381–392."
+        ),
+    ),
+    "ure1971": (
+        "Ure 1971",
+        "Ure 1971",
+        (
+            "URE J. Lexical density and register differentiation[M]//PERREN G E, TRIM J L M. Applications of "
+            "linguistics: selected papers of the Second International Congress of Applied Linguistics, Cambridge "
+            "1969. Cambridge: Cambridge University Press, 1971: 443-452."
+        ),
+        (
+            "Ure, J. (1971). Lexical density and register differentiation. In G. E. Perren & J. L. M. Trim (Eds.), "
+            "Applications of linguistics: Selected papers of the Second International Congress of Applied "
+            "Linguistics, Cambridge 1969 (pp. 443–452). Cambridge University Press."
+        ),
+    ),
+    "liu2008": (
+        "Liu 2008",
+        "Liu 2008",
+        (
+            "LIU H. Dependency distance as a metric of language comprehension difficulty[J]. Journal of "
+            "Cognitive Science, 2008, 9(2): 159-191."
+        ),
+        (
+            "Liu, H. (2008). Dependency distance as a metric of language comprehension difficulty. Journal of "
+            "Cognitive Science, 9(2), 159–191."
+        ),
+    ),
+    "flesch1948": (
+        "Flesch 1948",
+        "Flesch 1948",
+        "FLESCH R. A new readability yardstick[J]. Journal of Applied Psychology, 1948, 32(3): 221-233.",
+        "Flesch, R. (1948). A new readability yardstick. Journal of Applied Psychology, 32(3), 221–233.",
+    ),
+    "kincaid1975": (
+        "Kincaid 1975",
+        "Kincaid et al. 1975",
+        (
+            "KINCAID J P, FISHBURNE R P, ROGERS R L, et al. Derivation of new readability formulas (Automated "
+            "Readability Index, Fog Count and Flesch Reading Ease Formula) for Navy enlisted personnel: Research "
+            "Branch Report 8-75[R]. Millington, TN: Chief of Naval Technical Training, Naval Air Station Memphis, "
+            "1975. https://apps.dtic.mil/sti/pdfs/ADA006655.pdf."
+        ),
+        (
+            "Kincaid, J. P., Fishburne, R. P., Jr., Rogers, R. L., & Chissom, B. S. (1975). Derivation of new "
+            "readability formulas (Automated Readability Index, Fog Count and Flesch Reading Ease Formula) for "
+            "Navy enlisted personnel (Research Branch Report 8-75). Chief of Naval Technical Training, Naval Air "
+            "Station Memphis. https://apps.dtic.mil/sti/pdfs/ADA006655.pdf"
+        ),
+    ),
+    "mann1947": (
+        "Mann 1947",
+        "Mann & Whitney 1947",
+        (
+            "MANN H B, WHITNEY D R. On a test of whether one of two random variables is stochastically larger "
+            "than the other[J]. The Annals of Mathematical Statistics, 1947, 18(1): 50-60."
+        ),
+        (
+            "Mann, H. B., & Whitney, D. R. (1947). On a test of whether one of two random variables is "
+            "stochastically larger than the other. The Annals of Mathematical Statistics, 18(1), 50–60."
+        ),
+    ),
+    "spearman1904": (
+        "Spearman 1904",
+        "Spearman 1904",
+        (
+            "SPEARMAN C. The proof and measurement of association between two things[J]. The American Journal "
+            "of Psychology, 1904, 15(1): 72-101."
+        ),
+        (
+            "Spearman, C. (1904). The proof and measurement of association between two things. The American "
+            "Journal of Psychology, 15(1), 72–101."
+        ),
+    ),
+    "kilgarriff2004": (
+        "Kilgarriff 2004",
+        "Kilgarriff et al. 2004",
+        (
+            "KILGARRIFF A, RYCHLÝ P, SMRŽ P, et al. The Sketch Engine[C]//WILLIAMS G, VESSIER S. Proceedings of "
+            "the 11th EURALEX International Congress. Lorient: Université de Bretagne-Sud, 2004: 105-116. "
+            "https://euralex.org/publications/the-sketch-engine/."
+        ),
+        (
+            "Kilgarriff, A., Rychlý, P., Smrž, P., & Tugwell, D. (2004). The Sketch Engine. In G. Williams & S. "
+            "Vessier (Eds.), Proceedings of the 11th EURALEX International Congress (pp. 105–116). Université de "
+            "Bretagne-Sud. https://euralex.org/publications/the-sketch-engine/"
+        ),
+    ),
+    "kilgarriff2014": (
+        "Kilgarriff 2014",
+        "Kilgarriff et al. 2014",
+        (
+            "KILGARRIFF A, BAISA V, BUŠTA J, et al. The Sketch Engine: ten years on[J]. Lexicography, 2014, "
+            "1(1): 7-36."
+        ),
+        (
+            "Kilgarriff, A., Baisa, V., Bušta, J., Jakubíček, M., Kovář, V., Michelfeit, J., Rychlý, P., & "
+            "Suchomel, V. (2014). The Sketch Engine: Ten years on. Lexicography, 1(1), 7–36."
+        ),
+    ),
+    "browne2023": (
+        "Browne 2023",
+        "Browne, Culligan & Phillips 2023",
+        (
+            "BROWNE C, CULLIGAN B, PHILLIPS J. The New General Service List: version 1.2[EB/OL]. (2023-04)"
+            "[2026-11-06]. https://www.newgeneralservicelist.com/new-general-service-list."
+        ),
+        (
+            "Browne, C., Culligan, B., & Phillips, J. (2023). The New General Service List (Version 1.2) [Word "
+            "list]. https://www.newgeneralservicelist.com/new-general-service-list"
+        ),
+    ),
 }
 
 # DOIs, appended as "DOI: …" (GB/T 7714) or "https://doi.org/…" (APA)
@@ -272,6 +395,12 @@ DOIS = {
     "dice1945": "10.2307/1932409",
     "cohen1960": "10.1177/001316446002000104",
     "qi2020": "10.18653/v1/2020.acl-demos.14",
+    "mccarthy2010": "10.3758/BRM.42.2.381",
+    "liu2008": "10.17791/jcs.2008.9.2.159",
+    "flesch1948": "10.1037/h0057532",
+    "mann1947": "10.1214/aoms/1177730491",
+    "spearman1904": "10.2307/1412159",
+    "kilgarriff2014": "10.1007/s40607-014-0009-9",
 }
 
 
@@ -350,6 +479,72 @@ METRICS = {
         "Dice = 2a / (n + b)，a 为共现句数，n 为命中句数，b 为该词在目标侧的句数",
         ("dice1945",),
     ),
+    # P10 text metrics (words = tokens with a letter or CJK character; types = lower-cased forms)
+    "ttr": ("TTR", "TTR = 词种 / 词数（词不含标点、符号与纯数字）", ()),
+    "sttr": (
+        "STTR",
+        "每 n 词（STTR 窗口）一段的 TTR 均值，末尾不足一段不计；词数少于 100 的文档不计",
+        (),
+    ),
+    "mtld": (
+        "MTLD",
+        (
+            "顺读、倒读各一遍：累计 TTR 降到 0.72 记一个因子并重新累计，剩余部分记 (1 − TTR) / (1 − 0.72) 个因子；"
+            "MTLD = 词数 / 因子数，取两遍均值；词数少于 100 的文档不计"
+        ),
+        ("mccarthy2010",),
+    ),
+    "lexical_density": (
+        "词汇密度",
+        "实词数 / 词数；实词为 UPOS NOUN、PROPN、VERB、ADJ、ADV，或 jieba 词性以 n、v、a、d 开头",
+        ("ure1971",),
+    ),
+    "mean_sentence_length": ("平均句长", "词数 / 句数", ()),
+    "mean_dependency_distance": (
+        "平均依存距离",
+        "MDD = Σ|中心词序号 − 从属词序号| / 依存数，不含根，标点计入",
+        ("liu2008",),
+    ),
+    "flesch_reading_ease": (
+        "Flesch 易读度",
+        "206.835 − 1.015 × 词数 / 句数 − 84.6 × 音节数 / 词数（英文；音节按元音组估计）",
+        ("flesch1948",),
+    ),
+    "flesch_kincaid_grade": (
+        "Flesch-Kincaid 年级",
+        "0.39 × 词数 / 句数 + 11.8 × 音节数 / 词数 − 15.59（英文）",
+        ("kincaid1975",),
+    ),
+    "coverage": (
+        "词次覆盖率",
+        "该等级的词次 / 词数 × 100；英文按小写词元、中文按词形匹配词表，未匹配的词计入表外",
+        (),
+    ),
+    "ngsl": (
+        "NGSL 1.2",
+        "New General Service List 1.2（CC BY-SA 4.0），等级为 SFI 排名段 1–1000、1001–2000、2001–2809",
+        ("browne2023",),
+    ),
+    "mann_whitney": (
+        "Mann-Whitney U",
+        "每篇文档的每百万词为一个观测，比较两项；正态近似，含结校正与连续性校正；效应量 r = z / √n",
+        ("mann1947",),
+    ),
+    "spearman": (
+        "Spearman ρ",
+        "每篇文档的字段值与每百万词的秩相关；p 值按 t 分布（自由度 n − 2），双侧",
+        ("spearman1904",),
+    ),
+    "word_sketch": (
+        "Word Sketch",
+        "按 UD 依存关系（主语、宾语、修饰、并列、介词短语等）分栏列出搭配词元，logDice 在各关系内计算",
+        ("kilgarriff2004", "kilgarriff2014"),
+    ),
+    "logdice_diff": (
+        "logDice 差",
+        "logDice(A) − logDice(B)，一方没有该搭配时其 logDice 记 0",
+        (),
+    ),
 }
 
 # column / parameter value → metric key
@@ -361,6 +556,9 @@ COLUMN_METRIC = {
     "log_ratio_ci_high": "log_ratio_ci",
     "target_pm": "per_million",
     "ref_pm": "per_million",
+    "logdice_a": "logdice",
+    "logdice_b": "logdice",
+    "diff": "logdice_diff",
 }
 
 METHODS = {
@@ -371,6 +569,11 @@ METHODS = {
     "distribution": "分布",
     "breakdown": "命中频次分解",
     "translations": "译法",
+    "text_metrics": "文本指标",
+    "vocab_profile": "词汇等级画像",
+    "compare": "多项对比",
+    "word_sketch": "Word Sketch",
+    "sketch_diff": "近义词对比（sketch diff）",
 }
 UNITS = {
     "word": "词形",
@@ -408,8 +611,21 @@ TOTALS = {
     "hit_sentences": "命中句数",
     "aligned_sentences": "有对齐的命中句数",
     "unaligned": "无对齐的命中句数",
+    "words": "词数（不含标点）",
+    "node_freq": "节点词频次",
+    "node_freq_a": "词元 A 频次",
+    "node_freq_b": "词元 B 频次",
+    "items": "对比项数",
+    "notes": "说明",
 }
 SKIP_PARAMS = {"method", "project_id", "scope", "target", "reference", "layers"}
+SKIP_PARAMS |= {
+    "list_id",
+    "query_layers",
+    "item_scopes",
+}  # P10: written through other keys
+TESTS = {"mann_whitney": "Mann-Whitney U 检验", "spearman": "Spearman 秩相关"}
+VOCAB_BY = {"corpus": "全部范围", "document": "每篇文档"}
 
 
 def _n(v):
@@ -434,10 +650,41 @@ def _aligned(a):
     return f"{'含' if a.get('op') == '+' else '不含'} `{a.get('query', '')}`"
 
 
-def _param(key, v):
+def _p10_param(key, v, method):
+    """P10 parameters whose wording depends on the method; None when the key is not one of them."""
+    if method == "vocab_profile" and key == "by":
+        return "按 " + VOCAB_BY.get(v, f"字段 {v}")
+    if method == "compare" and key == "by":
+        return f"按字段 {v}"
+    if method == "compare" and key == "items":
+        return "对比项 " + "；".join(
+            f"{i.get('label')}：`{i.get('query')}`" for i in v if isinstance(i, dict)
+        )
+    if key == "metrics" and isinstance(v, list):
+        return "指标 " + "、".join(METRICS.get(m, (m,))[0] for m in v)
+    if key == "group_by":
+        return f"按字段 {v} 分组汇总"
+    if key == "sttr_window":
+        return f"STTR 窗口 {v} 词"
+    if key == "vocab_list" and isinstance(v, dict):
+        extra = "；".join(x for x in (v.get("source"), v.get("license")) if x)
+        return f"词表 {v.get('name', '')}" + (f"（{extra}）" if extra else "")
+    if key == "test":
+        return f"检验 {TESTS[v]}" if v in TESTS else None
+    if key in ("lemma", "lemma_a", "lemma_b"):
+        names = {"lemma": "词元", "lemma_a": "词元 A", "lemma_b": "词元 B"}
+        return f"{names[key]} {v}"
+    if key == "queries":
+        return "查询式 " + "；".join(f"`{q}`" for q in v) if v else None
+    return None
+
+
+def _param(key, v, method=None):
     """One parameter as Chinese text, or None to leave it out."""
     if v is None or key in SKIP_PARAMS:
         return None
+    if (text := _p10_param(key, v, method)) is not None:
+        return text
     if key == "unit":
         return f"单位 {UNITS.get(v, v)}"
     if key == "n":
@@ -497,6 +744,19 @@ def stat_metrics(stat) -> list[str]:
     keys += list(p.get("measures") or [])
     if p.get("measure"):
         keys.append(p["measure"])
+    method = stat.get("method")
+    keys = ["per_million" if k.startswith("per_million_") else k for k in keys]
+    if method == "vocab_profile":
+        keys.append("coverage")
+        if (p.get("vocab_list") or {}).get("builtin"):
+            keys.append("ngsl")
+    if method == "compare":
+        if len(p.get("items") or []) == 2 and not p.get("by"):
+            keys += ["ll", "log_ratio"]
+        if p.get("test") in TESTS:
+            keys.append(p["test"])
+    if method in ("word_sketch", "sketch_diff"):
+        keys += ["word_sketch", "logdice"]
     for k in keys:
         m = COLUMN_METRIC.get(k, k)
         if m in METRICS and m not in found:
@@ -590,15 +850,20 @@ def _search_line(i, s):
 
 
 def _totals(totals):
+    """Scalars and one level of dicts; lists (P10 groups, relations, notes …) are left out except notes."""
     out = []
     for k, v in (totals or {}).items():
         if isinstance(v, dict):
             inner = "，".join(
                 f"{TOTALS.get(a, a)} {_n(b)}"
                 for a, b in v.items()
-                if not isinstance(b, dict)
+                if not isinstance(b, dict | list)
             )
-            out.append(f"{'参照' if k == 'reference' else k}：{inner}")
+            if inner:
+                out.append(f"{'参照' if k == 'reference' else k}：{inner}")
+        elif isinstance(v, list):
+            if k == "notes" and v:
+                out.append(f"{TOTALS[k]}：{'，'.join(map(str, v))}")
         else:
             out.append(f"{TOTALS.get(k, k)} {_n(v)}")
     return "；".join(out)
@@ -613,7 +878,7 @@ def _stat_lines(sec, i, s, refs):
     if s.get("reference"):
         scope += f"；参照：{s['reference']}"
     lines.append(scope)
-    params = [x for k, v in p.items() if (x := _param(k, v))]
+    params = [x for k, v in p.items() if (x := _param(k, v, method))]
     if params:
         lines.append("- 参数：" + "；".join(params))
     if s.get("totals"):
