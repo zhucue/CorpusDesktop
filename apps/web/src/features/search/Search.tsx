@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { App, Form, Input, Modal, Popover, Select } from "antd";
+import { App, Dropdown, Form, Input, Modal, Popover, Select } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
@@ -41,6 +41,7 @@ import { posGroups } from "./posTags";
 import { convertScript, guessScript, scriptLabel } from "./script";
 import { sortNote, useCountPoll, type SearchCounts, type SearchPage } from "./countPoll";
 import { AlignedInput, BreakdownMenu, isAlignedError, parseAlignedParam, SampleDialog, TranslationsButton } from "./SearchTools";
+import SemanticSearch from "./SemanticSearch";
 import "./search.css";
 
 const PAGE_SIZE = 50;
@@ -438,6 +439,7 @@ export default function Search() {
   const [params, setParams] = useSearchParams();
 
   const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<"query" | "semantic">("query");
   const [tempScope, setTempScope] = useState<SearchScope | null>(null); // filtered scope from stats links
   const [ctxMode, setCtxMode] = useState<"char" | "sentence" | "paragraph">("char");
   const [sort, setSort] = useState<SearchRequest["sort"]>("position");
@@ -696,6 +698,9 @@ export default function Search() {
   const exporter = useExportJob(projectId);
   const exportAs = (format: "csv" | "xlsx") =>
     exporter.start({ url: "/search/export", body: { ...withoutSearchId(req!), format, project_id: projectId }, label: format.toUpperCase() });
+  // 导出整洁数据 (contracts/p10.md §三): one row per document of the current scope, hit columns for the current query
+  const tidyExport = (format: "csv" | "xlsx") =>
+    exporter.start({ url: "/stats/tidy_export", body: { project_id: projectId, scope: req!.scope, queries: [req!.query], format }, label: `整洁数据 ${format.toUpperCase()}` });
 
   const saveQuery = useMutation({
     mutationFn: (name: string) => api.post<SavedQuery>(`/projects/${projectId}/queries`, { name, query: query.trim(), scope }),
@@ -831,6 +836,7 @@ export default function Search() {
         title="检索"
         actions={
           <>
+            <SearchMode value={mode} onChange={setMode} />
             {/* direct corpus / subcorpus picker (QA Q28) */}
             <ScopeSelect
               projectId={projectId}
@@ -841,7 +847,7 @@ export default function Search() {
               }}
               width={220}
             />
-            <button className="btn s" type="button" onClick={() => setSaving(true)} disabled={!query.trim() || !scope || !!tempScope}>
+            <button className="btn s" type="button" onClick={() => setSaving(true)} disabled={mode === "semantic" || !query.trim() || !scope || !!tempScope}>
               <Icon name="plus" size={14} />
               <span className="lbl">保存查询</span>
             </button>
@@ -865,6 +871,10 @@ export default function Search() {
         }}
       />
       <div className="content">
+        {mode === "semantic" ? (
+          <SemanticSearch projectId={projectId} scope={scope} corpus={info.corpus} />
+        ) : (
+        <>
         <section className="card query-card" aria-label="查询">
           <form
             className="row"
@@ -1087,6 +1097,22 @@ export default function Search() {
                     XLSX
                   </button>
                 </Tip>
+                <Dropdown
+                  disabled={!req || exporter.busy}
+                  trigger={["click"]}
+                  menu={{
+                    items: [
+                      { key: "csv", label: "CSV" },
+                      { key: "xlsx", label: "XLSX" },
+                    ],
+                    onClick: ({ key }) => tidyExport(key as "csv" | "xlsx"),
+                  }}
+                >
+                  <button className="btn s" type="button" disabled={!req || exporter.busy}>
+                    <Icon name="download" size={14} />
+                    导出整洁数据
+                  </button>
+                </Dropdown>
               </div>
               <ErrorAlert error={parseBad || alignedError ? null : search.error} style={{ margin: 16 }} />
               {pollError ? <ErrorAlert error={pollError} style={{ margin: 16 }} /> : null}
@@ -1180,6 +1206,8 @@ export default function Search() {
             />
           </section>
         )}
+        </>
+        )}
       </div>
 
       <SampleDialog open={sampling} onClose={() => setSampling(false)} projectId={projectId} req={req} hits={counts?.complete ? counts.hits : null} />
@@ -1200,6 +1228,23 @@ export default function Search() {
         </Form>
       </Modal>
     </>
+  );
+}
+
+function SearchMode({ value, onChange }: { value: "query" | "semantic"; onChange: (v: "query" | "semantic") => void }) {
+  return (
+    <div className="seg-mini" role="tablist" aria-label="检索方式">
+      {(
+        [
+          ["query", "查询式"],
+          ["semantic", "语义"],
+        ] as const
+      ).map(([v, l]) => (
+        <button key={v} type="button" role="tab" aria-selected={value === v} onClick={() => onChange(v)}>
+          {l}
+        </button>
+      ))}
+    </div>
   );
 }
 

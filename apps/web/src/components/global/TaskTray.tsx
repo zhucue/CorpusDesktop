@@ -18,6 +18,7 @@ export const jobKindLabels: Record<string, string> = {
   kb_import: "文献导入",
   kb_summarize: "文献摘要",
   kb_extract: "术语抽取",
+  embed_corpus: "语义索引",
 };
 
 /** Jobs with a file to download (exports; knowledge-base exports may use their own kind). */

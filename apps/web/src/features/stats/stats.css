@@ -23,3 +23,17 @@
 .stat-tabs .ant-tabs-nav { margin-bottom: 0; }
 .chart-card { position: sticky; top: 76px; }
 .col-tip { cursor: help; border-bottom: 1px dotted var(--line); }
+/* P10 对比: one row per item (标签 · 范围 · 查询式), full width of the parameter bar. */
+.cmp-items { flex-basis: 100%; display: flex; flex-direction: column; gap: 22px; }
+.cmp-item { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.cmp-item > .btn { margin-bottom: 4px; }
+/* P10 词汇画像: one card per relation; 近义词对比: three columns per relation. */
+.sketch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; align-items: start; }
+.sketch-col .stat-tbl td, .sketch-col .stat-tbl th { padding: 6px 12px; }
+.sketch-none { padding: 12px 16px; }
+.diff-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line-soft); }
+.diff-col + .diff-col { border-left: 1px solid var(--line-soft); }
+.diff-col h4 { margin: 0; padding: 10px 12px 4px; font-size: 12px; font-weight: 600; color: var(--text-2); }
+.diff-col .stat-tbl td, .diff-col .stat-tbl th { padding: 6px 12px; }
+@media (max-width: 900px) { .diff-cols { grid-template-columns: 1fr; } .diff-col + .diff-col { border-left: 0; border-top: 1px solid var(--line-soft); } }
+.vocab-upload { border-top: 1px solid var(--line-soft); padding-top: 16px; }

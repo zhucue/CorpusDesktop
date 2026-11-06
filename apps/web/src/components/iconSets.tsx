@@ -23,6 +23,7 @@ export const jobKindIcon: Record<JobKind, IconName> = {
   kb_import: "bookopen",
   kb_summarize: "sparkles",
   kb_extract: "booka",
+  embed_corpus: "sparkles",
 };
 
 export const jobStateIcon: Record<JobState, IconName> = {
@@ -41,6 +42,11 @@ export const statIcon: Record<StatMethod, IconName> = {
   distribution: "barchart",
   breakdown: "listtree",
   translations: "languages",
+  text_metrics: "activity",
+  vocab_profile: "layers",
+  compare: "scale",
+  word_sketch: "columns",
+  sketch_diff: "diff",
 };
 
 export const layerIcon: Record<LayerKind, IconName> = {

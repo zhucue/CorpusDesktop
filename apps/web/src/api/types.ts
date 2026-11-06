@@ -225,7 +225,7 @@ export interface SavedQuery {
 }
 
 export type JobState = "queued" | "running" | "succeeded" | "failed" | "cancelled";
-export type JobKind = "import" | "index" | "export" | "stats" | "preannotate" | "kb_import" | "kb_summarize" | "kb_extract";
+export type JobKind = "import" | "index" | "export" | "stats" | "preannotate" | "kb_import" | "kb_summarize" | "kb_extract" | "embed_corpus";
 
 export interface Job {
   id: string;
@@ -271,7 +271,143 @@ export interface Page<T> {
 // ---------- P2: statistics ----------
 
 /** P2 methods plus P8 breakdown (命中分解) and translations (译法), contracts/p8.md §一、§四. */
-export type StatMethod = "frequency" | "ngrams" | "collocations" | "keywords" | "distribution" | "breakdown" | "translations";
+export type StatMethod =
+  | "frequency"
+  | "ngrams"
+  | "collocations"
+  | "keywords"
+  | "distribution"
+  | "breakdown"
+  | "translations"
+  // P10 (contracts/p10.md §一、§二、§四、§五)
+  | "text_metrics"
+  | "vocab_profile"
+  | "compare"
+  | "word_sketch"
+  | "sketch_diff";
+
+/** POST /stats/text_metrics `metrics` (the page always sends words and sentences). */
+export type TextMetric =
+  | "words"
+  | "sentences"
+  | "ttr"
+  | "sttr"
+  | "mtld"
+  | "lexical_density"
+  | "mean_sentence_length"
+  | "mean_dependency_distance"
+  | "flesch_reading_ease"
+  | "flesch_kincaid_grade";
+
+export interface TextMetricsRequest {
+  project_id: string;
+  scope: SearchScope;
+  metrics?: TextMetric[];
+  /** Metadata field; documents without it go to "（无）". */
+  group_by?: string;
+  sttr_window: number;
+}
+
+/** totals.groups of text_metrics with group_by: per metric, one entry per field value (documents with a value). */
+export type TextMetricGroups = Record<string, { value: string; documents: number; mean: number | null; sd: number | null }[]>;
+
+/** One field value with mean / sd per metric (the page's view of TextMetricGroups). */
+export interface TextMetricGroup {
+  value: string;
+  documents: number;
+  mean: Record<string, number | null>;
+  sd: Record<string, number | null>;
+}
+
+/** GET /projects/{id}/vocab-lists item; project_id null = built-in (NGSL). */
+export interface VocabList {
+  id: string;
+  project_id: string | null;
+  builtin?: boolean;
+  name: string;
+  language: string;
+  /** Level names in order. */
+  levels: string[];
+  source?: string | null;
+  license?: string | null;
+  /** Number of entries, when the API gives it. */
+  entries?: number | null;
+  created_by?: string | null;
+  created_at: string;
+}
+
+/** POST /stats/vocab_profile `by`: whole range, per document, or a metadata field. */
+export type VocabBy = "corpus" | "document" | (string & {});
+
+export interface VocabProfileRequest {
+  project_id: string;
+  scope: SearchScope;
+  list_id: string;
+  by: VocabBy;
+}
+
+export type CompareTest = "none" | "mann_whitney" | "spearman";
+
+export interface CompareItem {
+  label: string;
+  scope: SearchScope;
+  query: string;
+}
+
+export interface CompareRequest {
+  project_id: string;
+  /** 2–10 items. */
+  items: CompareItem[];
+  by?: string | null;
+  test?: CompareTest;
+}
+
+/** totals.test of compare; one observation per document (its hits per million). z, p, r null when σ = 0. */
+export type CompareTestResult =
+  | { method: "mann_whitney"; u: number | null; z: number | null; p: number | null; r: number | null; n1: number; n2: number }
+  | { method: "spearman"; field: string; items: { label: string; rho: number | null; p: number | null; n: number }[] };
+
+/** totals.relations of word_sketch / sketch_diff, in display order. */
+export interface SketchRelation {
+  key: string;
+  label: string;
+  freq?: number;
+  freq_a?: number;
+  freq_b?: number;
+  rows: number;
+}
+
+export interface WordSketchRequest {
+  project_id: string;
+  scope: SearchScope;
+  lemma: string;
+  pos?: string;
+  /** Chinese: the dependency layer (default: the corpus's latest finished dependency preannotation layer). */
+  layers?: { dep?: string };
+  min_freq: number;
+  top: number;
+}
+
+export interface SketchDiffRequest {
+  project_id: string;
+  scope: SearchScope;
+  lemma_a: string;
+  lemma_b: string;
+  pos?: string;
+  layers?: { dep?: string };
+  min_freq: number;
+  top: number;
+}
+
+/** POST /stats/tidy_export → Job (kind export). */
+export interface TidyExportRequest {
+  project_id: string;
+  scope: SearchScope;
+  /** ≤ 10; each adds q{n}_hits and q{n}_pm. */
+  queries?: string[];
+  metrics?: boolean;
+  format: "csv" | "xlsx";
+}
 
 /** POST /stats/breakdown `by`: the hit itself, its left / right neighbour, or a document metadata field. */
 export type BreakdownBy = "word" | "lemma" | "pos" | "left1" | "right1" | `meta:${string}`;
@@ -321,6 +457,12 @@ export interface StatRow {
   search_scope: SearchScope;
   /** P8 translations rows: the translation condition to open the search with. */
   search_aligned?: AlignedCondition | null;
+  /** P10 compare rows with by: one search per item (its query, the item's corpus narrowed to the row's value). */
+  searches?: { label: string; search_query: string | null; search_scope: SearchScope }[];
+  /** P10 word_sketch / sketch_diff: the dependency layer the search must use. */
+  search_layers?: SearchRequest["layers"];
+  /** P10 sketch_diff: the search for lemma B (search_query is A's, or B's when only B has it). */
+  search_query_b?: string | null;
 }
 
 export interface StatResult {
@@ -347,6 +489,27 @@ export interface StatResult {
     scope_aligned_sentences?: number;
     /** P8 keywords: word types tested (Bonferroni). */
     types_compared?: number;
+    /** P10 text_metrics: group summary (group_by) and notes (e.g. documents under 100 words without STTR / MTLD). */
+    groups?: TextMetricGroups;
+    group_by?: string;
+    notes?: string[];
+    /** P10 text_metrics / vocab_profile: words without punctuation. */
+    words?: number;
+    /** P10 vocab_profile: level names in order, 表外 last; by=corpus: the most frequent off-list words. */
+    levels?: string[];
+    off_list?: { item: string; freq: number; search_query: string | null }[];
+    /** P10 compare: number of items; two items without by: LL / log ratio (keyword formulas); the test result. */
+    items?: number;
+    comparison?: { ll: number | null; log_ratio: number | null; significance?: string | null; smoothed?: boolean };
+    test?: CompareTestResult | null;
+    /** P10 word_sketch / sketch_diff. */
+    relations?: SketchRelation[];
+    lemma?: string;
+    lemma_a?: string;
+    lemma_b?: string;
+    node_freq?: number;
+    node_freq_a?: number;
+    node_freq_b?: number;
   };
   created_at: string;
   columns: StatColumn[];

@@ -6,13 +6,14 @@ import { api, errorText, type Doc, type DocSentence, type Job, type MetadataFiel
 import { Empty, ErrorAlert, Skeleton, Tip } from "../../components/common";
 import { Icon } from "../../components/Icon";
 import { canEdit, useCorpus, useJobCreated, useMe, useProject, useProjectId } from "../../lib/data";
+import { SemanticIndexPanel } from "../search/SemanticIndexPanel";
 import { fmt, fmtRelative, fmtTime, fmtVersion, metadataText } from "../../lib/format";
 import { CorpusMetaList, corpusProfile } from "./CorpusMeta";
 import { DeleteConfirm, type DeleteTarget } from "./DeleteConfirm";
 import { draftFrom, emptyMeta, MetadataInput, metadataFromDraft, metaDraftRule, type MetaDraft } from "./MetadataInput";
 import { StatusCell } from "./StatusCell";
 import { TableMappingFields, useTableMapping } from "./TableMapping";
-import { AUTO_LANGUAGE, FilePicker, uploadFiles, uploadLanguageOptions } from "./UploadDialog";
+import { AUTO_LANGUAGE, FilePicker, FORMATS_HINT, uploadFiles, uploadLanguageOptions, useImportNotice } from "./UploadDialog";
 
 const PAGE_SIZE = 50;
 const SENTENCE_PAGE = 50;
@@ -21,6 +22,7 @@ export default function CorpusDrawer({ corpusId, onClose }: { corpusId: string |
   const corpus = useCorpus(corpusId ?? undefined);
   const project = useProject();
   const me = useMe();
+  const projectId = useProjectId();
   const c = corpus.data;
   const editable = !!c && ((canEdit(project.data) && c.project_id !== null) || (c.project_id === null && !!me.data?.is_admin));
 
@@ -90,6 +92,7 @@ export default function CorpusDrawer({ corpusId, onClose }: { corpusId: string |
           </div>
           {c.description && <p className="sm sub">{c.description}</p>}
           <CorpusMetaList meta={c.meta} />
+          {(c.status === "ready" || c.status === "stale") && <SemanticIndexPanel corpusId={c.id} projectId={projectId} />}
           <Tabs
             items={[
               { key: "docs", label: "文档", children: <Documents corpusId={c.id} editable={editable} /> },
@@ -295,6 +298,7 @@ function UploadTab({ corpusId }: { corpusId: string }) {
   const jobCreated = useJobCreated();
   const [files, setFiles] = useState<UploadFile[]>([]);
   const table = useTableMapping(files.map((f) => f.originFileObj as File));
+  const watchImport = useImportNotice();
   const upload = useMutation({
     mutationFn: (v: { language?: string; metadata?: MetaDraft }) =>
       uploadFiles(
@@ -307,6 +311,7 @@ function UploadTab({ corpusId }: { corpusId: string }) {
     onSuccess: (job: Job) => {
       setFiles([]);
       jobCreated(projectId);
+      watchImport(job);
       qc.invalidateQueries({ queryKey: ["corpus", corpusId] });
       qc.invalidateQueries({ queryKey: ["corpora", projectId] });
       message.success(
@@ -319,7 +324,7 @@ function UploadTab({ corpusId }: { corpusId: string }) {
   return (
     <Form layout="vertical" onFinish={upload.mutate} initialValues={{ language: AUTO_LANGUAGE, metadata: emptyMeta() }}>
       <Form.Item>
-        <FilePicker files={files} setFiles={setFiles} hint="TXT · DOCX · CSV/TSV · CoNLL-U · TMX" />
+        <FilePicker files={files} setFiles={setFiles} hint={FORMATS_HINT} />
       </Form.Item>
       <TableMappingFields state={table} />
       <Form.Item name="language" label="语言">

@@ -14,6 +14,11 @@ export const methodLabels: Record<StatResult["method"], string> = {
   distribution: "分布",
   breakdown: "命中分解",
   translations: "译法",
+  text_metrics: "文本指标",
+  vocab_profile: "词汇等级",
+  compare: "对比",
+  word_sketch: "词汇画像",
+  sketch_diff: "近义词对比",
 };
 
 /**
@@ -86,7 +91,13 @@ export function StatTable({
   const navigate = useNavigate();
   const link = linkColumn(stat);
   const barMax = cellBar ? Math.max(...stat.rows.map((r) => num(r.values[cellBar]) ?? 0), 1) : 1;
-  const go = (q: string | null | undefined, row: StatRow) => q && navigate(rowSearchHref(projectId, q, row.search_scope, statLayers(stat), row.search_aligned));
+  const go = (q: string | null | undefined, row: StatRow) => q && navigate(rowSearchHref(projectId, q, row.search_scope, row.search_layers ?? statLayers(stat), row.search_aligned));
+  /** P10 compare rows with by: hits_{i} opens item i's search narrowed to the row's value. */
+  const itemSearch = (key: string, row: StatRow) => {
+    const m = /^hits_(\d+)$/.exec(key);
+    const s = m ? row.searches?.[Number(m[1]) - 1] : undefined;
+    return s?.search_query ? s : undefined;
+  };
   const coll = stat.method === "collocations";
 
   return (
@@ -122,7 +133,18 @@ export function StatTable({
                   className={isNum ? "r num" : undefined}
                   style={c.key === highlight ? { color: "var(--accent)", fontWeight: 600 } : c.type === "string" && c === stat.columns[0] ? { fontWeight: 500 } : undefined}
                 >
-                  {c.key === link && row.search_query && v != null ? (
+                  {itemSearch(c.key, row) && v != null ? (
+                    <button
+                      className="numlink"
+                      type="button"
+                      onClick={() => {
+                        const s = itemSearch(c.key, row)!;
+                        navigate(rowSearchHref(projectId, s.search_query!, s.search_scope, row.search_layers ?? statLayers(stat)));
+                      }}
+                    >
+                      <Cell col={c} value={v} />
+                    </button>
+                  ) : c.key === link && row.search_query && v != null ? (
                     <button className="numlink" type="button" onClick={() => go(row.search_query, row)}>
                       <Cell col={c} value={v} />
                     </button>
@@ -151,7 +173,7 @@ export function StatTable({
                       <Icon name="right" size={14} />
                     </button>
                   </>
-                ) : (
+                ) : stat.method === "text_metrics" || row.searches ? null : (
                   <button className="back" type="button" disabled={!row.search_query} onClick={() => go(row.search_query, row)}>
                     回到例句
                     <Icon name="right" size={14} />

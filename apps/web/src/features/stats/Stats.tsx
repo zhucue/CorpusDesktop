@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, App, Checkbox, Drawer, Form, Input, InputNumber, Popconfirm, Select, Tabs } from "antd";
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
-import { MAX_PAGE_SIZE, api, errorText, type StatMethod, type Corpus, type MetadataField, type Page, type Scope, type StatResult } from "../../api";
+import { Link, useSearchParams } from "react-router";
+import { MAX_PAGE_SIZE, api, errorCode, errorText, type StatMethod, type Corpus, type MetadataField, type Page, type Scope, type StatResult } from "../../api";
 import { Empty, ErrorAlert, exportTip, IndexPendingNote, Skeleton, Tip } from "../../components/common";
 import { ScopeSelect } from "../../components/common/ScopeSelect";
 import { Icon, type IconName } from "../../components/Icon";
@@ -15,6 +15,10 @@ import { describeScope, sameScope, useCorpora, useProjectId, useSubcorpora } fro
 import { useExportJob } from "../../lib/exportJob";
 import { fmt, fmtRelative, fmtShortTime } from "../../lib/format";
 import { measureKey } from "./columns";
+import { type Body, fieldLabel, ParamsCard, POS_OPTIONS, scopeRule, toScope } from "./formParts";
+import { isP10, P10MethodForm } from "./P10Forms";
+import { P10Result } from "./P10Results";
+import { TidyExportDialog } from "./TidyExport";
 import { MEASURE_LABELS, StatChart } from "./StatChart";
 import { methodLabels, StatTable } from "./StatTable";
 import "./stats.css";
@@ -22,7 +26,20 @@ import { useStatJob, useStatResult } from "./useStatJob";
 import { useLayers } from "../annotate/data";
 import { AlignmentStatsCard } from "../annotate/AlignStats";
 
-const METHODS: StatMethod[] = ["frequency", "ngrams", "collocations", "keywords", "distribution", "breakdown", "translations"];
+const METHODS: StatMethod[] = [
+  "frequency",
+  "ngrams",
+  "collocations",
+  "keywords",
+  "distribution",
+  "breakdown",
+  "translations",
+  "text_metrics",
+  "vocab_profile",
+  "compare",
+  "word_sketch",
+  "sketch_diff",
+];
 /** Methods with the 排除标点和数字 option (word / lemma units). */
 const PUNCT_METHODS: StatMethod[] = ["frequency", "ngrams", "collocations", "keywords", "translations"];
 /** Methods whose form offers the corpus's metadata fields. */
@@ -34,16 +51,6 @@ const UNIT_OPTIONS = [
   { value: "word", label: "词形" },
   { value: "lemma", label: "词元" },
 ];
-const POS_OPTIONS = [
-  ["NOUN", "名词"],
-  ["VERB", "动词"],
-  ["ADJ", "形容词"],
-  ["ADV", "副词"],
-  ["PRON", "代词"],
-  ["ADP", "介词"],
-  ["NUM", "数词"],
-  ["PROPN", "专名"],
-].map(([v, l]) => ({ value: v, label: `${l} ${v}` }));
 const TOP_OPTIONS = [50, 100, 200].map((n) => ({ value: n, label: `前 ${n}` }));
 const MEASURES = ["logdice", "mi", "t", "ll", "mi3", "delta_p", "z"].map((m) => ({ value: m, label: MEASURE_LABELS[m] }));
 const DEFAULT_MEASURES = ["logdice", "mi", "t", "ll"];
@@ -66,10 +73,6 @@ const BREAKDOWN_BY = [
   { value: "right1", label: "右一词" },
   { value: "meta", label: "元数据字段" },
 ];
-const fieldLabel = (f: string) => (f === "year" ? "年份 year" : f);
-
-type Body = Record<string, unknown>;
-
 /** Simplified / traditional script of a corpus (`meta.script`), as 简体 / 繁体; null when unknown. */
 function corpusScript(c: Corpus | null | undefined): "简体" | "繁体" | null {
   const s = (c?.meta as { script?: unknown } | undefined)?.script;
@@ -80,44 +83,11 @@ function corpusScript(c: Corpus | null | undefined): "简体" | "繁体" | null 
   return null;
 }
 
-function ParamsCard({
-  children,
-  onSubmit,
-  running,
-  blocked,
-  form,
-}: {
-  children: React.ReactNode;
-  onSubmit: () => void;
-  running: boolean;
-  /** The range does not suit the method (译法 on a non-parallel corpus). */
-  blocked?: boolean;
-  form: ReturnType<typeof Form.useForm>[0];
-}) {
-  return (
-    <Form form={form} className="card params" layout="vertical" onFinish={onSubmit} requiredMark={false}>
-      <div className="params-fields">{children}</div>
-      <button className="btn p params-run" type="submit" disabled={running || blocked}>
-        {running ? <span className="spin" /> : <Icon name="play" size={14} />}
-        计算
-      </button>
-    </Form>
-  );
-}
-
-/** Stored scopes carry nulls and a display name; the form wants a request scope. */
-function toScope(v: unknown): Scope | undefined {
-  const s = (v ?? {}) as { corpus_id?: string | null; subcorpus_id?: string | null; filter?: Record<string, unknown> | null };
-  if (s.subcorpus_id) return { subcorpus_id: s.subcorpus_id };
-  if (s.corpus_id && s.filter) return { corpus_id: s.corpus_id, filter: s.filter } as unknown as Scope;
-  if (s.corpus_id) return { corpus_id: s.corpus_id };
-  return undefined;
-}
-
 /** The plain corpus / subcorpus scope a stored result was computed on (target for keywords), for the shared scope. */
 function resultScope(stat: StatResult): Scope | undefined {
   const p = stat.params as Body;
-  const s = toScope(stat.method === "keywords" ? p.target : p.scope) ?? toScope(stat.scope);
+  const first = stat.method === "compare" && Array.isArray(p.items) ? (p.items as Body[])[0]?.scope : undefined;
+  const s = toScope(stat.method === "keywords" ? p.target : (first ?? p.scope)) ?? toScope(stat.scope);
   return s && !("filter" in s) ? s : undefined;
 }
 
@@ -141,10 +111,6 @@ function formValues(stat: StatResult): Body {
   }
   if (stat.method === "translations") Object.assign(v, { query: p.query ?? undefined, measure: p.measure, target_language: p.target_language ?? undefined });
   return Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined && x !== null));
-}
-
-function scopeRule(msg = "请选择范围") {
-  return [{ required: true, message: msg }];
 }
 
 /** Warn when a keyword comparison mixes simplified and traditional corpora (meta.script). */
@@ -495,13 +461,15 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
   const t = stat.totals;
   const n = (v: number) => <span className="num">{fmt(v)}</span>;
   // Token totals count every token, punctuation included, also when punctuation is left out of the rows.
-  const parts: React.ReactNode[] = [
-    stat.scope.name,
-    <>
-      {n(t.tokens)} 词（含标点）
-      {stat.method === "keywords" && t.reference && <> 对 {n(t.reference.tokens)} 词</>}
-    </>,
-  ];
+  const parts: React.ReactNode[] = [stat.scope.name];
+  if (t.tokens != null)
+    parts.push(
+      <>
+        {n(t.tokens)} 词（含标点）
+        {stat.method === "keywords" && t.reference && <> 对 {n(t.reference.tokens)} 词</>}
+      </>,
+    );
+  parts.push(...p10Meta(stat));
   if (stat.method === "collocations" && t.node_hits != null) parts.push(<>节点 {n(t.node_hits)} 次</>);
   if ((stat.method === "distribution" || stat.method === "breakdown") && t.hits != null) parts.push(<>{n(t.hits)} 命中</>);
   if (stat.method === "breakdown" && typeof p.by === "string") parts.push(`按${breakdownByLabel(p.by)}`);
@@ -540,28 +508,32 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
     </span>
   );
 
+  const head = (
+    <div className="card-head">
+      <h2>{stat.method === "ngrams" ? `${(p as { n?: number }).n ?? ""}-gram` : methodLabels[stat.method]}</h2>
+      {meta}
+      <div className="grow" />
+      <span className="head-btns">
+        <button className="btn xs" type="button" onClick={() => setAppendix(true)}>
+          方法说明
+        </button>
+        <Tip title={exportTip("导出 CSV")}>
+          <button className="btn xs" type="button" disabled={exporter.busy} onClick={() => runExport("csv")}>
+            CSV
+          </button>
+        </Tip>
+        <Tip title={exportTip("导出 XLSX")}>
+          <button className="btn xs" type="button" disabled={exporter.busy} onClick={() => runExport("xlsx")}>
+            XLSX
+          </button>
+        </Tip>
+      </span>
+      {appendix && <MethodAppendix projectId={projectId} statIds={[stat.id]} onClose={() => setAppendix(false)} />}
+    </div>
+  );
   const table = (
     <div className="card" key="table">
-      <div className="card-head">
-        <h2>{stat.method === "ngrams" ? `${(p as { n?: number }).n ?? ""}-gram` : methodLabels[stat.method]}</h2>
-        {meta}
-        <div className="grow" />
-        <span className="head-btns">
-          <button className="btn xs" type="button" onClick={() => setAppendix(true)}>
-            方法说明
-          </button>
-          <Tip title={exportTip("导出 CSV")}>
-            <button className="btn xs" type="button" disabled={exporter.busy} onClick={() => runExport("csv")}>
-              CSV
-            </button>
-          </Tip>
-          <Tip title={exportTip("导出 XLSX")}>
-            <button className="btn xs" type="button" disabled={exporter.busy} onClick={() => runExport("xlsx")}>
-              XLSX
-            </button>
-          </Tip>
-        </span>
-      </div>
+      {head}
       {stat.rows.length === 0 ? (
         <Empty icon="barchart" text={`当前参数下无结果${(p as { min_freq?: number }).min_freq ? `（最低频次 ${(p as { min_freq?: number }).min_freq}）` : ""}`} />
       ) : (
@@ -569,9 +541,9 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
           <StatTable stat={stat} projectId={projectId} highlight={measure && measureKey(measure)} selected={picked} cellBar={stat.method === "ngrams" ? "freq" : undefined} />
         </div>
       )}
-      {appendix && <MethodAppendix projectId={projectId} statIds={[stat.id]} onClose={() => setAppendix(false)} />}
     </div>
   );
+  if (isP10(stat.method)) return <P10Result stat={stat} projectId={projectId} head={head} table={table} chartRef={chartRef} />;
   if (stat.method === "ngrams" || stat.rows.length === 0) return table;
 
   const chartTitle =
@@ -610,6 +582,31 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
     </div>
   );
   return <div className={`res ${stat.method === "distribution" ? "dist" : ""}`}>{stat.method === "distribution" ? [chart, table] : [table, chart]}</div>;
+}
+
+const TEST_LABELS: Record<string, string> = { mann_whitney: "Mann-Whitney U", spearman: "Spearman" };
+const VOCAB_BY: Record<string, string> = { corpus: "整体", document: "每篇" };
+
+/** Result header facts of the P10 methods (parameters that change how to read the numbers). */
+function p10Meta(stat: StatResult): React.ReactNode[] {
+  const p = stat.params as Body;
+  const t = stat.totals;
+  const out: React.ReactNode[] = [];
+  if (stat.method === "text_metrics") {
+    if (t.documents != null) out.push(`${fmt(t.documents)} 篇`);
+    if (p.sttr_window) out.push(`STTR 窗口 ${fmt(Number(p.sttr_window))} 词`);
+    if (p.group_by) out.push(`按 ${p.group_by}`);
+  }
+  if (stat.method === "vocab_profile" && typeof p.by === "string") out.push(`按${VOCAB_BY[p.by] ?? ` ${p.by}`}`);
+  if (stat.method === "compare") {
+    if (Array.isArray(p.items)) out.push(`${p.items.length} 项`);
+    if (p.by) out.push(`按 ${p.by}`);
+    if (typeof p.test === "string" && TEST_LABELS[p.test]) out.push(TEST_LABELS[p.test]);
+  }
+  if (stat.method === "word_sketch" && p.lemma) out.push(`词元 ${p.lemma}${p.pos ? `/${p.pos}` : ""}`);
+  if (stat.method === "sketch_diff" && p.lemma_a) out.push(`${p.lemma_a} 对 ${p.lemma_b}${p.pos ? ` · ${p.pos}` : ""}`);
+  if ((stat.method === "word_sketch" || stat.method === "sketch_diff") && p.min_freq) out.push(`最低频次 ${p.min_freq}`);
+  return out;
 }
 
 function breakdownByLabel(by: string): string {
@@ -680,6 +677,11 @@ function summary(s: StatResult): string {
   if (s.method === "keywords") return `${p.measure ?? ""} · ${p.unit ?? ""}${Array.isArray(p.items) && p.items.length ? ` · 指定 ${p.items.length} 词` : ""}`;
   if (s.method === "breakdown") return `${p.query ?? ""} · 按${breakdownByLabel(String(p.by ?? ""))}`;
   if (s.method === "translations") return `${p.query ?? ""} · ${p.unit ?? ""} · ${p.measure ?? ""}`;
+  if (s.method === "text_metrics") return p.group_by ? `按 ${p.group_by}` : `STTR 窗口 ${p.sttr_window ?? ""}`;
+  if (s.method === "vocab_profile") return `按${VOCAB_BY[String(p.by)] ?? ` ${p.by ?? ""}`}`;
+  if (s.method === "compare") return (Array.isArray(p.items) ? (p.items as Body[]).map((i) => String(i.label ?? "")).join(" / ") : "") + (p.by ? ` · 按 ${p.by}` : "");
+  if (s.method === "word_sketch") return `${p.lemma ?? ""}${p.pos ? `/${p.pos}` : ""}`;
+  if (s.method === "sketch_diff") return `${p.lemma_a ?? ""} 对 ${p.lemma_b ?? ""}`;
   return `${p.unit ?? ""}${p.pos ? ` · ${p.pos}` : ""}`;
 }
 
@@ -687,6 +689,7 @@ function summary(s: StatResult): string {
 function chartOffReason(stat: StatResult | undefined): string | null {
   if (!stat) return "先计算出结果";
   if (stat.method === "ngrams") return "n-gram 结果没有图表";
+  if (stat.method === "word_sketch" || stat.method === "sketch_diff") return "按栏显示，没有图表";
   if (stat.rows.length === 0) return "没有结果，无图表";
   return null;
 }
@@ -708,6 +711,7 @@ export default function Stats() {
   const disabledTab = (m: StatMethod) => m === "translations" && noParallel && tab !== "translations";
   const [reference, setReference] = useState<Scope | null>(null);
   const [savedOpen, setSavedOpen] = useState(false);
+  const [tidyOpen, setTidyOpen] = useState(false);
   const chartRef = useRef<EChartHandle>(null);
   const [params] = useSearchParams();
   const linked = useStatResult(params.get("stat"));
@@ -734,13 +738,13 @@ export default function Stats() {
 
   const disabledRef = useRef(disabledTab);
   disabledRef.current = disabledTab;
-  // 1–7 switch method.
+  // 1–9 switch to the first nine methods.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select, .ant-select")) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const n = Number(e.key);
-      if (n >= 1 && n <= METHODS.length && !disabledRef.current(METHODS[n - 1])) setTab(METHODS[n - 1]);
+      if (n >= 1 && n <= Math.min(9, METHODS.length) && !disabledRef.current(METHODS[n - 1])) setTab(METHODS[n - 1]);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -785,6 +789,10 @@ export default function Stats() {
               <Icon name="history" size={14} />
               <span className="lbl">统计结果</span>
             </button>
+            <button className="btn s" type="button" onClick={() => setTidyOpen(true)}>
+              <Icon name="filespreadsheet" size={14} />
+              <span className="lbl">导出整洁数据</span>
+            </button>
             {chartButton("svg")}
             {chartButton("png")}
           </>
@@ -809,21 +817,44 @@ export default function Stats() {
           className="stat-tabs"
         />
         <div className="col gap-20 panel-in" key={tab}>
-          <MethodForm
-            method={tab}
-            projectId={projectId}
-            scope={shell.scope}
-            onScope={shell.setScope}
-            reference={reference}
-            onReference={setReference}
-            initial={savedId ? saved.data : undefined}
-            running={running}
-            onRun={(body) => {
-              setOpened((o) => ({ ...o, [tab]: undefined }));
-              setRuns((r) => ({ ...r, [tab]: { body, n: (r[tab]?.n ?? 0) + 1 } }));
-            }}
-          />
-          {error ? <ErrorAlert error={error} /> : null}
+          {isP10(tab) ? (
+            <P10MethodForm
+              method={tab}
+              projectId={projectId}
+              scope={shell.scope}
+              onScope={shell.setScope}
+              initial={savedId ? saved.data : undefined}
+              running={running}
+              onRun={(body) => {
+                setOpened((o) => ({ ...o, [tab]: undefined }));
+                setRuns((r) => ({ ...r, [tab]: { body, n: (r[tab]?.n ?? 0) + 1 } }));
+              }}
+            />
+          ) : (
+            <MethodForm
+              method={tab}
+              projectId={projectId}
+              scope={shell.scope}
+              onScope={shell.setScope}
+              reference={reference}
+              onReference={setReference}
+              initial={savedId ? saved.data : undefined}
+              running={running}
+              onRun={(body) => {
+                setOpened((o) => ({ ...o, [tab]: undefined }));
+                setRuns((r) => ({ ...r, [tab]: { body, n: (r[tab]?.n ?? 0) + 1 } }));
+              }}
+            />
+          )}
+          {error ? (
+            <ErrorAlert error={error}>
+              {errorCode(error) === "NO_DEPENDENCIES" && (
+                <Link className="btn xs" to={`/p/${projectId}/annotate?kind=dep`}>
+                  去标注页建依存层
+                </Link>
+              )}
+            </ErrorAlert>
+          ) : null}
           {running && (
             <div className="card">
               <div className="card-head">
@@ -847,6 +878,7 @@ export default function Stats() {
           {tab === "frequency" && alignLayers.length > 0 && <AlignmentStatsCard projectId={projectId} layers={alignLayers} />}
         </div>
       </div>
+      <TidyExportDialog open={tidyOpen} onClose={() => setTidyOpen(false)} projectId={projectId} scope={shell.scope} />
       <SavedResults
         open={savedOpen}
         onClose={() => setSavedOpen(false)}

@@ -2,24 +2,31 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { App, Form, Input, Modal, Select, Upload, type UploadFile } from "antd";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { api, errorText, type Corpus, type Job, type Metadata, type TableMapping } from "../../api";
+import { api, errorText, type Corpus, type Job, type Metadata } from "../../api";
 import { CorpusStatusTag, ErrorAlert } from "../../components/common";
 import { Icon } from "../../components/Icon";
-import { useJobCreated } from "../../lib/data";
+import { isActiveJob, useJob, useJobCreated } from "../../lib/data";
 import { fmt } from "../../lib/format";
 import { emptyMeta, MetadataInput, metadataFromDraft, metaDraftRule, type MetaDraft } from "./MetadataInput";
-import { TableMappingFields, useTableMapping } from "./TableMapping";
+import { TableMappingFields, useTableMapping, type ImportMapping } from "./TableMapping";
 
+/** Languages with automatic annotation (engine.nlp.SUPPORTED). */
 export const languageOptions = [
   { value: "zh", label: "中文 zh" },
   { value: "en", label: "英语 en" },
+  { value: "ja", label: "日语 ja" },
+  { value: "fr", label: "法语 fr" },
+  { value: "de", label: "德语 de" },
+  { value: "es", label: "西班牙语 es" },
+  { value: "ru", label: "俄语 ru" },
 ];
 
 /** Upload language: "auto" detects each document's language from its text (CSV rows one by one). */
 export const AUTO_LANGUAGE = "auto";
 export const uploadLanguageOptions = [{ value: AUTO_LANGUAGE, label: "自动（按内容识别）" }, ...languageOptions];
 
-export const ACCEPT = ".txt,.docx,.csv,.tsv,.conllu,.tmx";
+export const ACCEPT = ".txt,.docx,.pdf,.csv,.tsv,.xlsx,.jsonl,.conllu,.tmx";
+export const FORMATS_HINT = "TXT · DOCX · PDF · CSV/TSV · XLSX · JSONL · CoNLL-U · TMX";
 
 export function parseMetadata(text: string | undefined): Metadata {
   if (!text?.trim()) return {};
@@ -63,7 +70,7 @@ export async function uploadFiles(
   files: File[],
   language?: string,
   metadata?: Metadata,
-  mapping?: TableMapping | null,
+  mapping?: ImportMapping | null,
 ): Promise<Job> {
   const body = new FormData();
   for (const f of files) body.append("files", f);
@@ -71,6 +78,30 @@ export async function uploadFiles(
   if (metadata && Object.keys(metadata).length) body.append("metadata", JSON.stringify(metadata));
   if (mapping) body.append("mapping", JSON.stringify(mapping));
   return api.post<Job>(`/corpora/${corpusId}/documents`, body);
+}
+
+/** "导入完成：3 篇，跳过重复 2 篇（a.csv #4、b.txt）" from an import job result. */
+export function importSummary(job: Job): string {
+  const r = job.result ?? {};
+  const skipped = Number(r.skipped_duplicates ?? 0);
+  const names = Array.isArray(r.duplicates) ? (r.duplicates as string[]) : [];
+  let text = `导入完成：${fmt(Number(r.documents ?? 0))} 篇`;
+  if (skipped) text += `，跳过重复 ${fmt(skipped)} 篇${names.length ? `（${names.slice(0, 3).join("、")}${skipped > 3 ? " 等" : ""}）` : ""}`;
+  return text;
+}
+
+/** Watch an import job after upload; when it succeeds, tell how many documents came in and how many were duplicates. */
+export function useImportNotice(): (job: Job) => void {
+  const { message } = App.useApp();
+  const [id, setId] = useState<string | null>(null);
+  const job = useJob(id, 2000);
+  useEffect(() => {
+    const j = job.data;
+    if (!j || isActiveJob(j)) return;
+    setId(null);
+    if (j.state === "succeeded") message.success(importSummary(j), 6);
+  }, [job.data, message]);
+  return (j: Job) => setId(j.id);
 }
 
 /** File picker shared by the upload dialog and the corpus drawer: duplicates are dropped with a notice. */
@@ -124,6 +155,7 @@ export default function UploadDialog({
   const own = corpora.filter((c) => c.project_id === projectId || (isAdmin && c.project_id === null));
   const current = own.find((c) => c.id === target);
   const table = useTableMapping(files.map((f) => f.originFileObj as File));
+  const watchImport = useImportNotice();
 
   // a closed dialog forgets its files (Esc, 取消 or after upload)
   useEffect(() => {
@@ -145,9 +177,10 @@ export default function UploadDialog({
         table.mapping,
       );
     },
-    onSuccess: () => {
+    onSuccess: (job: Job) => {
       qc.invalidateQueries({ queryKey: ["corpora", projectId] });
       jobCreated(projectId);
+      watchImport(job);
       message.success(
         <span>
           已创建导入任务，<Link to={`/p/${projectId}/jobs`}>查看任务</Link>
@@ -200,7 +233,7 @@ export default function UploadDialog({
           )
         )}
         <Form.Item label="文件" required>
-          <FilePicker files={files} setFiles={setFiles} hint="TXT · DOCX · CSV/TSV · CoNLL-U · TMX · Tatoeba 三件 TSV" />
+          <FilePicker files={files} setFiles={setFiles} hint={`${FORMATS_HINT} · Tatoeba 三件 TSV`} />
         </Form.Item>
         <TableMappingFields state={table} />
         <Form.Item name="language" label="语言">
