@@ -9,7 +9,7 @@ import { ResultContext } from "../../components/results/cards";
 import { reducedMotion } from "../../theme/motion";
 import { AiMessage } from "./ChainView";
 import { ToolList } from "./ToolList";
-import { useAgentChat, useAgentHealth, useSessions, type ChatItem } from "./useAgentChat";
+import { useAgentChat, useAgentHealth, useSessions, type AgentPageContext, type ChatItem } from "./useAgentChat";
 import "./assistant.css";
 
 export function HealthNotice({ compact }: { compact?: boolean }) {
@@ -43,6 +43,7 @@ export default function AssistantPanel({
   compact,
   prefill,
   onItems,
+  context,
 }: {
   projectId: string;
   sessionId: string | null;
@@ -53,9 +54,11 @@ export default function AssistantPanel({
   compact?: boolean;
   prefill?: string;
   onItems?: (items: ChatItem[]) => void;
+  /** Drawer: the page the question is asked from. */
+  context?: AgentPageContext | null;
 }) {
   const health = useAgentHealth();
-  const chat = useAgentChat({ projectId, sessionId, scope, onSessionCreated });
+  const chat = useAgentChat({ projectId, sessionId, scope, context, onSessionCreated });
   const [text, setText] = useState(prefill ?? "");
   const [scopeOpen, setScopeOpen] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
@@ -185,7 +188,9 @@ export default function AssistantPanel({
               value={text}
               disabled={disabled}
               data-slash={compact ? undefined : true}
-              placeholder={disabled ? "助手不可用" : compact ? "针对当前结果提问" : "向助手提问，Enter 发送，Shift+Enter 换行"}
+              placeholder={
+                disabled ? "助手不可用" : compact ? (context?.query ? "针对当前结果提问" : `针对「${scopeLabel || "当前范围"}」提问`) : "向助手提问，Enter 发送，Shift+Enter 换行"
+              }
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

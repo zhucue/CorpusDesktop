@@ -7,6 +7,10 @@ import { useProjectScope } from "../../lib/scope";
 export interface AssistantContext {
   label: string; // e.g. "当前检索 · 1,284 命中"
   scope: Scope | null;
+  /** Search page: the current query, its search_id and the selected hits (sent to the agent as page context). */
+  query?: string;
+  search_id?: string;
+  hit_ids?: string[];
 }
 
 interface ShellState {

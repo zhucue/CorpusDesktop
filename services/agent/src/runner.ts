@@ -13,10 +13,10 @@ import {
 import { ApiClient } from './api.ts';
 import type { Config } from './config.ts';
 import { MODEL_ERROR_TEXT, trackModelRequests, type ModelHandle } from './model.ts';
-import { describeScope, systemPrompt } from './prompt.ts';
+import { describeContext, describeScope, systemPrompt } from './prompt.ts';
 import type { Store, SessionRecord } from './store.ts';
 import { piName, piTools, runConfirmed, toolSpecs, type ToolOutput } from './tools.ts';
-import type { Message, Part, ToolCall } from './types.ts';
+import type { Message, PageContext, Part, ToolCall } from './types.ts';
 import { FenceSplitter } from './ui-stream.ts';
 
 /** Returns the write promise when the transport has one; the final event is awaited before the stream closes. */
@@ -34,6 +34,8 @@ export interface RunOptions {
   regenerate?: boolean;
   /** Proposals the user confirmed: run them first (no user message), then let the model report. */
   confirmed?: ToolCall[];
+  /** The page the question was asked from: prepended for the model, stored on the user message, not displayed. */
+  context?: PageContext;
 }
 
 export function sessionDir(dataDir: string, sessionId: string) {
@@ -110,7 +112,7 @@ export class Runner {
     const confirmed = options.confirmed ?? [];
     const userMessage: Message = {
       id: randomUUID(), role: 'user', content, parts: [{ type: 'text', text: content }], tool_calls: [],
-      created_at: new Date(started).toISOString(),
+      created_at: new Date(started).toISOString(), ...(options.context ? { context: options.context } : {}),
     };
     const assistant: Message = {
       id: randomUUID(), role: 'assistant', content: '', parts: [], tool_calls: [],
@@ -171,7 +173,8 @@ export class Runner {
       const dir = sessionDir(this.config.dataDir, session.id);
       mkdirSync(dir, { recursive: true });
 
-      let prompt = content;
+      const question = options.context ? `${describeContext(options.context)}\n\n${content}` : content;
+      let prompt = question;
       if (confirmed.length) {
         const reports: string[] = [];
         for (const proposed of confirmed) {
@@ -202,7 +205,7 @@ export class Runner {
           '请用中文简要告诉用户结果，需要时用组件呈现；不要再次调用这些工具。',
         ].join('\n');
       } else if (declined.length) {
-        prompt = `[平台消息] 用户取消了你上次提出的操作：${declined.join('；')}。除非用户再次要求，不要再提出。\n\n${content}`;
+        prompt = `[平台消息] 用户取消了你上次提出的操作：${declined.join('；')}。除非用户再次要求，不要再提出。\n\n${question}`;
       }
 
       const sessionManager = SessionManager.continueRecent(dir, dir);

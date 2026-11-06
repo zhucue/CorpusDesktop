@@ -47,7 +47,8 @@ test('PgStore session and message round trip', { skip: !url && 'AGENT_TEST_DATAB
 
     await store.updateSession(id, { title: '搭配', scope: { corpus_id: project }, state: 'running' });
     const now = Date.now();
-    await store.insertMessage(id, { id: randomUUID(), role: 'user', content: '你好', parts: [{ type: 'text', text: '你好' }], tool_calls: [], created_at: new Date(now).toISOString() });
+    const context = { page: 'search' as const, label: 'UD 中文', query: '翻译/v', search_id: 's1', hit_ids: ['d:1-2'], scope: { corpus_id: project } };
+    await store.insertMessage(id, { id: randomUUID(), role: 'user', content: '你好', parts: [{ type: 'text', text: '你好' }], tool_calls: [], created_at: new Date(now).toISOString(), context });
     const assistantId = randomUUID();
     await store.insertMessage(id, { id: assistantId, role: 'assistant', content: '', parts: [], tool_calls: [], created_at: new Date(now + 1).toISOString() });
     await store.updateMessage(assistantId, {
@@ -70,6 +71,10 @@ test('PgStore session and message round trip', { skip: !url && 'AGENT_TEST_DATAB
     assert.equal(messages[1].stopped, true);
     assert.equal(messages[1].parts.length, 2);
     assert.equal(messages[0].stopped, undefined);
+    // the page context round-trips the same way, kept out of the displayed parts
+    assert.deepEqual(messages[0].context, context);
+    assert.deepEqual(messages[0].parts, [{ type: 'text', text: '你好' }]);
+    assert.equal(messages[1].context, undefined);
 
     await store.resetRunning();
     assert.equal((await store.getSession(id))!.state, 'idle');

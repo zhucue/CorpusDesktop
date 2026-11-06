@@ -210,6 +210,8 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
   const jobPolls = new Map<string, number>();
   let jobPolled: () => void = () => {};
   const firstJobPoll = new Promise<void>(resolve => { jobPolled = resolve; });
+  /** What /auth/me returns; tests flip must_change_password. */
+  const me: typeof USER & { must_change_password?: boolean } = { ...USER };
   const json = (response: ServerResponse, status: number, value: unknown) =>
     response.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(value));
   const fail = (response: ServerResponse, status: number, code: string) => json(response, status, { error: { code, message: code } });
@@ -223,7 +225,7 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
     const cookieOk = request.headers.cookie === COOKIE;
     const bearerOk = request.headers.authorization === `Bearer ${AGENT_TOKEN}`;
 
-    if (path === '/auth/me') return cookieOk ? json(response, 200, USER) : fail(response, 401, 'AUTH_REQUIRED');
+    if (path === '/auth/me') return cookieOk ? json(response, 200, me) : fail(response, 401, 'AUTH_REQUIRED');
     if (path === '/auth/agent-token' && request.method === 'POST') {
       if (!cookieOk) return fail(response, 401, 'AUTH_REQUIRED');
       if (request.headers.origin !== ORIGIN) return fail(response, 403, 'ORIGIN_REJECTED');
@@ -359,7 +361,7 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
     }
     return fail(response, 404, 'NOT_FOUND');
   });
-  return { ...(await listen(server)), requests, firstJobPoll };
+  return { ...(await listen(server)), requests, firstJobPoll, me };
 }
 
 // ---------------------------------------------------------------- store + config

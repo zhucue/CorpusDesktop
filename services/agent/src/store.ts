@@ -1,14 +1,17 @@
 /** agent_sessions / agent_messages persistence (contracts/p2.md §六, migration 0002 owned by the api). */
 import pg from 'pg';
-import type { Message, Part, Scope, Session, ToolCall } from './types.ts';
+import type { Message, PageContext, Part, Scope, Session, ToolCall } from './types.ts';
 
 export interface SessionRecord extends Session { pi_session_path: string }
 
 export interface MessageFields { content: string; parts: Part[]; tool_calls: ToolCall[]; duration_ms?: number | null; stopped?: boolean }
 
-/** agent_messages has no flag column: a stopped run keeps a trailing {type: "stopped"} marker in parts. */
+/** agent_messages has no flag or context column: a stopped run keeps a trailing {type: "stopped"} marker in
+ * parts, a user message sent from a page a {type: "context", context} marker; both are stripped on read. */
 const STOPPED = { type: 'stopped' };
-const storedParts = (parts: Part[], stopped?: boolean) => JSON.stringify(stopped ? [...parts, STOPPED] : parts);
+const CONTEXT = 'context';
+const storedParts = (parts: Part[], stopped?: boolean, context?: PageContext) =>
+  JSON.stringify([...parts, ...(context ? [{ type: CONTEXT, context }] : []), ...(stopped ? [STOPPED] : [])]);
 
 export interface Store {
   /** Process start: no run survives a restart (no cross-process resume). */
@@ -39,10 +42,13 @@ function sessionRow(row: any): SessionRecord {
 function messageRow(row: any): Message {
   const raw: any[] = row.parts ?? [];
   const stopped = raw.some(part => part?.type === STOPPED.type);
+  const context = raw.find(part => part?.type === CONTEXT)?.context;
   return {
-    id: row.id, role: row.role, content: row.content ?? '', parts: raw.filter(part => part?.type !== STOPPED.type),
+    id: row.id, role: row.role, content: row.content ?? '',
+    parts: raw.filter(part => part?.type !== STOPPED.type && part?.type !== CONTEXT),
     tool_calls: row.tool_calls ?? [], created_at: iso(row.created_at), duration_ms: row.duration_ms ?? null,
     ...(stopped ? { stopped: true } : {}),
+    ...(context ? { context } : {}),
   };
 }
 
@@ -107,7 +113,7 @@ export class PgStore implements Store {
     await this.pool.query(
       `INSERT INTO agent_messages (id, session_id, role, content, parts, tool_calls, created_at, duration_ms)
        VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)`,
-      [message.id, sessionId, message.role, message.content, storedParts(message.parts, message.stopped),
+      [message.id, sessionId, message.role, message.content, storedParts(message.parts, message.stopped, message.context),
         JSON.stringify(message.tool_calls), message.created_at, message.duration_ms ?? null],
     );
   }

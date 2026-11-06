@@ -13,7 +13,7 @@ export class ApiError extends Error {
 /** Browser credentials (Cookie + Origin) or the agent token issued for one project. */
 export type ApiAuth = { cookie?: string; origin?: string } | { bearer: string };
 
-export interface User { id: string; email: string; display_name: string; is_admin: boolean }
+export interface User { id: string; email: string; display_name: string; is_admin: boolean; must_change_password?: boolean }
 export interface Job {
   id: string; project_id: string | null; kind: string; state: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
   progress: { done: number; total: number | null; message: string } | null;

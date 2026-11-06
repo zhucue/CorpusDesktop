@@ -5,7 +5,18 @@ import { TOOL_INVALIDATES } from "../../components/global/tools";
 import { applyEvent, fromMessage, markStopped, newChain, type ChainMessage } from "./chain";
 import { readSse } from "./sse";
 
-export type ChatItem = { kind: "user"; id: string; content: string } | { kind: "ai"; m: ChainMessage };
+/** `context` of POST /agent/sessions/{id}/messages (contracts/p7.md §三): seen by the model, not shown. */
+export interface AgentPageContext {
+  page: "search" | "stats" | "annotate" | "knowledge" | "corpora";
+  label: string;
+  query?: string;
+  search_id?: string;
+  /** At most 20. */
+  hit_ids?: string[];
+  scope: Scope | null;
+}
+
+export type ChatItem ={ kind: "user"; id: string; content: string } | { kind: "ai"; m: ChainMessage };
 
 export function useAgentHealth() {
   return useQuery({
@@ -45,11 +56,14 @@ export function useAgentChat({
   projectId,
   sessionId,
   scope,
+  context,
   onSessionCreated,
 }: {
   projectId: string;
   sessionId: string | null;
   scope: Scope | null;
+  /** The drawer's page context, attached to every new question. */
+  context?: AgentPageContext | null;
   onSessionCreated?: (s: AgentSession) => void;
 }) {
   const qc = useQueryClient();
@@ -196,9 +210,10 @@ export function useAgentChat({
         return false;
       }
       const userId = `u-${Date.now()}`;
-      return streamRun(sid, "messages", { content: text }, (list, ai) => [...list, { kind: "user", id: userId, content: text }, ai]);
+      const payload = context ? { content: text, context } : { content: text };
+      return streamRun(sid, "messages", payload, (list, ai) => [...list, { kind: "user", id: userId, content: text }, ai]);
     },
-    [projectId, scope, qc, onSessionCreated, streamRun],
+    [projectId, scope, context, qc, onSessionCreated, streamRun],
   );
 
   /** Re-ask the last question: its old answer (and any confirm runs after it) is replaced, not repeated. */

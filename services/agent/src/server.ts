@@ -7,7 +7,7 @@ import { ApiClient, ApiError, type User } from './api.ts';
 import type { Config } from './config.ts';
 import { Runner, sessionDir, type RunOptions } from './runner.ts';
 import type { SessionRecord, Store } from './store.ts';
-import type { Scope, Session, ToolCall } from './types.ts';
+import type { PageContext, Scope, Session, ToolCall } from './types.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_CONTENT = 20000;
@@ -33,6 +33,40 @@ function parseScope(value: unknown): Scope {
   throw new HttpError(422, 'INVALID_SCOPE', 'scope 应为 {corpus_id}、{subcorpus_id} 或 null');
 }
 
+const PAGES = new Set<PageContext['page']>(['search', 'stats', 'annotate', 'knowledge', 'corpora']);
+const MAX_HITS = 20;
+
+/** Optional `context` of POST /messages (contracts/p7.md §三); undefined when absent. */
+function parseContext(value: unknown): PageContext | undefined {
+  if (value === null || value === undefined) return undefined;
+  const bad = (message: string) => new HttpError(422, 'INVALID_CONTEXT', message);
+  if (typeof value !== 'object' || Array.isArray(value)) throw bad('context 应为对象');
+  const v = value as Record<string, unknown>;
+  if (!PAGES.has(v.page as PageContext['page'])) throw bad('context.page 应为 search、stats、annotate、knowledge 或 corpora');
+  const text = (key: string, max: number, required = false) => {
+    const item = v[key];
+    if (item === undefined || item === null || (item === '' && !required)) {
+      if (required) throw bad(`context.${key} 必填`);
+      return undefined;
+    }
+    if (typeof item !== 'string' || item.length > max) throw bad(`context.${key} 应为不超过 ${max} 字的字符串`);
+    return item;
+  };
+  const context: PageContext = { page: v.page as PageContext['page'], label: text('label', 200, true)!, scope: parseScope(v.scope) };
+  const query = text('query', 1000);
+  const searchId = text('search_id', 200);
+  if (query !== undefined) context.query = query;
+  if (searchId !== undefined) context.search_id = searchId;
+  if (v.hit_ids !== undefined && v.hit_ids !== null) {
+    const ids = v.hit_ids;
+    if (!Array.isArray(ids) || ids.length > MAX_HITS || ids.some(id => typeof id !== 'string' || !id || id.length > 200)) {
+      throw bad(`context.hit_ids 应为不超过 ${MAX_HITS} 个 hit_id`);
+    }
+    if (ids.length) context.hit_ids = ids;
+  }
+  return context;
+}
+
 export function createApp(config: Config, store: Store, runner: Runner) {
   const app = new Hono();
   const origins = new Set((config.publicOrigin ?? '').split(',').map(o => o.trim()).filter(Boolean));
@@ -47,7 +81,10 @@ export function createApp(config: Config, store: Store, runner: Runner) {
 
   async function currentUser(c: Context): Promise<User> {
     if (!c.req.header('cookie')) throw new HttpError(401, 'AUTH_REQUIRED', '请先登录');
-    return browserApi(c).get<User>('/auth/me');
+    const user = await browserApi(c).get<User>('/auth/me');
+    // Same rule as the api: until the password is changed, everything but /auth/me, /auth/password, /auth/logout is 403.
+    if (user.must_change_password) throw new HttpError(403, 'PASSWORD_CHANGE_REQUIRED', '请先修改密码');
+    return user;
   }
 
   async function ownSession(c: Context, user: User): Promise<SessionRecord> {
@@ -181,17 +218,19 @@ export function createApp(config: Config, store: Store, runner: Runner) {
     const input = await body(c);
     const regenerate = input.regenerate === true;
     let content = typeof input.content === 'string' ? input.content.trim() : '';
+    let context = parseContext(input.context);
     if (regenerate) {
-      // Regenerate re-asks the last question; the old question and answer are replaced, not repeated.
+      // Regenerate re-asks the last question with its page context; the old question and answer are replaced.
       const last = (await store.listMessages(session.id)).findLast(message => message.role === 'user');
       if (!last) throw new HttpError(409, 'NOTHING_TO_REGENERATE', '没有可以重新生成的回答');
       content = last.content;
+      context = last.context;
     }
     if (!content) throw new HttpError(422, 'EMPTY_CONTENT', '消息不能为空');
     if (content.length > MAX_CONTENT) throw new HttpError(422, 'CONTENT_TOO_LONG', `消息不能超过 ${MAX_CONTENT} 字`);
     if (!config.model) throw new HttpError(503, 'MODEL_NOT_CONFIGURED', '未配置模型服务');
     if (!runner.reserve(session.id)) throw new HttpError(409, 'SESSION_BUSY', '会话正在运行');
-    return stream(c, session, content, { regenerate });
+    return stream(c, session, content, { regenerate, ...(context ? { context } : {}) });
   });
 
   /**

@@ -25,9 +25,22 @@ export interface ToolCall {
   confirm?: Proposal;
 }
 
+/** The page the drawer was opened on (contracts/p7.md §三): given to the model before the question, not shown. */
+export interface PageContext {
+  page: 'search' | 'stats' | 'annotate' | 'knowledge' | 'corpora';
+  label: string;
+  query?: string;
+  search_id?: string;
+  /** At most 20. */
+  hit_ids?: string[];
+  scope: Scope;
+}
+
 export interface Message {
   id: string; role: 'user' | 'assistant'; content: string; parts: Part[]; tool_calls: ToolCall[];
   created_at: string; duration_ms?: number | null;
   /** The user stopped this run. */
   stopped?: boolean;
+  /** User messages sent from a page: the context the model saw with this question. */
+  context?: PageContext;
 }

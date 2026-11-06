@@ -826,3 +826,64 @@ test('system prompt: read-only requests never call write tools, and prose carrie
   assert.ok(prompt.includes('正文和思考中都不写内部 ID'));
   assert.ok(!prompt.includes('写出 hit_id') && !prompt.includes('写出 document_id'));
 });
+
+test('page context reaches the model before the question; the stored message shows only the question', async () => {
+  const { model, call, createSession } = await setup([{ text: '这两条都是动词用法。' }, { text: '再答一次。' }]);
+  const session = await createSession();
+  const context = {
+    page: 'search', label: 'UD 中文', query: '翻译/v', search_id: 'search-1', hit_ids: ['doc1:10-12', 'doc2:4-6'],
+    scope: { corpus_id: CORPUS },
+  };
+  const response = await call('POST', `/agent/sessions/${session.id}/messages`, { content: '选中的两条有什么区别', context });
+  assert.equal(response.status, 200);
+  const events = parseSse(await response.text());
+  assert.equal(events.at(-1)!.event, 'done');
+
+  const userText = (index: number) => {
+    const user = model.requests[index].body.messages.findLast((m: any) => m.role === 'user');
+    return typeof user.content === 'string' ? user.content : user.content.map((c: any) => c.text ?? '').join('');
+  };
+  const sent = userText(0);
+  assert.match(sent, /^\[当前页面：检索\] 范围：UD 中文（语料库，工具参数 corpus_id=22222222-2222-4222-8222-222222222222）；查询式：翻译\/v；检索结果 search_id=search-1；选中命中 hit_id：doc1:10-12、doc2:4-6\n\n选中的两条有什么区别$/);
+  assert.match(model.requests[0].body.messages[0].content, /\[当前页面：…\]/);
+
+  const detail = await (await call('GET', `/agent/sessions/${session.id}`)).json() as any;
+  const user = detail.messages[0];
+  assert.equal(user.content, '选中的两条有什么区别');
+  assert.deepEqual(user.parts, [{ type: 'text', text: '选中的两条有什么区别' }]);
+  assert.deepEqual(user.context, context);
+  assert.equal(detail.title, '选中的两条有什么区别');
+
+  // regenerate re-asks with the stored context
+  parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { regenerate: true })).text());
+  assert.match(userText(1), /^\[当前页面：检索\][^\n]*search_id=search-1/);
+
+  // other pages send page, label and scope only; bad context is rejected before the run
+  const plain = await call('POST', `/agent/sessions/${session.id}/messages`, { content: 'x', context: { page: 'search', label: 'a', scope: null, hit_ids: Array(21).fill('h') } });
+  assert.equal(plain.status, 422);
+  assert.equal(((await plain.json()) as any).error.code, 'INVALID_CONTEXT');
+  assert.equal((await call('POST', `/agent/sessions/${session.id}/messages`, { content: 'x', context: { page: 'home', label: 'a', scope: null } })).status, 422);
+});
+
+test('a user who must change the password gets 403 PASSWORD_CHANGE_REQUIRED from every session route', async () => {
+  const { api, call, createSession } = await setup([]);
+  const session = await createSession();
+  api.me.must_change_password = true;
+  const routes: [string, string, unknown?][] = [
+    ['GET', `/agent/sessions?project_id=${PROJECT}`],
+    ['POST', '/agent/sessions', { project_id: PROJECT, scope: null }],
+    ['GET', `/agent/sessions/${session.id}`],
+    ['PATCH', `/agent/sessions/${session.id}`, { title: 'x' }],
+    ['DELETE', `/agent/sessions/${session.id}`],
+    ['POST', `/agent/sessions/${session.id}/messages`, { content: '你好' }],
+    ['POST', `/agent/sessions/${session.id}/cancel`],
+    ['POST', `/agent/sessions/${session.id}/confirm`, { tool_call_ids: ['x'], action: 'decline' }],
+  ];
+  for (const [method, path, body] of routes) {
+    const response = await call(method, path, body);
+    assert.equal(response.status, 403, `${method} ${path}`);
+    assert.equal(((await response.json()) as any).error.code, 'PASSWORD_CHANGE_REQUIRED');
+  }
+  api.me.must_change_password = false;
+  assert.equal((await call('GET', `/agent/sessions/${session.id}`)).status, 200);
+});

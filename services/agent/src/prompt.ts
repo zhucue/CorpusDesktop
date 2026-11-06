@@ -1,11 +1,29 @@
 /** System prompt: short Chinese instructions + the OpenUI component catalog. */
 import { library } from './components.ts';
-import type { Scope } from './types.ts';
+import type { PageContext, Scope } from './types.ts';
 
 export function describeScope(scope: Scope, name: string | null): string {
   if (!scope) return '未指定（需要时先用 corpora_list 让用户选择语料）';
   const ref = 'subcorpus_id' in scope ? `子库，工具参数 subcorpus_id=${scope.subcorpus_id}` : `语料库，工具参数 corpus_id=${scope.corpus_id}`;
   return name ? `${name}（${ref}）` : ref;
+}
+
+const PAGE_NAMES: Record<PageContext['page'], string> = {
+  search: '检索', stats: '统计', annotate: '标注', knowledge: '知识库', corpora: '语料库',
+};
+
+const oneLine = (value: string) => value.replace(/\s+/g, ' ').trim();
+
+/** The hidden line put before the user's question when the drawer was opened on a page (contracts/p7.md §三). */
+export function describeContext(context: PageContext): string {
+  const scope = context.scope
+    ? 'subcorpus_id' in context.scope ? `子库，工具参数 subcorpus_id=${context.scope.subcorpus_id}` : `语料库，工具参数 corpus_id=${context.scope.corpus_id}`
+    : '未指定';
+  const items = [`范围：${oneLine(context.label) || '未命名'}（${scope}）`];
+  if (context.query) items.push(`查询式：${oneLine(context.query)}`);
+  if (context.search_id) items.push(`检索结果 search_id=${context.search_id}`);
+  if (context.hit_ids?.length) items.push(`选中命中 hit_id：${context.hit_ids.join('、')}`);
+  return `[当前页面：${PAGE_NAMES[context.page]}] ${items.join('；')}`;
 }
 
 const PREAMBLE = (scopeText: string) => `你是语料研究助手，帮助外语、翻译和语言学研究生做检索、统计、标注和证据整理。你通过工具调用平台接口，权限由平台判断。
@@ -14,6 +32,7 @@ const PREAMBLE = (scopeText: string) => `你是语料研究助手，帮助外语
 - 计数、频次和统计值只能来自工具结果，不估计、不编造；工具没给出的数据直接说明没有。
 - 结果优先用组件呈现，不在正文里写长表格；正文只写结论和必要说明，简短直接。
 - 当前会话范围：${scopeText}。工具的 scope 参数省略时即用此范围；用户明确要求其他范围时再换，并在回答中说明。
+- 用户消息开头可能有一行“[当前页面：…]”，由平台附加，说明用户提问时所在页面、范围、查询式与选中的命中；用户看不到这一行。问题涉及“这些结果”“选中的句子”“当前查询”时据此调用工具（search_id、hit_id 只用在工具参数里）；问题与页面无关时忽略它。页面范围与会话范围不同时，只有问到页面上的结果才用页面范围，并在回答中说明用的范围。
 - 查询式拿不准时先调用 corpus_parse 检查。检索时保持用户给的词和写法；需要改写查询式（如加引号限定词形、加词性）时，在正文写明改写后的查询式和原因，因为计数会与检索页不同。
 - 统计工具等待超时会返回任务：用 JobStatus 组件告知用户到任务页查看，不要重复提交。
 - 用用户的语言回答，默认中文。
