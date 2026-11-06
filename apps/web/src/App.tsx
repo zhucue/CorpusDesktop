@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router";
 import { ApiError, errorText } from "./api";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import AppShell from "./components/shell/AppShell";
+import ChangePassword from "./features/auth/ChangePassword";
 import Login from "./features/auth/Login";
 import Projects from "./features/projects/Projects";
 import ProjectGate from "./features/settings/ProjectGate";
@@ -21,12 +22,15 @@ const Onboarding = lazy(() => import("./features/onboarding/Onboarding"));
 
 export { useMe };
 
-function RequireAuth({ children }: { children: React.ReactNode }) {
+/** password: the change-password page itself, reachable while must_change_password is set. */
+function RequireAuth({ children, password }: { children: React.ReactNode; password?: boolean }) {
   const me = useMe();
   const loc = useLocation();
   if (me.isPending) return <Spin style={{ display: "block", marginTop: 120 }} />;
   if (me.error instanceof ApiError && me.error.status === 401)
     return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
+  if (!password && me.data?.must_change_password)
+    return <Navigate to={`/password?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
   if (me.error)
     return (
       <Alert
@@ -60,6 +64,14 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route
+        path="/password"
+        element={
+          <RequireAuth password>
+            <ChangePassword />
+          </RequireAuth>
+        }
+      />
       <Route
         path="/"
         element={

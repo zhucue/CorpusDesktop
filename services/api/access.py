@@ -32,6 +32,13 @@ def human_only(user):
         raise forbidden()
 
 
+def require_admin(user):
+    """Platform admin in a browser session; agent tokens never reach admin endpoints."""
+    human_only(user)
+    if not user.is_admin:
+        raise forbidden()
+
+
 def check_token_project(user, project_id):
     if token_project(user) is not None and project_id != token_project(user):
         raise forbidden()

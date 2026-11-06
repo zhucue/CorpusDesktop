@@ -5,6 +5,27 @@ export interface User {
   email: string;
   display_name: string;
   is_admin: boolean;
+  /** Only on /auth/login and /auth/me: a temporary password must be replaced before anything else. */
+  must_change_password?: boolean;
+}
+
+/** GET /admin/users item (contracts/p7.md §五). */
+export interface AdminUser {
+  id: string;
+  email: string;
+  display_name: string;
+  is_admin: boolean;
+  disabled_at: string | null;
+  last_login_at: string | null;
+  created_at: string;
+  projects: number;
+}
+
+/** GET /system/info (contracts/p7.md §六); hosts are host names only. */
+export interface SystemInfo {
+  version: string;
+  model: { configured: boolean; host: string | null; model_id: string | null };
+  embed: { mode: "local" | "remote"; host: string | null; model: string | null; ready: boolean };
 }
 
 export interface Project {

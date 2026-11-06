@@ -74,6 +74,10 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(Text)
     password_hash: Mapped[str] = mapped_column(Text)
     is_admin: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    # account lifecycle (0008): disabled accounts cannot log in; temporary passwords force a change
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    must_change_password: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created()
 
 

@@ -11,3 +11,16 @@
 .gone .btn.p { align-self: flex-start; }
 .proj-form { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 .danger-zone { border-top: 1px solid var(--line-soft); padding: 14px 18px; display: flex; align-items: center; gap: 12px; }
+.set-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+.set-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; color: var(--text-3); font: inherit; font-weight: 500; cursor: pointer; transition: color var(--t-fast); }
+.set-tabs button:hover { color: var(--text); }
+.set-tabs button[aria-selected="true"] { color: var(--accent); font-weight: 600; border-bottom-color: var(--accent); }
+.settings-narrow { max-width: 640px; }
+.set-body { padding: 16px 18px; }
+.pw-card { max-width: 380px; }
+.temp-pw { gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--fill); }
+.temp-pw code { font-size: 15px; letter-spacing: .04em; user-select: all; }
+.privacy { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px 16px; padding: 16px 18px; margin: 0; }
+.privacy dt { color: var(--text-3); }
+.privacy dd { margin: 0; }
+.privacy ul { margin: 0 0 6px; padding-left: 18px; }

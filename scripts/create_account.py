@@ -2,6 +2,8 @@
 
 uv run python scripts/create_account.py --email a@example.edu --name 张三 [--admin] [--password-stdin]
 docker compose -f deploy/compose.yaml exec api python scripts/create_account.py --email ...
+重置已有账号（生成临时密码并打印，或 --password-stdin 从标准输入读）；登录后须改密码，原有会话失效：
+docker compose -f deploy/compose.yaml exec api python scripts/create_account.py --email a@example.edu --reset
 批量（测试与运维脚本用）：每行一个 JSON {"email", "password", "name"?, "admin"?}，输出每行 {"id", "email"}：
 docker compose -f deploy/compose.yaml exec -T api python scripts/create_account.py --batch < accounts.jsonl
 """
@@ -16,7 +18,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import select
 
-from services.api.auth import HASHER, normalize_email
+from services.api.admin import temporary_password
+from services.api.auth import HASHER, normalize_email, revoke
 from services.api.db import transaction
 from services.api.models import User
 
@@ -26,11 +29,15 @@ def check_password(password):
         raise SystemExit("密码长度须为 12 到 1024 位")
 
 
-def add_user(db, email, password, name=None, admin=False):
+def _email(value):
     try:
-        email = normalize_email(email)
+        return normalize_email(value)
     except ValueError as e:
         raise SystemExit(str(e))
+
+
+def add_user(db, email, password, name=None, admin=False):
+    email = _email(email)
     check_password(password)
     if db.scalar(select(User.id).where(User.email == email)):
         raise SystemExit(f"账号已存在：{email}")
@@ -42,6 +49,19 @@ def add_user(db, email, password, name=None, admin=False):
     )
     db.add(user)
     db.flush()
+    return user
+
+
+def reset_user(db, email, password):
+    """New password, must_change_password=true, all sessions and agent tokens revoked."""
+    email = _email(email)
+    check_password(password)
+    user = db.scalar(select(User).where(User.email == email))
+    if not user:
+        raise SystemExit(f"账号不存在：{email}")
+    user.password_hash = HASHER.hash(password)
+    user.must_change_password = True
+    revoke(db, user.id)
     return user
 
 
@@ -71,11 +91,28 @@ def main():
     parser.add_argument(
         "--batch", action="store_true", help="从标准输入按行读取 JSON 批量创建"
     )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="重置已有账号的密码（不带 --password-stdin 时生成临时密码并打印）",
+    )
     args = parser.parse_args()
     if args.batch:
         return batch()
     if not args.email:
         parser.error("需要 --email 或 --batch")
+    if args.reset:
+        generated = not args.password_stdin
+        password = (
+            temporary_password() if generated else sys.stdin.readline().rstrip("\r\n")
+        )
+        with transaction() as db:
+            user = reset_user(db, args.email, password)
+            email = user.email
+        print(f"已重置：{email}，登录后须修改密码")
+        if generated:
+            print(f"临时密码：{password}")
+        return
     if args.password_stdin:
         password = sys.stdin.readline().rstrip("\r\n")
     else:

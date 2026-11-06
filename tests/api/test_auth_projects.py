@@ -19,6 +19,7 @@ def test_login_me_logout(make_user):
         "email": "a@example.edu",
         "display_name": "a",
         "is_admin": False,
+        "must_change_password": False,
     }
     assert client.get("/api/auth/me").json()["email"] == "a@example.edu"
 

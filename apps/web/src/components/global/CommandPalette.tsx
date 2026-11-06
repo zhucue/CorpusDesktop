@@ -82,7 +82,7 @@ export default function CommandPalette({
       { group: "页面", label: "知识库", icon: pageIcon.knowledge, run: go(`${base}/knowledge`) },
       { group: "页面", label: "助手", icon: pageIcon.assistant, run: go(`${base}/assistant`) },
       { group: "页面", label: "任务", icon: pageIcon.jobs, run: go(`${base}/jobs`) },
-      { group: "页面", label: "项目设置", icon: pageIcon.settings, run: go(`${base}/settings`) },
+      { group: "页面", label: "设置", icon: pageIcon.settings, run: go(`${base}/settings`) },
       { group: "页面", label: "打开引导", icon: "compass", run: go(`/onboarding?project=${projectId}`) },
     ];
     const proj: Item[] = (projects.data?.items ?? []).map((p) => ({

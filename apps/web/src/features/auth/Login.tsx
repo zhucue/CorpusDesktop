@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { ApiError, api, errorCode, errorText, type User } from "../../api";
 import { Icon } from "../../components/Icon";
+import { safeNext } from "./next";
 import "./login.css";
 
 export default function Login() {
@@ -21,8 +22,9 @@ export default function Login() {
     onSuccess: (user) => {
       qc.clear();
       qc.setQueryData(["me"], user);
-      const next = params.get("next");
-      navigate(next && next.startsWith("/") && !next.startsWith("/login") ? next : "/", { replace: true });
+      const next = safeNext(params.get("next"));
+      if (user.must_change_password) navigate(`/password?next=${encodeURIComponent(next)}`, { replace: true });
+      else navigate(next, { replace: true });
     },
     onError: () => setShake((n) => n + 1),
   });
@@ -42,6 +44,7 @@ export default function Login() {
 
   const err = login.error;
   const badCredentials = err instanceof ApiError && err.status === 401;
+  const disabled = errorCode(err) === "ACCOUNT_DISABLED";
   return (
     <div className="login-page dotgrid">
       <span className="glow a" aria-hidden />
@@ -95,7 +98,7 @@ export default function Login() {
               <Icon name="alert" size={14} />
               <span>
                 {badCredentials ? "邮箱或密码错误" : errorText(err)}
-                {!badCredentials && errorCode(err) && <span className="err-code">{errorCode(err)}</span>}
+                {!badCredentials && !disabled && errorCode(err) && <span className="err-code">{errorCode(err)}</span>}
               </span>
             </div>
           )}

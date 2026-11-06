@@ -1,14 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Form, Input, Modal, Popconfirm, Select, Spin, Table } from "antd";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { ApiError, MAX_PAGE_SIZE, api, errorText, roleLabels, type Member, type Page, type Project, type Role, type User } from "../../api";
 import { Avatar, ErrorAlert } from "../../components/common";
-import { Icon } from "../../components/Icon";
+import { Icon, type IconName } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
 import { useMe, useProject, useProjectId } from "../../lib/data";
 import { fmt } from "../../lib/format";
+import { PasswordCard, PrivacyCard } from "./AccountPanels";
 import { MAX_PROJECT_NAME } from "./project";
+import Users from "./Users";
 import "./settings.css";
 
 /** GET /projects/{id}/usage: what deleting the project removes. */
@@ -160,7 +162,7 @@ function ProjectCard({ project, isOwner }: { project: Project; isOwner: boolean 
   );
 }
 
-export default function Settings() {
+function ProjectSettings() {
   const projectId = useProjectId();
   const project = useProject();
   const me = useMe();
@@ -205,108 +207,160 @@ export default function Settings() {
   });
 
   return (
-    <>
-      <PageHeader title="项目设置" crumbs={1} />
-      <div className="content">
-        <div className="settings-grid">
-          {project.data && <ProjectCard key={project.data.id} project={project.data} isOwner={isOwner} />}
-          <div />
-          <section className="card">
-            <div className="card-head">
-              <h2 className="grow">成员</h2>
-              <span className="small muted num">{members.data?.total ?? 0} 人</span>
-            </div>
-            {isOwner && (
-              <div className="add-member">
-                <Form form={form} layout="inline" onFinish={addMember.mutate} initialValues={{ role: "viewer" }}>
-                  <Form.Item name="email" rules={[{ required: true, type: "email", message: "请输入邮箱" }]}>
-                    <Input placeholder="邮箱" style={{ width: 280 }} prefix={<Icon name="mail" size={14} />} />
-                  </Form.Item>
-                  <Form.Item name="role">
-                    <Select options={roleOptions} style={{ width: 110 }} />
-                  </Form.Item>
-                  <button className="btn p" type="submit" disabled={addMember.isPending}>
-                    <Icon name="plus" size={14} />
-                    添加
-                  </button>
-                </Form>
-                <ErrorAlert error={addMember.error} style={{ marginTop: 10 }} />
-              </div>
-            )}
-            <ErrorAlert error={members.error} style={{ margin: 16 }} />
-            <Table<Member>
-              rowKey="user_id"
-              loading={members.isPending}
-              dataSource={members.data?.items}
-              pagination={false}
-              rowClassName={(m) => (m.user_id === added ? "row-new" : "")}
-              locale={{ emptyText: "暂无成员" }}
-              columns={[
-                {
-                  title: "成员",
-                  render: (_, m) => (
-                    <span className="row">
-                      <Avatar name={m.email} />
-                      <span>{m.email}</span>
-                      {m.user_id === me.data?.id && <span className="tag t-gray">我</span>}
-                    </span>
-                  ),
-                },
-                {
-                  title: "角色",
-                  width: 150,
-                  render: (_, m) =>
-                    isOwner && m.user_id !== me.data?.id ? (
-                      <Select size="small" value={m.role} options={roleOptions} style={{ width: 110 }} onChange={(role) => setRole.mutate({ user_id: m.user_id, role })} />
-                    ) : (
-                      (roleLabels[m.role] ?? m.role)
-                    ),
-                },
-                {
-                  title: "",
-                  width: 80,
-                  render: (_, m) =>
-                    isOwner &&
-                    m.user_id !== me.data?.id && (
-                      <Popconfirm title={`移除 ${m.email}？`} okText="移除" cancelText="取消" onConfirm={() => remove.mutate(m.user_id)}>
-                        <button className="btn xs ghost danger" type="button">
-                          移除
-                        </button>
-                      </Popconfirm>
-                    ),
-                },
-              ]}
-            />
-          </section>
-          <section className="card" aria-label="角色权限">
-            <div className="card-head">
-              <h2>角色权限</h2>
-            </div>
-            <table className="tbl mid">
-              <thead>
-                <tr>
-                  <th />
-                  {(Object.keys(roleLabels) as Role[]).map((r) => (
-                    <th key={r} style={{ textAlign: "center" }}>
-                      {roleLabels[r]}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {MATRIX.map(([label, flags]) => (
-                  <tr key={label}>
-                    <td className="sm">{label}</td>
-                    {flags.map((f, i) => (
-                      <td key={i} style={{ textAlign: "center", color: f ? "var(--success)" : "var(--text-4)" }}>
-                        {f ? <Icon name="check" size={14} label="可" /> : "—"}
-                      </td>
-                    ))}
-                  </tr>
+    <div className="settings-grid">
+      {project.data && <ProjectCard key={project.data.id} project={project.data} isOwner={isOwner} />}
+      <div />
+      <section className="card">
+        <div className="card-head">
+          <h2 className="grow">成员</h2>
+          <span className="small muted num">{members.data?.total ?? 0} 人</span>
+        </div>
+        {isOwner && (
+          <div className="add-member">
+            <Form form={form} layout="inline" onFinish={addMember.mutate} initialValues={{ role: "viewer" }}>
+              <Form.Item name="email" rules={[{ required: true, type: "email", message: "请输入邮箱" }]}>
+                <Input placeholder="邮箱" style={{ width: 280 }} prefix={<Icon name="mail" size={14} />} />
+              </Form.Item>
+              <Form.Item name="role">
+                <Select options={roleOptions} style={{ width: 110 }} />
+              </Form.Item>
+              <button className="btn p" type="submit" disabled={addMember.isPending}>
+                <Icon name="plus" size={14} />
+                添加
+              </button>
+            </Form>
+            <ErrorAlert error={addMember.error} style={{ marginTop: 10 }} />
+          </div>
+        )}
+        <ErrorAlert error={members.error} style={{ margin: 16 }} />
+        <Table<Member>
+          rowKey="user_id"
+          loading={members.isPending}
+          dataSource={members.data?.items}
+          pagination={false}
+          rowClassName={(m) => (m.user_id === added ? "row-new" : "")}
+          locale={{ emptyText: "暂无成员" }}
+          columns={[
+            {
+              title: "成员",
+              render: (_, m) => (
+                <span className="row">
+                  <Avatar name={m.email} />
+                  <span>{m.email}</span>
+                  {m.user_id === me.data?.id && <span className="tag t-gray">我</span>}
+                </span>
+              ),
+            },
+            {
+              title: "角色",
+              width: 150,
+              render: (_, m) =>
+                isOwner && m.user_id !== me.data?.id ? (
+                  <Select size="small" value={m.role} options={roleOptions} style={{ width: 110 }} onChange={(role) => setRole.mutate({ user_id: m.user_id, role })} />
+                ) : (
+                  (roleLabels[m.role] ?? m.role)
+                ),
+            },
+            {
+              title: "",
+              width: 80,
+              render: (_, m) =>
+                isOwner &&
+                m.user_id !== me.data?.id && (
+                  <Popconfirm title={`移除 ${m.email}？`} okText="移除" cancelText="取消" onConfirm={() => remove.mutate(m.user_id)}>
+                    <button className="btn xs ghost danger" type="button">
+                      移除
+                    </button>
+                  </Popconfirm>
+                ),
+            },
+          ]}
+        />
+      </section>
+      <section className="card" aria-label="角色权限">
+        <div className="card-head">
+          <h2>角色权限</h2>
+        </div>
+        <table className="tbl mid">
+          <thead>
+            <tr>
+              <th />
+              {(Object.keys(roleLabels) as Role[]).map((r) => (
+                <th key={r} style={{ textAlign: "center" }}>
+                  {roleLabels[r]}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {MATRIX.map(([label, flags]) => (
+              <tr key={label}>
+                <td className="sm">{label}</td>
+                {flags.map((f, i) => (
+                  <td key={i} style={{ textAlign: "center", color: f ? "var(--success)" : "var(--text-4)" }}>
+                    {f ? <Icon name="check" size={14} label="可" /> : "—"}
+                  </td>
                 ))}
-              </tbody>
-            </table>
-          </section>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  );
+}
+
+type Tab = "project" | "account" | "privacy" | "users";
+
+export default function Settings() {
+  const me = useMe();
+  const [params, setParams] = useSearchParams();
+  const tabs: [Tab, string, IconName][] = [
+    ["project", "项目", "folder"],
+    ["account", "账号", "key"],
+    ["privacy", "数据与隐私", "shield"],
+    ...(me.data?.is_admin ? ([["users", "用户", "users"]] as [Tab, string, IconName][]) : []),
+  ];
+  const asked = params.get("tab") as Tab | null;
+  const tab = tabs.some(([k]) => k === asked) ? (asked as Tab) : "project";
+  return (
+    <>
+      <PageHeader title="设置" crumbs={1} />
+      <div className="content">
+        <div className="set-tabs" role="tablist" aria-label="设置">
+          {tabs.map(([k, label, icon]) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={tab === k}
+              onClick={() =>
+                setParams(
+                  (p) => {
+                    p.set("tab", k);
+                    return p;
+                  },
+                  { replace: true },
+                )
+              }
+            >
+              <Icon name={icon} size={14} /> {label}
+            </button>
+          ))}
+        </div>
+        <div role="tabpanel">
+          {tab === "project" && <ProjectSettings />}
+          {tab === "account" && (
+            <div className="settings-narrow">
+              <PasswordCard />
+            </div>
+          )}
+          {tab === "privacy" && (
+            <div className="settings-narrow">
+              <PrivacyCard />
+            </div>
+          )}
+          {tab === "users" && <Users />}
         </div>
       </div>
     </>

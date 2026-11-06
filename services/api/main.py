@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 
 from services.api import (
+    admin,
     agent_auth,
     agreement,
     alignments,
@@ -21,6 +22,7 @@ from services.api import (
     spans,
     stats,
     subcorpora,
+    system,
 )
 
 
@@ -30,6 +32,7 @@ async def lifespan(_: FastAPI):
 
     with transaction() as db:
         label_sets.seed_builtin(db)
+    search.searches.clear_dir()  # search result sets do not outlive the process
     threading.Thread(target=kb.warm_embeddings, daemon=True).start()
     yield
 
@@ -50,14 +53,11 @@ async def check_origin(request: Request, call_next):
     return await call_next(request)
 
 
-@app.get("/api/health")
-def health():
-    return {"ok": True}
-
-
 for module in (
+    system,
     auth,
     agent_auth,
+    admin,
     projects,
     corpora,
     subcorpora,

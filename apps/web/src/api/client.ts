@@ -17,6 +17,12 @@ const codeLabels: Record<string, { label: string; detail?: boolean }> = {
   MODEL_NOT_CONFIGURED: { label: "未配置对话模型" },
   LABEL_SET_IN_USE: { label: "标签集正被标注层使用" },
   EMBED_UNAVAILABLE: { label: "向量模型未就绪，已改用关键词检索" },
+  ACCOUNT_DISABLED: { label: "账号已停用，请联系管理员" },
+  PASSWORD_CHANGE_REQUIRED: { label: "请先修改密码" },
+  WRONG_PASSWORD: { label: "原密码不正确" },
+  LAST_ADMIN: { label: "至少保留一位可用的管理员" },
+  CANNOT_DISABLE_SELF: { label: "不能停用自己的账号" },
+  USER_EXISTS: { label: "该邮箱已有账号" },
 };
 
 export function codeLabel(code: string, message: string): string {
@@ -85,6 +91,13 @@ function redirectToLogin() {
   window.location.assign(`/login?next=${encodeURIComponent(next)}`);
 }
 
+/** A temporary password blocks every other endpoint (403 PASSWORD_CHANGE_REQUIRED): go to the change page. */
+function redirectToPassword() {
+  if (window.location.pathname === "/password") return;
+  const next = window.location.pathname + window.location.search;
+  window.location.assign(`/password?next=${encodeURIComponent(next)}`);
+}
+
 export async function request<T>(method: string, path: string, body?: unknown, query?: Query, base = "/api"): Promise<T> {
   let res: Response;
   try {
@@ -94,7 +107,11 @@ export async function request<T>(method: string, path: string, body?: unknown, q
     throw new ApiError(0, "UNAVAILABLE", unavailableText(method));
   }
   if (res.status === 401 && path !== "/auth/login" && path !== "/auth/me") redirectToLogin();
-  if (!res.ok) throw await errorFromResponse(res, method);
+  if (!res.ok) {
+    const err = await errorFromResponse(res, method);
+    if (err.code === "PASSWORD_CHANGE_REQUIRED") redirectToPassword();
+    throw err;
+  }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }

@@ -97,7 +97,7 @@ function SideNav() {
       </button>
       <NavList items={NAV} projectId={projectId} />
       <div className="side-spacer" />
-      <NavList items={[["settings", "项目设置", pageIcon.settings]]} projectId={projectId} />
+      <NavList items={[["settings", "设置", pageIcon.settings]]} projectId={projectId} />
       <div className="me">
         <Avatar name={me.data?.display_name || me.data?.email || "?"} />
         <div className="sm grow" style={{ minWidth: 0 }}>
