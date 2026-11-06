@@ -10,6 +10,7 @@ from pathlib import Path
 
 from engine.model import Document
 from engine.parsers import ParseError, read_text
+from engine.parsers.limits import check_zip
 
 
 def _document(
@@ -64,6 +65,7 @@ def _docx_title(d) -> str:
 def parse_docx(path: Path, language: str, metadata: dict) -> Document:
     import docx
 
+    check_zip(path, path.name, ParseError)
     try:
         d = docx.Document(str(path))
         title = _docx_title(d) or path.stem

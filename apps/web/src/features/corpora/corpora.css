@@ -33,3 +33,6 @@
 .ds-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
 .ds-a { color: var(--text-2); font-size: 13px; }
 .ds-a b { color: var(--text-3); font-weight: 500; margin-right: 4px; }
+.upload-source { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 12px; }
+.upload-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 13px; }
+.upload-progress .ant-progress { flex: 1; margin: 0; }

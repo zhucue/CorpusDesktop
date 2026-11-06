@@ -125,6 +125,9 @@ def _cell(value):
 def _workbook(source, name: str):
     from openpyxl import load_workbook
 
+    from engine.parsers.limits import check_zip
+
+    check_zip(source, name, ParseError)
     try:
         return load_workbook(source, read_only=True, data_only=True)
     except Exception as e:  # zip, XML and openpyxl errors

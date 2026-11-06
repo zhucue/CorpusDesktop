@@ -376,7 +376,11 @@ def upload_documents(
     language: Annotated[str | None, Form(max_length=20)] = None,
     metadata: Annotated[str | None, Form()] = None,
     mapping: Annotated[str | None, Form()] = None,
+    source: Annotated[str | None, Form(max_length=4000)] = None,
 ):
+    """source: optional JSON {license, attribution, source_url, version} for the corpus (shown on the corpus
+    page and written into the source line of exports): a given non-empty field is set, a given empty one
+    is removed, fields not given stay."""
     human_only(user)
     corpus = load_corpus(db, corpus_id, user, write=True)
     if int(request.headers.get("content-length") or 0) > MAX_UPLOAD:
@@ -411,6 +415,24 @@ def upload_documents(
                 "INVALID_MAPPING",
                 "mapping 须为 {text: [1–2 列], title, language, metadata}",
             ) from e
+    if source:
+        try:
+            given = CorpusMeta.model_validate_json(source).model_dump(
+                exclude_unset=True
+            )
+        except ValidationError as e:
+            raise ApiError(
+                422,
+                "INVALID_SOURCE",
+                "source 须为 {license, attribution, source_url, version}，各项有长度上限",
+            ) from e
+        merged = dict(corpus.meta or {})
+        for key, value in given.items():
+            if (value or "").strip():
+                merged[key] = value.strip()
+            else:
+                merged.pop(key, None)
+        corpus.meta = merged
     return _save_upload(
         db, corpus, user, files, (language or "").strip() or None, meta, table_mapping
     )

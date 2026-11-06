@@ -31,6 +31,7 @@ from services.api import (
     usage,
     vocab,
 )
+from services.api.help import router as help_router
 
 
 @asynccontextmanager
@@ -91,3 +92,4 @@ app.include_router(vocab.router)
 app.include_router(auth.users_router)
 app.include_router(admin.ops_router)
 app.include_router(projects.me_router)
+app.include_router(help_router)

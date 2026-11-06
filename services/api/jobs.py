@@ -18,7 +18,16 @@ from services.api.access import (
 from services.api.audit import record
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
-from services.api.models import AnnotationLayer, Corpus, Document, Job, KbDocument
+from services.api.models import (
+    AnnotationLayer,
+    Corpus,
+    Document,
+    Job,
+    KbDocument,
+    StatResult,
+    Subcorpus,
+    User,
+)
 from services.api.storage import export_path
 from services.api.usage import check_quota
 from services.api.views import job_summary, job_view
@@ -68,9 +77,13 @@ def claim_order():
 
 
 def queue_ahead(db, job) -> int | None:
-    """Queued job: jobs of its lane that run before it (running, or queued earlier). None otherwise."""
+    """Queued job: jobs of its lane that run before it (running, or queued earlier). None otherwise.
+    Inside job_views the positions come from one query for the whole page."""
     if job.state != "queued":
         return None
+    cached = db.info.get("queue_ahead")
+    if cached is not None and job.id in cached:
+        return cached[job.id]
     lane = short_lane()
     same = lane if db.scalar(select(lane).where(Job.id == job.id)) else not_(lane)
     return db.scalar(
@@ -238,6 +251,83 @@ def _load(db, job_id, user, manage=False, admin=False) -> Job:
     return job
 
 
+def _uuid(value):
+    try:
+        return UUID(str(value)) if value else None
+    except ValueError:
+        return None
+
+
+def _summary_refs(params) -> dict:
+    """{model: ids} that job_summary looks up for one job's params."""
+    refs = {Corpus: set(), Subcorpus: set(), AnnotationLayer: set()}
+    refs.update({KbDocument: set(), StatResult: set()})
+    p = params or {}
+    for key, model in (
+        ("corpus_id", Corpus),
+        ("layer_id", AnnotationLayer),
+        ("document_id", KbDocument),
+        ("stat_id", StatResult),
+    ):
+        refs[model].add(_uuid(p.get(key)))
+    for key in ("scope", "target", "reference"):
+        scope = p.get(key)
+        if isinstance(scope, dict):
+            refs[Corpus].add(_uuid(scope.get("corpus_id")))
+            refs[Subcorpus].add(_uuid(scope.get("subcorpus_id")))
+    return refs
+
+
+def _queue_positions(db, jobs) -> dict:
+    """{job id: queue_ahead} for the queued jobs, from one query over the running and queued jobs."""
+    queued = [j for j in jobs if j.state == "queued"]
+    if not queued:
+        return {}
+    active = db.execute(
+        select(Job.id, Job.state, Job.created_at, short_lane()).where(
+            Job.state.in_(ACTIVE)
+        )
+    ).all()
+    lane = {row[0]: row[3] for row in active}
+    out = {}
+    for j in queued:
+        mine = lane.get(j.id)
+        out[j.id] = sum(
+            1
+            for jid, state, created, short in active
+            if short == mine
+            and (state == "running" or (created, jid) < (j.created_at, j.id))
+        )
+    return out
+
+
+def job_views(db, jobs) -> list[dict]:
+    """job_view of many jobs with batched lookups: owners and the corpora, subcorpora, layers, documents and
+    statistics their summaries name are loaded one query per table into the session (job_view's db.get then
+    finds them without a query), and the queue positions come from one query."""
+    ids = {User: {j.owner_id for j in jobs}}
+    for j in jobs:
+        for model, found in _summary_refs(j.params).items():
+            ids.setdefault(model, set()).update(found)
+    keep = []  # the session's identity map holds objects weakly
+    for model, wanted in ids.items():
+        wanted.discard(None)
+        if wanted:
+            keep += db.scalars(select(model).where(model.id.in_(wanted))).all()
+    db.info["queue_ahead"] = _queue_positions(db, jobs)
+    try:
+        return [job_view(j) for j in jobs]
+    finally:
+        db.info.pop("queue_ahead", None)
+        del keep
+
+
+def page_of_jobs(db, paging, stmt):
+    page = paging.run(db, stmt, lambda job: job)
+    page["items"] = job_views(db, page["items"])
+    return page
+
+
 @router.get("/projects/{project_id}/jobs")
 def list_jobs(project_id: UUID, user: CurrentUser, db: Db, paging: Paging):
     require_project(db, project_id, user)
@@ -246,7 +336,7 @@ def list_jobs(project_id: UUID, user: CurrentUser, db: Db, paging: Paging):
         .where(Job.project_id == project_id)
         .order_by(Job.created_at.desc(), Job.id)
     )
-    return paging.run(db, stmt, job_view)
+    return page_of_jobs(db, paging, stmt)
 
 
 @router.get("/jobs")
@@ -261,7 +351,7 @@ def list_builtin_jobs(user: CurrentUser, db: Db, paging: Paging, builtin: bool =
         .where(Job.project_id.is_(None))
         .order_by(Job.created_at.desc(), Job.id)
     )
-    return paging.run(db, stmt, job_view)
+    return page_of_jobs(db, paging, stmt)
 
 
 @router.get("/jobs/{job_id}")

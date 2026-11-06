@@ -1,7 +1,9 @@
 """Chat model for worker jobs (summaries, term drafts): the agent's OpenAI-compatible endpoint.
 
 MODEL_BASE_URL / MODEL_API_KEY / MODEL_ID; MODEL_API openai-completions (default, POST /chat/completions) or
-openai-responses (POST /responses). One retry on timeouts, 429 and 5xx. Reasoning blocks (<think>…</think>)
+openai-responses (POST /responses). Up to two retries on connection errors, 429 and 5xx, after 2 s and 6 s or
+the Retry-After the server sends (at most 60 s; a cancelled job stops waiting within a second); no retry
+after a read timeout. Reasoning blocks (<think>…</think>)
 are removed. Errors never include the key.
 
 Usage (contracts/p9.md §二): every answered call inserts one llm_usage row with the response `usage` (chat
@@ -13,21 +15,25 @@ one set with source() (align), "other" outside a job. A failed insert is logged 
 
 import contextlib
 import contextvars
+import email.utils
 import json
 import logging
 import os
 import re
 import time
+from datetime import UTC, datetime
 
 import httpx
 from sqlalchemy import text as sql
 
 from services.api.db import transaction
-from services.worker.main import JobFailed
+from services.worker.main import Cancelled, JobFailed
 
 log = logging.getLogger("worker")
 
 TIMEOUT = 300
+RETRY_DELAYS = (2, 6)  # seconds before the first and second retry
+RETRY_AFTER_MAX = 60
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
 SOURCES = ("preannotate", "kb_summarize", "kb_extract")
 _RUN = contextvars.ContextVar("llm_run", default=None)
@@ -113,19 +119,56 @@ def model_id() -> str:
     return _env("MODEL_ID")
 
 
+def _retry_after(r) -> float | None:
+    """Seconds from a Retry-After header (seconds or HTTP date), at most RETRY_AFTER_MAX; None without one."""
+    value = (r.headers.get("retry-after") or "").strip()
+    if not value:
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            when = email.utils.parsedate_to_datetime(value)
+        except (TypeError, ValueError):
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=UTC)
+        seconds = (when - datetime.now(UTC)).total_seconds()
+    return min(max(seconds, 0.0), RETRY_AFTER_MAX)
+
+
+def _wait(seconds):
+    """Sleep before a retry; inside a job, checked against cancellation every second (Cancelled at once)."""
+    run = _RUN.get()
+    if run is None:
+        time.sleep(seconds)
+        return
+    end = time.monotonic() + seconds
+    while (left := end - time.monotonic()) > 0:
+        if run.cancel.wait(min(1.0, left)) or run.poll():
+            raise Cancelled
+
+
 def _request(url, body, headers):
-    for attempt in (1, 2):
+    """POST with at most len(RETRY_DELAYS) retries on connection errors, 429 and 5xx (Retry-After wins over
+    the fixed delay); a read timeout is not retried (TIMEOUT already passed). The last error is reported as
+    it happened."""
+    for attempt in range(len(RETRY_DELAYS) + 1):
+        last = attempt == len(RETRY_DELAYS)
         try:
             r = httpx.post(url, json=body, headers=headers, timeout=TIMEOUT)
+        except httpx.ReadTimeout as e:
+            raise JobFailed("MODEL_ERROR", f"对话模型 {TIMEOUT} 秒内没有响应") from e
         except httpx.TransportError as e:
-            if attempt == 2:
+            if last:
                 raise JobFailed(
                     "MODEL_ERROR", f"对话模型连接失败：{type(e).__name__}"
                 ) from e
-            time.sleep(3)
+            _wait(RETRY_DELAYS[attempt])
             continue
-        if (r.status_code == 429 or r.status_code >= 500) and attempt == 1:
-            time.sleep(3)
+        if (r.status_code == 429 or r.status_code >= 500) and not last:
+            wait = _retry_after(r)
+            _wait(RETRY_DELAYS[attempt] if wait is None else wait)
             continue
         if r.status_code >= 400:
             raise JobFailed(

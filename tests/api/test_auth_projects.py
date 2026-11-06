@@ -56,13 +56,13 @@ def test_projects_and_members(owner, project, make_user):
     assert other.get(f"/api/projects/{project['id']}").status_code == 404
     assert other.get("/api/projects").json() == {"items": [], "total": 0}
 
-    found = owner.get("/api/users", params={"email": "Other@example.edu"}).json()
-    assert found["id"] == other.user_id
-    assert (
-        owner.get("/api/users", params={"email": "none@example.edu"}).status_code == 404
-    )
-
     pid = project["id"]
+    find = {"email": "Other@example.edu", "project_id": pid}
+    [found] = owner.get("/api/users", params=find).json()["items"]
+    assert found["id"] == other.user_id
+    missing = {"email": "none@example.edu", "project_id": pid}
+    assert owner.get("/api/users", params=missing).json() == {"items": []}
+
     r = owner.put(
         f"/api/projects/{pid}/members/{other.user_id}", json={"role": "viewer"}
     )

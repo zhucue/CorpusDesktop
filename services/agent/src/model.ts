@@ -74,9 +74,16 @@ export function callUsage(messages: unknown, message: AssistantMessage): CallUsa
   return { prompt_tokens: prompt, completion_tokens: completion, total_tokens: prompt + completion, estimated: true };
 }
 
+export const MODEL_RETRIES = 2;
+export const MODEL_RETRY_AFTER_MAX_MS = 60_000;
+
 /**
  * Records the HTTP status of model requests so a failed run can be mapped to a
- * MODEL_* code. Also disables provider-side retries and applies the timeout.
+ * MODEL_* code. Applies the timeout and Pi's provider retry (contracts/p11.md §三 6):
+ * up to MODEL_RETRIES retries on 429, 408, 409, 5xx and connection errors, after the
+ * server's Retry-After (more than MODEL_RETRY_AFTER_MAX_MS fails at once with that
+ * delay in the message) or Pi's backoff (0.5 s, 1 s). The usage of a call is recorded
+ * once, from the result of the request that answered.
  * `onCall` receives the usage of every finished model call of the session.
  */
 export function trackModelRequests(session: AgentSession, config: ModelConfig, onCall?: (usage: CallUsage, model: string) => void) {
@@ -93,7 +100,9 @@ export function trackModelRequests(session: AgentSession, config: ModelConfig, o
   };
   const original = session.agent.streamFunction;
   session.agent.streamFunction = async (model, context, options) => {
-    const stream = await original(model, context, { ...options, fetch: tracked, maxRetries: 0, timeoutMs: config.timeoutMs });
+    const stream = await original(model, context, {
+      ...options, fetch: tracked, maxRetries: MODEL_RETRIES, maxRetryDelayMs: MODEL_RETRY_AFTER_MAX_MS, timeoutMs: config.timeoutMs,
+    });
     if (onCall) {
       stream.result().then(message => {
         const usage = callUsage(context.messages, message);

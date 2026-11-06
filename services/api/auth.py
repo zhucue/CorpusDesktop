@@ -1,8 +1,11 @@
 import hashlib
 import os
 import secrets
+import threading
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
+from uuid import UUID
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
@@ -11,6 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from services.api.access import MANAGE, human_only, require_project
 from services.api.db import get_db
 from services.api.errors import ApiError
 from services.api.models import AgentToken, LoginSession, User
@@ -222,10 +226,39 @@ def change_password(body: PasswordInput, request: Request, user: CurrentUser, db
 
 users_router = APIRouter(prefix="/api/users")
 
+LOOKUPS_PER_MINUTE = 20
+_lookups: dict = {}  # user id → recent lookup times (one api process: uvicorn without workers)
+_lookups_lock = threading.Lock()
+
+
+def _rate_limit(user_id):
+    now = time.monotonic()
+    with _lookups_lock:
+        recent = [t for t in _lookups.get(user_id, ()) if now - t < 60]
+        if len(recent) >= LOOKUPS_PER_MINUTE:
+            _lookups[user_id] = recent
+            raise ApiError(429, "RATE_LIMITED", "查找过于频繁，请一分钟后再试")
+        recent.append(now)
+        _lookups[user_id] = recent
+
 
 @users_router.get("")
-def find_user(email: Annotated[str, Query(max_length=254)], user: CurrentUser, db: Db):
+def find_user(
+    email: Annotated[str, Query(max_length=254)],
+    project_id: UUID,
+    user: CurrentUser,
+    db: Db,
+):
+    """Adding a member (contracts/p11.md §三 4): the project owner, browser session only, looks up one exact
+    email; `{items: []}` when there is no such account, `{items: [user]}` otherwise (same shape, same one
+    query either way). At most LOOKUPS_PER_MINUTE lookups per user and minute."""
+    human_only(user)
+    require_project(db, project_id, user, MANAGE)
+    _rate_limit(user.id)
     found = db.scalar(select(User).where(User.email == email.strip().lower()))
-    if not found:
-        raise ApiError(404, "NOT_FOUND", "用户不存在")
-    return user_view(found)
+    items = (
+        [{"id": found.id, "email": found.email, "display_name": found.display_name}]
+        if found
+        else []
+    )
+    return {"items": items}

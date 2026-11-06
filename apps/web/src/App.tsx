@@ -19,6 +19,8 @@ const Assistant = lazy(() => import("./features/assistant/AssistantPage"));
 const Jobs = lazy(() => import("./features/jobs/Jobs"));
 const Settings = lazy(() => import("./features/settings/Settings"));
 const Onboarding = lazy(() => import("./features/onboarding/Onboarding"));
+const Help = lazy(() => import("./features/help/Help"));
+const HelpStandalone = lazy(() => import("./features/help/Help").then((m) => ({ default: m.HelpStandalone })));
 
 export { useMe };
 
@@ -91,6 +93,16 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/help"
+        element={
+          <RequireAuth>
+            <Suspense fallback={Fallback}>
+              <HelpStandalone />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
+      <Route
         path="/p/:projectId"
         element={
           <RequireAuth>
@@ -111,6 +123,7 @@ function AppRoutes() {
         <Route path="assistant/:sessionId" element={<Assistant />} />
         <Route path="jobs" element={<Jobs />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="help" element={<Help />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

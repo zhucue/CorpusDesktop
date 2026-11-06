@@ -498,10 +498,11 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     }),
     spec({
       name: 'corpus.parse',
-      description: '检查查询式语法，返回解析结果或错误位置。',
-      parameters: Type.Object({ query: Type.String({ minLength: 1 }) }),
+      description: '检查查询式语法，返回解析结果或错误位置。按范围（默认会话范围）语料的词性体系解析，并检查所需的标注层。',
+      parameters: Type.Object({ query: Type.String({ minLength: 1 }), scope: ScopeArg }),
       run: async (args, signal) => {
-        const result = await api.post<any>('/search/parse', { query: args.query }, signal);
+        const scope = args.scope?.subcorpus_id || args.scope?.corpus_id ? resolveScope(args.scope) : ctx.scope;
+        const result = await api.post<any>('/search/parse', { query: args.query, ...(scope ? { scope } : {}) }, signal);
         return { data: result, summary: result.ok ? '语法正确' : `语法错误：${result.error?.message ?? ''}` };
       },
     }),

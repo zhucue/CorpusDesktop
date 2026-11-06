@@ -84,6 +84,7 @@ export default function CommandPalette({
       { group: "页面", label: "任务", icon: pageIcon.jobs, run: go(`${base}/jobs`) },
       { group: "页面", label: "设置", icon: pageIcon.settings, run: go(`${base}/settings`) },
       { group: "页面", label: "打开引导", icon: "compass", run: go(`/onboarding?project=${projectId}`) },
+      { group: "页面", label: "帮助", meta: "查询语法 · 导入格式 · 统计指标 · 权限 · 常见错误", icon: "bookopen", run: go(`${base}/help`) },
     ];
     const proj: Item[] = (projects.data?.items ?? []).map((p) => ({
       group: "项目",

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Form, Input, Modal, Popconfirm, Select, Spin, Table } from "antd";
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { ApiError, MAX_PAGE_SIZE, api, errorText, roleLabels, type AuditEntry, type DeletedProject, type Member, type Page, type Project, type Role, type User } from "../../api";
+import { MAX_PAGE_SIZE, api, errorText, roleLabels, type AuditEntry, type DeletedProject, type Member, type Page, type Project, type Role, type User } from "../../api";
 import { Avatar, ErrorAlert, RelTime } from "../../components/common";
 import { Icon, type IconName } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
@@ -257,13 +257,9 @@ function ProjectSettings() {
   });
   const addMember = useMutation({
     mutationFn: async ({ email, role }: { email: string; role: Role }) => {
-      let user: User;
-      try {
-        user = await api.get<User>("/users", { email: email.trim() });
-      } catch (e) {
-        if (e instanceof ApiError && e.status === 404) throw new Error("邮箱不存在");
-        throw e;
-      }
+      const found = await api.get<{ items: Pick<User, "id" | "email" | "display_name">[] }>("/users", { email: email.trim(), project_id: projectId });
+      const user = found.items[0];
+      if (!user) throw new Error("邮箱不存在");
       return api.put<Member>(`/projects/${projectId}/members/${encodeURIComponent(user.id)}`, { role });
     },
     onSuccess: (m) => {

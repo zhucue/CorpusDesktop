@@ -253,9 +253,14 @@ test('MODEL_NOT_CONFIGURED: health reports it and messages return 503', async ()
 });
 
 test('provider errors map to MODEL_* codes', async () => {
-  const cases: [Reply, string][] = [[{ status: 401 }, 'MODEL_AUTH_FAILED'], [{ status: 429 }, 'MODEL_RATE_LIMITED'], [{ status: 500 }, 'MODEL_REQUEST_FAILED']];
-  for (const [reply, code] of cases) {
-    const { app, call, createSession } = await setup([reply]);
+  // 429 and 5xx are retried twice: three answers in a row fail the run
+  const cases: [Reply[], string][] = [
+    [[{ status: 401 }], 'MODEL_AUTH_FAILED'],
+    [[{ status: 429 }, { status: 429 }, { status: 429 }], 'MODEL_RATE_LIMITED'],
+    [[{ status: 500 }, { status: 500 }, { status: 500 }], 'MODEL_REQUEST_FAILED'],
+  ];
+  for (const [replies, code] of cases) {
+    const { app, call, createSession } = await setup(replies);
     assert.equal(((await (await app.request('/agent/health')).json()) as any).ok, true);
     const session = await createSession();
     const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '你好' })).text());
@@ -265,7 +270,7 @@ test('provider errors map to MODEL_* codes', async () => {
 });
 
 test('model timeout maps to MODEL_TIMEOUT', async () => {
-  const { call, createSession } = await setup([{ hang: true }], { modelTimeoutMs: 300 });
+  const { call, createSession } = await setup([{ hang: true }, { hang: true }, { hang: true }], { modelTimeoutMs: 300 });
   const session = await createSession();
   const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '你好' })).text());
   assert.equal(events.at(-1)!.event, 'error');
@@ -1069,7 +1074,7 @@ test('openai-responses usage is recorded from response.completed', async () => {
 });
 
 test('without usage the tokens are estimated as characters / 2; a failed request writes nothing', async () => {
-  const { model, store, call, createSession } = await setup([{ text: '翻译腔是受源语影响的表达。' }, { status: 500 }]);
+  const { model, store, call, createSession } = await setup([{ text: '翻译腔是受源语影响的表达。' }, { status: 500 }, { status: 500 }, { status: 500 }]);
   const session = await createSession();
   parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '翻译腔是什么' })).text());
   assert.equal(store.usage.length, 1);
@@ -1344,4 +1349,29 @@ test('P10 components: catalog signatures, semantic KwicTable block, prompt rules
   for (const text of ['stats_word_sketch 用 WordSketch', 'stats_sketch_diff 用 SketchDiff', 'CompareChart', 'search_semantic 用 KwicTable', '近义词辨析', '数字只来自工具结果', '不代写研究结论']) {
     assert.ok(prompt.includes(text), text);
   }
+});
+
+test('model 503 twice then an answer: the run succeeds, Retry-After is waited, usage is recorded once', async () => {
+  const { model, store, call, createSession } = await setup([
+    { status: 503, retryAfter: '1' }, { status: 503 }, { text: '好的。', usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 } },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '你好' })).text());
+  assert.equal(events.at(-1)!.event, 'done', JSON.stringify(events.at(-1)));
+  assert.equal(model.requests.length, 3);
+  assert.ok(model.requests[1].at - model.requests[0].at >= 900, 'waited for Retry-After: 1');
+  assert.equal(store.usage.length, 1);
+  assert.equal(store.usage[0].total_tokens, 12);
+});
+
+test('corpus.parse sends the session scope, or the scope given', async () => {
+  const { api, call, createSession } = await setup([
+    { tool: 'corpus_parse', args: { query: '翻译/v' } },
+    { tool: 'corpus_parse', args: { query: '翻译/v', scope: { subcorpus_id: 'sub-1' } } },
+    { text: '语法正确。' },
+  ]);
+  const session = await createSession();
+  parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '检查' })).text());
+  const bodies = api.requests.filter(r => r.path === '/search/parse').map(r => r.body);
+  assert.deepEqual(bodies, [{ query: '翻译/v', scope: { corpus_id: CORPUS } }, { query: '翻译/v', scope: { subcorpus_id: 'sub-1' } }]);
 });

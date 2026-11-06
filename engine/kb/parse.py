@@ -4,6 +4,8 @@ pdf: one block per page (pypdf), locator {page} (1-based). docx: one block per p
 {heading_path} from Heading / 标题 / Title styles. md / txt: one block per paragraph (blank-line separated),
 locator {line} (1-based) plus {heading_path} under ATX headings (`# …`). url: fetched with httpx (http/https,
 no private / loopback / link-local addresses, ≤ 10 MB, ≤ 5 redirects), main text by trafilatura as Markdown, then parsed as md.
+Each hop resolves the name once, checks every address and connects to the checked IP (Host and SNI keep the
+name), so DNS rebinding cannot swap in an internal address. pdf / docx: unpacked-size limits (engine.parsers.limits).
 Heading lines are not block text; they only set the path.
 """
 
@@ -13,6 +15,8 @@ import socket
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 from zipfile import BadZipFile
+
+from engine.parsers import limits
 
 KINDS = ("pdf", "docx", "md", "txt", "url")
 MAX_FETCH = 10 * 1024 * 1024
@@ -117,7 +121,11 @@ def _title_line(text: str) -> str | None:
     """First paragraph of a page when it reads as a title: short, no sentence end, more text after it."""
     first, _, rest = text.partition("\n")
     first = first.strip()
-    if rest.strip() and 0 < len(first) <= 60 and first[-1] not in _SENTENCE_END + "，,；;：:":
+    if (
+        rest.strip()
+        and 0 < len(first) <= 60
+        and first[-1] not in _SENTENCE_END + "，,；;：:"
+    ):
         return first
     return None
 
@@ -125,8 +133,10 @@ def _title_line(text: str) -> str | None:
 def _usable_title(value: str) -> bool:
     """Metadata titles that name nothing (about:blank from browsers, Word's default) are ignored."""
     v = value.strip().lower()
-    return bool(v) and v not in ("about:blank", "untitled", "无标题") and not re.search(
-        r"\.(docx?|pdf|txt|md)$|^microsoft word -", v
+    return (
+        bool(v)
+        and v not in ("about:blank", "untitled", "无标题")
+        and not re.search(r"\.(docx?|pdf|txt|md)$|^microsoft word -", v)
     )
 
 
@@ -136,13 +146,21 @@ def _pdf(path: Path):
 
     try:
         reader = PdfReader(path)
-        blocks = []
+        pages, limit = limits.max_pdf_pages(), limits.max_unpacked_bytes()
+        if len(reader.pages) > pages:
+            raise ParseError(f"{path.name} {limits.TOO_LARGE}（超过 {pages} 页）")
+        blocks, size = [], 0
         for i, page in enumerate(reader.pages, 1):
             text = _join_lines(page.extract_text() or "")
+            size += len(text.encode("utf-8"))
+            if size > limit:
+                raise limits.too_large(path.name, limit, ParseError)
             if text:
                 blocks.append({"text": text, "locator": {"page": i}})
         info = reader.metadata or {}
         meta = {"pages": len(reader.pages)}
+    except ParseError:
+        raise
     except (PdfReadError, ValueError, KeyError) as e:
         raise ParseError(f"{path.name} 无法解析：{e}") from e
     for key, name in (("/Title", "title"), ("/Author", "author")):
@@ -166,6 +184,7 @@ def _docx(path: Path):
     from docx import Document
     from docx.opc.exceptions import PackageNotFoundError
 
+    limits.check_zip(path, path.name, ParseError)
     try:
         doc = Document(str(path))
     except (PackageNotFoundError, BadZipFile, KeyError, ValueError) as e:
@@ -180,7 +199,9 @@ def _docx(path: Path):
         level = int(m.group(1)) if m else (1 if style == "Title" else 0)
         if level:
             if first_heading is None and not blocks:
-                first_heading = text  # a Title / heading before any body text names the document
+                first_heading = (
+                    text  # a Title / heading before any body text names the document
+                )
             path_ = path_[: level - 1] + [text]
             continue
         blocks.append({"text": text, "locator": _heading_locator(path_)})
@@ -190,7 +211,10 @@ def _docx(path: Path):
         meta["title"] = props.title.strip()
     elif first_heading:
         meta["title"] = first_heading[:500]
-    if (props.author or "").strip() not in ("", "python-docx"):  # python-docx's template default
+    if (props.author or "").strip() not in (
+        "",
+        "python-docx",
+    ):  # python-docx's template default
         meta["author"] = props.author.strip()
     return blocks, meta
 
@@ -253,16 +277,28 @@ def _blocked(address: str) -> bool:
     return ip.is_loopback or ip.is_link_local or any(ip in net for net in _BLOCKED)
 
 
-def _check_public(host: str):
+def _public_address(host: str, port: int, resolver=None) -> str:
+    """The address to connect to: the literal IP, or the first of the name's addresses after checking that
+    none of them is internal. The name is resolved once; the caller connects to this address."""
     try:
-        infos = socket.getaddrinfo(host, None)
-    except socket.gaierror as e:
-        raise ParseError(f"无法解析域名：{host}") from e
-    if any(_blocked(info[4][0]) for info in infos):
+        ipaddress.ip_address(host)
+        addresses = [host]
+    except ValueError:
+        try:
+            infos = (resolver or socket.getaddrinfo)(
+                host, port, type=socket.SOCK_STREAM
+            )
+        except (socket.gaierror, UnicodeError) as e:
+            raise ParseError(f"无法解析域名：{host}") from e
+        addresses = list(dict.fromkeys(info[4][0] for info in infos))
+    if not addresses:
+        raise ParseError(f"无法解析域名：{host}")
+    if any(_blocked(a) for a in addresses):
         raise ParseError("只能导入公网地址")
+    return addresses[0]
 
 
-def check_public_url(url: str) -> str:
+def check_public_url(url: str, resolver=None) -> str:
     """Request-time check: http(s) URL whose host is not a private, loopback, link-local, CGNAT or multicast
     address (literal or resolved). A name that does not resolve here passes; the worker checks again on fetch."""
     url = check_url(url)
@@ -276,7 +312,7 @@ def check_public_url(url: str) -> str:
             raise ParseError("只能导入公网地址")
         return url
     try:
-        infos = socket.getaddrinfo(host, None)
+        infos = (resolver or socket.getaddrinfo)(host, None)
     except (socket.gaierror, UnicodeError):
         return url
     if any(_blocked(info[4][0]) for info in infos):
@@ -308,21 +344,44 @@ FETCH_HEADERS = {
 }
 
 
-def fetch(url: str) -> bytes:
+def _pinned(url: str, resolver=None):
+    """(URL with the checked IP as host, Host header, request extensions): the connection goes to the address
+    that was checked, so a second DNS answer (rebinding) is never used; Host and TLS SNI / certificate check
+    keep the name."""
+    import httpx
+
+    u = httpx.URL(url)
+    host = u.raw_host.decode("ascii")
+    ip = _public_address(host, u.port or (443 if u.scheme == "https" else 80), resolver)
+    header = f"[{host}]" if ":" in host else host
+    if u.port:
+        header += f":{u.port}"
+    ext = {"sni_hostname": host} if u.scheme == "https" else {}
+    return u.copy_with(host=ip.split("%")[0], fragment=None), header, ext
+
+
+def fetch(url: str, *, resolver=None, transport=None) -> bytes:
+    """GET with redirects followed by hand (each hop resolved, checked and pinned). No proxy from the
+    environment: the connection must go to the checked address. resolver / transport: tests."""
     import httpx
 
     url = check_url(url)
     agents = list(USER_AGENTS)
     try:
-        with httpx.Client(timeout=30, headers=FETCH_HEADERS) as client:
+        with httpx.Client(
+            timeout=30, headers=FETCH_HEADERS, trust_env=False, transport=transport
+        ) as client:
             for _ in range(7):
-                _check_public(urlsplit(url).hostname)
-                with client.stream("GET", url, headers={"User-Agent": agents[0]}) as r:
+                target, host, ext = _pinned(url, resolver)
+                headers = {"User-Agent": agents[0], "Host": host}
+                with client.stream("GET", target, headers=headers, extensions=ext) as r:
                     if r.is_redirect:
                         url = check_url(urljoin(url, r.headers.get("location", "")))
                         continue
                     if r.status_code == 403 and len(agents) > 1:
-                        agents.pop(0)  # some sites serve only a browser User-Agent: one more try
+                        agents.pop(
+                            0
+                        )  # some sites serve only a browser User-Agent: one more try
                         continue
                     if r.status_code >= 400:
                         raise ParseError(f"网页返回 HTTP {r.status_code}")
@@ -356,6 +415,9 @@ def html(page: str | bytes, url: str | None = None) -> tuple[list[dict], dict]:
         for key in ("title", "author", "sitename", "date"):
             value = getattr(info, key, None)
             # trafilatura sometimes reads navigation text as the author (Wikipedia: "Authority control …")
-            if value and (key != "author" or (len(str(value)) <= 80 and len(str(value).split()) <= 8)):
+            if value and (
+                key != "author"
+                or (len(str(value)) <= 80 and len(str(value).split()) <= 8)
+            ):
                 meta[key] = str(value)
     return markdown(text), meta

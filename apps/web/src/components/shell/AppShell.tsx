@@ -1,9 +1,9 @@
 import { useIsFetching, useIsMutating, useQueryClient } from "@tanstack/react-query";
-import { Spin } from "antd";
+import { Dropdown, Spin, type MenuProps } from "antd";
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { api } from "../../api";
-import { useMe, useProject, useProjectId } from "../../lib/data";
+import { useCorpora, useMe, useProject, useProjectId, useProjects, useSubcorpora } from "../../lib/data";
 import { useTheme } from "../../theme/theme";
 import { Avatar, Monogram, Tip } from "../common";
 import { ErrorBoundary } from "../common/ErrorBoundary";
@@ -117,12 +117,78 @@ function SideNav() {
   );
 }
 
-/** Breadcrumb scope bar: 项目 › 语料库 › 子库; each segment opens the palette at that group. */
+type CrumbGroup = "项目" | "语料库" | "子库";
+const NEW_PROJECT = "__new__";
+const ANY_SUB = "__any__";
+
+/** Menu entries of one breadcrumb segment: projects, the project's corpora, or the subcorpora of the corpus in scope. */
+function useCrumbMenu(group: CrumbGroup): { items: MenuProps["items"]; selected: string[]; pick: (key: string) => void } {
+  const { projectId, scopeInfo, setScope } = useShell();
+  const projects = useProjects();
+  const corpora = useCorpora(projectId);
+  const subs = useSubcorpora(projectId);
+  const navigate = useNavigate();
+  const page = usePageId();
+  if (group === "项目")
+    return {
+      items: [
+        ...(projects.data?.items ?? []).map((p) => ({ key: p.id, label: p.name, icon: <Icon name="folder" size={14} /> })),
+        { type: "divider" as const },
+        { key: NEW_PROJECT, label: "新建项目", icon: <Icon name="plus" size={14} /> },
+      ],
+      selected: [projectId],
+      pick: (key) => {
+        if (key === NEW_PROJECT) navigate("/onboarding");
+        else if (key !== projectId) navigate(`/p/${key}/${NAV.some(([k]) => k === page) || page === "settings" || page === "help" ? page : "corpora"}`);
+      },
+    };
+  if (group === "语料库")
+    return {
+      items: (corpora.data?.items ?? []).map((c) => ({
+        key: c.id,
+        label: c.project_id === null ? `${c.name}（内置）` : c.name,
+        icon: <Icon name="library" size={14} />,
+        disabled: c.status !== "ready" && c.status !== "stale",
+      })),
+      selected: scopeInfo.corpus ? [scopeInfo.corpus.id] : [],
+      pick: (key) => setScope({ corpus_id: key }),
+    };
+  const corpusId = scopeInfo.corpus?.id;
+  return {
+    items: [
+      { key: ANY_SUB, label: "不限子库" },
+      ...(subs.data?.items ?? []).filter((s) => s.corpus_id === corpusId).map((s) => ({ key: s.id, label: s.name, icon: <Icon name="filter" size={14} /> })),
+    ],
+    selected: [scopeInfo.subcorpus?.id ?? ANY_SUB],
+    pick: (key) => {
+      if (key === ANY_SUB) {
+        if (corpusId) setScope({ corpus_id: corpusId });
+      } else setScope({ subcorpus_id: key });
+    },
+  };
+}
+
+function Crumb({ group, label, last, placeholder, mono }: { group: CrumbGroup; label: string; last: boolean; placeholder?: boolean; mono?: boolean }) {
+  const menu = useCrumbMenu(group);
+  return (
+    <Dropdown
+      trigger={["click"]}
+      menu={{ items: menu.items, selectable: true, selectedKeys: menu.selected, onClick: ({ key }) => menu.pick(key), style: { maxHeight: 360, overflowY: "auto" } }}
+    >
+      <button type="button" className={`crumb ${last ? "last" : ""} ${placeholder ? "placeholder" : ""}`} aria-haspopup="menu" aria-label={`切换${group}：${label}`}>
+        {mono && <Monogram name={label || "项目"} />}
+        <span>{label}</span>
+      </button>
+    </Dropdown>
+  );
+}
+
+/** Breadcrumb scope bar: 项目 › 语料库 › 子库; each segment opens a menu that switches it. */
 export function ScopeCrumbs({ depth = 3 }: { depth?: 1 | 3 }) {
   const project = useProject();
-  const { scopeInfo, openPalette } = useShell();
+  const { scopeInfo } = useShell();
   const name = project.data?.name ?? "";
-  const segs: { label: string; group: string; placeholder?: boolean; mono?: boolean }[] = [{ label: name, group: "项目", mono: true }];
+  const segs: { label: string; group: CrumbGroup; placeholder?: boolean; mono?: boolean }[] = [{ label: name, group: "项目", mono: true }];
   if (depth === 3) {
     segs.push(scopeInfo.corpus ? { label: scopeInfo.corpus.name, group: "语料库" } : { label: "选择语料库", group: "语料库", placeholder: true });
     if (scopeInfo.subcorpus) segs.push({ label: scopeInfo.subcorpus.name, group: "子库" });
@@ -133,16 +199,7 @@ export function ScopeCrumbs({ depth = 3 }: { depth?: 1 | 3 }) {
       {segs.map((s, i) => (
         <span key={s.group} className="row" style={{ gap: 2, minWidth: 0 }}>
           {i > 0 && <Icon name="right" className="sep" />}
-          <Tip title={`切换${s.group}`}>
-            <button
-              type="button"
-              className={`crumb ${i === segs.length - 1 ? "last" : ""} ${s.placeholder ? "placeholder" : ""}`}
-              onClick={() => openPalette(s.group)}
-            >
-              {s.mono && <Monogram name={s.label || "项目"} />}
-              <span>{s.label}</span>
-            </button>
-          </Tip>
+          <Crumb group={s.group} label={s.label} last={i === segs.length - 1} placeholder={s.placeholder} mono={s.mono} />
         </span>
       ))}
     </nav>
@@ -163,7 +220,7 @@ export function PageHeader({
   const fetching = useIsFetching({ predicate: (q) => !q.meta?.background && q.state.fetchStatus === "fetching" });
   const mutating = useIsMutating();
   const { mode, toggle } = useTheme();
-  const { openPalette, openKeys, assistantOpen, setAssistantOpen } = useShell();
+  const { projectId, openPalette, openKeys, assistantOpen, setAssistantOpen } = useShell();
   const page = usePageId();
   const [spun, setSpun] = useState(false);
   return (
@@ -185,6 +242,11 @@ export function PageHeader({
           <kbd>Ctrl K</kbd>
         </button>
         <FeedbackButton />
+        <Tip title="帮助">
+          <Link className={`btn ghost icon ${page === "help" ? "on" : ""}`} to={`/p/${projectId}/help`} aria-label="帮助">
+            <Icon name="bookopen" />
+          </Link>
+        </Tip>
         <Tip title="快捷键（?）">
           <button className="btn ghost icon" type="button" aria-label="快捷键" onClick={openKeys}>
             <Icon name="keyboard" />

@@ -3,12 +3,12 @@
 "\n"), Sentence.external_id = Tatoeba id. Links between two loaded sentences of different languages
 become one Alignment per pair (reciprocal rows collapse), source = the language that sorts first."""
 
-import bz2
 import re
 from pathlib import Path
 
 from engine.model import Alignment, Document, Sentence
 from engine.parsers import ParseError
+from engine.parsers.limits import open_bz2_text
 
 LANGS = {
     "cmn": "zh",
@@ -38,7 +38,9 @@ def is_tatoeba_file(path: Path) -> bool:
 
 def _open(path: Path):
     if path.name.lower().endswith(".bz2"):
-        return bz2.open(path, "rt", encoding="utf-8", newline="\n")
+        return open_bz2_text(
+            path, path.name, ParseError, encoding="utf-8", newline="\n"
+        )
     return open(path, encoding="utf-8-sig", newline="\n")
 
 

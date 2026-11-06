@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { App, Form, Input, Modal, Select, Upload, type UploadFile } from "antd";
-import { useEffect, useState } from "react";
+import { App, Form, Input, Modal, Progress, Select, Upload, type UploadFile } from "antd";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { api, errorText, type Corpus, type Job, type Metadata } from "../../api";
+import { api, ApiError, errorFromResponse, errorText, unavailableText, type Corpus, type CorpusMeta, type Job, type Metadata } from "../../api";
 import { CorpusStatusTag, ErrorAlert } from "../../components/common";
 import { Icon } from "../../components/Icon";
 import { isActiveJob, useJob, useJobCreated } from "../../lib/data";
@@ -64,20 +64,83 @@ export function dedupeFiles(list: UploadFile[]): { files: UploadFile[]; dropped:
   return { files, dropped };
 }
 
-/** Upload files into an existing corpus, or create a project corpus first. Returns the import job. */
+/** Source and license fields of the upload dialog (Corpus.meta; the export source line uses them). */
+export const SOURCE_FIELDS: ["license" | "attribution" | "source_url", string, number][] = [
+  ["license", "许可", 200],
+  ["attribution", "署名", 2000],
+  ["source_url", "来源链接", 1000],
+];
+export type SourceValues = Partial<Record<"license" | "attribution" | "source_url", string>>;
+
+export interface UploadOptions {
+  /** Corpus source and license: a filled field is set, an empty one removed. */
+  source?: SourceValues;
+  onProgress?: (loaded: number, total: number) => void;
+  signal?: AbortSignal;
+}
+
+/** POST a form with XMLHttpRequest for upload progress; errors as from `request` (ApiError), abort as AbortError. */
+export function postForm<T>(path: string, body: FormData, { onProgress, signal }: UploadOptions = {}): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException("已取消上传", "AbortError"));
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `/api${path}`);
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded, e.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText) as T);
+        } catch {
+          reject(new ApiError(xhr.status, "http_error", "响应格式错误"));
+        }
+        return;
+      }
+      void errorFromResponse(new Response(xhr.responseText, { status: xhr.status, statusText: xhr.statusText }), "POST").then(reject);
+    };
+    xhr.onerror = () => reject(new ApiError(0, "UNAVAILABLE", unavailableText("POST")));
+    xhr.onabort = () => reject(new DOMException("已取消上传", "AbortError"));
+    signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.send(body);
+  });
+}
+
+/** Upload files into an existing corpus. Returns the import job. */
 export async function uploadFiles(
   corpusId: string,
   files: File[],
   language?: string,
   metadata?: Metadata,
   mapping?: ImportMapping | null,
+  options: UploadOptions = {},
 ): Promise<Job> {
   const body = new FormData();
   for (const f of files) body.append("files", f);
   if (language) body.append("language", language);
   if (metadata && Object.keys(metadata).length) body.append("metadata", JSON.stringify(metadata));
   if (mapping) body.append("mapping", JSON.stringify(mapping));
-  return api.post<Job>(`/corpora/${corpusId}/documents`, body);
+  if (options.source) body.append("source", JSON.stringify(options.source));
+  return postForm<Job>(`/corpora/${corpusId}/documents`, body, options);
+}
+
+/** Form values → the source body: every field trimmed (empty removes it); undefined when nothing changed. */
+export function sourceBody(values: SourceValues | undefined, current: CorpusMeta | undefined): SourceValues | undefined {
+  const out: SourceValues = {};
+  let changed = false;
+  for (const [k] of SOURCE_FIELDS) {
+    const v = values?.[k]?.trim() ?? "";
+    out[k] = v;
+    if (v !== (current?.[k] ?? "")) changed = true;
+  }
+  return changed ? out : undefined;
+}
+
+export const isAbort = (e: unknown) => e instanceof DOMException && e.name === "AbortError";
+
+function mb(n: number): string {
+  return (n / 1024 / 1024).toFixed(n < 10 * 1024 * 1024 ? 1 : 0);
 }
 
 /** "导入完成：3 篇，跳过重复 2 篇（a.csv #4、b.txt）" from an import job result. */
@@ -128,7 +191,7 @@ export function FilePicker({ files, setFiles, hint }: { files: UploadFile[]; set
   );
 }
 
-type Values = { corpus: string; name?: string; language: string; metadata?: MetaDraft };
+type Values = { corpus: string; name?: string; language: string; metadata?: MetaDraft; source?: SourceValues };
 
 export default function UploadDialog({
   open,
@@ -156,26 +219,58 @@ export default function UploadDialog({
   const current = own.find((c) => c.id === target);
   const table = useTableMapping(files.map((f) => f.originFileObj as File));
   const watchImport = useImportNotice();
+  const [progress, setProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const abort = useRef<AbortController | null>(null);
 
   // a closed dialog forgets its files (Esc, 取消 or after upload)
   useEffect(() => {
     if (!open) setFiles([]);
   }, [open]);
 
+  // the source fields show the chosen corpus's values (empty for a new corpus)
+  const currentMeta = current?.meta;
+  const currentId = current?.id;
+  useEffect(() => {
+    if (!open) return;
+    form.setFieldsValue({ source: Object.fromEntries(SOURCE_FIELDS.map(([k]) => [k, currentMeta?.[k] ?? ""])) as SourceValues });
+    // only when the dialog opens or the target corpus changes: a corpus list refresh keeps what was typed
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, currentId, form]);
+
   const upload = useMutation({
     mutationFn: async (v: Values) => {
+      const ctrl = new AbortController();
+      abort.current = ctrl;
+      setProgress({ loaded: 0, total: files.reduce((n, f) => n + (f.size ?? 0), 0) });
       let id = v.corpus;
+      let created: string | null = null;
       if (id === NEW) {
-        const c = await api.post<Corpus>(`/projects/${projectId}/corpora`, { name: v.name!.trim(), language: v.language });
-        id = c.id;
+        const filled = Object.fromEntries(Object.entries(sourceBody(v.source, undefined) ?? {}).filter(([, x]) => x));
+        const c = await api.post<Corpus>(`/projects/${projectId}/corpora`, {
+          name: v.name!.trim(),
+          language: v.language,
+          ...(Object.keys(filled).length ? { meta: filled } : {}),
+        });
+        id = created = c.id;
       }
-      return uploadFiles(
-        id,
-        files.map((f) => f.originFileObj as File),
-        v.language,
-        metadataFromDraft(v.metadata),
-        table.mapping,
-      );
+      try {
+        return await uploadFiles(id, files.map((f) => f.originFileObj as File), v.language, metadataFromDraft(v.metadata), table.mapping, {
+          source: created ? undefined : sourceBody(v.source, currentMeta),
+          signal: ctrl.signal,
+          onProgress: (loaded, total) => setProgress({ loaded, total }),
+        });
+      } catch (e) {
+        // a corpus made for this upload is kept only when the upload got through
+        if (created) await api.del(`/corpora/${created}`).catch(() => undefined);
+        throw e;
+      }
+    },
+    onSettled: () => {
+      abort.current = null;
+      setProgress(null);
+    },
+    onError: (e) => {
+      if (isAbort(e)) message.info("已取消上传");
     },
     onSuccess: (job: Job) => {
       qc.invalidateQueries({ queryKey: ["corpora", projectId] });
@@ -192,16 +287,19 @@ export default function UploadDialog({
     },
   });
 
+  const uploading = upload.isPending;
+  const percent = progress && progress.total ? Math.min(100, Math.floor((progress.loaded / progress.total) * 100)) : 0;
   return (
     <Modal
       title="上传语料"
       open={open}
-      onCancel={onClose}
+      onCancel={() => (uploading ? abort.current?.abort() : onClose())}
       okText="上传"
-      cancelText="取消"
+      cancelText={uploading ? "取消上传" : "取消"}
       width={table.tables.length ? 720 : 560}
-      okButtonProps={{ disabled: files.length === 0 || !table.ready, loading: upload.isPending }}
+      okButtonProps={{ disabled: files.length === 0 || !table.ready, loading: uploading }}
       onOk={() => form.submit()}
+      maskClosable={!uploading}
       destroyOnHidden
     >
       <Form
@@ -242,7 +340,20 @@ export default function UploadDialog({
         <Form.Item name="metadata" label="元数据（应用到本批全部文档）" rules={[metaDraftRule]}>
           <MetadataInput />
         </Form.Item>
-        <ErrorAlert error={upload.error} />
+        <div className="upload-source" role="group" aria-label="来源与许可">
+          {SOURCE_FIELDS.map(([k, label, max]) => (
+            <Form.Item key={k} name={["source", k]} label={label}>
+              <Input maxLength={max} allowClear aria-label={label} />
+            </Form.Item>
+          ))}
+        </div>
+        {progress && (
+          <div className="upload-progress" role="status">
+            <Progress percent={percent} size="small" status="active" />
+            <span className="num">{percent < 100 ? `已上传 ${mb(progress.loaded)} / ${mb(progress.total)} MB` : "上传完成，正在创建导入任务"}</span>
+          </div>
+        )}
+        {!isAbort(upload.error) && <ErrorAlert error={upload.error} />}
       </Form>
     </Modal>
   );

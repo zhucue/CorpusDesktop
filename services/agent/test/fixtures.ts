@@ -38,7 +38,7 @@ async function listen(server: ReturnType<typeof createServer>) {
 /** OpenAI chat usage; openai-completions sends it as the last chunk only when given (the responses fake always reports 8/4/12). */
 export type Usage = { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 type Answer = ({ text: string; thinking?: string } | { tool: string; args: Record<string, unknown> }) & { usage?: Usage };
-export type Reply = Answer | { status: number } | { hang: true };
+export type Reply = Answer | { status: number; retryAfter?: string } | { hang: true };
 
 function writeReply(response: ServerResponse, api: string, reply: Answer) {
   response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
@@ -91,13 +91,17 @@ export async function fakeModel(api: string, replies: Reply[]) {
   const requests: any[] = [];
   const server = createServer(async (request, response) => {
     const body = JSON.parse(await readBody(request));
-    requests.push({ body, authorization: request.headers.authorization });
+    requests.push({ body, authorization: request.headers.authorization, at: Date.now() });
     if (request.headers.authorization !== `Bearer ${MODEL_KEY}`) {
       response.writeHead(401, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: { message: 'bad key' } }));
       return;
     }
     const reply = replies[requests.length - 1] ?? { text: '（无更多脚本回复）' };
-    if ('status' in reply) { response.writeHead(reply.status, { 'Content-Type': 'application/json' }).end('{"error":{"message":"x"}}'); return; }
+    if ('status' in reply) {
+      const headers = { 'Content-Type': 'application/json', ...(reply.retryAfter ? { 'Retry-After': reply.retryAfter } : {}) };
+      response.writeHead(reply.status, headers).end('{"error":{"message":"x"}}');
+      return;
+    }
     if ('hang' in reply) return; // never answers; the client aborts
     writeReply(response, api, reply);
   });
