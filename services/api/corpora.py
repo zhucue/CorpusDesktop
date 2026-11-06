@@ -9,6 +9,7 @@ from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import Text, and_, cast, func, or_, select, update
 
+from engine.nlp import SUPPORTED, lang_code
 from services.api.access import (
     WRITE,
     Paging,
@@ -17,6 +18,7 @@ from services.api.access import (
     require_project,
     token_project,
 )
+from services.api.audit import record
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
 from services.api.jobs import (
@@ -104,6 +106,30 @@ def _create(db, project_id, body):
 def _mark_stale(corpus):
     if corpus.status == "ready":
         corpus.status = "stale"
+
+
+def queue_reindex(db, corpus, user):
+    """After documents were deleted or their metadata changed (contracts/p9.md §八): queue one index build
+    of an indexed corpus, unless one is already queued. Call after the change is flushed."""
+    if not corpus.index_version:
+        return  # never indexed: the running or next import builds the index
+    queued = db.scalar(
+        select(Job.id)
+        .where(
+            Job.kind == "index",
+            Job.state == "queued",
+            Job.params["corpus_id"].astext == str(corpus.id),
+        )
+        .limit(1)
+    )
+    if queued is None:
+        enqueue(
+            db,
+            "index",
+            {"corpus_id": str(corpus.id), "tokens": corpus_tokens(db, corpus.id)},
+            user.id,
+            corpus.project_id,
+        )
 
 
 @router.get("/corpora")
@@ -267,9 +293,20 @@ def document_delete_impact(document_id: UUID, user: CurrentUser, db: Db):
 
 
 @router.delete("/corpora/{corpus_id}", status_code=204)
-def delete_corpus(corpus_id: UUID, user: CurrentUser, db: Db):
+def delete_corpus(corpus_id: UUID, request: Request, user: CurrentUser, db: Db):
     human_only(user)
     corpus = load_corpus(db, corpus_id, user, write=True)
+    record(
+        db,
+        user,
+        "corpus_delete",
+        "corpus",
+        corpus.id,
+        corpus.name,
+        corpus.project_id,
+        {"documents": (corpus.stats or {}).get("documents")},
+        request,
+    )
     db.execute(
         update(Job)
         .where(Job.state.in_(ACTIVE), Job.params["corpus_id"].astext == str(corpus_id))
@@ -340,6 +377,13 @@ def upload_documents(
         name = f.filename.lower()
         if not (PurePath(name).suffix in FORMATS or name.endswith(".tsv.bz2")):
             raise ApiError(422, "UNSUPPORTED_FORMAT", f"不支持的文件格式：{f.filename}")
+    given = (language or "").strip() or corpus.language
+    if (
+        given != AUTO
+        and lang_code(given) not in SUPPORTED
+        and not all(f.filename.lower().endswith(".conllu") for f in files)
+    ):  # CoNLL-U brings its own tokens and tags: no NLP runs on it
+        raise ApiError(422, "LANGUAGE_UNSUPPORTED", "暂只支持中文与英文语料")
     try:
         meta = json.loads(metadata or "{}")
     except json.JSONDecodeError:
@@ -487,20 +531,38 @@ def patch_document(
     doc = _document(db, corpus_id, document_id)
     if body.title is not None:
         doc.title = body.title.strip()
-    if body.metadata is not None:
+    if body.metadata is not None and body.metadata != doc.meta:
         doc.meta = body.metadata
+        queue_reindex(
+            db, corpus, user
+        )  # metadata is in the index (filters); titles are not
     _mark_stale(corpus)
     db.commit()
     return document_view(doc)
 
 
 @router.delete("/corpora/{corpus_id}/documents/{document_id}", status_code=204)
-def delete_document(corpus_id: UUID, document_id: UUID, user: CurrentUser, db: Db):
+def delete_document(
+    corpus_id: UUID, document_id: UUID, request: Request, user: CurrentUser, db: Db
+):
     human_only(user)
     corpus = load_corpus(db, corpus_id, user, write=True)
     doc = _document(db, corpus_id, document_id)
     path = doc.text_path
+    record(
+        db,
+        user,
+        "document_delete",
+        "document",
+        doc.id,
+        doc.title,
+        corpus.project_id,
+        {"corpus_id": str(corpus.id), "corpus_name": corpus.name},
+        request,
+    )
     db.delete(doc)
+    db.flush()
+    queue_reindex(db, corpus, user)
     _mark_stale(corpus)
     db.commit()
     Path(path).unlink(missing_ok=True)

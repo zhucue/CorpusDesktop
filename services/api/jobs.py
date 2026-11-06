@@ -1,9 +1,9 @@
 import os
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse
 from sqlalchemy import and_, case, exists, func, not_, or_, select
 
@@ -15,11 +15,13 @@ from services.api.access import (
     require_project,
     token_project,
 )
+from services.api.audit import record
 from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
 from services.api.models import AnnotationLayer, Corpus, Document, Job, KbDocument
 from services.api.storage import export_path
-from services.api.views import job_view
+from services.api.usage import check_quota
+from services.api.views import job_summary, job_view
 
 router = APIRouter(prefix="/api")
 
@@ -184,10 +186,44 @@ def settle_kb_document(db, job, message):
         doc.error = message
 
 
-def _load(db, job_id, user, manage=False) -> Job:
+def export_retention_days() -> int:
+    """EXPORT_RETENTION_DAYS: the worker maintenance job deletes export files older than this."""
+    return int(os.environ.get("EXPORT_RETENTION_DAYS") or 30)
+
+
+def uses_llm(db, job) -> bool:
+    """Jobs that call the chat model (quota-checked when started, services.api.usage)."""
+    p = job.params or {}
+    if job.kind == "kb_summarize":
+        return True
+    if job.kind == "kb_extract":
+        return p.get("source") == "literature" or p.get("method") == "model"
+    if job.kind == "preannotate":
+        layer = (
+            db.get(AnnotationLayer, UUID(p["layer_id"])) if p.get("layer_id") else None
+        )
+        return layer is not None and layer_uses_llm(layer)
+    return False
+
+
+def layer_uses_llm(layer) -> bool:
+    """Pre-annotation by the chat model: span and relation layers, word-level alignment."""
+    return layer.kind in ("span", "relation") or (
+        layer.kind == "alignment" and layer.level == "word"
+    )
+
+
+def is_admin_session(user) -> bool:
+    return user.is_admin and token_project(user) is None
+
+
+def _load(db, job_id, user, manage=False, admin=False) -> Job:
+    """admin: platform admins (browser session) reach any job, also of projects they are not in."""
     job = db.get(Job, job_id)
     if not job:
         raise not_found("任务")
+    if admin and is_admin_session(user):
+        return job
     check_token_project(user, job.project_id)
     role = project_role(db, job.project_id, user) if job.project_id else None
     if job.project_id is not None and role is None:
@@ -232,12 +268,43 @@ def get_job(job_id: UUID, user: CurrentUser, db: Db):
     return job_view(_load(db, job_id, user))
 
 
+def _may_manage(db, job, user) -> bool:
+    """The creator, or an owner / editor of the job's project (built-in corpora: admins)."""
+    try:
+        _load(db, job.id, user, manage=True)
+    except ApiError:
+        return False
+    return True
+
+
 @router.post("/jobs/{job_id}/cancel")
-def cancel_job(job_id: UUID, user: CurrentUser, db: Db):
-    job = _load(db, job_id, user, manage=True)
+def cancel_job(job_id: UUID, request: Request, user: CurrentUser, db: Db):
+    """Creator, project owner / editor, or any platform admin (browser session; audited when only the admin
+    right allows it)."""
+    job = _load(db, job_id, user, manage=True, admin=True)
+    by_admin = not _may_manage(db, job, user)
     db.refresh(job, with_for_update=True)
     if job.state not in ACTIVE:
         raise ApiError(409, "JOB_FINISHED", "任务已结束")
+    if by_admin:
+        record(
+            db,
+            user,
+            "job_cancel_admin",
+            "job",
+            job.id,
+            job_summary(db, job),
+            job.project_id,
+            {"kind": job.kind, "state": job.state, "owner_id": str(job.owner_id)},
+            request,
+        )
+    stop(db, job)
+    db.commit()
+    return job_view(job)
+
+
+def stop(db, job):
+    """Mark an active job cancelled (the worker's cancel watcher stops it) and settle what it worked on."""
     job.state = "cancelled"
     job.finished_at = datetime.now(UTC)
     if job.kind in CORPUS_STATUS_FOR_KIND:
@@ -246,8 +313,6 @@ def cancel_job(job_id: UUID, user: CurrentUser, db: Db):
         settle_layer(db, job, "预标已取消")
     if job.kind == "kb_import":
         settle_kb_document(db, job, "导入已取消")
-    db.commit()
-    return job_view(job)
 
 
 @router.post("/jobs/{job_id}/retry")
@@ -255,6 +320,8 @@ def retry_job(job_id: UUID, user: CurrentUser, db: Db):
     job = _load(db, job_id, user, manage=True)
     if job.state not in ("failed", "cancelled"):
         raise ApiError(409, "JOB_NOT_RETRYABLE", "只能重试失败或已取消的任务")
+    if uses_llm(db, job):
+        check_quota(db, user)
     if job.kind == "import" and db.scalar(
         select(
             exists().where(
@@ -288,6 +355,11 @@ def download(job_id: UUID, user: CurrentUser, db: Db):
     fmt = job.params["format"]
     path = export_path(job.id, fmt)
     if not path.exists():
+        expired = job.finished_at and job.finished_at <= datetime.now(UTC) - timedelta(
+            days=export_retention_days()
+        )
+        if expired:
+            raise ApiError(410, "EXPORT_EXPIRED", "导出文件已过期，请重新导出")
         raise not_found("导出文件")
     return FileResponse(
         path, media_type=EXPORT_TYPES[fmt], filename=job.result["filename"]

@@ -6,17 +6,33 @@ from fastapi import Depends, Query
 from sqlalchemy import func, select
 
 from services.api.errors import forbidden, not_found
-from services.api.models import Corpus, ProjectMember, Subcorpus
+from services.api.models import Corpus, Project, ProjectMember, Subcorpus
 
 READ = ("owner", "editor", "annotator", "viewer")
 WRITE = ("owner", "editor")
 MANAGE = ("owner",)
 
 
-def project_role(db, project_id, user):
+def member_role(db, project_id, user_id):
+    """Role in the project, deleted (soft) or not; only restore and the admin views need this."""
     return db.scalar(
         select(ProjectMember.role).where(
-            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
+            ProjectMember.project_id == project_id, ProjectMember.user_id == user_id
+        )
+    )
+
+
+def project_role(db, project_id, user):
+    """Role in a live project. The single check every project-scoped access goes through (require_project,
+    load_corpus, load_subcorpus, layers, kb documents, jobs): a soft-deleted project has no members, so it
+    answers 404 for cookie sessions and agent tokens alike (contracts/p9.md §五)."""
+    return db.scalar(
+        select(ProjectMember.role)
+        .join(Project, Project.id == ProjectMember.project_id)
+        .where(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == user.id,
+            Project.deleted_at.is_(None),
         )
     )
 

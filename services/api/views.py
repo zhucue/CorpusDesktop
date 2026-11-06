@@ -28,6 +28,16 @@ def _corpus_updating(c) -> bool:
     return has_active_job(db, c.id, ["import", "index"])
 
 
+def _index_pending(c) -> bool:
+    """An index build of the corpus is queued or running (contracts/p9.md §八)."""
+    db = object_session(c)
+    if db is None:
+        return False
+    from services.api.jobs import has_active_job
+
+    return has_active_job(db, c.id, ["index"])
+
+
 def corpus_view(c):
     """meta: source/license fields plus, after indexing, tagset (upos | jieba | mixed), script
     (simplified | traditional | mixed, Chinese text only), languages (by text share) and indexed_at."""
@@ -44,6 +54,7 @@ def corpus_view(c):
         "index_version": c.index_version,
         "meta": c.meta or {},
         "updating": _corpus_updating(c),
+        "index_pending": _index_pending(c),
         "created_at": c.created_at,
     }
 

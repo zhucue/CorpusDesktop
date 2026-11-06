@@ -87,12 +87,15 @@ def test_import_index_ready(owner, project, corpus):
         json={"title": "A 篇", "metadata": {"year": 2002}},
     )
     assert r.json()["title"] == "A 篇" and r.json()["metadata"] == {"year": 2002}
-    assert owner.get(f"/api/corpora/{corpus['id']}").json()["status"] == "stale"
-
-    assert owner.post(f"/api/corpora/{corpus['id']}/reindex").json()["kind"] == "index"
+    c = owner.get(f"/api/corpora/{corpus['id']}").json()
+    # metadata changes queue an index build (contracts/p9.md §八); a manual one then conflicts
+    assert c["status"] == "stale" and c["index_pending"] is True
     assert owner.post(f"/api/corpora/{corpus['id']}/reindex").status_code == 409
     drain()
-    assert owner.get(f"/api/corpora/{corpus['id']}").json()["status"] == "ready"
+    c = owner.get(f"/api/corpora/{corpus['id']}").json()
+    assert c["status"] == "ready" and c["index_pending"] is False
+    assert owner.post(f"/api/corpora/{corpus['id']}/reindex").json()["kind"] == "index"
+    drain()
 
     assert (
         owner.delete(f"/api/corpora/{corpus['id']}/documents/{a['id']}").status_code

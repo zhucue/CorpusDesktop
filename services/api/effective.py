@@ -137,7 +137,7 @@ def check_layers(db, layers, corpus, user) -> dict:
 def default_layer(db, corpus, user, kind):
     """The most recently updated layer of a kind on the corpus in one of the user's projects (or None)."""
     from services.api.access import token_project
-    from services.api.models import ProjectMember
+    from services.api.models import Project, ProjectMember
 
     stmt = (
         select(AnnotationLayer)
@@ -148,7 +148,14 @@ def default_layer(db, corpus, user, kind):
                 ProjectMember.user_id == user.id,
             ),
         )
-        .where(AnnotationLayer.kind == kind, AnnotationLayer.corpus_id == corpus.id)
+        .join(Project, Project.id == AnnotationLayer.project_id)
+        .where(
+            AnnotationLayer.kind == kind,
+            AnnotationLayer.corpus_id == corpus.id,
+            Project.deleted_at.is_(
+                None
+            ),  # soft-deleted projects are gone (access.project_role)
+        )
         .order_by(AnnotationLayer.updated_at.desc(), AnnotationLayer.id)
         .limit(1)
     )

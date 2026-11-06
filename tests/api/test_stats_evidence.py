@@ -128,8 +128,10 @@ def test_stats_job_lifecycle(owner, project, corpus, member, fake_stats):
         ["a", "7", '"a"'],
     ]
     assert job["summary"].startswith("频次")
-    assert viewer.get(f"/api/jobs/{job['id']}").json()["result"]["filename"].startswith(
-        "统计-频次-"
+    assert (
+        viewer.get(f"/api/jobs/{job['id']}")
+        .json()["result"]["filename"]
+        .startswith("统计-频次-")
     )
     assert viewer.delete(f"/api/stats/{stat_id}").status_code == 403
 
@@ -479,7 +481,8 @@ def test_agent_token_cannot_delete_or_change_corpora(
         f"/api/corpora/{cid}/documents/{doc['id']}",
     ):
         assert owner.delete(path).status_code == 204, path
-    assert owner.post(f"/api/corpora/{cid}/reindex").status_code == 200
+    # the document deletion queued an index build (contracts/p9.md §八)
+    assert owner.get(f"/api/corpora/{cid}").json()["index_pending"] is True
     assert owner.delete(f"/api/corpora/{cid}").status_code == 204
 
 
