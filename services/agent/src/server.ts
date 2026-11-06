@@ -87,13 +87,41 @@ export function createApp(config: Config, store: Store, runner: Runner) {
     return user;
   }
 
+  /** The user must be a member of a live project: the api answers 404 for a deleted one (contracts/p9.md §五). */
+  async function checkProject(c: Context, projectId: string) {
+    try {
+      await browserApi(c).get(`/projects/${projectId}`);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) throw new HttpError(404, 'NOT_FOUND', '项目不存在或已删除');
+      throw error;
+    }
+  }
+
   async function ownSession(c: Context, user: User): Promise<SessionRecord> {
     const id = c.req.param('id') ?? '';
     const session = UUID.test(id) ? await store.getSession(id) : null;
     if (!session || session.owner_id !== user.id) throw new HttpError(404, 'NOT_FOUND', '会话不存在');
     // The owner must still be a project member: removal revokes access to earlier sessions at once.
-    await browserApi(c).get(`/projects/${session.project_id}`);
+    await checkProject(c, session.project_id);
     return session;
+  }
+
+  /** Reserve a run of the session for its owner: SESSION_BUSY, then TOO_MANY_RUNS (contracts/p9.md §二). */
+  function reserve(session: SessionRecord) {
+    const result = runner.reserve(session.id, session.owner_id, config.maxRunsPerUser);
+    if (result === 'busy') throw new HttpError(409, 'SESSION_BUSY', '会话正在运行');
+    if (result === 'too_many') {
+      throw new HttpError(429, 'TOO_MANY_RUNS', `已有 ${config.maxRunsPerUser} 个对话在运行，请等待完成或停止后再试`);
+    }
+  }
+
+  /** LLM_QUOTA_EXCEEDED once the owner's total_tokens this calendar month (server local time) reach the limit. */
+  async function checkQuota(userId: string) {
+    const limit = config.monthlyTokensPerUser;
+    if (!limit || !store.monthlyTokens) return;
+    const now = new Date();
+    const used = await store.monthlyTokens(userId, new Date(now.getFullYear(), now.getMonth(), 1));
+    if (used >= limit) throw new HttpError(429, 'LLM_QUOTA_EXCEEDED', `本月模型用量已达上限（${limit} token），请联系管理员`);
   }
 
   async function body(c: Context): Promise<Record<string, unknown>> {
@@ -127,7 +155,7 @@ export function createApp(config: Config, store: Store, runner: Runner) {
     const user = await currentUser(c);
     const projectId = c.req.query('project_id') ?? '';
     if (!UUID.test(projectId)) throw new HttpError(422, 'INVALID_PROJECT', '需要 project_id');
-    await browserApi(c).get(`/projects/${projectId}`);
+    await checkProject(c, projectId);
     const items = (await store.listSessions(projectId, user.id)).map(view);
     return c.json({ items, total: items.length });
   });
@@ -139,7 +167,7 @@ export function createApp(config: Config, store: Store, runner: Runner) {
     if (!UUID.test(projectId)) throw new HttpError(422, 'INVALID_PROJECT', '需要 project_id');
     const scope = parseScope(input.scope);
     const title = typeof input.title === 'string' ? input.title.trim().slice(0, 200) : '';
-    await browserApi(c).get(`/projects/${projectId}`);
+    await checkProject(c, projectId);
     const id = randomUUID();
     const session = await store.createSession({
       id, project_id: projectId, owner_id: user.id, title, scope, state: 'idle',
@@ -229,7 +257,8 @@ export function createApp(config: Config, store: Store, runner: Runner) {
     if (!content) throw new HttpError(422, 'EMPTY_CONTENT', '消息不能为空');
     if (content.length > MAX_CONTENT) throw new HttpError(422, 'CONTENT_TOO_LONG', `消息不能超过 ${MAX_CONTENT} 字`);
     if (!config.model) throw new HttpError(503, 'MODEL_NOT_CONFIGURED', '未配置模型服务');
-    if (!runner.reserve(session.id)) throw new HttpError(409, 'SESSION_BUSY', '会话正在运行');
+    await checkQuota(session.owner_id);
+    reserve(session);
     return stream(c, session, content, { regenerate, ...(context ? { context } : {}) });
   });
 
@@ -246,7 +275,10 @@ export function createApp(config: Config, store: Store, runner: Runner) {
       throw new HttpError(422, 'INVALID_CONFIRMATION', '需要 tool_call_ids 和 action（execute 或 decline）');
     }
     if (action === 'execute' && !config.model) throw new HttpError(503, 'MODEL_NOT_CONFIGURED', '未配置模型服务');
-    if (!runner.reserve(session.id)) throw new HttpError(409, 'SESSION_BUSY', '会话正在运行');
+    // Execute starts a model run: quota and the owner's run limit apply; decline only answers the card.
+    if (action === 'execute') await checkQuota(session.owner_id);
+    if (action === 'execute') reserve(session);
+    else if (runner.reserve(session.id, session.owner_id) === 'busy') throw new HttpError(409, 'SESSION_BUSY', '会话正在运行');
     let calls: ToolCall[];
     try {
       const message = (await store.listMessages(session.id)).findLast(item => item.role === 'assistant');

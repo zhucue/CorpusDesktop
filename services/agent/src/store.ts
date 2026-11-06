@@ -25,7 +25,16 @@ export interface Store {
   insertMessage(sessionId: string, message: Message): Promise<void>;
   updateMessage(id: string, fields: MessageFields): Promise<void>;
   deleteMessage(id: string): Promise<void>;
+  /** One llm_usage row per model call (contracts/p9.md §二); a store without the table skips it. */
+  recordUsage?(row: UsageRow): Promise<void>;
+  /** Sum of the user's total_tokens since `since` (start of the current month). */
+  monthlyTokens?(userId: string, since: Date): Promise<number>;
   close(): Promise<void>;
+}
+
+export interface UsageRow {
+  user_id: string; project_id: string; session_id: string; source: 'agent' | 'agent:estimated'; model: string;
+  prompt_tokens: number; completion_tokens: number; total_tokens: number;
 }
 
 const jsonOrNull = (value: unknown) => (value === null || value === undefined ? null : JSON.stringify(value));
@@ -81,7 +90,10 @@ export class PgStore implements Store {
 
   async listSessions(projectId: string, ownerId: string) {
     const { rows } = await this.pool.query(
-      `SELECT ${SESSION_COLUMNS} FROM agent_sessions s WHERE s.project_id = $1 AND s.owner_id = $2 ORDER BY s.updated_at DESC`,
+      // A soft-deleted project lists no sessions (contracts/p9.md §五).
+      `SELECT ${SESSION_COLUMNS} FROM agent_sessions s WHERE s.project_id = $1 AND s.owner_id = $2
+         AND NOT EXISTS (SELECT 1 FROM projects p WHERE p.id = s.project_id AND p.deleted_at IS NOT NULL)
+       ORDER BY s.updated_at DESC`,
       [projectId, ownerId],
     );
     return rows.map(sessionRow);
@@ -127,6 +139,22 @@ export class PgStore implements Store {
 
   async deleteMessage(id: string) {
     await this.pool.query('DELETE FROM agent_messages WHERE id = $1', [id]);
+  }
+
+  async recordUsage(row: UsageRow) {
+    await this.pool.query(
+      `INSERT INTO llm_usage (user_id, project_id, session_id, source, model, prompt_tokens, completion_tokens, total_tokens)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [row.user_id, row.project_id, row.session_id, row.source, row.model, row.prompt_tokens, row.completion_tokens, row.total_tokens],
+    );
+  }
+
+  async monthlyTokens(userId: string, since: Date) {
+    const { rows } = await this.pool.query(
+      'SELECT coalesce(sum(total_tokens), 0)::bigint AS total FROM llm_usage WHERE user_id = $1 AND created_at >= $2',
+      [userId, since],
+    );
+    return Number(rows[0].total);
   }
 
   async close() { await this.pool.end(); }

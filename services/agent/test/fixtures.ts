@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Config } from '../src/config.ts';
-import type { SessionRecord, Store } from '../src/store.ts';
+import type { SessionRecord, Store, UsageRow } from '../src/store.ts';
 import type { Message, Part, Scope, Session, ToolCall } from '../src/types.ts';
 
 export const PROJECT = '11111111-1111-4111-8111-111111111111';
@@ -35,9 +35,12 @@ async function listen(server: ReturnType<typeof createServer>) {
 
 // ---------------------------------------------------------------- model server
 
-export type Reply = { text: string; thinking?: string } | { tool: string; args: Record<string, unknown> } | { status: number } | { hang: true };
+/** OpenAI chat usage; openai-completions sends it as the last chunk only when given (the responses fake always reports 8/4/12). */
+export type Usage = { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+type Answer = ({ text: string; thinking?: string } | { tool: string; args: Record<string, unknown> }) & { usage?: Usage };
+export type Reply = Answer | { status: number } | { hang: true };
 
-function writeReply(response: ServerResponse, api: string, reply: { text: string; thinking?: string } | { tool: string; args: Record<string, unknown> }) {
+function writeReply(response: ServerResponse, api: string, reply: Answer) {
   response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
   const emit = (value: unknown) => response.write(`data: ${JSON.stringify(value)}\n\n`);
   const id = 'call_' + randomUUID().replaceAll('-', '');
@@ -60,6 +63,7 @@ function writeReply(response: ServerResponse, api: string, reply: { text: string
       chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(split) } }] });
       chunk({}, 'tool_calls');
     }
+    if (reply.usage) emit({ id: 'chatcmpl_test', object: 'chat.completion.chunk', created: 1, model: 'fake-model', choices: [], usage: reply.usage });
     response.end('data: [DONE]\n\n');
     return;
   }
@@ -450,6 +454,11 @@ export class MemoryStore implements Store {
     if (m) Object.assign(m, structuredClone(fields));
   }
   async deleteMessage(id: string) { this.messages.delete(id); }
+  usage: (UsageRow & { created_at: Date })[] = [];
+  async recordUsage(row: UsageRow) { this.usage.push({ ...row, created_at: new Date() }); }
+  async monthlyTokens(userId: string, since: Date) {
+    return this.usage.filter(row => row.user_id === userId && row.created_at >= since).reduce((sum, row) => sum + row.total_tokens, 0);
+  }
   async close() {}
 }
 
@@ -464,7 +473,7 @@ export function testConfig(overrides: Partial<Config> & { apiUrl: string; modelU
       baseUrl: modelUrl, apiKey: MODEL_KEY, id: 'fake-model', api: modelApi ?? 'openai-completions',
       contextWindow: 32000, maxTokens: 2048, timeoutMs: 10000, reasoning: false,
     } : null,
-    jobPollMs: 10, jobWaitMs: 5000,
+    jobPollMs: 10, jobWaitMs: 5000, monthlyTokensPerUser: 0, maxRunsPerUser: 2,
     ...rest,
   };
 }

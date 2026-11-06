@@ -24,6 +24,10 @@ export interface Config {
   model: ModelConfig | null;
   jobPollMs: number;
   jobWaitMs: number;
+  /** LLM_MONTHLY_TOKENS_PER_USER: total_tokens a user may use per calendar month; 0 = no limit (contracts/p9.md §二). */
+  monthlyTokensPerUser: number;
+  /** AGENT_MAX_RUNS_PER_USER: sessions of one user running at the same time. */
+  maxRunsPerUser: number;
 }
 
 function int(value: string | undefined, fallback: number): number {
@@ -64,5 +68,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     model: modelConfig(env),
     jobPollMs: 2000,
     jobWaitMs: 90000,
+    monthlyTokensPerUser: int(env.LLM_MONTHLY_TOKENS_PER_USER, 0),
+    maxRunsPerUser: int(env.AGENT_MAX_RUNS_PER_USER, 2),
   };
 }

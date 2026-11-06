@@ -12,7 +12,7 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { ApiClient } from './api.ts';
 import type { Config } from './config.ts';
-import { MODEL_ERROR_TEXT, trackModelRequests, type ModelHandle } from './model.ts';
+import { MODEL_ERROR_TEXT, trackModelRequests, type CallUsage, type ModelHandle } from './model.ts';
 import { describeContext, describeScope, systemPrompt } from './prompt.ts';
 import type { Store, SessionRecord } from './store.ts';
 import { piName, piTools, runConfirmed, toolSpecs, type ToolOutput } from './tools.ts';
@@ -23,6 +23,7 @@ import { FenceSplitter } from './ui-stream.ts';
 export type Emit = (event: string, data: unknown) => unknown;
 
 interface ActiveRun {
+  ownerId: string;
   cancelled: boolean;
   session?: AgentSession;
   /** Aborts confirmed tool calls the server runs itself. */
@@ -85,11 +86,15 @@ export class Runner {
     return this.active.has(sessionId);
   }
 
-  /** Reserve the session synchronously; false when a run is already active (SESSION_BUSY). */
-  reserve(sessionId: string): boolean {
-    if (this.active.has(sessionId)) return false;
-    this.active.set(sessionId, { cancelled: false, abort: new AbortController() });
-    return true;
+  /**
+   * Reserve the session synchronously: 'busy' when it already runs (SESSION_BUSY), 'too_many' when the
+   * owner already runs `maxRuns` sessions (TOO_MANY_RUNS). Without `maxRuns` only the session rule applies.
+   */
+  reserve(sessionId: string, ownerId: string, maxRuns?: number): 'ok' | 'busy' | 'too_many' {
+    if (this.active.has(sessionId)) return 'busy';
+    if (maxRuns !== undefined && [...this.active.values()].filter(run => run.ownerId === ownerId).length >= maxRuns) return 'too_many';
+    this.active.set(sessionId, { ownerId, cancelled: false, abort: new AbortController() });
+    return 'ok';
   }
 
   release(sessionId: string) {
@@ -123,6 +128,16 @@ export class Runner {
     let piSession: AgentSession | undefined;
     let final: [string, unknown] | null = null;
     let saving: Promise<void> = Promise.resolve();
+    // llm_usage rows of this run; awaited before the final event so the next quota check sees them.
+    const recording: Promise<void>[] = [];
+    const recordUsage = (usage: CallUsage, modelId: string) => {
+      if (!this.store.recordUsage) return;
+      recording.push(this.store.recordUsage({
+        user_id: session.owner_id, project_id: session.project_id, session_id: session.id,
+        source: usage.estimated ? 'agent:estimated' : 'agent', model: modelId,
+        prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens, total_tokens: usage.total_tokens,
+      }).catch(error => console.error('record usage', error)));
+    };
     const save = () => {
       const snapshot = { content: textOf(parts), parts: structuredClone(parts), tool_calls: structuredClone(calls) };
       saving = saving.then(() => this.store.updateMessage(assistant.id, snapshot)).catch(error => console.error('save message', error));
@@ -224,7 +239,7 @@ export class Runner {
         customTools: tools,
       }));
       run.session = piSession;
-      const classify = trackModelRequests(piSession, model.config);
+      const classify = trackModelRequests(piSession, model.config, recordUsage);
       const startedAt = new Map<string, number>();
 
       piSession.subscribe((event: AgentSessionEvent) => {
@@ -291,6 +306,7 @@ export class Runner {
       final = ['error', { code: 'INTERNAL', message: (error as Error).message }];
     } finally {
       piSession?.dispose();
+      await Promise.all(recording);
       await this.store.updateSession(session.id, { state: 'idle' }).catch(error => console.error('session idle', error));
       this.release(session.id);
       // The final event goes out after the session is idle, so a client refreshing on `done` never sees it running.

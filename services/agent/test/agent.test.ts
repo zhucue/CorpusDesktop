@@ -1041,3 +1041,116 @@ test('P8 write gate and system prompt rules', () => {
   assert.match(catalog, /TranslationTable\(stat_id: string, query: string, measure: string, rows: /);
   assert.match(catalog, /BreakdownTable\(stat_id: string, query: string, by: string, rows: /);
 });
+
+// ---- P9 model usage, quota and concurrent runs (contracts/p9.md §二)
+
+test('every model call writes an llm_usage row with the provider usage', async () => {
+  const { store, call, createSession } = await setup([
+    { tool: 'corpus_search', args: { query: '翻译' }, usage: { prompt_tokens: 1200, completion_tokens: 30, total_tokens: 1230 } },
+    { text: '有 2 条命中。', usage: { prompt_tokens: 1400, completion_tokens: 12, total_tokens: 1412 } },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '找 翻译' })).text());
+  assert.equal(events.at(-1)!.event, 'done');
+  assert.deepEqual(store.usage.map(({ created_at: _at, ...row }) => row), [
+    { user_id: USER.id, project_id: PROJECT, session_id: session.id, source: 'agent', model: 'fake-model', prompt_tokens: 1200, completion_tokens: 30, total_tokens: 1230 },
+    { user_id: USER.id, project_id: PROJECT, session_id: session.id, source: 'agent', model: 'fake-model', prompt_tokens: 1400, completion_tokens: 12, total_tokens: 1412 },
+  ]);
+});
+
+test('openai-responses usage is recorded from response.completed', async () => {
+  const { store, call, createSession } = await setup([{ text: '好的。' }], { modelApi: 'openai-responses' });
+  const session = await createSession();
+  parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '你好' })).text());
+  assert.deepEqual(store.usage.map(row => [row.source, row.prompt_tokens, row.completion_tokens, row.total_tokens]), [['agent', 8, 4, 12]]);
+});
+
+test('without usage the tokens are estimated as characters / 2; a failed request writes nothing', async () => {
+  const { model, store, call, createSession } = await setup([{ text: '翻译腔是受源语影响的表达。' }, { status: 500 }]);
+  const session = await createSession();
+  parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '翻译腔是什么' })).text());
+  assert.equal(store.usage.length, 1);
+  const [row] = store.usage;
+  assert.equal(row.source, 'agent:estimated');
+  assert.equal(row.completion_tokens, Math.ceil('翻译腔是受源语影响的表达。'.length / 2));
+  // the prompt carries the system prompt and the tool schemas: far more than the question
+  const system = model.requests[0].body.messages[0].content as string;
+  assert.ok(row.prompt_tokens >= Math.ceil(system.length / 2));
+  assert.equal(row.total_tokens, row.prompt_tokens + row.completion_tokens);
+
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '再说一次' })).text());
+  assert.equal(events.at(-1)!.event, 'error');
+  assert.equal(store.usage.length, 1);
+});
+
+test('LLM_QUOTA_EXCEEDED once the month total reaches the limit, for new messages and regenerate', async () => {
+  const { store, call, createSession } = await setup(
+    [{ text: '第一次回答。', usage: { prompt_tokens: 900, completion_tokens: 100, total_tokens: 1000 } }],
+    { config: { monthlyTokensPerUser: 1000 } },
+  );
+  const session = await createSession();
+  const first = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '你好' })).text());
+  assert.equal(first.at(-1)!.event, 'done');
+  for (const body of [{ content: '继续' }, { regenerate: true }]) {
+    const response = await call('POST', `/agent/sessions/${session.id}/messages`, body);
+    assert.equal(response.status, 429);
+    assert.deepEqual(((await response.json()) as any).error, { code: 'LLM_QUOTA_EXCEEDED', message: '本月模型用量已达上限（1000 token），请联系管理员' });
+  }
+  // last month's usage does not count
+  store.usage[0].created_at = new Date(new Date().getFullYear(), new Date().getMonth(), 0, 12);
+  const again = await call('POST', `/agent/sessions/${session.id}/messages`, { content: '继续' });
+  assert.equal(again.status, 200);
+  await again.text();
+});
+
+test('TOO_MANY_RUNS for a third concurrent session; stopping one lets it start', async () => {
+  const { model, call, createSession } = await setup([{ hang: true }, { hang: true }, { text: '第三个对话的回答。' }]);
+  const [a, b, c] = [await createSession(), await createSession(), await createSession()];
+  const bodyA = (await call('POST', `/agent/sessions/${a.id}/messages`, { content: '一' })).text();
+  const bodyB = (await call('POST', `/agent/sessions/${b.id}/messages`, { content: '二' })).text();
+  while (model.requests.length < 2) await new Promise(resolve => setTimeout(resolve, 10));
+
+  const busy = await call('POST', `/agent/sessions/${c.id}/messages`, { content: '三' });
+  assert.equal(busy.status, 429);
+  assert.deepEqual(((await busy.json()) as any).error, { code: 'TOO_MANY_RUNS', message: '已有 2 个对话在运行，请等待完成或停止后再试' });
+  // the per-session rule still comes first
+  assert.equal((await call('POST', `/agent/sessions/${a.id}/messages`, { content: '再来' })).status, 409);
+
+  assert.equal((await call('POST', `/agent/sessions/${a.id}/cancel`)).status, 204);
+  assert.equal(parseSse(await bodyA).at(-1)!.data.message.stopped, true);
+  const third = parseSse(await (await call('POST', `/agent/sessions/${c.id}/messages`, { content: '三' })).text());
+  assert.equal(third.at(-1)!.event, 'done');
+  assert.equal(third.at(-1)!.data.message.content, '第三个对话的回答。');
+
+  await call('POST', `/agent/sessions/${b.id}/cancel`);
+  await bodyB;
+});
+
+test('a deleted project (api 404) gives NOT_FOUND 项目不存在或已删除 on session routes', async () => {
+  const { call } = await setup([]);
+  const other = '55555555-5555-4555-8555-555555555555';
+  for (const response of [await call('GET', `/agent/sessions?project_id=${other}`), await call('POST', '/agent/sessions', { project_id: other })]) {
+    assert.equal(response.status, 404);
+    assert.deepEqual(((await response.json()) as any).error, { code: 'NOT_FOUND', message: '项目不存在或已删除' });
+  }
+});
+
+test('confirm execute is refused with LLM_QUOTA_EXCEEDED over the limit and nothing runs; decline still answers', async () => {
+  const { api, call, createSession } = await setup(
+    [
+      { tool: 'evidence_add', args: { kind: 'text', ref: {}, text: '翻译是再创作。', source: '笔记' }, usage: { prompt_tokens: 500, completion_tokens: 20, total_tokens: 520 } },
+      { text: '要把这句加入证据篮吗？', usage: { prompt_tokens: 560, completion_tokens: 10, total_tokens: 570 } },
+    ],
+    { config: { monthlyTokensPerUser: 1000 } },
+  );
+  const session = await createSession();
+  parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '把这句放进证据篮' })).text());
+  const [proposal] = await pending(call, session.id);
+  const refused = await call('POST', `/agent/sessions/${session.id}/confirm`, { tool_call_ids: [proposal.id], action: 'execute' });
+  assert.equal(refused.status, 429);
+  assert.equal(((await refused.json()) as any).error.code, 'LLM_QUOTA_EXCEEDED');
+  assert.ok(!api.requests.some(r => r.path === `/projects/${PROJECT}/evidence`));
+  assert.equal((await pending(call, session.id)).length, 1, 'the card stays open');
+  const declined = await call('POST', `/agent/sessions/${session.id}/confirm`, { tool_call_ids: [proposal.id], action: 'decline' });
+  assert.equal(declined.status, 200);
+});

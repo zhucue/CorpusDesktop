@@ -10,7 +10,7 @@ import { PgStore } from '../src/store.ts';
 
 const url = process.env.AGENT_TEST_DATABASE_URL?.replace(/^postgres(ql)?\+\w+:/, 'postgresql:');
 
-test('PgStore session and message round trip', { skip: !url && 'AGENT_TEST_DATABASE_URL not set' }, async () => {
+test('PgStore session and message round trip, llm_usage rows and month total, deleted projects', { skip: !url && 'AGENT_TEST_DATABASE_URL not set' }, async () => {
   const schema = `agent_store_test_${randomUUID().slice(0, 8)}`;
   const admin = new pg.Client({ connectionString: url });
   await admin.connect();
@@ -18,7 +18,13 @@ test('PgStore session and message round trip', { skip: !url && 'AGENT_TEST_DATAB
   await admin.query(`SET search_path TO ${schema}`);
   await admin.query(`
     CREATE TABLE users (id uuid PRIMARY KEY);
-    CREATE TABLE projects (id uuid PRIMARY KEY);
+    CREATE TABLE projects (id uuid PRIMARY KEY, deleted_at timestamptz);
+    -- contracts/p9.md §一 (migration 0010)
+    CREATE TABLE llm_usage (
+      id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, created_at timestamptz NOT NULL DEFAULT now(),
+      user_id uuid REFERENCES users(id) ON DELETE SET NULL, project_id uuid REFERENCES projects(id) ON DELETE SET NULL,
+      source text NOT NULL, model text, prompt_tokens integer, completion_tokens integer, total_tokens integer,
+      job_id uuid, session_id text);
     CREATE TABLE agent_sessions (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -75,6 +81,26 @@ test('PgStore session and message round trip', { skip: !url && 'AGENT_TEST_DATAB
     assert.deepEqual(messages[0].context, context);
     assert.deepEqual(messages[0].parts, [{ type: 'text', text: '你好' }]);
     assert.equal(messages[1].context, undefined);
+
+    // llm_usage rows and the month total; last month's row does not count
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const row = { user_id: user, project_id: project, session_id: id, model: 'fake-model' } as const;
+    await store.recordUsage({ ...row, source: 'agent', prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 });
+    await store.recordUsage({ ...row, source: 'agent:estimated', prompt_tokens: 40, completion_tokens: 5, total_tokens: 45 });
+    await admin.query(`INSERT INTO llm_usage (created_at, user_id, source, total_tokens) VALUES ($1, $2, 'agent', 1000)`,
+      [new Date(monthStart.getTime() - 3600e3), user]);
+    assert.equal(await store.monthlyTokens(user, monthStart), 165);
+    assert.equal(await store.monthlyTokens(randomUUID(), monthStart), 0);
+    const { rows: usage } = await admin.query(`SELECT source, session_id, project_id, model, prompt_tokens FROM llm_usage WHERE session_id = $1 ORDER BY id`, [id]);
+    assert.deepEqual(usage, [
+      { source: 'agent', session_id: id, project_id: project, model: 'fake-model', prompt_tokens: 100 },
+      { source: 'agent:estimated', session_id: id, project_id: project, model: 'fake-model', prompt_tokens: 40 },
+    ]);
+
+    // a soft-deleted project lists no sessions
+    await admin.query('UPDATE projects SET deleted_at = now() WHERE id = $1', [project]);
+    assert.deepEqual(await store.listSessions(project, user), []);
+    await admin.query('UPDATE projects SET deleted_at = NULL WHERE id = $1', [project]);
 
     await store.resetRunning();
     assert.equal((await store.getSession(id))!.state, 'idle');
