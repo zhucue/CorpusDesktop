@@ -629,6 +629,22 @@ def build_cases(w: World):
 
         return make
 
+    def fresh_project(_w, role, deleted=False):
+        """A throwaway project with the role accounts as members (P9 delete / restore / owner change)."""
+        pid = o.ok("POST", "/api/projects", json={"name": f"tmp-p9-{TAG}-{role}"})["id"]
+        for name in ("editor", "annotator", "viewer"):
+            o.ok(
+                "PUT",
+                f"/api/projects/{pid}/members/{w.u[name].id}",
+                json={"role": name},
+            )
+        if deleted:
+            o.ok("DELETE", f"/api/projects/{pid}")
+        return {"id": pid}
+
+    def fresh_feedback(_w, role):
+        return o.ok("POST", "/api/feedback", json={"text": f"tmp-{role}", "page": "/"})
+
     md = (FIX / "kb-sample.md").read_bytes()
     span_body = lambda role: {
         "document_id": sents[0][0],
@@ -1106,7 +1122,7 @@ def build_cases(w: World):
         C(
             "任务",
             "POST /jobs/{id}/cancel",
-            WRITE,
+            {**WRITE, "admin": OK},  # P9: admins cancel any job (409: already finished)
             lambda c, x, r: c.post(f"/api/jobs/{i['export_job']}/cancel"),
         ),
         C(
@@ -1118,7 +1134,7 @@ def build_cases(w: World):
         C(
             "任务",
             "POST cancel (viewer's job)",
-            JOB_OWN,
+            {**JOB_OWN, "admin": OK},
             lambda c, x, r: c.post(f"/api/jobs/{i['viewer_job']}/cancel"),
         ),
         C(
@@ -1654,6 +1670,101 @@ def build_cases(w: World):
             AGENT_OWN,
             lambda c, x, r: c.delete(f"/agent/sessions/{x['id']}"),
             fresh("session"),
+        ),
+        # P9 operations (contracts/p9.md): usage, admin views, audit, feedback, soft delete
+        C(
+            "运营",
+            "GET /me/llm-usage",
+            ANYONE,
+            lambda c, x, r: c.get("/api/me/llm-usage"),
+        ),
+        C(
+            "运营",
+            "GET /admin/llm-usage",
+            ADMIN,
+            lambda c, x, r: c.get("/api/admin/llm-usage", params={"group": "project"}),
+        ),
+        C(
+            "运营",
+            "GET /admin/projects",
+            ADMIN,
+            lambda c, x, r: c.get("/api/admin/projects", params={"q": TAG}),
+        ),
+        C(
+            "运营",
+            "POST /admin/projects/{id}/owner",
+            ADMIN,
+            lambda c, x, r: c.post(
+                f"/api/admin/projects/{x['id']}/owner", json={"user_id": o.id}
+            ),
+            fresh_project,
+        ),
+        C(
+            "运营",
+            "GET /admin/jobs",
+            ADMIN,
+            lambda c, x, r: c.get("/api/admin/jobs", params={"state": "succeeded"}),
+        ),
+        C(
+            "运营",
+            "GET /admin/system",
+            ADMIN,
+            lambda c, x, r: c.get("/api/admin/system"),
+        ),
+        C(
+            "运营",
+            "GET /admin/audit",
+            ADMIN,
+            lambda c, x, r: c.get("/api/admin/audit", params={"project_id": p}),
+        ),
+        C(
+            "运营",
+            "GET /projects/{id}/audit",
+            MANAGE_H,
+            lambda c, x, r: c.get(f"/api/projects/{p}/audit"),
+        ),
+        C(
+            "运营",
+            "POST /feedback",
+            COOKIE,
+            lambda c, x, r: c.post(
+                "/api/feedback", json={"text": f"tmp-{r}", "page": "/", "project_id": p}
+            ),
+        ),
+        C(
+            "运营",
+            "GET /admin/feedback",
+            ADMIN,
+            lambda c, x, r: c.get("/api/admin/feedback"),
+        ),
+        C(
+            "运营",
+            "PATCH /admin/feedback/{id}",
+            ADMIN,
+            lambda c, x, r: c.patch(
+                f"/api/admin/feedback/{x['id']}", json={"status": "done"}
+            ),
+            fresh_feedback,
+        ),
+        C(
+            "运营",
+            "GET /me/deleted-projects",
+            COOKIE,
+            lambda c, x, r: c.get("/api/me/deleted-projects"),
+        ),
+        C(
+            "运营",
+            "DELETE /projects/{id}",
+            MANAGE_H,
+            lambda c, x, r: c.delete(f"/api/projects/{x['id']}"),
+            fresh_project,
+        ),
+        C(
+            "运营",
+            "POST /projects/{id}/restore",
+            exp(OK, 403, 403, 403, 404, OK, 403),
+            lambda c, x, r: c.post(f"/api/projects/{x['id']}/restore"),
+            lambda _w, role: fresh_project(_w, role, deleted=True),
         ),
         # last: it removes each caller's own evidence, which earlier cases reference
         C(
