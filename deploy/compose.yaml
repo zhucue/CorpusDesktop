@@ -4,6 +4,8 @@ name: corpus
 
 x-python-env: &python-env
   DATABASE_URL: postgresql+psycopg://corpus:${POSTGRES_PASSWORD:?set in deploy/.env}@postgres:5432/corpus
+  # 服务器时区：模型用量按此时区的自然月统计（api、worker 与 agent 须一致）
+  TZ: ${TZ:-Asia/Shanghai}
   DATA_DIR: /data
   STANZA_RESOURCES_DIR: /stanza
   PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
@@ -26,6 +28,11 @@ x-python-env: &python-env
   EMBED_BASE_URL: ${EMBED_BASE_URL:-}
   EMBED_API_KEY: ${EMBED_API_KEY:-}
   EMBED_DIM: ${EMBED_DIM:-}
+  # 每位用户每月对话模型 token 上限（0 = 不限）：api 在预标、文献摘要与术语抽取发起时检查
+  LLM_MONTHLY_TOKENS_PER_USER: ${LLM_MONTHLY_TOKENS_PER_USER:-0}
+  # 删除的项目保留天数（期间可恢复，之后 worker 维护任务清除）；导出文件保留天数
+  PROJECT_PURGE_DAYS: ${PROJECT_PURGE_DAYS:-7}
+  EXPORT_RETENTION_DAYS: ${EXPORT_RETENTION_DAYS:-30}
 
 # 常驻服务：异常退出或宿主机重启后自动拉起；容器日志单文件 20 MB，保留 5 个
 x-service: &service
@@ -63,9 +70,12 @@ services:
       # 只用于 /system/info 显示模型主机与模型名（密钥不进 api）
       MODEL_BASE_URL: ${MODEL_BASE_URL:-}
       MODEL_ID: ${MODEL_ID:-}
+      # 管理 · 系统显示最近备份时间：只读挂载宿主机备份目录（scripts/backup.sh 的输出目录）
+      BACKUP_DIR: /backups
     volumes:
       - data:/data
       - models:/models
+      - ${BACKUP_DIR:-../tmp/backups}:/backups:ro
     depends_on:
       postgres: { condition: service_healthy }
     healthcheck:
@@ -84,6 +94,8 @@ services:
       MODEL_API_KEY: ${MODEL_API_KEY:-}
       MODEL_ID: ${MODEL_ID:-}
       MODEL_API: ${MODEL_API:-openai-completions}
+      # 每日维护（清除超期删除的项目、过期导出与失败上传）只由 worker-light 执行
+      WORKER_MAINTENANCE: "0"
     volumes:
       - data:/data
       - stanza:/stanza
@@ -105,6 +117,7 @@ services:
       <<: *worker-env
       WORKER_KINDS: export,stats,preannotate,kb_import,kb_summarize,kb_extract
       WORKER_SMALL_IMPORTS: "1"
+      WORKER_MAINTENANCE: ${WORKER_MAINTENANCE:-1}
 
   agent:
     <<: *service
@@ -117,8 +130,12 @@ services:
       API_BASE_URL: http://api:8000/api
       DATABASE_URL: postgresql://corpus:${POSTGRES_PASSWORD:?set in deploy/.env}@postgres:5432/corpus
       DATA_DIR: /data/agent
+      TZ: ${TZ:-Asia/Shanghai}
       PORT: "8700"
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
+      # 每位用户每月 token 上限（0 = 不限）；每位用户同时运行的对话数
+      LLM_MONTHLY_TOKENS_PER_USER: ${LLM_MONTHLY_TOKENS_PER_USER:-0}
+      AGENT_MAX_RUNS_PER_USER: ${AGENT_MAX_RUNS_PER_USER:-2}
     volumes:
       - agentdata:/data/agent
     depends_on:
