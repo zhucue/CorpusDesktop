@@ -19,8 +19,9 @@ or CCL short tags (n → NOUN|PROPN …); "jieba" (Chinese via engine.nlp): a on
 tag starting with it (n → n|ng|nr|ns|nt|nz…), longer jieba tags match exactly (nr), UPOS names map to jieba
 groups (NOUN, VERB …); "mixed" (both in one corpus): the union of both readings.
 
-Matching: a string with CJK characters matches characters and may cross word boundaries; other strings
-match whole word forms, case-insensitively (`?` = one character, `*` inside a word = any characters).
+Matching: a string with CJK characters (Han, kana incl. half-width katakana, Hangul) matches characters and
+may cross word boundaries, so Chinese and Japanese strings behave alike; other strings match whole word
+forms, case-insensitively (`?` = one character, `*` inside a word = any characters).
 Quoted forms match exactly, case-sensitively. One hit per start token, the shortest match from it
 (CQP MatchingStrategy traditional), always within one sentence.
 
@@ -177,7 +178,7 @@ TAGSETS = (
     "mixed",
 )  # mixed: both in one corpus (e.g. a zh–en TMX); tags of either apply
 
-_CJK = re.compile(r"[㐀-䶿一-鿿豈-﫿\U00020000-\U0003134f぀-ヿ가-힯]")
+_CJK = re.compile(r"[㐀-䶿一-鿿豈-﫿\U00020000-\U0003134f぀-ヿㇰ-ㇿｦ-ﾟ가-힯]")
 _TERM_STOP = set(' \t\r\n|"{}[]()')
 ATTR_KEYS = ("pos", "dep", "lemma")
 
@@ -519,7 +520,7 @@ def parse(text: str, tagset: str = "upos") -> QueryAST:
                 if atom.cjk and len(atom.text) > MAX_CJK:
                     raise QueryError(
                         text.find(atom.text),
-                        f"中文字串最长 {MAX_CJK} 字，可用空格分成相邻的词",
+                        f"中日文字串最长 {MAX_CJK} 字，可用空格分成相邻的词",
                     )
     return QueryAST(
         parts[0][1],

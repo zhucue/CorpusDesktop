@@ -348,18 +348,24 @@ def _import(client, project, name, data, language="auto"):
 
 
 @pytest.mark.parametrize(
-    ("name", "message"),
-    [
+    ("name", "data", "message"),
+    [  # P10 (contracts/p10.md §八): fr / ja are supported; other languages still fail
         (
-            "fr.txt",
-            "fr：可能不是英文，请确认语言；暂只支持中英，可指定 zh 或 en 后重试",
+            "ko.txt",
+            "한국어 말뭉치는 언어 연구에 널리 쓰인다. ".encode() * 20,
+            "ko：文本的文字不属于支持的语言（zh、en、ja、fr、de、es、ru），请确认语言",
         ),
-        ("ja.txt", "ja：未识别为中文或英文，请确认语言；暂只支持中英"),
-        ("en-fr.tmx", "TMX 含暂不支持的语言：fr"),
+        (
+            "en-ko.tmx",
+            (IMP / "en-fr.tmx").read_bytes().replace(b'"fr-FR"', b'"ko-KR"'),
+            "TMX 含暂不支持的语言：ko",
+        ),
     ],
 )
-def test_import_rejects_other_languages(owner, project, real_parsers, name, message):
-    job = _import(owner, project, name, (IMP / name).read_bytes())
+def test_import_rejects_other_languages(
+    owner, project, real_parsers, name, data, message
+):
+    job = _import(owner, project, name, data)
     assert job["state"] == "failed"
     assert job["error"] == {"code": "LANGUAGE_UNSUPPORTED", "message": message}
 
@@ -381,12 +387,13 @@ def test_given_language_checked_at_start():
     from services.worker.main import JobFailed
 
     with pytest.raises(JobFailed) as e:
-        tasks._check_upload_language({"language": "fr", "files": ["a.txt"]})
+        tasks._check_upload_language({"language": "ko", "files": ["a.txt"]})
     assert (e.value.code, e.value.message) == (
         "LANGUAGE_UNSUPPORTED",
-        "暂只支持中文与英文语料",
+        "暂不支持该语言：ko（支持 zh、en、ja、fr、de、es、ru）",
     )
-    tasks._check_upload_language({"language": "fr", "files": ["a.conllu"]})
+    tasks._check_upload_language({"language": "ko", "files": ["a.conllu"]})
+    tasks._check_upload_language({"language": "fr", "files": ["a.txt"]})
     tasks._check_upload_language({"language": "zh-Hans", "files": ["a.txt"]})
     tasks._check_upload_language({"language": None, "files": ["a.txt"]})
 

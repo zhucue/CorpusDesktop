@@ -40,7 +40,8 @@ def corpus(owner, project):
         f"/api/projects/{project['id']}/corpora",
         json={"name": "作文", "language": "en"},
     ).json()
-    upload(owner, c["id"], {"a.txt": TEXT, "b.txt": TEXT})
+    # two different texts: an identical second file would be skipped as a duplicate (P10)
+    upload(owner, c["id"], {"a.txt": TEXT, "b.txt": TEXT + " Again."})
     drain()
     return owner.get(f"/api/corpora/{c['id']}").json()
 
@@ -771,13 +772,13 @@ def test_upload_language_check(owner, project):
 
     en, fr = (
         corpus_of("en"),
-        corpus_of("fr"),
-    )  # creating a corpus of any language is fine
-    r = upload(owner, en["id"], {"a.txt": TEXT}, language="fr")
+        corpus_of("ko"),
+    )  # creating a corpus of any language is fine (P10: ko is still unsupported)
+    r = upload(owner, en["id"], {"a.txt": TEXT}, language="ko")
     assert r.status_code == 422
     assert r.json()["error"] == {
         "code": "LANGUAGE_UNSUPPORTED",
-        "message": "暂只支持中文与英文语料",
+        "message": "暂不支持该语言：ko（支持 zh、en、ja、fr、de、es、ru）",
     }
     assert upload(owner, fr["id"], {"a.txt": TEXT}).status_code == 422
     assert upload(owner, fr["id"], {"a.conllu": "# x\n"}).status_code == 200

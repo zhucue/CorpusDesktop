@@ -1,0 +1,5 @@
+P10 导入样例来源
+
+lang-fr.txt、lang-de.txt、lang-es.txt、lang-ru.txt、lang-ja.txt：为本项目测试自写的短文（法、德、西、俄、日各一篇，约 250 词 / 日文约 700 字），可自由使用。
+text-layer.pdf（两页，有文字层）、scanned.pdf（只有一张图片，无文字层）、abstracts.xlsx（两个工作表：摘要、2025；第 4 行与第 1 行正文相同）、abstracts.jsonl（6 行，第 4 行与第 1 行正文相同）：由 make_p10_fixtures.py 生成，文字为自写。
+fr.txt、ja.txt、en.txt 等其余文件见 P9 及更早批次的测试。

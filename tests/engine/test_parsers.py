@@ -303,7 +303,7 @@ def test_tatoeba_single_file():
 
 
 def test_unknown_format(tmp_path):
-    p = tmp_path / "x.pdf"
-    p.write_bytes(b"%PDF")
+    p = tmp_path / "x.odt"
+    p.write_bytes(b"PK")
     with pytest.raises(ParseError, match="不支持"):
         parse(p, language=None, metadata={})

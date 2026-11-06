@@ -1,4 +1,5 @@
-"""P9 engine: language check at import (contracts/p9.md §九) and cancellable CWB tool runs (§七)."""
+"""P9 engine: language check at import (contracts/p9.md §九, widened to seven languages in contracts/p10.md
+§八; see also test_p10_import.py) and cancellable CWB tool runs (§七)."""
 
 import sys
 import threading
@@ -17,16 +18,12 @@ def _text(name):
     return (IMP / name).read_text(encoding="utf-8")
 
 
-def test_french_text_is_not_english():
-    assert nlp.language_problem(_text("fr.txt")) == nlp.NOT_EN
-    # the given language skips the function-word test (the import checks the code itself)
-    assert nlp.language_problem(_text("fr.txt"), check_english=False) is None
-
-
-def test_japanese_text_is_neither_chinese_nor_english():
-    assert nlp.language_problem(_text("ja.txt")) == nlp.NOT_ZH_EN
-    assert nlp.language_problem(_text("ja.txt"), check_english=False) == nlp.NOT_ZH_EN
-    assert nlp.language_problem("Привет, как дела? Это русский текст.") == nlp.NOT_ZH_EN
+def test_french_and_japanese_are_detected():
+    # P10: no longer rejected, detected as their own language
+    assert nlp.language_problem(_text("fr.txt")) is None
+    assert nlp.detect_language(_text("fr.txt")) == "fr"
+    assert nlp.detect_language(_text("ja.txt")) == "ja"
+    assert nlp.detect_language("Привет, как дела? Это русский текст.") == "ru"
 
 
 def test_english_and_chinese_pass():
@@ -38,12 +35,12 @@ def test_english_and_chinese_pass():
         nlp.language_problem("本文用 logDice（Ｒａｙｓｏｎ 2000）衡量搭配强度。")
         is None
     )
-    # short Latin text: too few words for the function-word test
+    # short Latin text: never rejected
     assert nlp.language_problem("Bonjour tout le monde, merci beaucoup.") is None
 
 
 def test_tmx_parser_keeps_every_language():
-    """The parser reads all languages; the import (services.worker.tasks) rejects fr."""
+    """The parser reads all languages; the import (services.worker.tasks) checks them."""
     docs, _ = parse(IMP / "en-fr.tmx", language=None, metadata={})
     assert sorted(d.language for d in docs) == ["en", "fr", "zh"]
 
@@ -120,11 +117,15 @@ ZH_TERMS = (
 IPA = "ʃ ʒ ɪ ʊ ə ɛ ɔ æ ŋ θ ð ɹ ɾ ʔ ˈ ː " * 300 + "the words of " * 10
 
 
-@pytest.mark.parametrize("text", [REFERENCES, GLOSSARY, ZH_TERMS, IPA])
-def test_english_lists_terms_and_ipa_pass(text):
+@pytest.mark.parametrize(
+    ("text", "lang"),
+    [(REFERENCES, "en"), (GLOSSARY, "en"), (ZH_TERMS, "zh"), (IPA, "en")],
+)
+def test_english_lists_terms_and_ipa_pass(text, lang):
     assert nlp.language_problem(text) is None
-    assert nlp.language_problem(text, check_english=False) is None
+    assert nlp.detect_language(text) == lang
+    assert nlp.language_problem(text, lang) is None
 
 
-def test_not_english_message_suggests_language():
-    assert nlp.NOT_EN.endswith("可指定 zh 或 en 后重试")
+def test_not_detected_message_asks_for_language():
+    assert nlp.NOT_DETECTED.startswith("未识别语言，请指定")

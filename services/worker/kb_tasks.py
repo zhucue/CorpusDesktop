@@ -149,8 +149,14 @@ def run_kb_import(run):
             for i in range(0, len(rows), INSERT_BATCH):
                 db.execute(insert(KbChunk).values(rows[i : i + INSERT_BATCH]))
             # the title is still the default (URL, file name): take the document's own title
-            default_title = doc.source if kind == "url" else PurePath(doc.source or "").stem
-            if kind in ("url", "literature") and meta.get("title") and doc.title == default_title:
+            default_title = (
+                doc.source if kind == "url" else PurePath(doc.source or "").stem
+            )
+            if (
+                kind in ("url", "literature")
+                and meta.get("title")
+                and doc.title == default_title
+            ):
                 doc.title = meta["title"][:500]
             doc.meta = {
                 **doc.meta,
@@ -366,7 +372,13 @@ def _corpus_candidates(run, p):
             corpus = db.get(Corpus, corpus.id)
             aligned, info = _aligned_pairs(db, corpus, filt, fields)
         kbterms.translate(cands, aligned)
-    where = {"corpus_id": corpus.id, "filt": filt, "fields": fields, "name": name, "language": language}
+    where = {
+        "corpus_id": corpus.id,
+        "filt": filt,
+        "fields": fields,
+        "name": name,
+        "language": language,
+    }
     return cands, info, where
 
 
@@ -380,9 +392,22 @@ def _find_examples(run, where, drafts):
         corpus = db.get(Corpus, where["corpus_id"])
         clauses = scope_clauses(corpus, where["filt"], where["fields"])
         for i, d in enumerate(todo):
-            like = "%" + d["term"].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            like = (
+                "%"
+                + d["term"]
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+                + "%"
+            )
             row = db.execute(
-                select(Sentence.text, Sentence.document_id, Sentence.start_cp, Sentence.end_cp, Document.title)
+                select(
+                    Sentence.text,
+                    Sentence.document_id,
+                    Sentence.start_cp,
+                    Sentence.end_cp,
+                    Document.title,
+                )
                 .join(Document, Document.id == Sentence.document_id)
                 .where(*clauses, Sentence.text.ilike(like))
                 .limit(1)
@@ -394,7 +419,13 @@ def _find_examples(run, where, drafts):
 
 def _example(row, name):
     text, doc_id, a, b, title = row
-    return {"text": text, "source": f"{name}《{title}》", "document_id": str(doc_id), "start_cp": a, "end_cp": b}
+    return {
+        "text": text,
+        "source": f"{name}《{title}》",
+        "document_id": str(doc_id),
+        "start_cp": a,
+        "end_cp": b,
+    }
 
 
 def _candidate_draft(c, info, name):
@@ -455,11 +486,18 @@ def run_kb_extract(run):
             )
             answer = llm.chat(
                 TERMS_SYSTEM,
-                CANDIDATES_PROMPT.format(top=p["top"], items=items, language=where["language"]),
+                CANDIDATES_PROMPT.format(
+                    top=p["top"], items=items, language=where["language"]
+                ),
             )
             drafts = _clean_drafts(llm.json_array(answer), "model")
-            by_term = {(c.term.lower(), c.language): _candidate_draft(c, info, where["name"]) for c in cands}
-            for d in drafts:  # the model keeps candidate texts: reuse their aligned example
+            by_term = {
+                (c.term.lower(), c.language): _candidate_draft(c, info, where["name"])
+                for c in cands
+            }
+            for (
+                d
+            ) in drafts:  # the model keeps candidate texts: reuse their aligned example
                 same = by_term.get((d["term"].lower(), d["language"]))
                 if same:
                     d["examples"] = same["examples"]
@@ -497,7 +535,11 @@ def run_kb_extract(run):
             "candidates": len(drafts),
             # why nothing or less came out: terms already in the term base, the candidate pool
             "skipped_existing": existing[:20],
-            **({"pool": pool, "min_freq": p.get("min_freq")} if pool is not None else {}),
+            **(
+                {"pool": pool, "min_freq": p.get("min_freq")}
+                if pool is not None
+                else {}
+            ),
         }
         run.succeed(db, result)
 
@@ -530,7 +572,12 @@ def _text_lang(text, default):
     return default
 
 
-TERM_SOURCE_LABELS = {"manual": "手工", "corpus": "语料", "literature": "文献", "model": "模型"}
+TERM_SOURCE_LABELS = {
+    "manual": "手工",
+    "corpus": "语料",
+    "literature": "文献",
+    "model": "模型",
+}
 
 
 def write_tbx(path, terms):
@@ -581,7 +628,7 @@ def write_tbx(path, terms):
 
 
 def run_export_terms(run):
-    from services.worker.tasks import _write_xlsx
+    from services.worker.tasks import _write_xlsx, safe_rows
 
     p = run.params
     with session() as db:
@@ -596,7 +643,17 @@ def run_export_terms(run):
         write_tbx(path, terms)
     else:
         # columns and values as the term table and card show them
-        header = ["术语", "语言", "译名", "译名语言", "定义", "领域", "例句", "来源", "状态"]
+        header = [
+            "术语",
+            "语言",
+            "译名",
+            "译名语言",
+            "定义",
+            "领域",
+            "例句",
+            "来源",
+            "状态",
+        ]
         rows = [
             [
                 t.term,
@@ -615,7 +672,7 @@ def run_export_terms(run):
         ]
         if fmt == "csv":
             with open(path, "w", encoding="utf-8-sig", newline="") as f:
-                csv.writer(f).writerows([header, *rows])
+                csv.writer(f).writerows(safe_rows([header, *rows]))
         else:
             _write_xlsx(path, header, rows, "术语表")
     _finish(run, path, f"术语表-{_stamp()}.{fmt}", {"rows": len(terms)})

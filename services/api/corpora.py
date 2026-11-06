@@ -9,7 +9,7 @@ from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import Text, and_, cast, func, or_, select, update
 
-from engine.nlp import SUPPORTED, lang_code
+from engine.nlp import SUPPORTED, lang_code, unsupported_message
 from services.api.access import (
     WRITE,
     Paging,
@@ -50,22 +50,33 @@ from services.api.views import corpus_view, document_view, job_view
 
 router = APIRouter(prefix="/api")
 
-FORMATS = {".txt", ".docx", ".csv", ".tsv", ".conllu", ".tmx"}
-TABLES = {".csv", ".tsv"}
+FORMATS = {
+    ".txt",
+    ".docx",
+    ".pdf",
+    ".csv",
+    ".tsv",
+    ".xlsx",
+    ".jsonl",
+    ".conllu",
+    ".tmx",
+}
+TABLES = {".csv", ".tsv", ".xlsx", ".jsonl"}  # files with a field mapping
 MAX_UPLOAD = 500 * 1024 * 1024
-PREVIEW_BYTES = (
-    256 * 1024
-)  # the web client sends at most this much of a table for preview
+# the web client sends at most this much of a CSV / TSV / JSONL for preview; an XLSX (zip) is sent whole
+PREVIEW_BYTES = 256 * 1024
+XLSX_PREVIEW_MAX = 50 * 1024 * 1024
 AUTO = "auto"  # upload/corpus language: detected per document from its text
 
 
 class TableMapping(BaseModel):
-    """CSV/TSV columns for one upload batch; see engine/parsers/table.py."""
+    """CSV/TSV/XLSX columns or JSONL fields for one upload batch; see engine/parsers/table.py."""
 
     text: list[str] = Field(min_length=1, max_length=2)
     title: str | None = None
     language: str | None = None
     metadata: list[str] | None = None  # None = every other column
+    sheet: str | None = Field(default=None, max_length=200)  # XLSX; None = first sheet
 
 
 class CorpusMeta(BaseModel):
@@ -383,7 +394,7 @@ def upload_documents(
         and lang_code(given) not in SUPPORTED
         and not all(f.filename.lower().endswith(".conllu") for f in files)
     ):  # CoNLL-U brings its own tokens and tags: no NLP runs on it
-        raise ApiError(422, "LANGUAGE_UNSUPPORTED", "暂只支持中文与英文语料")
+        raise ApiError(422, "LANGUAGE_UNSUPPORTED", unsupported_message([given]))
     try:
         meta = json.loads(metadata or "{}")
     except json.JSONDecodeError:
@@ -406,17 +417,34 @@ def upload_documents(
 
 
 @router.post("/imports/preview")
-async def preview_table(user: CurrentUser, file: Annotated[UploadFile, File()]):
-    """Header, first rows and default column mapping of a CSV/TSV (or its first PREVIEW_BYTES)."""
+def preview_table(
+    user: CurrentUser,
+    file: Annotated[UploadFile, File()],
+    sheet: Annotated[str | None, Form(max_length=200)] = None,
+):
+    """Header, first rows and default field mapping of a CSV/TSV/JSONL (or its first PREVIEW_BYTES) or of an
+    XLSX (whole file, `sheet` or the first sheet; the response adds `sheets`). A plain def: FastAPI runs it
+    in its thread pool, so reading a large XLSX does not block the event loop."""
     from engine.parsers import ParseError, table
 
     human_only(user)
     name = PurePath((file.filename or "").replace("\\", "/")).name
     if PurePath(name.lower()).suffix not in TABLES:
-        raise ApiError(422, "UNSUPPORTED_FORMAT", f"只有 CSV/TSV 需要列映射：{name}")
-    data = await file.read(PREVIEW_BYTES)
+        raise ApiError(
+            422, "UNSUPPORTED_FORMAT", f"只有 CSV/TSV/XLSX/JSONL 需要字段映射：{name}"
+        )
+    if table.kind_of(name) == "xlsx":
+        data = file.file.read(XLSX_PREVIEW_MAX + 1)
+        if len(data) > XLSX_PREVIEW_MAX:
+            raise ApiError(
+                413, "TOO_LARGE", "XLSX 预览不超过 50 MB，可另存为 CSV 后上传"
+            )
+        partial = False
+    else:
+        data = file.file.read(PREVIEW_BYTES)
+        partial = len(data) >= PREVIEW_BYTES
     try:
-        return table.preview(data, name, partial=len(data) >= PREVIEW_BYTES)
+        return table.preview(data, name, partial=partial, sheet=sheet or None)
     except ParseError as e:
         raise ApiError(422, "PARSE_ERROR", str(e)) from e
 

@@ -244,6 +244,32 @@ def add_example(term_id: UUID, body: Example, user: CurrentUser, db: Db):
     return term_view(term)
 
 
+TERM_LANGUAGES = ("zh", "en")  # languages with POS patterns (engine/kb/terms.py)
+
+
+def _check_term_languages(corpus, language):
+    """Corpus term extraction relies on zh / en POS patterns (contracts/p10.md §八): the requested language,
+    else every language of the corpus (as indexed), must be one of them."""
+    langs = (
+        [lang_code(language)]
+        if language
+        else (corpus.meta or {}).get("languages") or [lang_code(corpus.language)]
+    )
+    other = sorted({x for x in langs if x not in ("", "auto", *TERM_LANGUAGES)})
+    if not other:
+        return
+    hint = (
+        "；可指定语言 zh 或 en 只抽取该语言"
+        if not language and set(langs) & set(TERM_LANGUAGES)
+        else ""
+    )
+    raise ApiError(
+        422,
+        "LANGUAGE_UNSUPPORTED",
+        f"术语抽取的词性模式只支持中文与英文，暂不支持：{'、'.join(other)}{hint}",
+    )
+
+
 @router.post("/projects/{project_id}/kb/terms/extract")
 def extract(project_id: UUID, body: ExtractInput, user: CurrentUser, db: Db):
     require_project(db, project_id, user, EDIT)
@@ -256,6 +282,7 @@ def extract(project_id: UUID, body: ExtractInput, user: CurrentUser, db: Db):
             raise forbidden()
         if corpus.project_id not in (None, project_id):
             raise forbidden()
+        _check_term_languages(corpus, body.language)
     else:
         docs = db.scalars(
             select(KbDocument).where(KbDocument.id.in_(body.document_ids))

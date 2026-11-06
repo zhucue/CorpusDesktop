@@ -989,20 +989,22 @@ def run_export_brat(run, layer_id):
 
 
 def _xlsx_sheet(wb, title, header, rows, notice=()):
+    from services.worker.tasks import excel_safe  # formula injection (= + - @ …)
+
     ws = wb.create_sheet(title)
     for line in notice:
-        ws.append([line])
+        ws.append([excel_safe(line)])
     if notice:
         ws.append([])
     font = Font(name="宋体", bold=True)
     cells = []
     for h in header:
-        c = WriteOnlyCell(ws, value=h)
+        c = WriteOnlyCell(ws, value=excel_safe(h))
         c.font = font
         cells.append(c)
     ws.append(cells)
     for r in rows:
-        ws.append(r)
+        ws.append([excel_safe(v) for v in r])
 
 
 def run_export_xlsx(run, layer_id):

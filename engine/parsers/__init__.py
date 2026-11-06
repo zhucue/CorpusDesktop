@@ -1,13 +1,19 @@
 """File → Documents (+ sentence alignments for parallel formats).
 
-Format by extension: .txt .docx .csv .tsv .conllu .tmx. Tatoeba: pass the directory holding the
-official `*sentences*.tsv[.bz2]` and `*links*.tsv[.bz2]` files of one upload batch; a single
+Format by extension: .txt .docx .pdf .csv .tsv .xlsx .jsonl .conllu .tmx. Tatoeba: pass the directory
+holding the official `*sentences*.tsv[.bz2]` and `*links*.tsv[.bz2]` files of one upload batch; a single
 header-less `*sentences*.tsv` is also accepted (no alignments). Only CoNLL-U yields tokens.
-CSV/TSV take an optional column `mapping` (see `table.py`); without it the defaults are detected.
+CSV/TSV/XLSX/JSONL take an optional field `mapping` (see `table.py`); without it the defaults are detected.
 Text files may be UTF-8 (with or without BOM), UTF-16 (with BOM, or detected) or GB18030/GBK.
+
+Every document gets a `source` attribute naming where it came from, for import messages (duplicates):
+the file name, or "<file> #n" for row n of a table or JSONL file (see table.py). It is not stored.
 """
 
 import codecs
+import hashlib
+import re
+import unicodedata
 from pathlib import Path
 
 from engine.model import Alignment, Document
@@ -17,14 +23,31 @@ class ParseError(ValueError):
     pass
 
 
+def content_hash(text: str) -> str:
+    """Import dedup key (contracts/p10.md §七): the text stripped, whitespace runs collapsed to one space,
+    NFKC-normalized, as sha256 hex. Migration 0011 inlines the same rule to backfill stored documents."""
+    norm = unicodedata.normalize("NFKC", re.sub(r"\s+", " ", text.strip()))
+    return hashlib.sha256(norm.encode("utf-8")).hexdigest()
+
+
+def source_of(doc: Document) -> str:
+    """Where a parsed document came from (file, or file and row); the title for documents made elsewhere."""
+    return getattr(doc, "source", None) or doc.title
+
+
 def parse(
     path: Path, *, language: str | None, metadata: dict, mapping: dict | None = None
 ) -> tuple[list[Document], list[Alignment]]:
-    from engine.parsers import conllu, table, tatoeba, text, tmx
+    docs, links = _parse(Path(path), language or "", dict(metadata or {}), mapping)
+    for d in docs:
+        if not getattr(d, "source", None):
+            d.source = d.title if Path(path).is_dir() else Path(path).name
+    return docs, links
 
-    path = Path(path)
-    language = language or ""
-    metadata = dict(metadata or {})
+
+def _parse(path: Path, language: str, metadata: dict, mapping: dict | None):
+    from engine.parsers import conllu, pdf, table, tatoeba, text, tmx
+
     if path.is_dir():
         return tatoeba.parse_dir(path, metadata)
     name = path.name.lower()
@@ -34,10 +57,10 @@ def parse(
         return [text.parse_txt(path, language, metadata)], []
     if name.endswith(".docx"):
         return [text.parse_docx(path, language, metadata)], []
-    if name.endswith((".csv", ".tsv")):
-        return table.parse(
-            path, language, metadata, table.delimiter_for(name), mapping
-        ), []
+    if name.endswith(".pdf"):
+        return [pdf.parse(path, language, metadata)], []
+    if name.endswith((".csv", ".tsv", ".xlsx", ".jsonl")):
+        return table.parse(path, language, metadata, mapping=mapping), []
     if name.endswith(".conllu"):
         return conllu.parse(path, language, metadata), []
     if name.endswith(".tmx"):

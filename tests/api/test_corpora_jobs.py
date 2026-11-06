@@ -58,6 +58,8 @@ def test_import_index_ready(owner, project, corpus):
         "sentences": 2,
         "tokens": 8,
         "alignments": 0,
+        "skipped_duplicates": 0,
+        "duplicates": [],
     }
     assert first["finished_at"]
 
@@ -110,7 +112,7 @@ def test_import_index_ready(owner, project, corpus):
 
 def test_upload_validation(owner, corpus, member):
     assert (
-        upload(owner, corpus["id"], {"a.pdf": "x"}).json()["error"]["code"]
+        upload(owner, corpus["id"], {"a.odt": "x"}).json()["error"]["code"]
         == "UNSUPPORTED_FORMAT"
     )
     assert (
