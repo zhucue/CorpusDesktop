@@ -7,6 +7,7 @@ STACK_COMPOSE 可改 compose 命令（默认 `docker compose -f deploy/compose.y
 测试只创建并改动自己的账号、项目与内置语料（结束时删除内置语料与项目）；矩阵表打印到标准输出。
 """
 
+import itertools
 import json
 import os
 import secrets
@@ -69,10 +70,18 @@ AGENT_OWN = exp(OK, 404, 404, 404, 404, 404, 401)
 # ---- clients ----
 
 
+_clients = itertools.count(1)
+
+
 class Client:
     def __init__(self, name, token=None):
         self.name = name
-        headers = {"Origin": ORIGIN}
+        # nginx limits logins per client IP; give each test client its own forwarded address
+        n = next(_clients)
+        headers = {
+            "Origin": ORIGIN,
+            "X-Forwarded-For": f"10.250.{n // 250}.{n % 250 + 1}",
+        }
         if token:
             headers["Authorization"] = f"Bearer {token}"
         self.http = httpx.Client(base_url=STACK_URL, headers=headers, timeout=120)
@@ -445,6 +454,17 @@ def build_cases(w: World):
     idx = {r: n for n, r in enumerate(ROLES)}
     serial = iter(range(10**6))
 
+    def fresh_account(_w, role):
+        """A throwaway account per call, so admin actions never touch the role accounts."""
+        return w.u["admin"].ok(
+            "POST",
+            "/api/admin/users",
+            json={
+                "email": f"p7-{TAG}-t{next(serial)}-{role}@example.edu",
+                "display_name": "临时",
+            },
+        )["user"]
+
     def fresh_corpus(_w, role):
         return o.ok(
             "POST",
@@ -725,6 +745,20 @@ def build_cases(w: World):
             lambda c, x, r: c.delete(f"/api/corpora/{x['id']}"),
             fresh_corpus,
         ),
+        C(
+            "语料",
+            "GET /corpora/{id}/delete-impact",
+            WRITE_H,
+            lambda c, x, r: c.get(f"/api/corpora/{i['victim']}/delete-impact"),
+        ),
+        C(
+            "语料",
+            "GET /documents/{id}/delete-impact",
+            WRITE_H,
+            lambda c, x, r: c.get(
+                f"/api/documents/{i['victim_docs'][-1]}/delete-impact"
+            ),
+        ),
         # built-in corpora
         C(
             "内置",
@@ -753,6 +787,58 @@ def build_cases(w: World):
             ADMIN,
             lambda c, x, r: c.delete(f"/api/corpora/{x['id']}"),
             fresh_builtin,
+        ),
+        # account administration (contracts/p7.md §五) and system info (§六)
+        C(
+            "账号",
+            "GET /admin/users",
+            ADMIN,
+            lambda c, x, r: c.get("/api/admin/users", params={"q": TAG}),
+        ),
+        C(
+            "账号",
+            "POST /admin/users",
+            ADMIN,
+            lambda c, x, r: c.post(
+                "/api/admin/users",
+                json={"email": f"p7-{TAG}-{r}@example.edu", "display_name": r},
+            ),
+        ),
+        C(
+            "账号",
+            "POST /admin/users/{id}/disable",
+            ADMIN,
+            lambda c, x, r: c.post(f"/api/admin/users/{x['id']}/disable"),
+            fresh_account,
+        ),
+        C(
+            "账号",
+            "POST /admin/users/{id}/enable",
+            ADMIN,
+            lambda c, x, r: c.post(f"/api/admin/users/{x['id']}/enable"),
+            fresh_account,
+        ),
+        C(
+            "账号",
+            "POST /admin/users/{id}/reset-password",
+            ADMIN,
+            lambda c, x, r: c.post(f"/api/admin/users/{x['id']}/reset-password"),
+            fresh_account,
+        ),
+        C(
+            "账号",
+            "POST /admin/users/{id}/admin",
+            ADMIN,
+            lambda c, x, r: c.post(
+                f"/api/admin/users/{x['id']}/admin", json={"is_admin": True}
+            ),
+            fresh_account,
+        ),
+        C(
+            "系统",
+            "GET /system/info",
+            ANYONE,
+            lambda c, x, r: c.get("/api/system/info"),
         ),
         # subcorpora
         C(
@@ -1501,6 +1587,15 @@ def build_cases(w: World):
             AGENT_OWN,
             lambda c, x, r: c.delete(f"/agent/sessions/{x['id']}"),
             fresh("session"),
+        ),
+        # last: it removes each caller's own evidence, which earlier cases reference
+        C(
+            "证据",
+            "DELETE /projects/{id}/evidence?mine=true",
+            exp(OK, OK, OK, OK, 404, 404, 403),
+            lambda c, x, r: c.delete(
+                f"/api/projects/{p}/evidence", params={"mine": "true"}
+            ),
         ),
     ]
 
