@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router";
 import type { Job } from "../../api";
 import { isActiveJob, quietJobs, useBuiltinJobs, useMe, useProjectJobs } from "../../lib/data";
+import { JobDownloadLink, jobDownloadUrl } from "../../lib/download";
 import { fmt } from "../../lib/format";
 import { Empty, Progress, Sparkline } from "../common";
 import { Icon } from "../Icon";
@@ -49,7 +50,7 @@ export function progressText(j: Job): string {
 
 /** Where a finished job's result opens: statistics result, download, or the job's detail. */
 export function jobLink(j: Job, projectId: string): { to?: string; href?: string } {
-  if (hasDownload(j)) return { href: `/api/jobs/${j.id}/download` };
+  if (hasDownload(j)) return { href: jobDownloadUrl(j.id) };
   if (j.kind === "stats" && j.result?.stat_id) return { to: `/p/${projectId}/stats?stat=${j.result.stat_id}` };
   return { to: `/p/${projectId}/jobs?job=${j.id}` };
 }
@@ -85,7 +86,9 @@ export function TaskTray({ projectId, open, onToggle }: { projectId: string; ope
             message: `${title}完成`,
             description:
               hasDownload(j) ? (
-                <a href={`/api/jobs/${j.id}/download`}>下载 {j.result?.filename ?? ""}</a>
+                <JobDownloadLink jobId={j.id} filename={j.result?.filename}>
+                  下载 {j.result?.filename ?? ""}
+                </JobDownloadLink>
               ) : (
                 <Link to={`/p/${projectId}/jobs`}>查看任务</Link>
               ),
@@ -134,9 +137,9 @@ export function TaskTray({ projectId, open, onToggle }: { projectId: string; ope
                     const l = jobLink(j, projectId);
                     const t = jobTitle(j);
                     return l.href ? (
-                      <a className="grow ellipsis" href={l.href} title={t}>
+                      <JobDownloadLink className="grow ellipsis" jobId={j.id} filename={j.result?.filename} title={t}>
                         {t}
-                      </a>
+                      </JobDownloadLink>
                     ) : (
                       <Link className="grow ellipsis" to={l.to!} title={t}>
                         {t}

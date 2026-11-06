@@ -1,5 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import { App, Spin } from "antd";
-import { ErrorAlert } from "../../components/common";
+import { api, type MyLlmUsage } from "../../api";
+import { ErrorAlert, Progress } from "../../components/common";
+import { fmt } from "../../lib/format";
 import { PasswordForm } from "../auth/ChangePassword";
 import { useSystemInfo } from "./system";
 
@@ -39,7 +42,7 @@ export function PrivacyCard() {
           <dt>数据存放</dt>
           <dd>本机 PostgreSQL 数据库与 Docker 数据卷：语料、索引、标注、知识库、导出文件、助手会话。</dd>
           <dt>管理员可见</dt>
-          <dd>全部账号及各账号的项目数；不通过界面读取他人项目内容。</dd>
+          <dd>全部账号及其项目数、项目名称与负责人、各项目磁盘占用、全局任务、模型用量、审计记录与反馈；不通过界面读取他人项目内的语料、标注与知识库内容。</dd>
           <dt>发送到外部模型</dt>
           <dd>
             <ul>
@@ -57,6 +60,34 @@ export function PrivacyCard() {
           <dt>备份</dt>
           <dd>保留期限与存放位置由部署方决定。</dd>
         </dl>
+      )}
+    </section>
+  );
+}
+
+/** GET /me/llm-usage: this month's model tokens against the per-user limit (contracts/p9.md §二). */
+export function LlmUsageCard() {
+  const usage = useQuery({ queryKey: ["my-llm-usage"], queryFn: () => api.get<MyLlmUsage>("/me/llm-usage") });
+  const d = usage.data;
+  const pct = d?.limit ? Math.min(100, (d.total_tokens / d.limit) * 100) : null;
+  return (
+    <section className="card" aria-label="模型用量">
+      <div className="card-head">
+        <h2 className="grow">本月模型用量</h2>
+        {d && <span className="small muted num">{d.month}</span>}
+      </div>
+      <ErrorAlert error={usage.error} style={{ margin: 16 }} />
+      {usage.isPending ? (
+        <Spin style={{ display: "block", margin: 24 }} />
+      ) : (
+        d && (
+          <div className="set-body col" style={{ gap: 10 }}>
+            <div className="num" data-testid="llm-usage">
+              <b>{fmt(d.total_tokens)}</b> token / 上限 {d.limit ? `${fmt(d.limit)} token` : "不限"}
+            </div>
+            {pct != null && <Progress done={d.total_tokens} total={d.limit} state={pct >= 100 ? "failed" : undefined} thin />}
+          </div>
+        )
       )}
     </section>
   );

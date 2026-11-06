@@ -15,7 +15,7 @@
 .set-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; color: var(--text-3); font: inherit; font-weight: 500; cursor: pointer; transition: color var(--t-fast); }
 .set-tabs button:hover { color: var(--text); }
 .set-tabs button[aria-selected="true"] { color: var(--accent); font-weight: 600; border-bottom-color: var(--accent); }
-.settings-narrow { max-width: 640px; }
+.settings-narrow { max-width: 640px; display: flex; flex-direction: column; gap: 20px; }
 .set-body { padding: 16px 18px; }
 .pw-card { max-width: 380px; }
 .temp-pw { gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--fill); }
@@ -24,3 +24,9 @@
 .privacy dt { color: var(--text-3); }
 .privacy dd { margin: 0; }
 .privacy ul { margin: 0 0 6px; padding-left: 18px; }
+.settings-grid > .span-2 { grid-column: 1 / -1; }
+.set-tabs.sub { border-bottom: 0; margin-bottom: 16px; }
+.set-tabs.sub button { height: 32px; padding: 0 12px; border: 0; margin: 0; border-radius: var(--radius); }
+.set-tabs.sub button[aria-selected="true"] { background: var(--accent-tint); }
+.card-head.wrap { flex-wrap: wrap; row-gap: 8px; }
+.fb-text { white-space: pre-wrap; word-break: break-word; }

@@ -1,7 +1,14 @@
 import type { Role } from "./types";
 
-// Codes whose backend message carries the specifics (position, field, format) keep it after the label.
-const codeLabels: Record<string, { label: string; detail?: boolean }> = {
+// Codes whose backend message carries the specifics (position, field, format) keep it after the label;
+// `server` codes show the backend message as is (limits and counts are in it) and fall back to the label.
+const codeLabels: Record<string, { label: string; detail?: boolean; server?: boolean }> = {
+  LLM_QUOTA_EXCEEDED: { label: "本月模型用量已达上限，请联系管理员", server: true },
+  TOO_MANY_RUNS: { label: "运行中的对话过多，请等待完成或停止后再试", server: true },
+  PURGED: { label: "项目已超过恢复期限，无法恢复", server: true },
+  EXPORT_EXPIRED: { label: "导出文件已过期，请重新导出", server: true },
+  LANGUAGE_UNSUPPORTED: { label: "暂只支持中文与英文语料", server: true },
+  RATE_LIMITED: { label: "请求过于频繁，请稍后再试", server: true },
   CORPUS_NOT_READY: { label: "语料库尚未就绪" },
   SEARCH_EXPIRED: { label: "结果已过期，重新检索" },
   JOB_IN_PROGRESS: { label: "任务仍在进行" },
@@ -28,6 +35,7 @@ const codeLabels: Record<string, { label: string; detail?: boolean }> = {
 export function codeLabel(code: string, message: string): string {
   const known = codeLabels[code];
   if (!known) return message;
+  if (known.server) return message || known.label;
   return known.detail && message && message !== known.label ? `${known.label}：${message}` : known.label;
 }
 
@@ -70,6 +78,10 @@ export async function errorFromResponse(res: Response, method?: string): Promise
     /* non-JSON body */
   }
   if (res.status === 413) code = "TOO_LARGE";
+  if (res.status === 429 && code === "http_error") {
+    code = "RATE_LIMITED";
+    message = "";
+  }
   if (code === "http_error" && UNAVAILABLE_STATUS.has(res.status)) return new ApiError(res.status, "UNAVAILABLE", unavailableText(method));
   return new ApiError(res.status, code, message);
 }

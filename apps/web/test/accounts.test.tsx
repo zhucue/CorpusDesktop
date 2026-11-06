@@ -146,5 +146,6 @@ describe("data and privacy", () => {
     await screen.findByText("api.example.com");
     expect(screen.getByText("版本 1.0.0")).toBeTruthy();
     expect(screen.getByText("本机模型处理，不外发")).toBeTruthy();
+    expect(screen.getByText(/全局任务、模型用量、审计记录与反馈；不通过界面读取他人项目内的语料、标注与知识库内容/)).toBeTruthy();
   });
 });

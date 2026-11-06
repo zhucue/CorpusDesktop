@@ -16,7 +16,7 @@ import {
   type SearchResult,
   type SearchScope,
 } from "../../api";
-import { ErrorAlert, Empty, exportTip, QueryChip, Sparkline, Tip } from "../../components/common";
+import { ErrorAlert, Empty, exportTip, IndexPendingNote, QueryChip, Sparkline, Tip } from "../../components/common";
 import { ScopeSelect } from "../../components/common/ScopeSelect";
 import { Icon } from "../../components/Icon";
 import { conditionTerms, hasPos, KwicTable, type KwicMark, type KwicRow } from "../../components/results/Kwic";
@@ -962,6 +962,7 @@ export default function Search() {
               <ScopeSelect projectId={projectId} value={null} onChange={(sc) => shell.setScope(sc)} size="small" />
             </div>
           )}
+          <IndexPendingNote corpus={info.corpus} />
           {tempScope && (
             <div className="row">
               <span className="filter-chip">

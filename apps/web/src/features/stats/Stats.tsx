@@ -3,7 +3,7 @@ import { Alert, App, Checkbox, Drawer, Form, Input, InputNumber, Popconfirm, Sel
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { MAX_PAGE_SIZE, api, errorText, type StatMethod, type Corpus, type MetadataField, type Page, type Scope, type StatResult } from "../../api";
-import { Empty, ErrorAlert, exportTip, Skeleton, Tip } from "../../components/common";
+import { Empty, ErrorAlert, exportTip, IndexPendingNote, Skeleton, Tip } from "../../components/common";
 import { ScopeSelect } from "../../components/common/ScopeSelect";
 import { Icon, type IconName } from "../../components/Icon";
 import { MethodAppendix } from "../../components/global/MethodAppendix";
@@ -471,6 +471,7 @@ function MethodForm({
         )}
       </ParamsCard>
       {method === "keywords" && <ScriptWarning projectId={projectId} target={formScope} reference={ref} />}
+      <IndexPendingNote corpus={scopeCorpus?.index_pending ? scopeCorpus : method === "keywords" ? describeScope(ref ?? null, corpora.data?.items ?? [], subs.data?.items ?? []).corpus : null} />
     </>
   );
 }

@@ -2,13 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Form, Input, Modal, Popconfirm, Select, Spin, Table } from "antd";
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { ApiError, MAX_PAGE_SIZE, api, errorText, roleLabels, type Member, type Page, type Project, type Role, type User } from "../../api";
-import { Avatar, ErrorAlert } from "../../components/common";
+import { ApiError, MAX_PAGE_SIZE, api, errorText, roleLabels, type AuditEntry, type DeletedProject, type Member, type Page, type Project, type Role, type User } from "../../api";
+import { Avatar, ErrorAlert, RelTime } from "../../components/common";
 import { Icon, type IconName } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
-import { useMe, useProject, useProjectId } from "../../lib/data";
+import { listOf, useMe, useProject, useProjectId } from "../../lib/data";
 import { fmt } from "../../lib/format";
-import { PasswordCard, PrivacyCard } from "./AccountPanels";
+import { LlmUsageCard, PasswordCard, PrivacyCard } from "./AccountPanels";
+import { AdminAudit, AdminFeedback, AdminJobs, AdminProjects, AdminSystemPanel, AdminUsage } from "./AdminPanels";
+import { AuditTable } from "./audit";
 import { MAX_PROJECT_NAME } from "./project";
 import Users from "./Users";
 import "./settings.css";
@@ -136,7 +138,7 @@ function ProjectCard({ project, isOwner }: { project: Project; isOwner: boolean 
         width={440}
       >
         <div className="col" style={{ gap: 12 }}>
-          <span className="sm">以下内容会一并删除，不可恢复：</span>
+          <span className="sm">以下内容会一并删除，7 天内可由负责人或管理员恢复：</span>
           {usage.isPending ? (
             <Spin />
           ) : (
@@ -158,6 +160,76 @@ function ProjectCard({ project, isOwner }: { project: Project; isOwner: boolean 
           <ErrorAlert error={usage.error ?? remove.error} />
         </div>
       </Modal>
+    </section>
+  );
+}
+
+/** GET /me/deleted-projects: own projects deleted in the last 7 days, with 恢复. Hidden when there are none. */
+function DeletedProjects() {
+  const qc = useQueryClient();
+  const { message } = App.useApp();
+  const deleted = useQuery({
+    queryKey: ["deleted-projects"],
+    queryFn: () => api.get<Page<DeletedProject> | DeletedProject[]>("/me/deleted-projects"),
+  });
+  const restore = useMutation({
+    mutationFn: (p: DeletedProject) => api.post<Project>(`/projects/${p.id}/restore`),
+    onSuccess: (_, p) => {
+      void qc.invalidateQueries({ queryKey: ["deleted-projects"] });
+      void qc.invalidateQueries({ queryKey: ["projects"] });
+      message.success(`已恢复项目「${p.name}」`);
+    },
+    onError: (e) => message.error(errorText(e)),
+  });
+  const items = listOf(deleted.data);
+  if (!deleted.error && items.length === 0) return null;
+  return (
+    <section className="card" aria-label="最近删除">
+      <div className="card-head">
+        <h2 className="grow">最近删除</h2>
+      </div>
+      <ErrorAlert error={deleted.error} style={{ margin: 16 }} />
+      {items.length > 0 && (
+        <table className="tbl mid">
+          <tbody>
+            {items.map((p) => (
+              <tr key={p.id}>
+                <td>{p.name}</td>
+                <td>
+                  <RelTime at={p.deleted_at} />
+                </td>
+                <td className="r">
+                  <button className="btn xs" type="button" disabled={restore.isPending} onClick={() => restore.mutate(p)}>
+                    <Icon name="restore" size={14} />
+                    恢复
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+const AUDIT_PAGE = 20;
+
+/** GET /projects/{id}/audit: the project's own entries, for its owners. */
+function ProjectAudit({ projectId }: { projectId: string }) {
+  const [page, setPage] = useState(1);
+  const audit = useQuery({
+    queryKey: ["project-audit", projectId, page],
+    queryFn: () => api.get<Page<AuditEntry>>(`/projects/${projectId}/audit`, { page, page_size: AUDIT_PAGE }),
+  });
+  return (
+    <section className="card span-2" aria-label="项目审计">
+      <div className="card-head">
+        <h2 className="grow">审计</h2>
+        <span className="small muted num">{fmt(audit.data?.total ?? 0)} 条</span>
+      </div>
+      <ErrorAlert error={audit.error} style={{ margin: 16 }} />
+      <AuditTable items={audit.data?.items} total={audit.data?.total ?? 0} page={page} pageSize={AUDIT_PAGE} loading={audit.isPending} onPage={setPage} />
     </section>
   );
 }
@@ -209,7 +281,9 @@ function ProjectSettings() {
   return (
     <div className="settings-grid">
       {project.data && <ProjectCard key={project.data.id} project={project.data} isOwner={isOwner} />}
-      <div />
+      <div>
+        <DeletedProjects />
+      </div>
       <section className="card">
         <div className="card-head">
           <h2 className="grow">成员</h2>
@@ -306,11 +380,47 @@ function ProjectSettings() {
           </tbody>
         </table>
       </section>
+      {isOwner && <ProjectAudit projectId={projectId} />}
     </div>
   );
 }
 
-type Tab = "project" | "account" | "privacy" | "users";
+type Tab = "project" | "account" | "privacy" | "admin";
+type AdminTab = "users" | "projects" | "jobs" | "usage" | "audit" | "feedback" | "system";
+
+const ADMIN_TABS: [AdminTab, string, IconName][] = [
+  ["users", "用户", "users"],
+  ["projects", "项目", "folder"],
+  ["jobs", "任务", "listchecks"],
+  ["usage", "用量", "coins"],
+  ["audit", "审计", "scrolltext"],
+  ["feedback", "反馈", "feedback"],
+  ["system", "系统", "server"],
+];
+
+/** 管理 (platform admins): users and the cross-project views; the sub tab is kept in `?admin=`. */
+function Admin({ sub, onSub }: { sub: AdminTab; onSub: (t: AdminTab) => void }) {
+  return (
+    <>
+      <div className="set-tabs sub" role="tablist" aria-label="管理">
+        {ADMIN_TABS.map(([k, label, icon]) => (
+          <button key={k} type="button" role="tab" aria-selected={sub === k} onClick={() => onSub(k)}>
+            <Icon name={icon} size={14} /> {label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel">
+        {sub === "users" && <Users />}
+        {sub === "projects" && <AdminProjects />}
+        {sub === "jobs" && <AdminJobs />}
+        {sub === "usage" && <AdminUsage />}
+        {sub === "audit" && <AdminAudit />}
+        {sub === "feedback" && <AdminFeedback />}
+        {sub === "system" && <AdminSystemPanel />}
+      </div>
+    </>
+  );
+}
 
 export default function Settings() {
   const me = useMe();
@@ -319,10 +429,24 @@ export default function Settings() {
     ["project", "项目", "folder"],
     ["account", "账号", "key"],
     ["privacy", "数据与隐私", "shield"],
-    ...(me.data?.is_admin ? ([["users", "用户", "users"]] as [Tab, string, IconName][]) : []),
+    ...(me.data?.is_admin ? ([["admin", "管理", "shield"]] as [Tab, string, IconName][]) : []),
   ];
-  const asked = params.get("tab") as Tab | null;
+  // ?tab=users (P7 links) opens 管理 · 用户
+  const raw = params.get("tab");
+  const asked = (raw === "users" ? "admin" : raw) as Tab | null;
   const tab = tabs.some(([k]) => k === asked) ? (asked as Tab) : "project";
+  const askedSub = (raw === "users" ? "users" : params.get("admin")) as AdminTab | null;
+  const sub = ADMIN_TABS.some(([k]) => k === askedSub) ? (askedSub as AdminTab) : "users";
+  const go = (t: Tab, admin?: AdminTab) =>
+    setParams(
+      (p) => {
+        p.set("tab", t);
+        if (admin) p.set("admin", admin);
+        else p.delete("admin");
+        return p;
+      },
+      { replace: true },
+    );
   return (
     <>
       <PageHeader title="设置" crumbs={1} />
@@ -334,15 +458,7 @@ export default function Settings() {
               type="button"
               role="tab"
               aria-selected={tab === k}
-              onClick={() =>
-                setParams(
-                  (p) => {
-                    p.set("tab", k);
-                    return p;
-                  },
-                  { replace: true },
-                )
-              }
+              onClick={() => go(k)}
             >
               <Icon name={icon} size={14} /> {label}
             </button>
@@ -353,6 +469,7 @@ export default function Settings() {
           {tab === "account" && (
             <div className="settings-narrow">
               <PasswordCard />
+              <LlmUsageCard />
             </div>
           )}
           {tab === "privacy" && (
@@ -360,7 +477,7 @@ export default function Settings() {
               <PrivacyCard />
             </div>
           )}
-          {tab === "users" && <Users />}
+          {tab === "admin" && <Admin sub={sub} onSub={(t) => go("admin", t)} />}
         </div>
       </div>
     </>

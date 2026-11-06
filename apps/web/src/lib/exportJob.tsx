@@ -3,15 +3,7 @@ import { App } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { api, errorText, type Job } from "../api";
 import { quietJobs, useJob, useJobCreated } from "./data";
-
-function save(href: string, filename: string) {
-  const a = document.createElement("a");
-  a.href = href;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
+import { JobDownloadLink, useJobDownload } from "./download";
 
 /**
  * Export as a background job: toast "已开始导出", poll it, download the file when it finishes (with a 下载 link in
@@ -22,6 +14,7 @@ export function useExportJob(projectId: string) {
   const jobCreated = useJobCreated();
   const [jobId, setJobId] = useState<string | null>(null);
   const job = useJob(jobId);
+  const download = useJobDownload();
   const pending = useRef<string | null>(null);
   pending.current = jobId;
 
@@ -41,10 +34,18 @@ export function useExportJob(projectId: string) {
     if (!j || j.id !== jobId || j.state === "queued" || j.state === "running") return;
     setJobId(null);
     if (j.state === "succeeded") {
-      const href = `/api/jobs/${j.id}/download`;
       const name = typeof j.result?.filename === "string" ? j.result.filename : "";
-      save(href, name);
-      notification.success({ message: "导出完成", description: <a href={href}>下载 {name}</a>, placement: "top", duration: 6 });
+      void download(j.id, name);
+      notification.success({
+        message: "导出完成",
+        description: (
+          <JobDownloadLink jobId={j.id} filename={name}>
+            下载 {name}
+          </JobDownloadLink>
+        ),
+        placement: "top",
+        duration: 6,
+      });
     } else notification.error({ message: "导出失败", description: j.error?.message ?? "任务已取消", placement: "top", duration: 6 });
   }, [job.data, jobId]); // eslint-disable-line react-hooks/exhaustive-deps
 

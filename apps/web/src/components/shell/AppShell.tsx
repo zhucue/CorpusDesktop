@@ -13,6 +13,7 @@ import KeysOverlay from "../global/KeysOverlay";
 import { TaskTray } from "../global/TaskTray";
 import { Icon, type IconName } from "../Icon";
 import { pageIcon } from "../iconSets";
+import { FeedbackButton } from "./Feedback";
 import { ShellProvider, useShell } from "./shell";
 
 const AssistantDrawer = lazy(() => import("../../features/assistant/AssistantDrawer"));
@@ -183,6 +184,7 @@ export function PageHeader({
           <span className="grow">搜索或跳转</span>
           <kbd>Ctrl K</kbd>
         </button>
+        <FeedbackButton />
         <Tip title="快捷键（?）">
           <button className="btn ghost icon" type="button" aria-label="快捷键" onClick={openKeys}>
             <Icon name="keyboard" />

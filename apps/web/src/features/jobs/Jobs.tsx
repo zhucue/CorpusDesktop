@@ -9,6 +9,7 @@ import { Icon, type IconName } from "../../components/Icon";
 import { jobKindIcon, jobStateIcon } from "../../components/iconSets";
 import { PageHeader } from "../../components/shell/AppShell";
 import { canEdit, isActiveJob, useJob, useMe, useProject, useProjectId } from "../../lib/data";
+import { JobDownloadLink } from "../../lib/download";
 import { fmt, fmtDuration, fmtTime } from "../../lib/format";
 import "./jobs.css";
 
@@ -49,10 +50,10 @@ function Actions({ job, manage, onAct, pending }: { job: Job; manage: boolean; o
         </button>
       )}
       {hasDownload(job) && (
-        <a className="btn xs" href={`/api/jobs/${job.id}/download`}>
+        <JobDownloadLink className="btn xs" jobId={job.id} filename={job.result?.filename}>
           <Icon name="download" size={14} />
           下载
-        </a>
+        </JobDownloadLink>
       )}
     </span>
   );

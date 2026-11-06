@@ -238,3 +238,15 @@ export function Skeleton({ rows = 5 }: { rows?: number }) {
     </div>
   );
 }
+
+/** One line while an index job for the scoped corpus is queued or running (contracts/p9.md §八). */
+export const INDEX_PENDING_TEXT = "索引更新中，完成前结果可能包含已删除或修改前的文档";
+export function IndexPendingNote({ corpus, style }: { corpus: { index_pending?: boolean } | null | undefined; style?: React.CSSProperties }) {
+  if (!corpus?.index_pending) return null;
+  return (
+    <div className="alert info" role="status" style={style}>
+      <Icon name="info" size={14} />
+      <span className="grow">{INDEX_PENDING_TEXT}</span>
+    </div>
+  );
+}

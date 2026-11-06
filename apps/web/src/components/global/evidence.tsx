@@ -6,6 +6,7 @@ import { MAX_PAGE_SIZE, api, errorText, type Evidence, type EvidenceInput, type 
 import { knowledgeHref } from "../../features/knowledge/data";
 import { EVIDENCE_MIME, NotePicker, evidenceMarkdown, writeEvidenceToNote, type NoteTarget } from "../../features/knowledge/NotePicker";
 import { isActiveJob, quietJobs, useJob, useJobCreated } from "../../lib/data";
+import { JobDownloadLink, useJobDownload } from "../../lib/download";
 import { cpSlice } from "../annot/spans";
 import { reducedMotion } from "../../theme/motion";
 import { Tip } from "../common";
@@ -217,6 +218,7 @@ function EvidenceBody({ it }: { it: Evidence }) {
 /** Basket export as a background job: toast at the top (the dock sits bottom right), download when done. */
 function useBasketExport(projectId: string) {
   const { message } = App.useApp();
+  const download = useJobDownload();
   const jobCreated = useJobCreated();
   const [jobId, setJobId] = useState<string | null>(null);
   const job = useJob(jobId);
@@ -238,18 +240,15 @@ function useBasketExport(projectId: string) {
       message.error(`导出失败：${j.error?.message ?? "任务已取消"}`);
       return;
     }
-    const href = `/api/jobs/${j.id}/download`;
     const name = typeof j.result?.filename === "string" ? j.result.filename : "";
-    const a = document.createElement("a");
-    a.href = href;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    void download(j.id, name);
     message.success({
       content: (
         <span>
-          导出完成，<a href={href}>下载 {name}</a>
+          导出完成，
+          <JobDownloadLink jobId={j.id} filename={name}>
+            下载 {name}
+          </JobDownloadLink>
         </span>
       ),
       duration: 6,

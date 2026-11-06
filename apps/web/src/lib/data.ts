@@ -43,7 +43,7 @@ export function canEdit(p?: Project): boolean {
   return p?.role === "owner" || p?.role === "editor";
 }
 
-const busy = (c: Corpus) => c.status === "importing" || c.status === "indexing" || !!c.updating;
+const busy = (c: Corpus) => c.status === "importing" || c.status === "indexing" || !!c.updating || !!c.index_pending;
 
 export function useCorpora(projectId: string | undefined) {
   return useQuery({

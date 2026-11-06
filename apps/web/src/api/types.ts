@@ -66,6 +66,8 @@ export interface Corpus {
   meta?: CorpusMeta;
   /** Searchable corpus with an import/index job running; the old index serves until it is replaced. */
   updating?: boolean;
+  /** An index job is queued or running: results may still include deleted or edited documents (contracts/p9.md §八). */
+  index_pending?: boolean;
   created_at: string;
 }
 
@@ -798,4 +800,98 @@ export interface KbSearchResult {
   terms: Term[];
   /** EMBED_UNAVAILABLE: vector model not ready, keyword results only. */
   warning?: string | { code: string; message?: string } | null;
+}
+
+/* ---------- P9 operations (contracts/p9.md) ---------- */
+
+/** GET /me/llm-usage: the current month; limit null = no limit. */
+export interface MyLlmUsage {
+  month: string;
+  total_tokens: number;
+  limit: number | null;
+  by_source: { source: string; total_tokens: number }[];
+}
+
+/** GET /admin/llm-usage?group=user|project item. */
+export interface LlmUsageRow {
+  key: string;
+  name: string;
+  total_tokens: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  calls: number;
+}
+
+export interface LlmUsageReport {
+  items: LlmUsageRow[];
+  total: number;
+}
+
+/** GET /admin/projects item; deleted_at set for soft-deleted projects. */
+export interface AdminProject {
+  id: string;
+  name: string;
+  owner: { id: string; email: string; display_name: string } | null;
+  members: number;
+  corpora: number;
+  layers: number;
+  kb_documents: number;
+  disk_bytes: number;
+  created_at: string;
+  deleted_at: string | null;
+}
+
+/** GET /admin/jobs item: a Job with its project name (null for built-in corpus jobs). */
+export type AdminJob = Job & { project_name?: string | null };
+
+/** GET /admin/system. */
+export interface AdminSystem {
+  version: string;
+  model: SystemInfo["model"] | string | null;
+  embed: SystemInfo["embed"] | string | null;
+  workers: { id: string; kinds: string[] | string | null; last_seen: string | null; healthy: boolean }[];
+  disk: { path: string; total: number | null; free: number | null } | null;
+  search_cache_bytes: number;
+  data_bytes: number;
+  last_backup_at: string | null;
+}
+
+/** GET /admin/audit and GET /projects/{id}/audit item. */
+export interface AuditEntry {
+  id: number;
+  at: string;
+  actor_id: string | null;
+  actor_email: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  target_name: string | null;
+  project_id: string | null;
+  project_name?: string | null;
+  detail: Record<string, unknown> | null;
+  ip: string | null;
+}
+
+export type FeedbackStatus = "open" | "done";
+
+/** GET /admin/feedback item. */
+export interface FeedbackItem {
+  id: number;
+  created_at: string;
+  user: { id: string; email: string; display_name: string } | null;
+  project_id: string | null;
+  project_name?: string | null;
+  page: string;
+  app_version: string;
+  text: string;
+  status: FeedbackStatus;
+  admin_note: string;
+  handled_at: string | null;
+}
+
+/** GET /me/deleted-projects item: own projects deleted within the restore window. */
+export interface DeletedProject {
+  id: string;
+  name: string;
+  deleted_at: string;
 }
