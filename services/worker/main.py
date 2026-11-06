@@ -259,12 +259,12 @@ def _fail(run, error):
 
 def execute(run):
     from engine import cwb
-    from services.worker import llm, tasks
+    from services.worker import embed_tasks, llm, tasks
 
     log.info("job %s %s start", run.id, run.kind)
     try:
         with llm.job(run):
-            tasks.HANDLERS[run.kind](run)
+            (tasks.HANDLERS | embed_tasks.HANDLERS)[run.kind](run)
     except (Cancelled, cwb.Cancelled):
         log.info("job %s cancelled", run.id)
         if run.kind in ("import", "index"):

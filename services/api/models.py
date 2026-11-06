@@ -31,6 +31,7 @@ JOB_KINDS = (
     "kb_import",
     "kb_summarize",
     "kb_extract",
+    "embed_corpus",
 )
 LABEL_SET_KINDS = ("pos", "dep", "span", "relation")
 LAYER_KINDS = ("pos", "dep", "span", "relation", "alignment")
@@ -135,11 +136,14 @@ class Corpus(Base):
     index_version: Mapped[str | None] = mapped_column(Text)
     # source and license: {license, attribution, source_url, version} (built-in corpora)
     meta: Mapped[dict] = mapped_column("metadata", JSONB, server_default="{}")
+    # semantic index (0011): {status: none|building|ready|stale|failed, sentences, model, built_at, error}
+    semantic: Mapped[dict] = mapped_column(JSONB, server_default="{}")
     created_at: Mapped[datetime] = _created()
 
 
 class Document(Base):
     __tablename__ = "documents"
+    __table_args__ = (Index("ix_documents_content_hash", "corpus_id", "content_hash"),)
     id: Mapped[uuid.UUID] = _id()
     corpus_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("corpora.id", ondelete="CASCADE"), index=True
@@ -152,6 +156,8 @@ class Document(Base):
     char_count: Mapped[int] = mapped_column(Integer)
     sentence_count: Mapped[int] = mapped_column(Integer)
     token_count: Mapped[int] = mapped_column(Integer)
+    # sha256 of the normalized text (engine.parsers.content_hash), for import dedup (0011)
+    content_hash: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _created()
 
 
@@ -166,6 +172,27 @@ class Sentence(Base):
     start_cp: Mapped[int] = mapped_column(Integer)
     end_cp: Mapped[int] = mapped_column(Integer)
     text: Mapped[str] = mapped_column(Text)
+
+
+class SentenceEmbedding(Base):
+    """Sentence vectors of a corpus's semantic index (contracts/p10.md §六); model in Corpus.semantic."""
+
+    __tablename__ = "sentence_embeddings"
+    __table_args__ = (
+        Index(
+            "ix_sentence_embeddings_embedding",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
+    sentence_id: Mapped[int] = mapped_column(
+        ForeignKey("sentences.id", ondelete="CASCADE"), primary_key=True
+    )
+    corpus_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("corpora.id", ondelete="CASCADE"), index=True
+    )
+    embedding = mapped_column(Vector(EMBED_DIM), nullable=False)
 
 
 class Token(Base):
@@ -775,3 +802,32 @@ class Feedback(Base):
     status: Mapped[str] = mapped_column(Text, server_default="open")
     admin_note: Mapped[str] = mapped_column(Text, server_default="")
     handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# ---- vocabulary level lists (0012, contracts/p10.md §二) ----
+
+
+class VocabList(Base):
+    """A word list with ordered levels; project_id null = built-in (NGSL 1.2, seeded by services/api/vocab.py)."""
+
+    __tablename__ = "vocab_lists"
+    id: Mapped[uuid.UUID] = _id()
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(Text)
+    language: Mapped[str] = mapped_column(Text)
+    levels: Mapped[list] = mapped_column(JSONB)
+    source: Mapped[str] = mapped_column(Text, server_default="")
+    license: Mapped[str] = mapped_column(Text, server_default="")
+    created_by: Mapped[uuid.UUID | None] = _user_fk()
+    created_at: Mapped[datetime] = _created()
+
+
+class VocabEntry(Base):
+    __tablename__ = "vocab_entries"
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("vocab_lists.id", ondelete="CASCADE"), primary_key=True
+    )
+    form: Mapped[str] = mapped_column(Text, primary_key=True)
+    level: Mapped[str] = mapped_column(Text)

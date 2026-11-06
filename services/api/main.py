@@ -23,11 +23,13 @@ from services.api import (
     projects,
     samples,
     search,
+    semantic,
     spans,
     stats,
     subcorpora,
     system,
     usage,
+    vocab,
 )
 
 
@@ -84,6 +86,8 @@ for module in (
     feedback,
 ):
     app.include_router(module.router)
+app.include_router(semantic.router)
+app.include_router(vocab.router)
 app.include_router(auth.users_router)
 app.include_router(admin.ops_router)
 app.include_router(projects.me_router)
