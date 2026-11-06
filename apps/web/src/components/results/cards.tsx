@@ -234,6 +234,10 @@ export interface KeywordTableProps {
   rows: { word: string; target_freq: number; reference_freq: number; score: number }[];
 }
 
+/** Column name of the ranking measure (contracts/p8.md §三). */
+const KEYWORD_MEASURES: Record<string, string> = { ll: "LL", log_ratio: "Log Ratio", pct_diff: "%DIFF", odds_ratio: "Odds Ratio" };
+const keywordMeasure = (measure: string) => KEYWORD_MEASURES[measure] ?? measure;
+
 export function KeywordTableCard(p: KeywordTableProps) {
   const { projectId, scope } = useContext(ResultContext);
   const navigate = useNavigate();
@@ -243,7 +247,7 @@ export function KeywordTableCard(p: KeywordTableProps) {
       icon="chartscatter"
       title="关键词"
       meta={`${p.target} 对 ${p.reference}`}
-      right={p.measure === "log_ratio" ? "Log Ratio" : "LL"}
+      right={keywordMeasure(p.measure)}
       pin={cardPin("KeywordTable", `关键词 · ${(p.rows ?? []).slice(0, 3).map((r) => r.word).join("、")}`)}
       foot={<StatLink statId={p.stat_id} />}
     >
@@ -254,7 +258,7 @@ export function KeywordTableCard(p: KeywordTableProps) {
               <th>词</th>
               <th className="r">目标</th>
               <th className="r">参照</th>
-              <th className="r">{p.measure === "log_ratio" ? "Log Ratio" : "LL"}</th>
+              <th className="r">{keywordMeasure(p.measure)}</th>
             </tr>
           </thead>
           <tbody className="stagger">

@@ -7,9 +7,10 @@ import type { Config } from '../src/config.ts';
 import { createModel } from '../src/model.ts';
 import { systemPrompt } from '../src/prompt.ts';
 import { Runner } from '../src/runner.ts';
+import { CONFIRM_TOOLS } from '../src/tools.ts';
 import { createApp } from '../src/server.ts';
 import {
-  AGENT_TOKEN, AGREEMENT, ALIGN_LAYER, BUILTIN_CORPUS, CORPUS, COOKIE, DEP_LAYER, KB_SEARCH, SPAN_LAYER, LONG_CHUNK, MemoryStore, ORIGIN, PROJECT, USER, fakeApi, fakeModel, parseSse, testConfig, type Reply,
+  AGENT_TOKEN, AGREEMENT, ALIGN_LAYER, APPENDIX, SAMPLE_LAYER, SAMPLE_SUMMARY, BUILTIN_CORPUS, CORPUS, COOKIE, DEP_LAYER, KB_SEARCH, SPAN_LAYER, LONG_CHUNK, MemoryStore, ORIGIN, PROJECT, USER, fakeApi, fakeModel, parseSse, testConfig, type Reply,
 } from './fixtures.ts';
 
 const closers: (() => Promise<void>)[] = [];
@@ -137,7 +138,7 @@ test('full run: search and collocation tools, prose and OpenUI streamed, message
   assert.match(system, /KwicTable\(search_id: string/);
   assert.match(system, /UD 中文/);
   const toolNames = model.requests[0].body.tools.map((t: any) => t.function.name);
-  assert.equal(toolNames.length, 39);
+  assert.equal(toolNames.length, 44);
   assert.ok(!toolNames.some((n: string) => ['read', 'bash', 'edit', 'write'].includes(n)));
   assert.ok(toolNames.includes('stats_collocations') && toolNames.includes('jobs_cancel') && toolNames.includes('kb_search') && toolNames.includes('align_suggest'));
 
@@ -544,8 +545,8 @@ test('TermCard block parses with the contract props', () => {
   assert.equal(card.props.status, 'confirmed');
 });
 
-test('catalog lists the 14 components with the P3, P4 and P5 signatures', () => {
-  assert.equal(COMPONENTS.length, 14);
+test('catalog lists the 16 components with the P3, P4, P5 and P8 signatures', () => {
+  assert.equal(COMPONENTS.length, 16);
   const catalog = componentCatalog();
   for (const component of COMPONENTS) assert.ok(catalog.includes(component.name), component.name);
   assert.match(catalog, /DependencyTree\(document_id: string, sentence_index: number, tokens: .*arcs: .*highlight\?/);
@@ -886,4 +887,157 @@ test('a user who must change the password gets 403 PASSWORD_CHANGE_REQUIRED from
   }
   api.me.must_change_password = false;
   assert.equal((await call('GET', `/agent/sessions/${session.id}`)).status, 200);
+});
+
+// ---------------------------------------------------------------- P8 research tools (contracts/p8.md §七)
+
+const TRANSLATIONS = [
+  'root = TranslationTable("stat-tr", "\\"翻译\\"", "dice", rows)',
+  'rows = [{item: "translate", cooc: 55, pct: 78.6, score: 0.9, search_query: "\\"翻译\\"", search_aligned: {op: "+", query: "\\"translate\\""}}]',
+].join('\n');
+
+test('stats.translations and stats.breakdown: request bodies, first 50 rows with stat_id and row links, TranslationTable block', async () => {
+  const { api, model, call, createSession } = await setup([
+    { tool: 'stats_translations', args: { query: '"翻译"', target_language: 'en' } },
+    { tool: 'stats_breakdown', args: { query: '翻译', by: 'meta:year' } },
+    { text: `“翻译”最常见的译法是 translate。\n\n\`\`\`openui-lang\n${TRANSLATIONS}\n\`\`\`\n` },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '统计 翻译 的译法' })).text());
+  const results = events.filter(e => e.event === 'tool_result').map(e => e.data);
+  assert.deepEqual(results.map(r => [r.name, r.state]), [['stats.translations', 'succeeded'], ['stats.breakdown', 'succeeded']]);
+  assert.deepEqual(results[0].result_ref, { kind: 'stat', id: 'stat-tr' });
+  assert.equal(results[0].result_summary, '译法：55 行');
+  assert.deepEqual(results[1].result_ref, { kind: 'stat', id: 'stat-bd' });
+
+  const tr = api.requests.find(r => r.path === '/stats/translations')!;
+  assert.equal(tr.headers.authorization, `Bearer ${AGENT_TOKEN}`);
+  assert.deepEqual(tr.body, {
+    scope: { corpus_id: CORPUS }, query: '"翻译"', unit: 'word', target_language: 'en', measure: 'dice', top: 100, min_freq: 2, exclude_punct: true,
+  });
+  const bd = api.requests.find(r => r.path === '/stats/breakdown')!;
+  assert.deepEqual(bd.body, { scope: { corpus_id: CORPUS }, query: '翻译', by: 'meta:year', top: 200, min_freq: 1 });
+
+  const [trResult, bdResult] = toolResults(model, 2);
+  assert.equal(trResult.stat_id, 'stat-tr');
+  assert.equal(trResult.rows.length, 50);
+  assert.equal(trResult.row_count, 55);
+  assert.equal(trResult.totals.unaligned, 4);
+  // same scope as the session (null fields aside): no search_scope on the row
+  assert.deepEqual(trResult.rows[0], {
+    key: 'translate', values: { item: 'translate', cooc: 55, pct: 78.6, target_freq: 120, dice: 0.9, ll: 30.5 },
+    search_query: '"翻译"', search_aligned: { op: '+', query: '"translate"' },
+  });
+  // meta rows filter the scope: search_scope kept; rows that cannot be searched keep search_query null
+  assert.deepEqual(bdResult.rows[0].search_scope, { corpus_id: CORPUS, filter: { year: ['2001'] } });
+  assert.equal(bdResult.rows[1].search_query, null);
+  assert.equal(bdResult.rows[1].search_scope, undefined);
+
+  const message = events.at(-1)!.data.message;
+  const root = createParser(library.toJSONSchema()).parse(message.parts.find((p: any) => p.type === 'ui').lang).root as any;
+  assert.equal(root?.typeName, 'TranslationTable');
+  assert.deepEqual([root.props.rows[0].item, root.props.rows[0].cooc], ['translate', 55]);
+  assert.deepEqual(root.props.rows[0].search_aligned, { op: '+', query: '"translate"' });
+});
+
+test('new stats parameters and corpus.search aligned map onto the api bodies', async () => {
+  const { api, call, createSession } = await setup([
+    { tool: 'stats_frequency', args: { parts: 'field:year', dispersion: true } },
+    { tool: 'stats_keywords', args: { reference: { corpus_id: 'ref-corpus' }, measure: 'pct_diff', direction: 'negative', items: ['翻译', '译者'] } },
+    { tool: 'stats_collocations', args: { node: '翻译', measures: ['mi3', 'delta_p', 'z'] } },
+    { tool: 'corpus_search', args: { query: '"翻译"', aligned: { op: '-', query: '"translate"' } } },
+    { tool: 'stats_distribution', args: { query: '"翻译"', field: 'year', aligned: { op: '+', query: '{lemma=translate}' } } },
+    { text: '完成。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '对比' })).text());
+  const results = events.filter(e => e.event === 'tool_result').map(e => e.data);
+  assert.ok(results.every(r => r.state === 'succeeded'), JSON.stringify(results.map(r => [r.name, r.result_summary])));
+  assert.match(results[3].result_summary, /含译文条件/);
+
+  const body = (path: string) => api.requests.find(r => r.path === path)!.body;
+  assert.deepEqual(body('/stats/frequency'), { scope: { corpus_id: CORPUS }, unit: 'word', top: 200, min_freq: 1, parts: 'field:year', dispersion: true });
+  assert.deepEqual(body('/stats/keywords'), {
+    target: { corpus_id: CORPUS }, reference: { corpus_id: 'ref-corpus' }, unit: 'word', measure: 'pct_diff', min_freq: 3, top: 200,
+    direction: 'negative', items: ['翻译', '译者'],
+  });
+  assert.deepEqual(body('/stats/collocations').measures, ['mi3', 'delta_p', 'z']);
+  assert.deepEqual(body('/search').aligned, { op: '-', query: '"translate"' });
+  assert.equal(body('/search').query, '"翻译"');
+  assert.deepEqual(body('/stats/distribution').aligned, { op: '+', query: '{lemma=translate}' });
+});
+
+test('methods.appendix posts the sources and returns the markdown without a confirmation', async () => {
+  const { api, model, call, createSession } = await setup([
+    { tool: 'methods_appendix', args: { stat_ids: ['stat-1'], searches: [{ query: '"翻译"', aligned: { op: '+', query: '"translate"' } }], layer_ids: [SAMPLE_LAYER] } },
+    { text: '方法附录如下。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '写方法部分' })).text());
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([result.name, result.state], ['methods.appendix', 'succeeded']);
+  const request = api.requests.find(r => r.path === `/projects/${PROJECT}/method-appendix`)!;
+  assert.equal(request.method, 'POST');
+  assert.deepEqual(request.body, {
+    stat_ids: ['stat-1'], searches: [{ query: '"翻译"', scope: { corpus_id: CORPUS }, aligned: { op: '+', query: '"translate"' } }],
+    layer_ids: [SAMPLE_LAYER], style: 'gbt7714',
+  });
+  const [data] = toolResults(model, 1);
+  assert.equal(data.markdown, APPENDIX.markdown);
+  assert.deepEqual(data.citations, APPENDIX.citations);
+});
+
+test('sample.create needs confirmation, resolves the span label set by name; sample.summary reads the summary', async () => {
+  const args = { query: '"翻译"', n: 2, seed: 7, layer_name: '翻译策略抽样', label_set_name: '翻译策略' };
+  const { api, model, call, createSession } = await setup([
+    { tool: 'sample_create', args }, { text: '将新建抽样层，请确认。' }, { text: '已抽样 2 条。' },
+    { tool: 'sample_summary', args: { layer_id: SAMPLE_LAYER } }, { text: '已编码 1 条。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '抽 2 条编码翻译策略' })).text());
+  const proposed = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([proposed.name, proposed.state], ['sample.create', 'needs_confirmation']);
+  assert.deepEqual(proposed.confirm, {
+    title: '抽样编码：新建抽样层「翻译策略抽样」', lines: ['查询式："翻译"', '范围：UD 中文', '抽样：2 条，seed 7', '标签集：翻译策略'],
+  });
+  assert.ok(!api.requests.some(r => r.path === `/projects/${PROJECT}/samples`), 'nothing is written before 执行');
+
+  const confirmed = await confirmAll(call, session.id);
+  assert.deepEqual(confirmed.filter(e => e.event === 'tool_result').map(e => [e.data.name, e.data.state, e.data.result_ref]),
+    [['sample.create', 'succeeded', { kind: 'layer', id: SAMPLE_LAYER }]]);
+  const request = api.requests.find(r => r.path === `/projects/${PROJECT}/samples`)!;
+  assert.equal(request.headers.authorization, `Bearer ${AGENT_TOKEN}`);
+  assert.deepEqual(request.body, { scope: { corpus_id: CORPUS }, query: '"翻译"', n: 2, seed: 7, layer: { name: '翻译策略抽样', label_set_id: 'ls-strategy' } });
+  assert.equal(confirmedResults(model, 2)[0].sampled, 2);
+
+  const summary = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '编码结果如何' })).text());
+  assert.deepEqual(summary.filter(e => e.event === 'tool_result').map(e => [e.data.name, e.data.state, e.data.result_summary]),
+    [['sample.summary', 'succeeded', '已编码 1 / 抽样 2']]);
+  assert.deepEqual(toolResults(model, 4).at(-1).labels, SAMPLE_SUMMARY.labels);
+});
+
+test('sample.create without a label set fails before any proposal and lists the span label sets', async () => {
+  const { api, call, createSession } = await setup([
+    { tool: 'sample_create', args: { query: '"翻译"', n: 5, layer_name: '抽样' } }, { text: '需要标签集。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '抽 5 条' })).text());
+  const result = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([result.name, result.state], ['sample.create', 'failed']);
+  assert.match(result.result_summary, /LABEL_SET_REQUIRED.*翻译策略、偏误类型/);
+  assert.ok(!api.requests.some(r => r.path === `/projects/${PROJECT}/samples`));
+});
+
+test('P8 write gate and system prompt rules', () => {
+  assert.ok(CONFIRM_TOOLS.has('sample.create'));
+  for (const name of ['methods.appendix', 'sample.summary', 'stats.translations', 'stats.breakdown']) assert.ok(!CONFIRM_TOOLS.has(name), name);
+  const prompt = systemPrompt('UD 中文');
+  assert.ok(prompt.includes('某词的译法、对应译文用 stats_translations'));
+  assert.ok(prompt.includes('用 stats_breakdown'));
+  assert.ok(prompt.includes('methods_appendix'));
+  assert.ok(prompt.includes('不代写研究结论'));
+  assert.ok(prompt.includes('抽样编码'));
+  const catalog = componentCatalog();
+  assert.match(catalog, /TranslationTable\(stat_id: string, query: string, measure: string, rows: /);
+  assert.match(catalog, /BreakdownTable\(stat_id: string, query: string, by: string, rows: /);
 });

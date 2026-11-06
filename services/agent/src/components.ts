@@ -39,7 +39,7 @@ export const FreqChart = defineComponent({
 
 export const CollocationTable = defineComponent({
   name: 'CollocationTable',
-  description: '搭配词表。stats_collocations 之后使用；measure 为排序所用指标（mi、logdice、t、ll），score 为该指标值。',
+  description: '搭配词表。stats_collocations 之后使用；measure 为排序所用指标（mi、logdice、t、ll、mi3、delta_p_node、delta_p_coll、z），score 为该指标值。',
   props: z.object({
     stat_id: z.string(),
     node: z.string(),
@@ -52,13 +52,45 @@ export const CollocationTable = defineComponent({
 
 export const KeywordTable = defineComponent({
   name: 'KeywordTable',
-  description: '关键词表。stats_keywords 之后使用；measure 为 ll 或 log_ratio，score 为该指标值。',
+  description: '关键词表。stats_keywords 之后使用；measure 为排序所用指标（ll、log_ratio、pct_diff、odds_ratio），score 为该指标值。',
   props: z.object({
     stat_id: z.string(),
     target: z.string(),
     reference: z.string(),
     measure: z.string(),
     rows: z.array(z.object({ word: z.string(), target_freq: z.number(), reference_freq: z.number(), score: z.number() })),
+  }),
+  component: null,
+});
+
+export const BreakdownTable = defineComponent({
+  name: 'BreakdownTable',
+  description: '命中频次分解表。stats_breakdown 之后使用：by 原样复制工具参数；rows 每行 item（项）、hits（命中数）、pct（占比 %）、per_million（每百万词）取自 values 同名键；search_query 与 search_scope 从该行复制（没有就省略），用于打开例句。',
+  props: z.object({
+    stat_id: z.string(),
+    query: z.string(),
+    by: z.string(),
+    rows: z.array(z.object({
+      item: z.string(), hits: z.number(), pct: z.number(), per_million: z.number(),
+      search_query: z.string().nullable().optional(), search_scope: z.record(z.string(), z.unknown()).optional(),
+    })),
+  }),
+  component: null,
+});
+
+export const TranslationTable = defineComponent({
+  name: 'TranslationTable',
+  description: '平行语料译法表。stats_translations 之后使用：query 为源语言查询式；measure 为排序指标（dice 或 ll），score 为该指标值；rows 每行 item、cooc（共现句数）、pct（占命中句 %）取自 values 同名键，score 取 values 中 measure 对应的值（dice 或 ll）；search_query、search_aligned、search_scope 从该行原样复制（没有就省略），点击行打开含该译法的例句。',
+  props: z.object({
+    stat_id: z.string(),
+    query: z.string(),
+    measure: z.string(),
+    rows: z.array(z.object({
+      item: z.string(), cooc: z.number(), pct: z.number(), score: z.number(),
+      search_query: z.string().nullable().optional(),
+      search_aligned: z.object({ op: z.enum(['+', '-']), query: z.string() }).optional(),
+      search_scope: z.record(z.string(), z.unknown()).optional(),
+    })),
   }),
   component: null,
 });
@@ -186,7 +218,7 @@ export const AlignmentGraph = defineComponent({
 
 export const COMPONENTS = [
   KwicTable, FreqChart, CollocationTable, KeywordTable, DistributionChart, EvidenceCard, JobStatus, Callout,
-  DependencyTree, AnnotationDiff, TermCard, KbCitation, SpanView, AlignmentGraph,
+  DependencyTree, AnnotationDiff, TermCard, KbCitation, SpanView, AlignmentGraph, BreakdownTable, TranslationTable,
 ];
 export const COMPONENT_NAMES = COMPONENTS.map(component => component.name);
 

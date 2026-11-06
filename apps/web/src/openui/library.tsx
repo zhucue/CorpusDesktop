@@ -14,6 +14,7 @@ import {
 import { AnnotationDiffCard, DependencyTreeCard } from "../components/results/annotCards";
 import { AlignmentGraphCard, SpanViewCard } from "../components/results/annot2Cards";
 import { KbCitationCard, TermCardView } from "../components/results/kbCards";
+import { BreakdownTableCard, TranslationTableCard } from "./statCards";
 
 // Names, prop order and schemas mirror services/agent/src/components.ts (positional OpenUI Lang args).
 export const KwicTable = defineComponent({
@@ -188,6 +189,49 @@ export const AlignmentGraph = defineComponent({
   component: ({ props }) => <AlignmentGraphCard {...props} />,
 });
 
+export const BreakdownTable = defineComponent({
+  name: "BreakdownTable",
+  description: "命中频次分解表；行的 search_query、search_scope 用于打开例句。",
+  props: z.object({
+    stat_id: z.string(),
+    query: z.string(),
+    by: z.string(),
+    rows: z.array(
+      z.object({
+        item: z.string(),
+        hits: z.number(),
+        pct: z.number(),
+        per_million: z.number(),
+        search_query: z.string().nullable().optional(),
+        search_scope: z.record(z.string(), z.unknown()).optional(),
+      }),
+    ),
+  }),
+  component: ({ props }) => <BreakdownTableCard {...props} />,
+});
+
+export const TranslationTable = defineComponent({
+  name: "TranslationTable",
+  description: "平行语料译法表；行的 search_query、search_aligned 打开含该译法的例句。",
+  props: z.object({
+    stat_id: z.string(),
+    query: z.string(),
+    measure: z.string(),
+    rows: z.array(
+      z.object({
+        item: z.string(),
+        cooc: z.number(),
+        pct: z.number(),
+        score: z.number(),
+        search_query: z.string().nullable().optional(),
+        search_aligned: z.object({ op: z.enum(["+", "-"]), query: z.string() }).optional(),
+        search_scope: z.record(z.string(), z.unknown()).optional(),
+      }),
+    ),
+  }),
+  component: ({ props }) => <TranslationTableCard {...props} />,
+});
+
 export const COMPONENTS = [
   KwicTable,
   FreqChart,
@@ -203,6 +247,8 @@ export const COMPONENTS = [
   KbCitation,
   SpanView,
   AlignmentGraph,
+  BreakdownTable,
+  TranslationTable,
 ];
 
 /** No root component: each ui block is a program whose entry is `root = <Component>(...)`. */
@@ -269,4 +315,6 @@ export const RENDERERS: Record<string, React.FC<never>> = {
   KbCitation: KbCitationCard,
   SpanView: SpanViewCard,
   AlignmentGraph: AlignmentGraphCard,
+  BreakdownTable: BreakdownTableCard,
+  TranslationTable: TranslationTableCard,
 };

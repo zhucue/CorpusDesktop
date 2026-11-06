@@ -47,6 +47,20 @@ type ScopeInput = { corpus_id?: string; subcorpus_id?: string } | undefined;
 
 const oneOf = (values: string[]) => Type.Optional(Type.Union(values.map(value => Type.Literal(value))));
 const positiveInt = () => Type.Optional(Type.Integer({ minimum: 1 }));
+/** Translation condition of a parallel corpus (contracts/p8.md §四): keep hits whose aligned sentence has (+) or lacks (-) a match. */
+const AlignedArg = Type.Optional(Type.Object({
+  op: Type.Union([Type.Literal('+'), Type.Literal('-')], { description: '+ 对齐句含该译文，- 不含' }),
+  query: Type.String({ minLength: 1, description: '译文一侧的查询式，如 "translate" 或 {lemma=translate}' }),
+}, { description: '译文条件，只用于平行语料：只保留对齐译文含（+）或不含（-）该查询命中的结果' }));
+type AlignedInput = { op: '+' | '-'; query: string } | undefined;
+const alignedBody = (aligned: AlignedInput) => aligned ? { aligned: { op: aligned.op, query: aligned.query } } : {};
+const alignedLine = (aligned: AlignedInput) => aligned ? [`译文条件：${aligned.op === '+' ? '含' : '不含'} ${aligned.query}`] : [];
+/** Scope compared for stat row links: null fields dropped, keys sorted. */
+const scopeKey = (scope: unknown) => JSON.stringify(Object.fromEntries(
+  Object.entries((scope ?? {}) as Record<string, unknown>).filter(([, v]) => v !== null && v !== undefined).sort(([a], [b]) => a.localeCompare(b))));
+/** Methods whose rows the assistant opens in the search page: rows carry their search link fields. */
+const ROW_LINK_METHODS = new Set(['breakdown', 'translations']);
+const MAX_APPENDIX_CHARS = 12000;
 /** Document selector of the sentence-level annotation tools (one of; none → the layer's first document). */
 const DocArgs = {
   document_id: Type.Optional(Type.String()),
@@ -95,7 +109,9 @@ const compactKbDocument = (doc: any) => ({
 export const piName = (name: string) => name.replace('.', '_');
 
 /** Step and citation summaries are shown to users: Chinese names, no internal values. */
-const METHOD_NAMES: Record<string, string> = { frequency: '频次', ngrams: 'n-gram', collocations: '搭配', keywords: '关键词', distribution: '分布' };
+const METHOD_NAMES: Record<string, string> = {
+  frequency: '频次', ngrams: 'n-gram', collocations: '搭配', keywords: '关键词', distribution: '分布', breakdown: '命中分解', translations: '译法',
+};
 const CORPUS_STATUS: Record<string, string> = { ready: '就绪', indexing: '索引中', importing: '导入中', failed: '失败', pending: '等待中' };
 
 const compactJob = (job: Job) => ({
@@ -180,6 +196,23 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     const found = builtin.find(set => set.name === wanted) ?? builtin[0];
     if (!found) throw new Error(`LABEL_SET_REQUIRED: 没有可用的 ${kind} 标签集，请传入 label_set_id`);
     return found.id;
+  }
+
+  /** Span label set of a sample layer: by id, else by name (exact, then unique substring); none → list the choices. */
+  async function spanLabelSet(args: { label_set_id?: string; label_set_name?: string }, signal?: AbortSignal): Promise<{ id: string; name: string }> {
+    const sets = listItems(await api.get<any>(`/label-sets${query({ project_id: projectId, kind: 'span' })}`, signal));
+    const names = sets.map((set: any) => set.name).join('、') || '无';
+    if (args.label_set_id) {
+      const found = sets.find((set: any) => set.id === args.label_set_id);
+      if (!found) throw new Error(`LABEL_SET_NOT_FOUND: 没有该片段标签集；可用：${names}`);
+      return { id: found.id, name: found.name };
+    }
+    if (!args.label_set_name) throw new Error(`LABEL_SET_REQUIRED: 请传入 label_set_name；可用的片段标签集：${names}（没有合适的请用户在标注页新建）`);
+    const wanted = args.label_set_name.trim().toLowerCase();
+    const exact = sets.filter((set: any) => String(set.name).toLowerCase() === wanted);
+    const pick = exact.length ? exact : sets.filter((set: any) => String(set.name).toLowerCase().includes(wanted));
+    if (pick.length !== 1) throw new Error(`LABEL_SET_${pick.length ? 'AMBIGUOUS' : 'NOT_FOUND'}: “${args.label_set_name}”${pick.length ? '匹配多个' : '不存在'}；可用的片段标签集：${names}`);
+    return { id: pick[0].id, name: pick[0].name };
   }
 
   /** `documents` here is the layer's progress by document ({total, done}); annot.layers adds the list separately. */
@@ -300,11 +333,20 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     const statId = String(job.result?.stat_id ?? '');
     if (!statId) throw new Error('STAT_RESULT_MISSING: 任务成功但没有 stat_id');
     const stat = await api.get<any>(`/stats/${statId}`, signal);
+    // Breakdown and translation rows open the search page with their own query (and translation condition);
+    // search_scope only when it differs from the session scope (meta rows filter the scope).
+    const links = ROW_LINK_METHODS.has(stat.method);
+    const sessionScope = scopeKey(ctx.scope);
     return {
       data: {
         stat_id: statId, method: stat.method, scope: stat.scope, index_version: stat.index_version,
         columns: stat.columns, row_count: stat.row_count, totals: stat.totals,
-        rows: (stat.rows ?? []).slice(0, MAX_STAT_ROWS).map((row: any) => ({ key: row.key, values: row.values })),
+        rows: (stat.rows ?? []).slice(0, MAX_STAT_ROWS).map((row: any) => ({
+          key: row.key, values: row.values,
+          ...(links ? { search_query: row.search_query ?? null } : {}),
+          ...(links && row.search_aligned ? { search_aligned: row.search_aligned } : {}),
+          ...(links && row.search_scope && scopeKey(row.search_scope) !== sessionScope ? { search_scope: row.search_scope } : {}),
+        })),
       },
       summary: `${METHOD_NAMES[stat.method] ?? '统计'}：${stat.row_count ?? 0} 行`,
       ref: { kind: 'stat', id: statId },
@@ -393,28 +435,30 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     }),
     spec({
       name: 'corpus.search',
-      description: `按查询式检索，返回命中、句、文档三项计数、前 ${MAX_HITS} 条命中（含 hit_id）和 search_id。`,
+      description: `按查询式检索，返回命中、句、文档三项计数、前 ${MAX_HITS} 条命中（含 hit_id）和 search_id。平行语料可加 aligned 译文条件，如只看译成 translate 的例句：aligned={op:"+", query:"\\"translate\\""}；含与不含两次计数之和等于无条件计数。`,
       parameters: Type.Object({
         query: Type.String({ minLength: 1 }),
         scope: ScopeArg,
         sort: oneOf(['position', 'left', 'right', 'random']),
+        aligned: AlignedArg,
       }),
       run: async (args, signal) => {
         const scope = resolveScope(args.scope);
         const result = await api.post<any>('/search', {
-          scope, query: args.query, context: { unit: 'char', size: 40 }, sort: args.sort ?? 'position', page: 1, page_size: MAX_HITS,
+          scope, query: args.query, ...alignedBody(args.aligned), context: { unit: 'char', size: 40 }, sort: args.sort ?? 'position',
+          page: 1, page_size: MAX_HITS,
         }, signal);
         const counts = result.counts;
         return {
           data: {
-            search_id: result.search_id, query: args.query, scope, scope_name: await scopeName(scope, signal), counts,
+            search_id: result.search_id, query: args.query, ...alignedBody(args.aligned), scope, scope_name: await scopeName(scope, signal), counts,
             hits: (result.items ?? []).slice(0, MAX_HITS).map((hit: any) => ({
               hit_id: hit.hit_id, sentence_index: hit.sentence_index, left: hit.left, match: hit.match, right: hit.right,
               source: hit.document_title,
               ...(hit.aligned?.length ? { aligned: hit.aligned.map((a: any) => a.text).join(' / ') } : {}),
             })),
           },
-          summary: `命中 ${counts.hits}，句 ${counts.sentences}，文档 ${counts.documents}${counts.complete === false ? '（计数未完成）' : ''}`,
+          summary: `命中 ${counts.hits}，句 ${counts.sentences}，文档 ${counts.documents}${args.aligned ? '（含译文条件）' : ''}${counts.complete === false ? '（计数未完成）' : ''}`,
           ref: { kind: 'search', id: result.search_id },
         };
       },
@@ -490,16 +534,59 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     }),
     spec({
       name: 'stats.frequency',
-      description: '词频统计（后台任务，最多等待 90 秒），返回 stat_id 与前 50 行。',
+      description: '整个范围的词频表（后台任务，最多等待 90 秒），返回 stat_id 与前 50 行。默认附离散度列：range（出现的部分数）、range_pct、dp（Gries DP，0 均匀、越大越集中）、dp_norm、juilland_d；parts 决定“部分”怎么分。用户问“哪些词最常用”“某词分布是否均匀、是否集中在少数文档”时用它。只统计某个查询的命中由哪些词形构成时用 stats_breakdown。',
       parameters: Type.Object({
         scope: ScopeArg,
         unit: oneOf(['word', 'lemma', 'pos']),
         pos: Type.Optional(Type.String({ description: '只统计该词性，如 n、v' })),
         top: positiveInt(),
         min_freq: positiveInt(),
+        parts: Type.Optional(Type.String({
+          pattern: '^(document|segments|field:.+)$',
+          description: '离散度的部分：document 每篇文档一部分（默认）；segments 按语料顺序等分 10 段；field:<字段> 每个元数据字段值一部分，如 field:year',
+        })),
+        dispersion: Type.Optional(Type.Boolean({ description: '是否计算离散度列，默认 true' })),
       }),
       run: (args, signal) => runStat('/stats/frequency', {
         scope: resolveScope(args.scope), unit: args.unit ?? 'word', pos: args.pos, top: args.top ?? 200, min_freq: args.min_freq ?? 1,
+        ...(args.parts !== undefined ? { parts: args.parts } : {}), ...(args.dispersion !== undefined ? { dispersion: args.dispersion } : {}),
+      }, signal),
+    }),
+    spec({
+      name: 'stats.breakdown',
+      description: '命中频次分解（后台任务）：一个查询的全部命中按 by 分组计数，返回 stat_id 与前 50 行（项、命中数、占比 %、每百万词；totals.hits 为全部命中数，等于检索计数）。用户问“命中里各词形 / 词元 / 词性各多少”“左边 / 右边第一个词是什么”“各年份 / 体裁各多少条”时用它。by：word 词形、lemma 词元、pos 词性、left1 左一词、right1 右一词、meta:<字段> 文档元数据（如 meta:year）。每行的 search_query 可打开该行例句（null 表示无法回到检索）。',
+      parameters: Type.Object({
+        scope: ScopeArg,
+        query: Type.String({ minLength: 1, description: '查询式，与检索相同' }),
+        by: Type.String({ pattern: '^(word|lemma|pos|left1|right1|meta:.+)$', description: 'word | lemma | pos | left1 | right1 | meta:<字段>' }),
+        top: positiveInt(),
+        min_freq: positiveInt(),
+        layers: Type.Optional(Type.Object({
+          pos: Type.Optional(Type.String()), dep: Type.Optional(Type.String()), span: Type.Optional(Type.String()),
+        }, { description: '查询用到 {pos=}、{dep=}、[标签] 时所用的标注层 layer_id；一般省略' })),
+      }),
+      run: (args, signal) => runStat('/stats/breakdown', {
+        scope: resolveScope(args.scope), query: args.query, by: args.by, top: args.top ?? 200, min_freq: args.min_freq ?? 1,
+        ...(args.layers ? { layers: args.layers } : {}),
+      }, signal),
+    }),
+    spec({
+      name: 'stats.translations',
+      description: '平行语料的译法统计（后台任务）：取查询命中句的对齐译文句，统计译文中各词出现的句数，按 Dice 或 LL 排序，返回 stat_id 与前 50 行（译文词、共现句数、占命中句 %、目标侧句数、Dice、LL；totals 含 hit_sentences、aligned_sentences、unaligned）。用户问“某词怎么译”“有哪些译法”“对应的英文 / 中文”时用它；只用于平行语料（corpora_list 中 parallel 为 true），否则返回 NOT_PARALLEL。scope 一般用源语言一侧。每行的 search_query 与 search_aligned 可打开含该译法的例句；要比较几种译法的数量或分布，用 corpus_search / stats_distribution 加 aligned 条件。',
+      parameters: Type.Object({
+        scope: ScopeArg,
+        query: Type.String({ minLength: 1, description: '源语言一侧的查询式，如 "翻译"' }),
+        unit: oneOf(['word', 'lemma']),
+        target_language: Type.Optional(Type.String({ description: '译文语言代码，如 en；省略时取平行语料中与命中句不同的一侧' })),
+        measure: oneOf(['dice', 'll']),
+        top: positiveInt(),
+        min_freq: positiveInt(),
+        exclude_punct: Type.Optional(Type.Boolean({ description: '排除标点，默认 true' })),
+      }),
+      run: (args, signal) => runStat('/stats/translations', {
+        scope: resolveScope(args.scope), query: args.query, unit: args.unit ?? 'word',
+        ...(args.target_language ? { target_language: args.target_language } : {}),
+        measure: args.measure ?? 'dice', top: args.top ?? 100, min_freq: args.min_freq ?? 2, exclude_punct: args.exclude_punct ?? true,
       }, signal),
     }),
     spec({
@@ -520,14 +607,14 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     }),
     spec({
       name: 'stats.collocations',
-      description: '搭配统计（后台任务）：node 为节点查询式，返回 stat_id 与前 50 行（含 MI、logDice、t、LL）。',
+      description: '搭配统计（后台任务）：node 为节点查询式，返回 stat_id 与前 50 行。measures 可选 mi、logdice、t、ll（默认这四项），以及 mi3（MI³，偏向高频搭配）、delta_p（ΔP，有方向：delta_p_node = P(搭配词|节点) − P(搭配词|非节点)，delta_p_coll 反向）、z（z-score）；用户点名某个指标或问搭配的方向性时再加。',
       parameters: Type.Object({
         scope: ScopeArg,
         node: Type.String({ minLength: 1 }),
         window: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })),
         unit: oneOf(['word', 'lemma']),
         pos: Type.Optional(Type.String({ description: '只保留该词性的搭配词' })),
-        measures: Type.Optional(Type.Array(Type.Union(['mi', 'logdice', 't', 'll'].map(value => Type.Literal(value))))),
+        measures: Type.Optional(Type.Array(Type.Union(['mi', 'logdice', 't', 'll', 'mi3', 'delta_p', 'z'].map(value => Type.Literal(value))))),
         min_freq: positiveInt(),
         top: positiveInt(),
       }),
@@ -538,12 +625,14 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     }),
     spec({
       name: 'stats.keywords',
-      description: '关键词统计（后台任务）：target 相对 reference，返回 stat_id 与前 50 行。',
+      description: '关键词与两库对比（后台任务）：target 相对 reference，返回 stat_id 与前 50 行。列含 LL、log ratio 及其 95% 置信区间（log_ratio_ci_low / log_ratio_ci_high）、%DIFF（pct_diff）、odds ratio、Bonferroni 校正后的显著性。measure 为排序指标：ll（默认）、log_ratio、pct_diff、odds_ratio。direction：positive 目标库显著多用的词（默认）、negative 参照库多用的词、both 两者。只比较指定的几个词在两库的用量时传 items（≤ 50 个词），此时忽略 min_freq 与 direction。',
       parameters: Type.Object({
         target: ScopeArg,
         reference: scopeObject(),
         unit: oneOf(['word', 'lemma']),
-        measure: oneOf(['ll', 'log_ratio']),
+        measure: oneOf(['ll', 'log_ratio', 'pct_diff', 'odds_ratio']),
+        direction: oneOf(['positive', 'negative', 'both']),
+        items: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 50, description: '只返回这些词的行' })),
         min_freq: positiveInt(),
         top: positiveInt(),
       }),
@@ -554,21 +643,109 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
         return runStat('/stats/keywords', {
           target: resolveScope(args.target), reference, unit: args.unit ?? 'word', measure: args.measure ?? 'll',
           min_freq: args.min_freq ?? 3, top: args.top ?? 200,
+          ...(args.direction ? { direction: args.direction } : {}), ...(args.items ? { items: args.items } : {}),
         }, signal);
       },
     }),
     spec({
       name: 'stats.distribution',
-      description: '命中在元数据字段（如 year）或文本位置（field="position"）上的分布（后台任务），返回 stat_id 与各区间。',
+      description: '命中在元数据字段（如 year）或文本位置（field="position"）上的分布（后台任务），返回 stat_id 与各区间。平行语料可加 aligned 译文条件，比较某种译法的分布。',
       parameters: Type.Object({
         scope: ScopeArg,
         query: Type.Optional(Type.String()),
         field: Type.String({ minLength: 1 }),
         bins: Type.Optional(Type.Integer({ minimum: 2, maximum: 50 })),
+        aligned: AlignedArg,
       }),
       run: (args, signal) => runStat('/stats/distribution', {
-        scope: resolveScope(args.scope), query: args.query, field: args.field, bins: args.bins,
+        scope: resolveScope(args.scope), query: args.query, field: args.field, bins: args.bins, ...alignedBody(args.aligned),
       }, signal),
+    }),
+    spec({
+      name: 'methods.appendix',
+      description: '生成论文方法部分的附录草稿（Markdown）：语料规模与版本、处理工具、检索式与计数、统计方法的全部参数与公式出处、标注与抽样情况、参考文献条目。用户要“写方法部分”“方法说明”“怎么引用语料 / 平台”“列出统计方法的文献”时用它。来源三选：stat_ids（统计结果的 stat_id）、searches（[{query, scope, aligned?}]）、layer_ids（标注层，含抽样层）；evidence=true 时从证据篮收集。style：gbt7714（默认）或 apa。返回 markdown 与 citations，不生成文件。',
+      parameters: Type.Object({
+        stat_ids: Type.Optional(Type.Array(Type.String(), { minItems: 1 })),
+        searches: Type.Optional(Type.Array(Type.Object({ query: Type.String({ minLength: 1 }), scope: ScopeArg, aligned: AlignedArg }), { minItems: 1 })),
+        layer_ids: Type.Optional(Type.Array(Type.String(), { minItems: 1 })),
+        evidence: Type.Optional(Type.Boolean({ description: '从项目证据篮收集统计与检索' })),
+        style: oneOf(['gbt7714', 'apa']),
+      }),
+      run: async (args, signal) => {
+        if (!args.stat_ids && !args.searches && !args.layer_ids && !args.evidence) {
+          throw new Error('SOURCE_REQUIRED: 需要 stat_ids、searches、layer_ids 或 evidence=true 之一');
+        }
+        const result = await api.post<any>(`/projects/${projectId}/method-appendix`, {
+          ...(args.stat_ids ? { stat_ids: args.stat_ids } : {}),
+          ...(args.searches ? {
+            searches: args.searches.map(s => ({ query: s.query, scope: resolveScope(s.scope), ...alignedBody(s.aligned) })),
+          } : {}),
+          ...(args.layer_ids ? { layer_ids: args.layer_ids } : {}),
+          ...(args.evidence !== undefined ? { evidence: args.evidence } : {}),
+          style: args.style ?? 'gbt7714',
+        }, signal);
+        const markdown = String(result?.markdown ?? '');
+        return {
+          data: {
+            markdown: clip(markdown, MAX_APPENDIX_CHARS), citations: result?.citations ?? [],
+            note: '附录由平台按实际参数生成；原样给用户，不改动其中的数字与文献。',
+          },
+          summary: `方法附录：${markdown.length} 字，${(result?.citations ?? []).length} 条引用`,
+        };
+      },
+    }),
+    spec({
+      name: 'sample.create',
+      description: '检索结果抽样编码：从一个查询的全部命中中按 seed 等概率无放回抽 n 条，新建一个片段层（抽样层），每条命中一个待编码片段，由用户在标注页逐条编码。用户明确要求“抽样”“抽 n 条来编码 / 人工分类”时用它。label_set_id 或 label_set_name 指定片段标签集（都省略时报错并列出可用标签集）；seed 省略则随机生成并记录。命中计数未完成或超过上限时返回 SEARCH_INCOMPLETE。',
+      parameters: Type.Object({
+        query: Type.String({ minLength: 1 }),
+        scope: ScopeArg,
+        aligned: AlignedArg,
+        n: Type.Integer({ minimum: 1, maximum: 500 }),
+        seed: Type.Optional(Type.Integer()),
+        layer_name: Type.String({ minLength: 1, description: '新抽样层名称' }),
+        label_set_id: Type.Optional(Type.String()),
+        label_set_name: Type.Optional(Type.String({ minLength: 1 })),
+      }),
+      confirm: async (args, signal) => {
+        const labelSet = await spanLabelSet(args, signal);
+        return {
+          title: `抽样编码：新建抽样层「${args.layer_name}」`,
+          lines: [
+            `查询式：${args.query}`, await scopeLine(resolveScope(args.scope), signal), ...alignedLine(args.aligned),
+            `抽样：${args.n} 条${args.seed !== undefined ? `，seed ${args.seed}` : ''}`, `标签集：${labelSet.name}`,
+          ],
+        };
+      },
+      run: async (args, signal) => {
+        const labelSet = await spanLabelSet(args, signal);
+        const result = await api.post<any>(`/projects/${projectId}/samples`, {
+          scope: resolveScope(args.scope), query: args.query, ...alignedBody(args.aligned), n: args.n,
+          ...(args.seed !== undefined ? { seed: args.seed } : {}),
+          layer: { name: args.layer_name, label_set_id: labelSet.id },
+        }, signal);
+        return {
+          data: {
+            layer_id: result.layer_id, layer_name: args.layer_name, label_set: labelSet.name, sampled: result.sampled, total: result.total,
+            note: '片段均未编码，由用户在标注页抽样模式中编码；汇总用 sample_summary。',
+          },
+          summary: `已抽样 ${result.sampled} / ${result.total} 条`,
+          ref: { kind: 'layer', id: String(result.layer_id) },
+        };
+      },
+    }),
+    spec({
+      name: 'sample.summary',
+      description: '抽样层的编码汇总：总命中数、抽样数、已编码数、拒绝数，以及各标签的条数、比例（以已编码且未拒绝为分母）、95% Wilson 区间（ci_low / ci_high）和估计命中数 estimate（= 比例 × 总命中，属估计值，回答中注明“估计”）。用户问抽样编码的结果、比例或置信区间时用它。',
+      parameters: Type.Object({ layer_id: Type.String() }),
+      run: async (args, signal) => {
+        const summary = await api.get<any>(`/layers/${seg(args.layer_id)}/sample-summary`, signal);
+        return {
+          data: { layer_id: args.layer_id, ...summary },
+          summary: `已编码 ${summary.coded ?? 0} / 抽样 ${summary.sampled ?? 0}`,
+          ref: { kind: 'layer', id: args.layer_id },
+        };
+      },
     }),
     spec({
       name: 'evidence.add',

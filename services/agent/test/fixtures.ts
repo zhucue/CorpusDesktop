@@ -115,6 +115,8 @@ export const LABEL_SETS = [
   { id: 'ls-upos', project_id: null, name: 'upos', kind: 'pos', language: null, labels: [] },
   { id: 'ls-jieba', project_id: null, name: 'jieba', kind: 'pos', language: 'zh', labels: [] },
   { id: 'ls-deprel', project_id: null, name: 'ud-deprel', kind: 'dep', language: null, labels: [] },
+  { id: 'ls-strategy', project_id: PROJECT, name: '翻译策略', kind: 'span', language: null, labels: [] },
+  { id: 'ls-error', project_id: PROJECT, name: '偏误类型', kind: 'span', language: null, labels: [] },
 ];
 const layer = (id: string, kind: string, name: string, status: string) => ({
   id, project_id: PROJECT, corpus_id: CORPUS, corpus_name: 'UD 中文', kind, name, label_set_id: kind === 'dep' ? 'ls-deprel' : 'ls-jieba',
@@ -205,6 +207,42 @@ export const DISAGREEMENTS = Array.from({ length: 12 }, (_, i) => ({
   values: [{ annotator_id: USER.id, label: '直译' }, { annotator_id: 'u2', label: '意译' }],
 }));
 
+// ---- P8 translations, breakdown, method appendix, samples (contracts/p8.md)
+const STAT_OF_JOB: Record<string, string> = { 'job-translations': 'stat-tr', 'job-breakdown': 'stat-bd' };
+const statBase = (id: string, method: string) => ({
+  id, project_id: PROJECT, method, params: {}, scope: { corpus_id: CORPUS, subcorpus_id: null, name: 'UD 中文' },
+  index_version: 'v1', created_at: '2026-11-05T00:00:00Z',
+});
+export const TRANSLATION_STAT = {
+  ...statBase('stat-tr', 'translations'),
+  totals: { tokens: 1000, sentences: 80, documents: 5, hit_sentences: 70, aligned_sentences: 66, unaligned: 4 },
+  columns: [{ key: 'item', label: '译文词', type: 'string' }, { key: 'cooc', label: '共现句数', type: 'number' }, { key: 'dice', label: 'Dice', type: 'number' }],
+  rows: Array.from({ length: 55 }, (_, i) => {
+    const word = i === 0 ? 'translate' : `t${i}`;
+    return {
+      key: word, values: { item: word, cooc: 55 - i, pct: i === 0 ? 78.6 : 1, target_freq: 120, dice: 0.9 - i / 100, ll: i === 0 ? 30.5 : 1 },
+      search_query: '"翻译"', search_aligned: { op: '+', query: `"${word}"` }, search_scope: { corpus_id: CORPUS, subcorpus_id: null },
+    };
+  }),
+  row_count: 55,
+};
+export const BREAKDOWN_STAT = {
+  ...statBase('stat-bd', 'breakdown'),
+  totals: { tokens: 1000, sentences: 80, documents: 5, hits: 12 },
+  columns: [{ key: 'item', label: '项', type: 'string' }, { key: 'hits', label: '命中数', type: 'number' }],
+  rows: [
+    { key: '2001', values: { item: '2001', hits: 7 }, search_query: '翻译', search_scope: { corpus_id: CORPUS, filter: { year: ['2001'] } } },
+    { key: '（无）', values: { item: '（无）', hits: 5 }, search_query: null, search_scope: { corpus_id: CORPUS } },
+  ],
+  row_count: 2,
+};
+export const APPENDIX = { markdown: '## 语料\n\nUD 中文，1000 词。\n\n## 统计\n\nlogDice（Rychlý 2008）。', citations: ['Rychlý P. A lexicographer-friendly association score[C]. 2008.'] };
+export const SAMPLE_LAYER = 'layer-sample';
+export const SAMPLE_SUMMARY = {
+  total_hits: 2, sampled: 2, coded: 1, rejected: 0,
+  labels: [{ label: '直译', count: 1, pct: 100, ci_low: 20.65, ci_high: 100, estimate: 2 }],
+};
+
 export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' } = {}) {
   const requests: ApiRequest[] = [];
   const jobPolls = new Map<string, number>();
@@ -259,7 +297,7 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
         items: HITS, page: 1, page_size: 20,
       });
     }
-    const statJob = /^\/stats\/(frequency|ngrams|collocations|keywords|distribution)$/.exec(path);
+    const statJob = /^\/stats\/(frequency|ngrams|collocations|keywords|distribution|breakdown|translations)$/.exec(path);
     if (statJob && request.method === 'POST') {
       return json(response, 200, { id: `job-${statJob[1]}`, project_id: PROJECT, kind: 'stats', state: 'queued', progress: { done: 0, total: null, message: '' }, result: null, error: null });
     }
@@ -301,7 +339,7 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
       const done = options.statJobState !== 'running' && polls >= 2;
       return json(response, 200, {
         id: job[1], project_id: PROJECT, kind: 'stats', state: done ? 'succeeded' : 'running',
-        progress: { done: done ? 1 : 0, total: 1, message: '' }, result: done ? { stat_id: 'stat-1' } : null, error: null,
+        progress: { done: done ? 1 : 0, total: 1, message: '' }, result: done ? { stat_id: STAT_OF_JOB[job[1]] ?? 'stat-1' } : null, error: null,
       });
     }
     if (path === '/stats/stat-1') {
@@ -313,8 +351,17 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
         row_count: 60,
       });
     }
+    if (path === '/stats/stat-tr') return json(response, 200, TRANSLATION_STAT);
+    if (path === '/stats/stat-bd') return json(response, 200, BREAKDOWN_STAT);
+    // ---- P8 method appendix and samples (contracts/p8.md §五–六)
+    if (path === `/projects/${PROJECT}/method-appendix` && request.method === 'POST') return json(response, 200, APPENDIX);
+    if (path === `/projects/${PROJECT}/samples` && request.method === 'POST') return json(response, 201, { layer_id: SAMPLE_LAYER, sampled: body.n, total: 2 });
+    if (path === `/layers/${SAMPLE_LAYER}/sample-summary`) return json(response, 200, SAMPLE_SUMMARY);
     // ---- P3 annotation (contracts/p3.md §三)
-    if (path === '/label-sets' && request.method === 'GET') return json(response, 200, LABEL_SETS);
+    if (path === '/label-sets' && request.method === 'GET') {
+      const kind = url.searchParams.get('kind');
+      return json(response, 200, LABEL_SETS.filter(set => !kind || set.kind === kind));
+    }
     if (path === `/projects/${PROJECT}/layers` && request.method === 'POST') {
       return json(response, 201, { ...layer('layer-new', body.kind, body.name, 'preannotating'), label_set_id: body.label_set_id, job_id: 'job-preannotate' });
     }
