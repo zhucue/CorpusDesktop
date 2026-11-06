@@ -6,7 +6,6 @@ import {
   ApiError,
   api,
   errorText,
-  type Counts,
   type Hit,
   type MetadataField,
   type ParseCorpus,
@@ -40,11 +39,10 @@ import { loadHistory, pushHistory, type HistoryEntry } from "./history";
 import { distributionFields, fieldLabel } from "./fields";
 import { posGroups } from "./posTags";
 import { convertScript, guessScript, scriptLabel } from "./script";
+import { sortNote, useCountPoll, type SearchCounts, type SearchPage } from "./countPoll";
 import "./search.css";
 
 const PAGE_SIZE = 50;
-const COUNT_POLL_MS = 3000;
-const COUNT_POLL_MAX = 20; // 3 s × 20 = 1 min
 
 const CHIPS: [string, string, string][] = [
   ["词/n", "/n", "词 + 词性"],
@@ -146,17 +144,15 @@ function Count({ value, unit, pending }: { value: number | null; unit: string; p
 
 export function CountsCards({
   counts,
-  timedOut,
   spark,
   searching,
 }: {
-  counts: Counts | null;
-  timedOut: boolean;
+  counts: SearchCounts | null;
   spark?: { values: number[]; label: string } | null;
   /** A new search is running: the previous counts are not shown. */
   searching?: boolean;
 }) {
-  const pending = searching ? "检索中" : counts && !counts.complete ? (timedOut ? "未完成" : "计算中") : undefined;
+  const pending = searching ? "检索中" : counts && !counts.complete ? (counts.failed ? "未完成" : "计算中") : undefined;
   const v = (n: number | undefined) => (counts ? (n ?? 0) : null);
   return (
     <section className="grid-3" aria-label="计数">
@@ -512,11 +508,11 @@ export default function Search() {
     queryKey: ["search", runId, req],
     queryFn: async () => {
       try {
-        return await api.post<SearchResult>("/search", req);
+        return await api.post<SearchPage>("/search", req);
       } catch (e) {
         if (!isExpired(e) || !req?.search_id) throw e;
         message.info(errorText(e));
-        return api.post<SearchResult>("/search", withoutSearchId(req));
+        return api.post<SearchPage>("/search", withoutSearchId(req));
       }
     },
     enabled: !!req,
@@ -526,45 +522,22 @@ export default function Search() {
   });
   const result = search.data;
 
-  // Re-request the same search_id while counts are incomplete, every 3 s for up to 1 min.
-  const [polled, setPolled] = useState<{ id: string; counts: Counts } | null>(null);
-  const [pollState, setPollState] = useState<{ id: string; timedOut: boolean; error?: unknown } | null>(null);
-  const [pollRound, setPollRound] = useState(0);
-  useEffect(() => {
-    if (!req || !result || result.counts.complete) return;
-    const id = result.search_id;
-    let n = 0;
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout>;
-    setPollState({ id, timedOut: false });
-    const tick = async () => {
-      n += 1;
-      try {
-        const r = await api.post<SearchResult>("/search", { ...req, search_id: id });
-        if (stopped) return;
-        setPolled({ id, counts: r.counts });
-        if (r.counts.complete) return;
-      } catch (e) {
-        if (stopped) return;
-        if (isExpired(e)) {
-          setRunId((k) => k + 1);
-          setReq(withoutSearchId(req));
-        } else setPollState({ id, timedOut: true, error: e });
-        return;
-      }
-      if (n < COUNT_POLL_MAX) timer = setTimeout(tick, COUNT_POLL_MS);
-      else setPollState({ id, timedOut: true });
-    };
-    timer = setTimeout(tick, COUNT_POLL_MS);
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result?.search_id, result?.counts.complete, pollRound]);
-
-  const counts = result && !result.counts.complete && polled?.id === result.search_id ? polled.counts : (result?.counts ?? null);
-  const timedOut = !!result && pollState?.id === result.search_id && pollState.timedOut && !counts?.complete;
+  // Poll the background count; once done, the page on screen is fetched again when it was unsorted or short.
+  const { counts, error: pollError } = useCountPoll({
+    req,
+    result,
+    placeholder: search.isPlaceholderData,
+    post: (body) => api.post<SearchPage>("/search", body),
+    refetch: (next) => {
+      setRunId((k) => k + 1);
+      setReq(next);
+    },
+    expired: (r) => {
+      setRunId((k) => k + 1);
+      setReq(withoutSearchId(r));
+    },
+    isExpired,
+  });
 
   // History keeps the final hit count.
   useEffect(() => {
@@ -727,11 +700,21 @@ export default function Search() {
   useEffect(() => {
     const sc = req && !("filter" in req.scope) ? (req.scope as Scope) : shell.scope;
     setAssistantContext(
-      counts?.complete && req ? { label: `当前检索 · ${fmt(counts.hits)} 命中`, scope: sc } : sc ? { label: describeScope(sc, allCorpora, allSubs).name, scope: sc } : null,
+      req
+        ? {
+            label: counts?.complete ? `当前检索 · ${fmt(counts.hits)} 命中` : describeScope(sc, allCorpora, allSubs).name,
+            scope: sc,
+            query: req.query,
+            search_id: result?.search_id,
+            hit_ids: selected ? [selected] : undefined,
+          }
+        : sc
+          ? { label: describeScope(sc, allCorpora, allSubs).name, scope: sc }
+          : null,
     );
     return () => setAssistantContext(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [counts?.complete, counts?.hits, req, shell.scope]);
+  }, [counts?.complete, counts?.hits, req, shell.scope, result?.search_id, selected]);
 
   /* ---------- rows ---------- */
   const terms = conditionTerms(result?.parse.conditions);
@@ -963,7 +946,7 @@ export default function Search() {
         </section>
 
         {(result || search.isFetching) && (
-          <CountsCards counts={counts} timedOut={timedOut} spark={spark} searching={search.isFetching && search.isPlaceholderData && !req?.search_id} />
+          <CountsCards counts={counts} spark={spark} searching={search.isFetching && search.isPlaceholderData && !req?.search_id} />
         )}
 
         {result && distBase && (
@@ -1037,10 +1020,10 @@ export default function Search() {
                   )}
                 </span>
                 <div className="grow" />
-                {timedOut && (
-                  <button className="btn s" type="button" onClick={() => setPollRound((n) => n + 1)}>
-                    继续计数
-                  </button>
+                {sortNote(result, counts) && (
+                  <span className="muted" role="status">
+                    {sortNote(result, counts)}
+                  </span>
                 )}
                 <Tip title={exportTip("导出 CSV")}>
                   <button className="btn s" type="button" disabled={!req || exporter.busy} onClick={() => exportAs("csv")}>
@@ -1056,7 +1039,13 @@ export default function Search() {
                 </Tip>
               </div>
               <ErrorAlert error={parseBad ? null : search.error} style={{ margin: 16 }} />
-              {pollState?.error && pollState.id === result?.search_id ? <ErrorAlert error={pollState.error} style={{ margin: 16 }} /> : null}
+              {pollError ? <ErrorAlert error={pollError} style={{ margin: 16 }} /> : null}
+              {counts?.failed && (
+                <div className="alert warn" role="alert" style={{ margin: 16 }}>
+                  <Icon name="info" size={14} />
+                  <span className="grow">{counts.message || "计数失败，请缩小范围或加条件"}</span>
+                </div>
+              )}
               {search.isFetching && !result ? (
                 <div className="col" style={{ padding: 16 }}>
                   {Array.from({ length: 6 }, (_, i) => (
@@ -1123,7 +1112,7 @@ export default function Search() {
               {result && result.items.length > 0 && (
                 <div className="card-foot" style={{ marginTop: "auto" }}>
                   <span className="num">
-                    {fmt(from)}–{fmt(from + result.items.length - 1)} / {total != null ? fmt(total) : "计算中"}
+                    {fmt(from)}–{fmt(from + result.items.length - 1)} / {total != null ? fmt(total) : counts?.failed ? "未完成" : "计算中"}
                   </span>
                   <div className="grow" />
                   <Pager page={result.page} pages={pages} onChange={changePage} />

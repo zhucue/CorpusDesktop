@@ -15,6 +15,7 @@ offsets through offsets.bin, and hit text always comes from text.bin. Queries ar
 engine.query.parse so they match the NFC lexicon.
 """
 
+import contextlib
 import functools
 import hashlib
 import json
@@ -25,6 +26,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unicodedata
 from array import array
 from bisect import bisect_left, bisect_right
@@ -344,37 +347,113 @@ def _open(home: str) -> _Index:
 # ---------------------------------------------------------------- search
 
 
-def _cqp(
-    index_dir: Path, key: str, commands: list[str], timeout: float
-) -> list[list[str]]:
+class Cancelled(RuntimeError):
+    """A CQP run stopped through its `cancel` event."""
+
+
+class TooManyHits(RuntimeError):
+    """More anchor hits than `max_hits`; CQP was stopped."""
+
+    def __init__(self, limit: int):
+        super().__init__(f"命中超过 {limit}")
+        self.limit = limit
+
+
+def _cqp_lines(
+    index_dir: Path,
+    key: str,
+    commands: list[str],
+    timeout: float,
+    cancel: threading.Event | None = None,
+):
+    """Run CQP and yield its output as it arrives: a list of tab-separated fields per line, None at each
+    `.EOL.` marker. subprocess.TimeoutExpired after `timeout` seconds and Cancelled once `cancel` is set (a
+    watchdog kills the process); closing the generator early also kills it."""
+    if cancel is not None and cancel.is_set():
+        raise Cancelled("检索已取消")
     script = (
         "\n".join(
             [f"{key.upper()};", "set MatchingStrategy traditional;", *commands, "exit;"]
         )
         + "\n"
     )
-    r = subprocess.run(
-        ["cqp", "-c", "-r", str(Path(index_dir) / "registry")],
-        input=script,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=timeout,
-        check=False,
-    )
-    err = r.stderr + r.stdout
-    if r.returncode != 0 or "CQP Error" in err or "PARSE ERROR" in err:
+    args = ["cqp", "-c", "-r", str(Path(index_dir) / "registry")]
+    with tempfile.TemporaryFile() as err_f:
+        p = subprocess.Popen(
+            args,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=err_f,
+            text=True,
+            encoding="utf-8",
+        )
+        stopped, done = [], threading.Event()
+
+        def watch():
+            deadline = time.monotonic() + timeout
+            while not done.wait(min(0.2, max(0.0, deadline - time.monotonic()))):
+                if cancel is not None and cancel.is_set():
+                    stopped.append("cancel")
+                elif time.monotonic() >= deadline:
+                    stopped.append("timeout")
+                else:
+                    continue
+                p.kill()
+                return
+
+        threading.Thread(target=watch, daemon=True).start()
+        errors = []
+        try:
+            try:
+                p.stdin.write(script)
+                p.stdin.close()
+            except BrokenPipeError:  # CQP exited early; its error is on stderr
+                pass
+            first = True
+            for line in p.stdout:
+                line = line.rstrip("\n")
+                if first and line.startswith("CQP version"):
+                    first = False
+                    continue
+                first = False
+                if line == EOL:
+                    yield None
+                elif "CQP Error" in line or "PARSE ERROR" in line:
+                    errors.append(line)
+                elif line:
+                    yield line.split("\t")
+            p.wait()
+        finally:
+            done.set()
+            if p.poll() is None:
+                p.kill()
+            p.wait()
+            p.stdout.close()
+        if stopped == ["cancel"]:
+            raise Cancelled("检索已取消")
+        if stopped:
+            raise subprocess.TimeoutExpired(args, timeout)
+        err_f.seek(0)
+        err = err_f.read().decode("utf-8", "replace") + "\n".join(errors)
+    if p.returncode != 0 or "CQP Error" in err or "PARSE ERROR" in err:
         raise CQPError(err.strip())
-    out = r.stdout.split("\n")
-    if out and out[0].startswith("CQP version"):
-        out = out[1:]
+
+
+def _cqp(
+    index_dir: Path,
+    key: str,
+    commands: list[str],
+    timeout: float,
+    cancel: threading.Event | None = None,
+) -> list[list[list[str]]]:
+    """CQP output split into sections at the `.EOL.` markers (lines after the last marker are dropped)."""
     sections, cur = [], []
-    for line in out:
-        if line == EOL:
+    for fields in _cqp_lines(index_dir, key, commands, timeout, cancel):
+        if fields is None:
             sections.append(cur)
             cur = []
-        elif line:
-            cur.append(line.split("\t"))
+        else:
+            cur.append(fields)
     return sections
 
 
@@ -404,6 +483,309 @@ def _targets(cqp: str) -> dict[int, str]:
 AttrFilter = Callable[[int, set[tuple[str, int, int]]], set[tuple[str, int, int]]]
 
 
+# match, matchend (corpus positions), doc_id, sentence index
+Row = tuple[int, int, str, int]
+SORTS = ("position", "left", "right", "random")
+
+
+class RowSet:
+    """Hit rows packed as int32 (match, matchend, doc number, sentence) with the doc ids by number; slicing
+    and iteration give Row tuples."""
+
+    def __init__(self, arr: array | None = None, docs: list[str] | None = None):
+        self.arr = arr if arr is not None else array("i")
+        self.docs = docs if docs is not None else []
+
+    def __len__(self) -> int:
+        return len(self.arr) // 4
+
+    def __getitem__(self, s: slice) -> list[Row]:
+        lo, hi, _ = s.indices(len(self))
+        a, docs = self.arr, self.docs
+        return [
+            (a[i], a[i + 1], docs[a[i + 2]], a[i + 3]) for i in range(lo * 4, hi * 4, 4)
+        ]
+
+    def __iter__(self):
+        return iter(self[:])
+
+    def __eq__(self, other) -> bool:
+        return list(self) == list(other)
+
+
+def _query(
+    index_dir: Path,
+    corpus_key: str,
+    cqp: str,
+    *,
+    restrict: str | None,
+    sort: str,
+    seed: int | None,
+    timeout: float,
+    attr_filter: AttrFilter | None,
+    cut: int | None,
+    cancel: threading.Event | None,
+    max_hits: int | None,
+) -> tuple[RowSet, int]:
+    """(filtered and sorted rows, number of anchor hits before filtering); see query_rows."""
+    key = _key(corpus_key)
+    if sort not in SORTS:
+        raise ValueError(f"未知排序：{sort}")
+    ix = _open(str(_home(index_dir, key)))
+    if ix.empty:
+        return RowSet(), 0
+    anchor, conds, _ = _split(cqp)
+    targets = _targets(cqp)
+    if targets and attr_filter is None:
+        raise ValueError("属性约束需要 attr_filter")
+    fields = "match, matchend, match doc_id, match s_n"
+    if sort == "left":
+        fields += ", match[-1] word, match[-2] word, match[-3] word"
+    elif sort == "right":
+        fields += ", matchend[1] word, matchend[2] word, matchend[3] word"
+
+    cmds = []
+    for i, (_, q) in enumerate(conds):
+        cmds += [
+            f"C{i} = {q} within s;",
+            f"S{i} = C{i} expand to s;",
+            f"tabulate S{i} match doc_id, match s_n;",
+            ".EOL.;",
+        ]
+    where = f" :: {restrict}" if restrict else ""
+    tail = f"{where} within s{f' cut {cut}' if cut else ''};"
+    for slot, q in sorted(targets.items()):
+        cmds += [
+            f"T{slot} = {q}{tail}",
+            f"tabulate T{slot} match, matchend, target;",
+            ".EOL.;",
+        ]
+    cmds += [
+        f"A = {anchor}{tail}",
+        f"tabulate A {fields};",
+        ".EOL.;",
+    ]
+
+    # Streamed into compact structures: condition sentences, slot tokens by hit, packed anchor rows and
+    # (left / right) one sort key string per row. "\0" joins the three words so that string order equals
+    # the order of the word lists.
+    slots = sorted(targets)
+    found = [set() for _ in conds]
+    marked = [{} for _ in slots]
+    docs, num = [], {}
+    arr, keys = array("i"), ([] if sort in ("left", "right") else None)
+    last, sec, anchors = len(conds) + len(slots), 0, 0
+
+    def doc(d: str) -> int:
+        i = num.get(d)
+        if i is None:
+            i = num[d] = len(docs)
+            docs.append(d)
+        return i
+
+    lines = _cqp_lines(index_dir, key, cmds, timeout, cancel)
+    with contextlib.closing(lines):  # leaving early (TooManyHits) stops CQP
+        for f in lines:
+            if f is None:
+                sec += 1
+            elif sec == last:
+                anchors += 1
+                if max_hits is not None and anchors > max_hits:
+                    raise TooManyHits(max_hits)
+                arr.extend((int(f[0]), int(f[1]), doc(f[2]), int(f[3])))
+                if keys is not None:
+                    keys.append("\0".join(w.casefold() for w in f[4:7]))
+            elif sec < len(conds):
+                found[sec].add((doc(f[0]), int(f[1])))
+            elif sec < last:
+                at = marked[sec - len(conds)]
+                at[(int(f[0]), int(f[1]))] = int(f[2])
+                if max_hits is not None and len(at) > max_hits:
+                    raise TooManyHits(max_hits)
+
+    keep = None  # row numbers left after filtering, in order; None = all
+    for (op, _), sents in zip(conds, found):
+        rows = range(len(arr) // 4) if keep is None else keep
+        keep = [
+            i
+            for i in rows
+            if ((arr[4 * i + 2], arr[4 * i + 3]) in sents) == (op == "+")
+        ]
+    for slot, at in zip(slots, marked):
+        rows = range(len(arr) // 4) if keep is None else keep
+        tokens = [
+            (docs[arr[4 * i + 2]], arr[4 * i + 3], ix.token_index(t))
+            if (t := at.get((arr[4 * i], arr[4 * i + 1]), -1)) >= 0
+            else None
+            for i in rows
+        ]
+        allowed = attr_filter(slot, {k for k in tokens if k})
+        keep = [i for i, k in zip(rows, tokens) if k in allowed]
+    if keys is not None:
+        keep = list(range(len(arr) // 4)) if keep is None else keep
+        keep.sort(key=keys.__getitem__)
+    elif sort == "random":
+        keep = list(range(len(arr) // 4)) if keep is None else keep
+        random.Random(seed or 0).shuffle(keep)
+    if keep is not None:
+        out = array("i")
+        for i in keep:
+            out.extend(arr[4 * i : 4 * i + 4])
+        arr = out
+    return RowSet(arr, docs), anchors
+
+
+def query_rows(
+    index_dir: Path,
+    corpus_key: str,
+    cqp: str,
+    *,
+    restrict: str | None,
+    sort: str = "position",
+    seed: int | None = None,
+    timeout: float = 20,
+    attr_filter: AttrFilter | None = None,
+    cut: int | None = None,
+    cancel: threading.Event | None = None,
+    max_hits: int | None = None,
+) -> RowSet:
+    """Anchor hits within s, filtered by same-sentence conditions and attribute slots, ordered by `sort`.
+
+    cut: only the first `cut` anchor hits in corpus order are taken (then filtered), so with sort "position"
+    the rows are a prefix of the uncut rows. Raises subprocess.TimeoutExpired when CQP runs longer than
+    `timeout` seconds, Cancelled when `cancel` is set meanwhile, TooManyHits as soon as there are more than
+    `max_hits` anchor hits (CQP is stopped in all three cases).
+
+    Attribute slots (`#attr` / `#target` lines, engine.query): for each slot the anchor is run again with
+    the target marker on it, giving that slot's token per hit; attr_filter(slot, {(doc_id, sentence_index,
+    token_index)}) returns the tokens that satisfy the slot's constraints and the other hits are dropped.
+    """
+    return _query(
+        index_dir,
+        corpus_key,
+        cqp,
+        restrict=restrict,
+        sort=sort,
+        seed=seed,
+        timeout=timeout,
+        attr_filter=attr_filter,
+        cut=cut,
+        cancel=cancel,
+        max_hits=max_hits,
+    )[0]
+
+
+def prefix_rows(
+    index_dir: Path,
+    corpus_key: str,
+    cqp: str,
+    need: int,
+    *,
+    restrict: str | None,
+    timeout: float = 60,
+    attr_filter: AttrFilter | None = None,
+    max_hits: int | None = None,
+) -> list[Row]:
+    """The first `need` rows in corpus order (fewer when the query has fewer). The anchor hits are cut at
+    `need` and the cut is doubled while conditions or attribute slots leave too few rows, up to `max_hits`
+    anchor hits and `timeout` seconds in all; a later run that times out returns the rows found so far."""
+    deadline = time.monotonic() + timeout
+    cut = max(1, min(need, max_hits or need))
+    rows, anchors = _query(
+        index_dir,
+        corpus_key,
+        cqp,
+        restrict=restrict,
+        sort="position",
+        seed=None,
+        timeout=timeout,
+        attr_filter=attr_filter,
+        cut=cut,
+        cancel=None,
+        max_hits=None,
+    )
+    while len(rows) < need and anchors >= cut and (max_hits is None or cut < max_hits):
+        cut = cut * 2 if max_hits is None else min(cut * 2, max_hits)
+        left = deadline - time.monotonic()
+        if left <= 0:
+            break
+        try:
+            rows, anchors = _query(
+                index_dir,
+                corpus_key,
+                cqp,
+                restrict=restrict,
+                sort="position",
+                seed=None,
+                timeout=left,
+                attr_filter=attr_filter,
+                cut=cut,
+                cancel=None,
+                max_hits=None,
+            )
+        except subprocess.TimeoutExpired:
+            break
+    return rows[:need]
+
+
+def count_rows(rows) -> Counts:
+    """Exact hits / sentences / documents of complete rows."""
+    if isinstance(rows, RowSet):
+        a = rows.arr
+        sents = {(a[i], a[i + 1]) for i in range(2, len(a), 4)}
+        return Counts(len(rows), len(sents), len({d for d, _ in sents}), True)
+    return Counts(
+        len(rows), len({(r[2], r[3]) for r in rows}), len({r[2] for r in rows}), True
+    )
+
+
+def hits(
+    index_dir: Path, corpus_key: str, cqp: str, rows: list[Row], context: Context
+) -> list[Hit]:
+    """Hits (code points, text and context) of rows from query_rows, on the current index."""
+    if not rows:
+        return []
+    ix = _open(str(_home(index_dir, _key(corpus_key))))
+    edges = _split(cqp)[2]
+    return [_hit(ix, m, me, d, n, edges, context) for m, me, d, n in rows]
+
+
+def write_rows(path: Path, rows) -> int:
+    """Store rows (RowSet or Row list) in directory `path` (rows.bin: int32 match, matchend, doc number,
+    sentence; docs.json: doc ids by number), so any slice can be read back with read_rows without holding
+    the rows in memory. Returns the bytes written."""
+    path = Path(path)
+    path.mkdir(parents=True, exist_ok=True)
+    if not isinstance(rows, RowSet):
+        docs = list(dict.fromkeys(r[2] for r in rows))
+        num = {d: i for i, d in enumerate(docs)}
+        rows = RowSet(
+            array("i", (x for m, me, d, n in rows for x in (m, me, num[d], n))), docs
+        )
+    meta = json.dumps(rows.docs, ensure_ascii=False).encode("utf-8")
+    (path / "docs.json").write_bytes(meta)
+    data = rows.arr.tobytes()
+    (path / "rows.bin").write_bytes(data)
+    return len(meta) + len(data)
+
+
+def read_rows(path: Path, lo: int, hi: int) -> list[Row]:
+    """Rows lo..hi-1 written by write_rows (fewer past the end); FileNotFoundError when the files are gone."""
+    path = Path(path)
+    lo = max(0, lo)
+    arr = array("i")
+    with open(path / "rows.bin", "rb") as f:
+        f.seek(lo * 16)
+        arr.frombytes(f.read(max(0, hi - lo) * 16))
+    if not arr:
+        return []
+    docs = json.loads((path / "docs.json").read_text("utf-8"))
+    return [
+        (arr[i], arr[i + 1], docs[arr[i + 2]], arr[i + 3])
+        for i in range(0, len(arr), 4)
+    ]
+
+
 def search(
     index_dir: Path,
     corpus_key: str,
@@ -418,98 +800,36 @@ def search(
     count_timeout: float = 20,
     attr_filter: AttrFilter | None = None,
 ) -> SearchResult:
-    """Anchor hits within s, filtered by same-sentence conditions; counts over the filtered hits.
+    """One page of query_rows, with exact counts over all filtered hits.
 
-    All anchor hits are tabulated and counted in Python (exact hits / sentences / documents). If CQP does
-    not finish within count_timeout, the first page is taken from the first page*page_size anchor hits
-    in corpus order and counts are None with complete=False.
-
-    Attribute slots (`#attr` / `#target` lines, engine.query): for each slot the anchor is run again with
-    the target marker on it, giving that slot's token per hit; attr_filter(slot, {(doc_id, sentence_index,
-    token_index)}) returns the tokens that satisfy the slot's constraints and the other hits are dropped.
+    If CQP does not finish within count_timeout, the page is taken from the first page*page_size anchor hits
+    in corpus order (sort not applied) and counts are None with complete=False.
     """
-    key = _key(corpus_key)
-    if sort not in ("position", "left", "right", "random"):
-        raise ValueError(f"未知排序：{sort}")
     page, page_size = max(1, page), max(1, page_size)
-    ix = _open(str(_home(index_dir, key)))
-    if ix.empty:
-        return SearchResult(Counts(0, 0, 0, True), [], page, page_size)
-    anchor, conds, edges = _split(cqp)
-    targets = _targets(cqp)
-    if targets and attr_filter is None:
-        raise ValueError("属性约束需要 attr_filter")
-    fields = "match, matchend, match doc_id, match s_n"
-    if sort == "left":
-        fields += ", match[-1] word, match[-2] word, match[-3] word"
-    elif sort == "right":
-        fields += ", matchend[1] word, matchend[2] word, matchend[3] word"
-
-    def commands(cut: int | None) -> list[str]:
-        cmds = []
-        for i, (_, q) in enumerate(conds):
-            cmds += [
-                f"C{i} = {q} within s;",
-                f"S{i} = C{i} expand to s;",
-                f"tabulate S{i} match doc_id, match s_n;",
-                ".EOL.;",
-            ]
-        where = f" :: {restrict}" if restrict else ""
-        tail = f"{where} within s{f' cut {cut}' if cut else ''};"
-        for slot, q in sorted(targets.items()):
-            cmds += [
-                f"T{slot} = {q}{tail}",
-                f"tabulate T{slot} match, matchend, target;",
-            ]
-            cmds.append(".EOL.;")
-        cmds += [
-            f"A = {anchor}{tail}",
-            f"tabulate A {fields};",
-            ".EOL.;",
-        ]
-        return cmds
-
-    complete = True
+    kw = {"restrict": restrict, "attr_filter": attr_filter}
     try:
-        sections = _cqp(index_dir, key, commands(None), count_timeout)
+        rows = query_rows(
+            index_dir,
+            corpus_key,
+            cqp,
+            sort=sort,
+            seed=seed,
+            timeout=count_timeout,
+            **kw,
+        )
+        counts = count_rows(rows)
     except subprocess.TimeoutExpired:
-        complete = False
-        sections = _cqp(
-            index_dir, key, commands(page * page_size), max(count_timeout, 60)
+        rows = prefix_rows(
+            index_dir,
+            corpus_key,
+            cqp,
+            page * page_size,
+            timeout=max(count_timeout, 60),
+            **kw,
         )
-    rows = sections[-1]
-    for (op, _), sents in zip(conds, sections):
-        found = {(r[0], r[1]) for r in sents}
-        rows = [r for r in rows if ((r[2], r[3]) in found) == (op == "+")]
-    for slot, marked in zip(sorted(targets), sections[len(conds) : -1]):
-        at = {(r[0], r[1]): int(r[2]) for r in marked}
-        keys = [
-            (r[2], int(r[3]), ix.token_index(t))
-            if (t := at.get((r[0], r[1]), -1)) >= 0
-            else None
-            for r in rows
-        ]
-        allowed = attr_filter(slot, {k for k in keys if k})
-        rows = [r for r, k in zip(rows, keys) if k in allowed]
-    if sort in ("left", "right"):
-        rows.sort(key=lambda r: [w.casefold() for w in r[4:7]])
-    elif sort == "random":
-        random.Random(seed or 0).shuffle(rows)
-    counts = (
-        Counts(
-            len(rows),
-            len({(r[2], r[3]) for r in rows}),
-            len({r[2] for r in rows}),
-            True,
-        )
-        if complete
-        else Counts(None, None, None, False)
-    )
+        counts = Counts(None, None, None, False)
     lo = (page - 1) * page_size
-    items = [
-        _hit(ix, int(r[0]), int(r[1]), r[2], int(r[3]), edges, context)
-        for r in rows[lo : lo + page_size]
-    ]
+    items = hits(index_dir, corpus_key, cqp, rows[lo : lo + page_size], context)
     return SearchResult(counts, items, page, page_size)
 
 

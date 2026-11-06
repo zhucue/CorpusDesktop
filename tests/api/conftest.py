@@ -7,7 +7,9 @@ Docker: docker compose -f deploy/compose.yaml run --rm test
 
 import importlib
 import os
+import random
 import re
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -84,7 +86,7 @@ def clean(database):
         )
     with transaction() as db:
         seed_builtin(db)
-    searches.entries.clear()
+    searches.clear()
 
 
 # ---- fake engine ----
@@ -96,6 +98,9 @@ class FakeEngine:
         self.calls = []
         self.needle = "language"
         self.complete = True
+        self.delay = 0  # seconds an uncut query_rows takes; TimeoutExpired below it
+        self.gate = None
+        self.contexts = []
 
     def parse(self, path, *, language, metadata, mapping=None):
         path = Path(path)
@@ -185,6 +190,106 @@ class FakeEngine:
                 "context": context,
             }
         )
+        hits = self._hits(corpus_key, attr_filter)
+        counts = em.Counts(
+            hits=len(hits) if self.complete else None,
+            sentences=len({(h.doc_id, h.sentence_index) for h in hits})
+            if self.complete
+            else None,
+            documents=len({h.doc_id for h in hits}) if self.complete else None,
+            complete=self.complete,
+        )
+        items = hits[(page - 1) * page_size : page * page_size]
+        return em.SearchResult(counts, items, page, page_size)
+
+    def query_rows(
+        self,
+        index_dir,
+        corpus_key,
+        cqp,
+        *,
+        restrict,
+        sort="position",
+        seed=None,
+        timeout=20,
+        attr_filter=None,
+        cut=None,
+        cancel=None,
+        max_hits=None,
+    ):
+        """cwb.query_rows over the fake hits; rows carry code points instead of corpus positions.
+        An uncut run longer than `timeout` (self.delay seconds) raises TimeoutExpired; with self.gate set,
+        uncut runs wait for it (a test holds the background count)."""
+        self.calls.append(
+            {
+                "cqp": cqp,
+                "restrict": restrict,
+                "sort": sort,
+                "seed": seed,
+                "timeout": timeout,
+                "cut": cut,
+            }
+        )
+        if cut is None:
+            if timeout < self.delay:
+                raise subprocess.TimeoutExpired("cqp", timeout)
+            if self.gate is not None:
+                assert self.gate.wait(10)
+        hits = self._hits(corpus_key, attr_filter)
+        if max_hits is not None and len(hits) > max_hits and not cut:
+            raise cwb.TooManyHits(max_hits)
+        hits = hits[:cut]
+        if sort == "left":
+            hits.sort(key=lambda h: h.left[::-1].casefold())
+        elif sort == "right":
+            hits.sort(key=lambda h: h.right.casefold())
+        elif sort == "random":
+            random.Random(seed or 0).shuffle(hits)
+        return [(h.start_cp, h.end_cp, h.doc_id, h.sentence_index) for h in hits]
+
+    def prefix_rows(
+        self,
+        index_dir,
+        corpus_key,
+        cqp,
+        need,
+        *,
+        restrict,
+        timeout=60,
+        attr_filter=None,
+        max_hits=None,
+    ):
+        return self.query_rows(
+            index_dir,
+            corpus_key,
+            cqp,
+            restrict=restrict,
+            timeout=timeout,
+            attr_filter=attr_filter,
+            cut=need,
+        )
+
+    def hits(self, index_dir, corpus_key, cqp, rows, context):
+        self.contexts.append(context)
+        docs = dict(self.indexes.get(corpus_key, []))
+        out = []
+        for start, end, doc_id, n in rows:
+            text = docs[doc_id].text
+            out.append(
+                em.Hit(
+                    f"{doc_id}:{start}-{end}",
+                    doc_id,
+                    n,
+                    start,
+                    end,
+                    text[max(0, start - 10) : start],
+                    text[start:end],
+                    text[end : end + 10],
+                )
+            )
+        return out
+
+    def _hits(self, corpus_key, attr_filter):
         hits = []
         for doc_id, d in self.indexes.get(corpus_key, []):
             for n, s in enumerate(d.sentences):
@@ -214,16 +319,7 @@ class FakeEngine:
 
             allowed = attr_filter(0, {key(h) for h in hits})
             hits = [h for h in hits if key(h) in allowed]
-        counts = em.Counts(
-            hits=len(hits) if self.complete else None,
-            sentences=len({(h.doc_id, h.sentence_index) for h in hits})
-            if self.complete
-            else None,
-            documents=len({h.doc_id for h in hits}) if self.complete else None,
-            complete=self.complete,
-        )
-        items = hits[(page - 1) * page_size : page * page_size]
-        return em.SearchResult(counts, items, page, page_size)
+        return hits
 
 
 @pytest.fixture(autouse=True)
@@ -243,6 +339,9 @@ def fake_engine(monkeypatch):
     )
     monkeypatch.setattr(cwb, "build", fake.build, raising=False)
     monkeypatch.setattr(cwb, "search", fake.search, raising=False)
+    monkeypatch.setattr(cwb, "query_rows", fake.query_rows, raising=False)
+    monkeypatch.setattr(cwb, "hits", fake.hits, raising=False)
+    monkeypatch.setattr(cwb, "prefix_rows", fake.prefix_rows, raising=False)
     return fake
 
 

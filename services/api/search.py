@@ -1,10 +1,14 @@
 import hashlib
 import json
+import logging
 import os
 import re
 import secrets
+import shutil
+import subprocess
 from collections import OrderedDict
-from threading import Lock
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event, Lock
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -26,6 +30,7 @@ from services.api.access import (
     token_project,
 )
 from services.api.auth import CurrentUser, Db
+from services.api.db import data_dir, session
 from services.api.errors import ApiError, not_found
 from services.api.jobs import enqueue
 from services.api.metadata import field_types, validate_filter
@@ -45,6 +50,13 @@ from services.api.views import document_view, job_view, saved_query_view
 router = APIRouter(prefix="/api")
 
 COUNT_TIMEOUT = float(os.environ.get("SEARCH_COUNT_TIMEOUT") or 20)  # seconds
+# background full count after COUNT_TIMEOUT (contracts/p7.md §1)
+FULL_TIMEOUT = float(os.environ.get("SEARCH_FULL_TIMEOUT") or 300)
+# more anchor hits fail the count; total size of the stored result sets
+MAX_HITS = int(os.environ.get("SEARCH_MAX_HITS") or 2_000_000)
+CACHE_MAX_BYTES = int(os.environ.get("SEARCH_CACHE_MAX_BYTES") or 2 * 1024**3)
+
+log = logging.getLogger(__name__)
 
 
 class Scope(BaseModel):
@@ -273,6 +285,13 @@ def resolve_scope(db, scope: Scope, user):
     return corpus, restrict
 
 
+def search_context(corpus, req: SearchInput) -> Context:
+    # parallel corpora: neighbouring sentences are unrelated pairs, so context stays in the hit's sentence
+    return Context(
+        unit=req.context.unit, size=req.context.size, sentence_only=corpus.parallel
+    )
+
+
 def run_search(
     corpus,
     restrict,
@@ -293,13 +312,37 @@ def run_search(
         seed=req.seed,
         page=page,
         page_size=page_size,
-        # parallel corpora: neighbouring sentences are unrelated pairs, so context stays in the hit's sentence
-        context=Context(
-            unit=req.context.unit, size=req.context.size, sentence_only=corpus.parallel
-        ),
+        context=search_context(corpus, req),
         count_timeout=count_timeout,
         **kw,
     )
+
+
+def pg_answered(ast, cqp) -> bool:
+    """Pure span and pure attribute queries are answered from PostgreSQL (services.api.effective)."""
+    return bool(query.spans(cqp) and query.pure_span(ast)) or bool(
+        query.attrs(cqp) and pure_attr(ast)
+    )
+
+
+def attr_filter_for(db, cqp, layers):
+    """attr_filter for cwb: keep hits whose attribute / span slot tokens satisfy the constraints; None
+    without such slots."""
+    constraints = query.attrs(cqp)
+    span_constraints = query.spans(cqp)
+    if not constraints and not span_constraints:
+        return None
+
+    def attr_filter(slot, keys):
+        if slot in constraints:
+            keys = effective.filter_tokens(db, layers, constraints[slot], keys)
+        if slot in span_constraints:
+            keys = effective.filter_span_tokens(
+                db, layers["span"], span_constraints[slot], keys
+            )
+        return keys
+
+    return attr_filter
 
 
 def search_page(db, corpus, restrict, ast, cqp, layers, req, page, page_size, timeout):
@@ -308,8 +351,6 @@ def search_page(db, corpus, restrict, ast, cqp, layers, req, page, page_size, ti
     likewise: a pure span query lists the effective spans, anchored ones keep slot tokens inside them."""
     constraints = query.attrs(cqp)
     span_constraints = query.spans(cqp)
-    if not constraints and not span_constraints:
-        return run_search(corpus, restrict, cqp, req, page, page_size, timeout)
     if span_constraints and query.pure_span(ast):
         filt = scope_filter(db, req.scope)
         fields = field_types(db, corpus.id) if filt else {}
@@ -331,34 +372,60 @@ def search_page(db, corpus, restrict, ast, cqp, layers, req, page, page_size, ti
         return effective.pg_search(
             db, corpus, filt, fields, atom, constraints[0], layers, req, page, page_size
         )
-
-    def attr_filter(slot, keys):
-        if slot in constraints:
-            keys = effective.filter_tokens(db, layers, constraints[slot], keys)
-        if slot in span_constraints:
-            keys = effective.filter_span_tokens(
-                db, layers["span"], span_constraints[slot], keys
-            )
-        return keys
-
-    return run_search(corpus, restrict, cqp, req, page, page_size, timeout, attr_filter)
+    return run_search(
+        corpus,
+        restrict,
+        cqp,
+        req,
+        page,
+        page_size,
+        timeout,
+        attr_filter_for(db, cqp, layers),
+    )
 
 
 class SearchCache:
-    """search_id → seed and final counts, so paging and count re-checks reuse the first search.
+    """search_id → seed, counts and the result set, so paging and count re-checks reuse the first search.
 
-    Held in the single API process; after a restart an old search_id gets 409 and the page
-    re-runs the search.
+    CWB searches (contracts/p7.md §1): the complete hit rows (filtered and sorted) are computed once and
+    stored under DATA_DIR/search-cache/<search_id>; pages are slices of it. When the first run exceeds
+    COUNT_TIMEOUT, one background full count per search_id runs (at most WORKERS at a time; one per user and
+    sign-in kind — browser session or agent token — where a new one cancels the previous unfinished count).
+    Until it finishes pages come from a corpus-order prefix (`partial`, the first `cut` rows). More than
+    MAX_HITS anchor hits fail the count. Entry state: None (not run) | running | done | failed.
+
+    Held in the single API process; after a restart an old search_id gets 409 and the page re-runs the
+    search. Result sets are deleted with their entries (LRU by count, LIMIT, and by size, CACHE_MAX_BYTES);
+    the API empties the directory at startup (clear_dir).
     """
 
     LIMIT = 2000
+    WORKERS = 2
 
     def __init__(self):
         self.entries = OrderedDict()
         self.lock = Lock()
+        self.pool = None
+        self.running = {}  # (user id, sign-in kind) → entry whose background count has not finished
+        self.bytes = 0  # size of the stored result sets
+
+    @staticmethod
+    def root():
+        return data_dir() / "search-cache"
+
+    def clear_dir(self):
+        """Delete all stored result sets (API startup)."""
+        shutil.rmtree(self.root(), ignore_errors=True)
+
+    def clear(self):
+        """Forget every entry and delete its files (tests)."""
+        with self.lock:
+            while self.entries:
+                self._drop(self.entries.popitem(last=False)[1])
+            self.bytes = 0
 
     def open(self, corpus, restrict, cqp, req: SearchInput):
-        """Return (search_id, entry); entry = {"key", "seed", "counts"}."""
+        """Return (search_id, entry); entry = {"key", "seed", "counts", "state", ...}."""
         key = hashlib.sha256(
             json.dumps(
                 [str(corpus.id), corpus.index_version, restrict, cqp, req.sort]
@@ -375,14 +442,114 @@ class SearchCache:
             if req.sort == "random" and seed is None:
                 seed = secrets.randbelow(2**31)
             sid = secrets.token_hex(8)
-            entry = {"key": key, "seed": seed, "counts": None}
+            entry = {
+                "sid": sid,
+                "key": key,
+                "seed": seed,
+                "counts": None,
+                "state": None,
+                "dir": None,
+                "bytes": 0,
+                "partial": [],
+                "cut": 0,
+                "message": None,
+                "cancel": Event(),
+            }
             self.entries[sid] = entry
             while len(self.entries) > self.LIMIT:
-                self.entries.popitem(last=False)
+                self._drop(self.entries.popitem(last=False)[1])
             return sid, entry
+
+    def _drop(self, entry):
+        """(under the lock) an entry left the cache: stop its count, delete its files."""
+        entry["cancel"].set()
+        if entry["dir"]:
+            shutil.rmtree(entry["dir"], ignore_errors=True)
+            self.bytes -= entry["bytes"]
+
+    def finish(self, entry, rows):
+        """Write the complete rows as the entry's result set and record the counts; then delete the least
+        recently used result sets while the stored total exceeds CACHE_MAX_BYTES."""
+        path = self.root() / entry["sid"]
+        size = cwb.write_rows(path, rows)
+        counts = counts_view(cwb.count_rows(rows))
+        with self.lock:
+            if self.entries.get(entry["sid"]) is not entry:  # evicted meanwhile
+                shutil.rmtree(path, ignore_errors=True)
+                return
+            entry.update(
+                state="done", dir=path, bytes=size, counts=counts, partial=None
+            )
+            self.bytes += size
+            for sid in list(self.entries):
+                if self.bytes <= CACHE_MAX_BYTES:
+                    break
+                old = self.entries[sid]
+                if old is not entry and old["dir"]:
+                    del self.entries[sid]
+                    self._drop(old)
+
+    def fail(self, entry, message):
+        with self.lock:
+            if entry["state"] != "done":
+                entry.update(state="failed", message=message)
+
+    def start(self, entry, owner, job):
+        """Run job(cancel) → complete rows in the background; owner = (user id, sign-in kind)."""
+        with self.lock:
+            prev = self.running.get(owner)
+            if prev is not None and prev is not entry:
+                prev["cancel"].set()
+            self.running[owner] = entry
+            entry["state"] = "running"
+            if self.pool is None:
+                self.pool = ThreadPoolExecutor(
+                    self.WORKERS, thread_name_prefix="search-count"
+                )
+            self.pool.submit(self._run, entry, owner, job)
+
+    def _run(self, entry, owner, job):
+        try:
+            if entry["cancel"].is_set():
+                raise cwb.Cancelled()
+            rows = job(entry["cancel"])
+            if entry["cancel"].is_set():
+                raise cwb.Cancelled()
+            self.finish(entry, rows)
+        except subprocess.TimeoutExpired:
+            self.fail(entry, timeout_message())
+        except cwb.TooManyHits:
+            self.fail(entry, too_many_message())
+        except cwb.Cancelled:
+            self.fail(entry, "计数已取消：已开始新的检索")
+        except Exception:
+            log.exception("background search count failed")
+            self.fail(entry, "计数失败，请重试")
+        finally:
+            with self.lock:
+                if self.running.get(owner) is entry:
+                    del self.running[owner]
+
+    def counts(self, entry):
+        """Counts of an unfinished entry: unknown, or failed with the reason."""
+        counts = {"hits": None, "sentences": None, "documents": None, "complete": False}
+        with self.lock:
+            if entry["state"] == "failed":
+                counts.update(failed=True, message=entry["message"])
+        return counts
 
 
 searches = SearchCache()
+
+
+def timeout_message():
+    return f"计数超时（{FULL_TIMEOUT:g} 秒），请缩小范围或加条件"
+
+
+def too_many_message():
+    n = MAX_HITS
+    shown = f"{n // 10000} 万" if n >= 10000 and n % 10000 == 0 else f"{n}"
+    return f"命中超过 {shown}，请缩小范围或加条件"
 
 
 def counts_view(c):
@@ -392,6 +559,85 @@ def counts_view(c):
         "documents": c.documents,
         "complete": c.complete,
     }
+
+
+def cwb_page(db, user, entry, corpus, restrict, cqp, layers, req: SearchInput):
+    """(engine hits, counts, sort_applied) of one page of a CWB query, from the search_id's result set.
+
+    First request: the full query with COUNT_TIMEOUT; on timeout a background count with FULL_TIMEOUT
+    starts and pages come from a corpus-order prefix (sort not applied) until it is done. More than MAX_HITS
+    anchor hits fail the count at once; pages still come from the prefix."""
+    ix, key = index_dir(corpus.id), corpus_key(corpus.id)
+    ctx = search_context(corpus, req)
+    lo, hi = (req.page - 1) * req.page_size, req.page * req.page_size
+    rows_kw = {"restrict": restrict, "attr_filter": attr_filter_for(db, cqp, layers)}
+    if entry["state"] is None:  # only the request that created the search_id gets here
+        try:
+            rows = cwb.query_rows(
+                ix,
+                key,
+                cqp,
+                sort=req.sort,
+                seed=req.seed,
+                timeout=COUNT_TIMEOUT,
+                max_hits=MAX_HITS,
+                **rows_kw,
+            )
+        except subprocess.TimeoutExpired:
+            owner = (user.id, "token" if token_project(user) else "session")
+            job = full_count(corpus, restrict, cqp, layers, req)
+            searches.start(entry, owner, job)
+        except cwb.TooManyHits:
+            searches.fail(entry, too_many_message())
+        else:
+            searches.finish(entry, rows)
+            return cwb.hits(ix, key, cqp, rows[lo:hi], ctx), entry["counts"], True
+    with searches.lock:
+        state, path, counts = entry["state"], entry["dir"], entry["counts"]
+        partial, cut = entry["partial"], entry["cut"]
+    if state == "done":
+        try:
+            rows = cwb.read_rows(path, lo, hi)
+        except FileNotFoundError:
+            raise ApiError(409, "SEARCH_EXPIRED", "检索结果已失效，请重新检索")
+        return cwb.hits(ix, key, cqp, rows, ctx), counts, True
+    if cut < hi:  # a page past the prefix read so far
+        partial = cwb.prefix_rows(
+            ix,
+            key,
+            cqp,
+            hi,
+            timeout=max(COUNT_TIMEOUT, 60),
+            max_hits=MAX_HITS,
+            **rows_kw,
+        )
+        with searches.lock:
+            if entry["state"] != "done" and entry["cut"] < hi:
+                entry.update(partial=partial, cut=hi)
+    hits = cwb.hits(ix, key, cqp, partial[lo:hi], ctx)
+    return hits, searches.counts(entry), req.sort == "position"
+
+
+def full_count(corpus, restrict, cqp, layers, req: SearchInput):
+    """Background job: the complete rows with FULL_TIMEOUT and MAX_HITS, in its own database session."""
+    ix, key = index_dir(corpus.id), corpus_key(corpus.id)
+
+    def job(cancel):
+        with session() as db:
+            return cwb.query_rows(
+                ix,
+                key,
+                cqp,
+                restrict=restrict,
+                sort=req.sort,
+                seed=req.seed,
+                timeout=FULL_TIMEOUT,
+                attr_filter=attr_filter_for(db, cqp, layers),
+                cancel=cancel,
+                max_hits=MAX_HITS,
+            )
+
+    return job
 
 
 def aligned_texts(db, sentence_ids):
@@ -516,28 +762,36 @@ def search(body: SearchInput, user: CurrentUser, db: Db):
     check_layer_problem(db, corpus, user, ast, layers)
     sid, entry = searches.open(corpus, restrict, cache_key(cqp, layers), body)
     req = body.model_copy(update={"seed": entry["seed"]})
-    result = search_page(
-        db,
-        corpus,
-        restrict,
-        ast,
-        cqp,
-        layers,
-        req,
-        body.page,
-        body.page_size,
-        COUNT_TIMEOUT,
-    )
-    counts = entry["counts"] or counts_view(result.counts)
-    if counts["complete"]:
-        entry["counts"] = counts
-    items = enrich(db, result.items)
+    if pg_answered(ast, cqp):
+        result = search_page(
+            db,
+            corpus,
+            restrict,
+            ast,
+            cqp,
+            layers,
+            req,
+            body.page,
+            body.page_size,
+            COUNT_TIMEOUT,
+        )
+        hits = result.items
+        counts = entry["counts"] or counts_view(result.counts)
+        if counts["complete"]:
+            entry["counts"] = counts
+        sort_applied = counts["complete"] or body.sort == "position"
+    else:
+        hits, counts, sort_applied = cwb_page(
+            db, user, entry, corpus, restrict, cqp, layers, req
+        )
+    items = enrich(db, hits)
     if body.include_tokens:
         attach_tokens(db, items)
     return {
         "search_id": sid,
         "parse": parse_view(body.query, tagset),
         "counts": counts,
+        "sort_applied": sort_applied,
         "items": items,
         "page": body.page,
         "page_size": body.page_size,

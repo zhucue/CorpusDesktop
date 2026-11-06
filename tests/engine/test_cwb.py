@@ -1,3 +1,4 @@
+import threading
 from pathlib import Path
 
 import pytest
@@ -324,3 +325,79 @@ def test_lexicon_and_has_values(zh, tmp_path):
         cwb.has_values(tmp_path, "missing", "deprel") is None
         and cwb.lexicon(tmp_path, "missing", "pos") == []
     )
+
+
+def test_rows_pages_equal_search(zh, tmp_path):
+    """query_rows → write_rows → read_rows → hits rebuilds exactly the pages of cwb.search."""
+    for q, sort, ctx in [
+        ("语言", "position", Context()),
+        ("语言", "left", Context(unit="sentence")),
+        ("语言 +文化", "right", Context(size=3)),
+        ("语言", "random", Context(unit="paragraph")),
+    ]:
+        cqp = query.compile(query.parse(q))
+        rows = cwb.query_rows(zh, "zh", cqp, restrict=None, sort=sort, seed=7)
+        path = tmp_path / sort
+        cwb.write_rows(path, rows)
+        paged = [
+            h
+            for lo in range(0, len(rows), 2)
+            for h in cwb.hits(zh, "zh", cqp, cwb.read_rows(path, lo, lo + 2), ctx)
+        ]
+        r = run(zh, q, sort=sort, seed=7, ctx=ctx)
+        assert paged == r.items and cwb.count_rows(rows) == r.counts
+
+
+def test_cut_is_corpus_order_prefix(zh):
+    cqp = query.compile(query.parse("语言"))
+    full = cwb.query_rows(zh, "zh", cqp, restrict=None)
+    assert cwb.query_rows(zh, "zh", cqp, restrict=None, cut=3) == full[:3]
+    # timed out: the page comes from the prefix in corpus order, whatever the sort
+    r = cwb.search(
+        zh,
+        "zh",
+        cqp,
+        restrict=None,
+        sort="right",
+        seed=None,
+        page=1,
+        page_size=3,
+        context=Context(),
+        count_timeout=0.0001,
+    )
+    assert not r.counts.complete
+    assert [(h.start_cp, h.end_cp) for h in r.items] == [
+        (h.start_cp, h.end_cp) for h in run(zh, "语言", page_size=3).items
+    ]
+
+
+def test_cancel_stops_cqp(zh):
+    cancel = threading.Event()
+    cancel.set()
+    with pytest.raises(cwb.Cancelled):
+        cwb.query_rows(
+            zh,
+            "zh",
+            query.compile(query.parse("语言")),
+            restrict=None,
+            timeout=5,
+            cancel=cancel,
+        )
+
+
+def test_max_hits_and_prefix_with_conditions(zh, ud):
+    cqp = query.compile(query.parse("语言"))
+    assert len(cwb.query_rows(zh, "zh", cqp, restrict=None, max_hits=5)) == 5
+    with pytest.raises(cwb.TooManyHits):
+        cwb.query_rows(zh, "zh", cqp, restrict=None, max_hits=4)
+    # a condition keeps few anchor hits: the prefix doubles its cut until `need` rows survive
+    index, _ = ud
+    cqp = query.compile(query.parse("the +of"))
+    full = cwb.query_rows(index, "ud", cqp, restrict=None)
+    anchors = cwb.query_rows(
+        index, "ud", query.compile(query.parse("the")), restrict=None
+    )
+    assert 3 < len(full) < len(anchors)
+    for need in (1, 3, len(full), len(full) + 5):
+        assert cwb.prefix_rows(index, "ud", cqp, need, restrict=None) == full[:need]
+    assert len(cwb.prefix_rows(index, "ud", cqp, 50, restrict=None, max_hits=3)) <= 3
