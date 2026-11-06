@@ -19,6 +19,10 @@ x-python-env: &python-env
   # worker 同时加载的 Stanza 语言管线数（每种约 330 MB 内存）；语义索引句数上限
   STANZA_MAX_PIPELINES: ${STANZA_MAX_PIPELINES:-2}
   SEMANTIC_MAX_SENTENCES: ${SEMANTIC_MAX_SENTENCES:-300000}
+  # 压缩格式解压后总字节、文件数与 PDF 页数上限
+  MAX_UNPACKED_BYTES: ${MAX_UNPACKED_BYTES:-524288000}
+  MAX_UNPACKED_FILES: ${MAX_UNPACKED_FILES:-10000}
+  MAX_PDF_PAGES: ${MAX_PDF_PAGES:-5000}
   # 短任务门槛：上传小于此字节数的导入、词数小于此值的建索引算短任务（worker-light 也处理，各 worker 优先取短任务）
   LIGHT_IMPORT_BYTES: ${LIGHT_IMPORT_BYTES:-5242880}
   LIGHT_INDEX_TOKENS: ${LIGHT_INDEX_TOKENS:-1000000}
