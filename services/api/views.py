@@ -78,8 +78,13 @@ METHOD_NAMES = {
     "collocations": "搭配",
     "keywords": "关键词",
     "distribution": "分布",
+    "text_metrics": "文本指标",
+    "vocab_profile": "词汇等级",
+    "compare": "对比",
+    "word_sketch": "词汇画像",
+    "sketch_diff": "近义词对比",
 }
-EXPORT_SOURCES = {"evidence": "证据篮", "kb_terms": "术语表"}
+EXPORT_SOURCES = {"evidence": "证据篮", "kb_terms": "术语表", "tidy": "整洁数据"}
 
 
 def _name(db, model, oid, attr="name"):
@@ -102,6 +107,8 @@ def _stat_summary(db, p):
     if p.get("method") == "keywords":
         target = _scope_name(db, p.get("target"))
         return f"{method} · {target} 对 {_scope_name(db, p.get('reference'))}"
+    if p.get("method") == "compare":  # items carry their own scopes
+        return f"{method} · {len(p.get('items') or [])} 项"
     return f"{method} · {_scope_name(db, p.get('scope'))}"
 
 
@@ -118,6 +125,8 @@ def job_summary(db, j) -> str:
         return f"{_name(db, Corpus, p.get('corpus_id'))}：{names}"
     if j.kind == "index":
         return _name(db, Corpus, p.get("corpus_id"))
+    if j.kind == "embed_corpus":
+        return _name(db, Corpus, p.get("corpus_id"))  # shown as 语义索引 · <name>
     if j.kind == "stats":
         return _stat_summary(db, p)
     if j.kind == "preannotate":

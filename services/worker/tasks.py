@@ -23,7 +23,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from engine import cwb, nlp, parsers, query, stats
 from engine import model as em
 from engine.conllu import write_conllu
-from services.api import effective
+from services.api import effective, semantic
 from services.api.annotations import (
     is_zh,
     refresh_progress,
@@ -126,16 +126,13 @@ def _parse_batch(run):
     return documents, alignments
 
 
-LANGUAGE_UNSUPPORTED = "暂只支持中文与英文语料"
-
-
 def _tokenized(doc):
     """CoNLL-U: tokens and annotation come with the file, so any language is stored as is."""
     return bool(doc.sentences) and all(s.tokens for s in doc.sentences)
 
 
 def _unsupported(documents):
-    """Language codes other than zh / en among documents that need annotation, sorted."""
+    """Language codes outside engine.nlp.SUPPORTED among documents that need annotation, sorted."""
     return sorted(
         {
             nlp.lang_code(d.language)
@@ -147,30 +144,90 @@ def _unsupported(documents):
 
 
 def _check_upload_language(params):
-    """An upload whose given language is not zh / en fails at once, unless every file is CoNLL-U."""
+    """An upload whose given language is not supported fails at once, unless every file is CoNLL-U."""
     language = params.get("language")
     if not language or nlp.lang_code(language) in nlp.SUPPORTED:
         return
     if all(n.lower().endswith(".conllu") for n in params["files"]):
         return
-    raise JobFailed("LANGUAGE_UNSUPPORTED", LANGUAGE_UNSUPPORTED)
+    raise JobFailed("LANGUAGE_UNSUPPORTED", nlp.unsupported_message([language]))
 
 
 def _check_languages(documents):
-    """Documents to annotate: a language other than zh / en fails the import; documents without a language
-    are detected (engine.nlp.language_problem: script share, and English function words), as is the script of
-    documents given as zh / en."""
+    """Documents to annotate: an unsupported language fails the import; documents without a language must
+    be detectable (engine.nlp.language_problem), documents with one must not be mostly in another script."""
     other = _unsupported(documents)
     if other:
-        raise JobFailed(
-            "LANGUAGE_UNSUPPORTED", f"{LANGUAGE_UNSUPPORTED}（{'、'.join(other)}）"
-        )
+        raise JobFailed("LANGUAGE_UNSUPPORTED", nlp.unsupported_message(other))
     for d in documents:
         if _tokenized(d):
             continue
-        problem = nlp.language_problem(d.text, check_english=not d.language)
+        problem = nlp.language_problem(d.text, d.language or None)
         if problem:
             raise JobFailed("LANGUAGE_UNSUPPORTED", f"{d.title}：{problem}")
+
+
+DUPLICATES_LISTED = 20  # duplicate documents named in the import result
+HASH_LOOKUP = 5000  # hashes per lookup query
+
+
+def _stored_hashes(db, corpus_id, hashes) -> set:
+    """Those of hashes that documents of the corpus already have."""
+    unique, found = list(set(hashes)), set()
+    for i in range(0, len(unique), HASH_LOOKUP):
+        found.update(
+            db.scalars(
+                select(Document.content_hash).where(
+                    Document.corpus_id == corpus_id,
+                    Document.content_hash.in_(unique[i : i + HASH_LOOKUP]),
+                )
+            )
+        )
+    return found
+
+
+def _aligned_groups(documents, alignments) -> list[list[int]]:
+    """Document indexes grouped by sentence alignment (TMX, Tatoeba): linked documents form one group,
+    every other document is a group of its own; groups in document order."""
+    parent = list(range(len(documents)))
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    owner = {
+        s.external_id: i
+        for i, d in enumerate(documents)
+        for s in d.sentences
+        if s.external_id
+    }
+    for a in alignments:
+        if a.src_external_id in owner and a.tgt_external_id in owner:
+            parent[root(owner[a.src_external_id])] = root(owner[a.tgt_external_id])
+    groups: dict[int, list[int]] = {}
+    for i in range(len(documents)):
+        groups.setdefault(root(i), []).append(i)
+    return sorted(groups.values())
+
+
+def _skip_duplicates(db, corpus_id, documents, alignments):
+    """Leave out documents whose normalized text (engine.parsers.content_hash) is already in the corpus or
+    earlier in this batch. Aligned documents (the sides of a TMX or Tatoeba import) are skipped only when
+    every side is a duplicate; otherwise all sides are imported, so no alignment is lost. Returns (kept
+    documents, sources of the skipped ones: file or "file #row")."""
+    hashes = [parsers.content_hash(d.text) for d in documents]
+    seen = _stored_hashes(db, corpus_id, hashes)
+    keep = [False] * len(documents)
+    for group in _aligned_groups(documents, alignments):
+        if not all(hashes[i] in seen for i in group):
+            for i in group:
+                keep[i] = True
+        seen.update(hashes[i] for i in group)
+    kept = [d for d, k in zip(documents, keep) if k]
+    skipped = [parsers.source_of(d) for d, k in zip(documents, keep) if not k]
+    return kept, skipped
 
 
 def _write_documents(db, corpus_id, documents, written):
@@ -192,6 +249,7 @@ def _write_documents(db, corpus_id, documents, written):
                 "meta": doc.metadata,
                 "external_id": doc.external_id,
                 "text_path": str(path),
+                "content_hash": parsers.content_hash(doc.text),
                 "char_count": len(doc.text),
                 "sentence_count": len(doc.sentences),
                 "token_count": sum(len(s.tokens) for s in doc.sentences),
@@ -239,8 +297,11 @@ def run_import(run):
     corpus_id = uuid.UUID(run.params["corpus_id"])
     _check_upload_language(run.params)
     documents, alignments = _parse_batch(run)
+    # the same text twice (already in the corpus, or twice in this batch) is imported once; checked here so
+    # duplicates are not annotated, and again under the corpus lock before writing (concurrent imports)
+    with session() as db:
+        documents, skipped = _skip_duplicates(db, corpus_id, documents, alignments)
     _check_languages(documents)
-    total = len(documents)
     # progress in characters so one large document (Tatoeba: one per language) still advances
     chars = sum(len(d.text) for d in documents)
     done, last = 0, 0.0
@@ -252,6 +313,9 @@ def run_import(run):
             last = time.monotonic()
             run.progress(done + offset, chars, "分句与标注", "字")
 
+    def downloading(message):  # first use of a Stanza language: "下载 fr 模型"
+        run.progress(done, chars, message, "字")
+
     # language "auto" (or a CSV row without one): detect from the text
     for d in documents:
         if not d.language:
@@ -262,7 +326,10 @@ def run_import(run):
     done = chars - sum(len(d.text) for d in todo)
     report(0)
     try:  # Stanza batches paragraphs across documents (many short CSV rows)
-        nlp.annotate_many(todo, report)
+        with nlp.notifying(downloading):
+            nlp.annotate_many(todo, report)
+    except nlp.ModelError as e:
+        raise JobFailed("MODEL_UNAVAILABLE", str(e)) from e
     except ValueError as e:  # e.g. a language without an annotation model
         raise JobFailed("ANNOTATE_ERROR", str(e)[:500]) from e
     run.progress(chars, chars, "写入", "字")
@@ -270,7 +337,14 @@ def run_import(run):
     try:
         with transaction() as db:
             run.lock(db)
-            corpus = _corpus(db, corpus_id)
+            # one import writes into a corpus at a time (worker and worker-light may run two); the
+            # duplicate check is repeated under this lock against what the other one wrote meanwhile
+            corpus = db.get(Corpus, corpus_id, with_for_update=True)
+            if not corpus:
+                raise JobFailed("CORPUS_DELETED", "语料库已删除")
+            documents, late = _skip_duplicates(db, corpus_id, documents, alignments)
+            skipped += late
+            total = len(documents)
             by_external = _write_documents(db, corpus_id, documents, written)
             pairs = {
                 (by_external[a.src_external_id], by_external[a.tgt_external_id])
@@ -283,29 +357,31 @@ def run_import(run):
                     [{"src_sentence_id": s, "tgt_sentence_id": t} for s, t in pairs],
                 )
                 corpus.parallel = True
-            if corpus.language in ("auto", ""):
+            if corpus.language in ("auto", "") and documents:
                 shares = Counter()
                 for d in documents:
                     shares[nlp.lang_code(d.language)] += len(d.text)
                 corpus.language = shares.most_common(1)[0][0] or corpus.language
-            index_job = db.scalar(
-                select(Job).where(
-                    Job.kind == "index",
-                    Job.state == "queued",
-                    Job.params["corpus_id"].astext == str(corpus_id),
+            # nothing new (all duplicates) leaves a searchable index as it is
+            if documents or not live_index(corpus):
+                index_job = db.scalar(
+                    select(Job).where(
+                        Job.kind == "index",
+                        Job.state == "queued",
+                        Job.params["corpus_id"].astext == str(corpus_id),
+                    )
                 )
-            )
-            tokens = corpus_tokens(db, corpus_id)
-            if index_job is None:
-                enqueue(
-                    db,
-                    "index",
-                    {"corpus_id": str(corpus_id), "tokens": tokens},
-                    run.owner_id,
-                    run.project_id,
-                )
-            else:
-                index_job.params = {**index_job.params, "tokens": tokens}
+                tokens = corpus_tokens(db, corpus_id)
+                if index_job is None:
+                    enqueue(
+                        db,
+                        "index",
+                        {"corpus_id": str(corpus_id), "tokens": tokens},
+                        run.owner_id,
+                        run.project_id,
+                    )
+                else:
+                    index_job.params = {**index_job.params, "tokens": tokens}
             # a searchable corpus keeps serving its old index until the new one is in
             if not live_index(corpus):
                 corpus.status = "indexing"
@@ -319,6 +395,8 @@ def run_import(run):
                         len(s.tokens) for d in documents for s in d.sentences
                     ),
                     "alignments": len(pairs),
+                    "skipped_duplicates": len(skipped),
+                    "duplicates": skipped[:DUPLICATES_LISTED],
                 },
             )
     except BaseException:
@@ -465,6 +543,7 @@ def run_index(run):
         corpus.index_version = info.index_version if info else None
         corpus.status = "ready" if info else "empty"
         corpus.error = None
+        semantic.mark_stale(db, corpus)
         run.succeed(db, {**corpus.stats, "index_version": corpus.index_version})
 
 
@@ -567,13 +646,28 @@ def _cell(value):
     )
 
 
+FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+
+
+def excel_safe(value):
+    """Spreadsheet formula injection: text starting with = + - @, a tab or a carriage return gets a leading
+    apostrophe so Excel shows it as text; numbers and other values are unchanged."""
+    if isinstance(value, str) and value.startswith(FORMULA_START):
+        return "'" + value
+    return value
+
+
+def safe_rows(rows):
+    return [[excel_safe(v) for v in row] for row in rows]
+
+
 def _write_csv(path, header, rows, notice=()):
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
         if notice:
-            writer.writerows([[line] for line in notice] + [[]])
-        writer.writerow(header)
-        writer.writerows(rows)
+            writer.writerows([[excel_safe(line)] for line in notice] + [[]])
+        writer.writerow([excel_safe(h) for h in header])
+        writer.writerows(safe_rows(rows))
 
 
 def _write_xlsx(path, header, rows, sheet="检索结果", notice=()):
@@ -581,17 +675,17 @@ def _write_xlsx(path, header, rows, sheet="检索结果", notice=()):
     ws = wb.create_sheet(sheet)
     title_font = Font(name="宋体", bold=True)
     for line in notice:
-        ws.append([line])
+        ws.append([excel_safe(line)])
     if notice:
         ws.append([])
     cells = []
     for title in header:
-        cell = WriteOnlyCell(ws, value=title)
+        cell = WriteOnlyCell(ws, value=excel_safe(title))
         cell.font = title_font
         cells.append(cell)
     ws.append(cells)
     for row in rows:
-        ws.append(row)
+        ws.append([excel_safe(v) for v in row])
     wb.save(path)
 
 
@@ -726,6 +820,11 @@ def run_export_stats(run):
         "distribution": "分布",
         "breakdown": "命中分解",
         "translations": "译法",
+        "text_metrics": "文本指标",
+        "vocab_profile": "词汇等级",
+        "compare": "多项对比",
+        "word_sketch": "Word Sketch",
+        "sketch_diff": "近义词对比",
     }
     units = {
         "word": "词形",
@@ -757,6 +856,7 @@ def run_export_stats(run):
     }
     directions = {"negative": "参照多于目标", "both": "双向"}
     fine = {"dp", "dp_norm", "juilland_d", "delta_p_node", "delta_p_coll", "dice"}
+    fine |= {"ttr", "sttr", "lexical_density"}  # text metrics between 0 and 1
     with session() as db:
         stat = db.get(StatResult, uuid.UUID(run.params["stat_id"]))
         if not stat:
@@ -798,6 +898,30 @@ def run_export_stats(run):
     if method == "breakdown" and p.get("by"):
         by = p["by"]
         parts.append(f"按 {by_labels.get(by) or by.removeprefix('meta:')}")
+    if method == "text_metrics":
+        if p.get("group_by"):
+            parts.append(f"按 {p['group_by']} 分组")
+        parts.append(f"STTR 窗口 {p.get('sttr_window', 1000)}")
+    if method == "vocab_profile":
+        vl = p.get("vocab_list") or {}
+        by = p.get("by", "corpus")
+        names = {"corpus": "全部", "document": "每篇文档"}
+        parts.append(f"词表 {vl.get('name', '')}（{vl.get('license') or '—'}）")
+        parts.append(f"按 {names.get(by, by)}")
+    if method == "compare":
+        items = p.get("items") or []
+        parts.append(
+            "对比项 " + "、".join(f"{i['label']}：{i['query']}" for i in items)
+        )
+        if p.get("by"):
+            parts.append(f"按 {p['by']}")
+        tests = {"mann_whitney": "Mann-Whitney U", "spearman": "Spearman ρ"}
+        if p.get("test") in tests:
+            parts.append(f"检验 {tests[p['test']]}")
+    if method == "word_sketch" and p.get("lemma"):
+        parts.append(f"词元 {p['lemma']}")
+    if method == "sketch_diff":
+        parts.append(f"词元 {p.get('lemma_a')} 对 {p.get('lemma_b')}")
     if method == "translations" and p.get("target_language"):
         parts.append(f"译文语言 {p['target_language']}")
     if method == "frequency" and p.get("dispersion"):
@@ -1010,9 +1134,155 @@ def run_export_layer(run):
         run.succeed(db, {"rows": sentences, "tokens": tokens, "filename": filename})
 
 
+TIDY_NAME = "tidy_data"
+TIDY_METRIC_UNITS = {
+    "words": "词",
+    "mean_sentence_length": "词/句",
+    "mean_dependency_distance": "词",
+    "flesch_kincaid_grade": "年级",
+}
+
+
+def _snake(text):
+    import re
+
+    return re.sub(r"[^\w]+", "_", str(text).strip().lower()).strip("_") or "field"
+
+
+def run_export_tidy(run):
+    """Tidy data (contracts/p10.md §三): one row per document of the scope (corpus order) with its metadata
+    fields, tokens and sentences, per query hits and hits per million tokens (counted as search counts them),
+    and with metrics=true the text metrics (engine.metrics, STTR window 1000). The codebook lists every
+    column: name, meaning, unit, query. csv: zip of tidy_data.csv and tidy_data.codebook.csv (UTF-8, no BOM)
+    plus source.txt when the corpus has a license; xlsx: sheets data, codebook (and source)."""
+    import zipfile
+
+    from engine import metrics
+
+    p = run.params
+    queries, layers = p.get("queries") or [], p.get("query_layers") or []
+    with stats.cancellable(run.cancel), session() as db:
+        user = db.get(User, run.owner_id)
+        scope = Scope.model_validate(p["scope"])
+        corpus, restrict = resolve_scope(db, scope, user)
+        target = stats.Scope(index_dir(corpus.id), corpus_key(corpus.id), restrict)
+        notice = source_notice(db, [corpus.id])
+        info = _scope_docs(db, corpus, scope)
+        counts = []
+        for i, q in enumerate(queries):
+            run.progress(i, len(queries), f"统计查询 {i + 1}")
+            item_layers = layers[i] if i < len(layers) else None
+            try:
+                hits, _ = _doc_hits(db, q, item_layers, corpus, scope, user, target)
+            except ValueError as e:
+                raise JobFailed("EXPORT_INVALID", f"{q}：{e}") from e
+            counts.append(hits)
+        doc_metrics = {}
+        if p.get("metrics"):
+            run.progress(0, len(info), "计算文本指标", "篇")
+            check = _ticker(run, len(info))
+            for doc in _index_docs(target, info):
+                check()
+                doc_metrics[doc.id] = metrics.document_metrics(doc)
+    meta_keys = sorted({k for v in info.values() for k in v[2]})
+    columns = [  # (name, meaning, unit, query)
+        ("document_id", "文档 ID", "", ""),
+        ("title", "文档标题", "", ""),
+        ("language", "语言代码", "", ""),
+    ]
+    used = {c[0] for c in columns}
+    meta_names = []
+    for k in meta_keys:
+        name, n = f"meta_{_snake(k)}", 2
+        while name in used:
+            name, n = f"meta_{_snake(k)}_{n}", n + 1
+        used.add(name)
+        meta_names.append(name)
+        columns.append((name, f"元数据字段：{k}", "", ""))
+    columns += [
+        ("tokens", "词数（含标点，每百万词的分母）", "词", ""),
+        ("sentences", "句数", "句", ""),
+    ]
+    for i, q in enumerate(queries, 1):
+        columns += [
+            (f"q{i}_hits", f"查询 {i} 的命中数（同检索计数）", "次", q),
+            (
+                f"q{i}_pm",
+                f"查询 {i} 每百万词命中数 = 命中数 / 词数 × 10⁶",
+                "次/百万词",
+                q,
+            ),
+        ]
+    if p.get("metrics"):
+        columns += [
+            (m, metrics.LABELS[m], TIDY_METRIC_UNITS.get(m, ""), "")
+            for m in metrics.METRICS
+            if m != "sentences"
+        ]
+    rows = []
+    for doc_id, (title, language, meta, tokens, sentences) in info.items():
+        row = [doc_id, title, language]
+        row += [_cell(meta.get(k)) for k in meta_keys]
+        row += [tokens, sentences]
+        for hits in counts:
+            h = hits.get(doc_id, 0)
+            row += [h, h / tokens * 1e6 if tokens else None]
+        if p.get("metrics"):
+            m = doc_metrics.get(doc_id) or {}
+            row += [m.get(k) for k in metrics.METRICS if k != "sentences"]
+        rows.append(row)
+    run.check()
+    header = [c[0] for c in columns]
+    book_header = ["column", "description", "unit", "query"]
+    book = [list(c) for c in columns]
+    fmt = p["format"]
+    path = export_path(run.id, fmt)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if fmt == "zip":
+        import io
+
+        def csv_bytes(head, body):
+            buf = io.StringIO(newline="")
+            writer = csv.writer(buf)
+            writer.writerow([excel_safe(h) for h in head])
+            writer.writerows(safe_rows(body))
+            return buf.getvalue().encode("utf-8")
+
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr(f"{TIDY_NAME}.csv", csv_bytes(header, rows))
+            z.writestr(f"{TIDY_NAME}.codebook.csv", csv_bytes(book_header, book))
+            if notice:
+                z.writestr("source.txt", "\n".join(notice) + "\n")
+    else:
+        wb = Workbook(write_only=True)
+        title_font = Font(name="宋体", bold=True)
+        sheets = [("data", header, rows), ("codebook", book_header, book)]
+        if notice:
+            sheets.append(("source", ["source"], [[line] for line in notice]))
+        for name, head, body in sheets:
+            ws = wb.create_sheet(name)
+            cells = []
+            for title in head:
+                cell = WriteOnlyCell(ws, value=excel_safe(title))
+                cell.font = title_font
+                cells.append(cell)
+            ws.append(cells)
+            for r in body:
+                ws.append([excel_safe(v) for v in r])
+        wb.save(path)
+    filename = f"整洁数据-{datetime.now():%Y%m%d-%H%M}.{fmt}"
+    with transaction() as db:
+        run.lock(db)
+        run.succeed(
+            db,
+            {"rows": len(rows), "columns": len(columns), "filename": filename},
+        )
+
+
 EXPORTS = {
     "search": run_export,
     "stats": run_export_stats,
+    "tidy": run_export_tidy,
     "evidence": run_export_evidence,
     "layer": run_export_layer,
     "kb_terms": kb_tasks.run_export_terms,
@@ -1405,6 +1675,246 @@ def _translations(db, p, corpus, scope, user, target, params):
     )
 
 
+# ---- P10 statistics (contracts/p10.md §一、二、四、五) ----
+
+P10_METHODS = ("text_metrics", "vocab_profile", "compare", "word_sketch", "sketch_diff")
+LAYER_DOC_BATCH = 200  # documents per read of a dependency layer's effective tokens
+
+
+def _ticker(run, total):
+    """check() for the engine's per-document loops: cancellation, and progress every PROGRESS_SECONDS."""
+    state = {"done": 0, "last": time.monotonic()}
+
+    def check():
+        run.check()
+        state["done"] += 1
+        if time.monotonic() - state["last"] >= PROGRESS_SECONDS:
+            state["last"] = time.monotonic()
+            run.progress(state["done"], total, "计算", "篇")
+
+    return check
+
+
+def _scope_docs(db, corpus, scope):
+    """{document id: (title, language, metadata, tokens, sentences)} of a scope, in corpus order."""
+    filt = scope_filter(db, scope)
+    fields = field_types(db, corpus.id) if filt else {}
+    rows = db.execute(
+        select(
+            Document.id,
+            Document.title,
+            Document.language,
+            Document.meta,
+            Document.token_count,
+            Document.sentence_count,
+        )
+        .where(*effective.scope_clauses(corpus, filt, fields))
+        .order_by(Document.created_at, Document.id)
+    )
+    return {str(i): (t, lg, m or {}, n, s) for i, t, lg, m, n, s in rows}
+
+
+def _index_docs(target, info):
+    """engine.metrics.Doc of the scope: system tokens from the index, title / language / metadata from the
+    database (documents deleted since the index was built are left out)."""
+    from engine.metrics import Doc
+
+    for doc_id, sents in stats.documents(target):
+        if doc_id in info:
+            title, language, meta = info[doc_id][:3]
+            yield Doc(doc_id, title, language, meta, sents)
+
+
+def _layer_docs(db, info, layers):
+    """engine.metrics.Doc with the effective tokens of the layers (dependency layer), from PostgreSQL."""
+    from engine.metrics import Doc
+
+    for chunk in _chunks(info, LAYER_DOC_BATCH):
+        tokens = effective.layer_tokens(db, chunk, layers)
+        for doc_id in chunk:
+            by_sentence = tokens.get(uuid.UUID(doc_id), {})
+            sents = [
+                [
+                    (form, pos, lemma, head, dep)
+                    for _, _, form, pos, lemma, head, dep in toks
+                ]
+                for _, toks in sorted(by_sentence.items())
+            ]
+            title, language, meta = info[doc_id][:3]
+            yield Doc(doc_id, title, language, meta, sents)
+
+
+def _p10(db, run, corpus, scope, user, target, params):
+    p, method = run.params, run.params["method"]
+    if method == "compare":
+        return _compare(db, run, user, params)
+    info = _scope_docs(db, corpus, scope)
+    check = _ticker(run, len(info))
+    filt = scope_filter(db, scope)
+    scope_totals = effective.scope_totals(
+        db, corpus, filt, field_types(db, corpus.id) if filt else {}
+    )
+    if method == "text_metrics":
+        from engine import metrics
+
+        table = metrics.table(
+            _index_docs(target, info),
+            p.get("metrics"),
+            p.get("group_by"),
+            p.get("sttr_window", 1000),
+            check=check,
+        )
+    elif method == "vocab_profile":
+        table = _vocab_profile(db, p, target, info, check, params)
+    else:
+        table = _sketch(db, p, corpus, user, target, info, check)
+    table.totals = {**scope_totals, **table.totals}
+    return table
+
+
+def _vocab_profile(db, p, target, info, check, params):
+    from engine import vocab
+    from services.api.models import VocabEntry, VocabList
+
+    v = db.get(VocabList, uuid.UUID(p["list_id"]))
+    if v is None:
+        raise JobFailed("VOCAB_DELETED", "词表已删除")
+    entries = dict(
+        db.execute(
+            select(VocabEntry.form, VocabEntry.level).where(VocabEntry.list_id == v.id)
+        ).all()
+    )
+    params["vocab_list"] = {
+        "id": str(v.id),
+        "name": v.name,
+        "language": v.language,
+        "source": v.source,
+        "license": v.license,
+        "builtin": v.project_id is None,
+    }
+    return vocab.profile(
+        _index_docs(target, info),
+        entries,
+        list(v.levels),
+        v.language,
+        p.get("by", "corpus"),
+        check=check,
+    )
+
+
+def _sketch(db, p, corpus, user, target, info, check):
+    """Word Sketch / sketch diff: the dependency layer of layers.dep (set by the api for corpora without system
+    dependencies), else the index's system dependencies."""
+    from engine import sketch
+
+    tags = None
+    if p.get("pos"):
+        tags = set(query.resolve_pos(p["pos"], corpus_tagset(corpus)))
+    dep = (p.get("layers") or {}).get("dep")
+    if dep:
+        layers = effective.check_layers(
+            db, LayersInput.model_validate(p["layers"]), corpus, user
+        )
+        docs = _layer_docs(db, info, layers)
+    else:
+        docs = _index_docs(target, info)
+    if p["method"] == "word_sketch":
+        return sketch.sketch(
+            docs, p["lemma"].strip(), tags, p["min_freq"], p["top"], check, dep
+        )
+    return sketch.diff(
+        docs,
+        p["lemma_a"].strip(),
+        p["lemma_b"].strip(),
+        tags,
+        p["min_freq"],
+        p["top"],
+        check,
+        dep,
+    )
+
+
+def _doc_hits(db, text, item_layers, corpus, scope, user, target):
+    """(hits per document id, tokens per document id) of a query in a scope, counted as search counts them:
+    a whole `{…}` / `[…]` query from PostgreSQL (effective annotations), others with CWB; more than
+    SEARCH_MAX_HITS hits raise ValueError."""
+    from services.api.search import MAX_HITS, pg_answered, pure_attr
+
+    ast, cqp = plan_query(text, corpus_tagset(corpus))
+    if not pg_answered(ast, cqp):
+        attr_filter = _hit_filter(
+            db, {"query": text, "layers": item_layers}, corpus, user
+        )
+        hits, sizes, _ = stats.doc_hits(target, text, attr_filter, MAX_HITS)
+        return hits, sizes
+    _, sizes, _ = stats.doc_hits(target, None)
+    layers = effective.check_layers(
+        db, LayersInput.model_validate(item_layers or {}), corpus, user
+    )
+    with_span_layer(db, cqp, layers, corpus, user)
+    filt = scope_filter(db, scope)
+    fields = field_types(db, corpus.id) if filt else {}
+    if query.spans(cqp) and query.pure_span(ast):
+        found = effective.scope_spans(
+            db, corpus, filt, fields, layers["span"], query.spans(cqp)[0]
+        )
+        docs = [str(s["document_id"]) for s in found]
+    else:
+        assert pure_attr(ast)
+        rows = effective.pg_rows(
+            db,
+            corpus,
+            filt,
+            fields,
+            ast.anchor.items[0][0],
+            query.attrs(cqp)[0],
+            layers,
+            limit=MAX_HITS + 1,
+        )
+        docs = [str(r[0]) for r in rows]
+    if len(docs) > MAX_HITS:
+        raise ValueError(f"命中超过 {MAX_HITS}，请缩小范围或加条件")
+    return Counter(d for d in docs if d in sizes), sizes
+
+
+def _compare(db, run, user, params):
+    """Each item's hits per document (as search counts them, failing past SEARCH_MAX_HITS) and the scope's
+    tokens per document from the index; metadata from the database when grouping by a field."""
+    from engine import compare
+
+    p = run.params
+    by, layers = p.get("by"), p.get("query_layers") or [None] * len(p["items"])
+    items, numeric = [], bool(by)
+    for item, item_layers in zip(p["items"], layers):
+        run.check()
+        sc = Scope.model_validate(item["scope"])
+        corpus, restrict = resolve_scope(db, sc, user)
+        target = stats.Scope(index_dir(corpus.id), corpus_key(corpus.id), restrict)
+        hits, sizes = _doc_hits(
+            db, item["query"], item_layers, corpus, sc, user, target
+        )
+        meta = {}
+        if by:
+            meta = {d: v[2] for d, v in _scope_docs(db, corpus, sc).items()}
+            numeric = numeric and field_types(db, corpus.id).get(by) == "number"
+        items.append(
+            {
+                "label": item["label"],
+                "scope_name": _scope_info(db, sc, corpus)["name"],
+                "query": item["query"],
+                "hits": hits,
+                "sizes": sizes,
+                "meta": meta,
+                "search_query": item["query"],
+                "search_scope": sc.model_dump(mode="json", exclude_none=True),
+                "corpus_id": str(corpus.id),
+                "base_filter": scope_filter(db, sc),
+            }
+        )
+    params["item_scopes"] = [it["scope_name"] for it in items]
+    return compare.table(items, by, numeric, p.get("test", "none"))
+
+
 def run_stats(run):
     """CWB scans, CQP runs and the engine's loops stop soon after a cancel (run.cancel, contracts/p9.md §七)."""
     with stats.cancellable(run.cancel):
@@ -1453,6 +1963,13 @@ def _run_stats(run):
                     table = _translations(db, p, corpus, scope, user, target, params)
             except ValueError as e:
                 raise JobFailed("STATS_INVALID", str(e)) from e
+        # P10: documents from the index (or a dependency layer) with their metadata from the database
+        if method in P10_METHODS:
+            run.progress(0, None, "计算")
+            try:
+                table = _p10(db, run, corpus, scope, user, target, params)
+            except ValueError as e:
+                raise JobFailed("STATS_INVALID", str(e)) from e
     run.progress(0, None, "计算")
     try:
         table = table or _compute(p, target, reference, numeric, positions)
@@ -1460,7 +1977,9 @@ def _run_stats(run):
         raise JobFailed("STATS_INVALID", str(e)) from e
     search_scope = scope.model_dump(mode="json", exclude_none=True)
     for row in table.rows:
-        row["search_scope"] = search_scope
+        row.setdefault(
+            "search_scope", search_scope
+        )  # comparison rows carry their item's scope
         # by field (distribution, breakdown meta:): temporary filter for that value
         if "bin_value" in row:
             field = p["field"] if method == "distribution" else p["by"][5:]

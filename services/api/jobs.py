@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api")
 
 ACTIVE = ("queued", "running")
 CORPUS_STATUS_FOR_KIND = {"import": "importing", "index": "indexing"}
-HEAVY_KINDS = ("import", "index")
+HEAVY_KINDS = ("import", "index", "embed_corpus")  # long lane (embed_corpus: always)
 _HUGE = 2**62
 
 
@@ -118,6 +118,7 @@ EXPORT_TYPES = {
     "brat": "application/zip",
     "json": "application/json",
     "tmx": "application/xml",
+    "zip": "application/zip",  # tidy data as CSV: table and codebook
 }
 
 
