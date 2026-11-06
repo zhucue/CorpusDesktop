@@ -1,0 +1,20 @@
+/* WordSketch / SketchDiff column cards and the CompareChart legend (contracts/p10.md §四–五). */
+.sk-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.sk-cols.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 640px) { .sk-cols.three { grid-template-columns: 1fr; } }
+.sk-col { border: 1px solid var(--line-soft); border-radius: var(--radius-sm); min-width: 0; overflow: hidden; }
+.sk-col-h { display: flex; align-items: baseline; gap: 6px; padding: 6px 10px; background: var(--surface-2); border-bottom: 1px solid var(--line-soft); font-size: 12.5px; font-weight: 600; }
+.sk-col-h .muted { font-weight: 400; margin-left: auto; }
+.sk-col table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sk-col td { padding: 4px 10px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.sk-col tr:last-child td { border-bottom: 0; }
+.sk-col td.w { overflow: hidden; text-overflow: ellipsis; max-width: 0; width: 100%; }
+.sk-col td.r { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.sk-col tr.go { cursor: pointer; }
+.sk-col tr.go:hover td { background: var(--surface-2); }
+.sk-col tr.go:focus-visible td { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sk-col .rel { display: block; font-size: 11px; color: var(--text-4); overflow: hidden; text-overflow: ellipsis; }
+.sk-col .none { padding: 8px 10px; font-size: 12px; color: var(--text-3); }
+.cmp-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+.cmp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.cmp-legend i { width: 10px; height: 10px; border-radius: 3px; background: var(--pc); }

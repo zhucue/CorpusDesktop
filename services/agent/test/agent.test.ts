@@ -7,10 +7,11 @@ import type { Config } from '../src/config.ts';
 import { createModel } from '../src/model.ts';
 import { systemPrompt } from '../src/prompt.ts';
 import { Runner } from '../src/runner.ts';
-import { CONFIRM_TOOLS } from '../src/tools.ts';
+import { findSkill, readSkill, researchSkills } from '../src/skills.ts';
+import { CONFIRM_TOOLS, piName, toolSpecs } from '../src/tools.ts';
 import { createApp } from '../src/server.ts';
 import {
-  AGENT_TOKEN, AGREEMENT, ALIGN_LAYER, APPENDIX, SAMPLE_LAYER, SAMPLE_SUMMARY, BUILTIN_CORPUS, CORPUS, COOKIE, DEP_LAYER, KB_SEARCH, SPAN_LAYER, LONG_CHUNK, MemoryStore, ORIGIN, PROJECT, USER, fakeApi, fakeModel, parseSse, testConfig, type Reply,
+  AGENT_TOKEN, AGREEMENT, SEMANTIC_HITS, VOCAB_LISTS, ALIGN_LAYER, APPENDIX, SAMPLE_LAYER, SAMPLE_SUMMARY, BUILTIN_CORPUS, CORPUS, COOKIE, DEP_LAYER, KB_SEARCH, SPAN_LAYER, LONG_CHUNK, MemoryStore, ORIGIN, PROJECT, USER, fakeApi, fakeModel, parseSse, testConfig, type Reply,
 } from './fixtures.ts';
 
 const closers: (() => Promise<void>)[] = [];
@@ -138,8 +139,10 @@ test('full run: search and collocation tools, prose and OpenUI streamed, message
   assert.match(system, /KwicTable\(search_id: string/);
   assert.match(system, /UD 中文/);
   const toolNames = model.requests[0].body.tools.map((t: any) => t.function.name);
-  assert.equal(toolNames.length, 44);
-  assert.ok(!toolNames.some((n: string) => ['read', 'bash', 'edit', 'write'].includes(n)));
+  assert.equal(toolNames.length, 53);
+  // 'read' is the skills-only reader (skills.read); Pi's own file tools stay off
+  assert.ok(!toolNames.some((n: string) => ['bash', 'edit', 'write'].includes(n)));
+  assert.equal(toolNames.filter((n: string) => n === 'read').length, 1);
   assert.ok(toolNames.includes('stats_collocations') && toolNames.includes('jobs_cancel') && toolNames.includes('kb_search') && toolNames.includes('align_suggest'));
 
   // persisted: user + assistant, session idle, title from first message, Pi session file present
@@ -545,8 +548,8 @@ test('TermCard block parses with the contract props', () => {
   assert.equal(card.props.status, 'confirmed');
 });
 
-test('catalog lists the 16 components with the P3, P4, P5 and P8 signatures', () => {
-  assert.equal(COMPONENTS.length, 16);
+test('catalog lists the 19 components with the P3, P4, P5, P8 and P10 signatures', () => {
+  assert.equal(COMPONENTS.length, 19);
   const catalog = componentCatalog();
   for (const component of COMPONENTS) assert.ok(catalog.includes(component.name), component.name);
   assert.match(catalog, /DependencyTree\(document_id: string, sentence_index: number, tokens: .*arcs: .*highlight\?/);
@@ -1153,4 +1156,192 @@ test('confirm execute is refused with LLM_QUOTA_EXCEEDED over the limit and noth
   assert.equal((await pending(call, session.id)).length, 1, 'the card stays open');
   const declined = await call('POST', `/agent/sessions/${session.id}/confirm`, { tool_call_ids: [proposal.id], action: 'decline' });
   assert.equal(declined.status, 200);
+});
+
+// ---- P10 research tools, skills and components (contracts/p10.md §九)
+
+test('P10 stats tools and search.semantic map their parameters onto the api bodies', async () => {
+  const { api, model, call, createSession } = await setup([
+    { tool: 'stats_text_metrics', args: { group_by: 'level' } },
+    { tool: 'vocab_lists', args: {} },
+    { tool: 'stats_vocab_profile', args: { list_id: 'vl-ngsl', by: 'document' } },
+    { tool: 'stats_compare', args: { items: [{ label: 'big', query: '{lemma=big}' }, { label: 'large', query: '{lemma=large}', scope: { subcorpus_id: 'sub-1' } }], by: 'year', test: 'spearman' } },
+    { tool: 'search_semantic', args: { text: '我喜欢读书' } },
+    { text: '完成。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '研究' })).text());
+  const results = events.filter(e => e.event === 'tool_result').map(e => e.data);
+  assert.deepEqual(results.map(r => [r.name, r.state]), [
+    ['stats.text_metrics', 'succeeded'], ['vocab.lists', 'succeeded'], ['stats.vocab_profile', 'succeeded'],
+    ['stats.compare', 'succeeded'], ['search.semantic', 'succeeded'],
+  ]);
+  assert.equal(results[4].result_summary, '语义相近 25 句');
+
+  const body = (path: string) => api.requests.find(r => r.path === path)!.body;
+  assert.deepEqual(body('/stats/text_metrics'), { scope: { corpus_id: CORPUS }, group_by: 'level', sttr_window: 1000 });
+  assert.deepEqual(body('/stats/vocab_profile'), { scope: { corpus_id: CORPUS }, list_id: 'vl-ngsl', by: 'document' });
+  assert.deepEqual(body('/stats/compare'), {
+    items: [{ label: 'big', scope: { corpus_id: CORPUS }, query: '{lemma=big}' }, { label: 'large', scope: { subcorpus_id: 'sub-1' }, query: '{lemma=large}' }],
+    by: 'year', test: 'spearman',
+  });
+  assert.deepEqual(body('/search/semantic'), { scope: { corpus_id: CORPUS }, text: '我喜欢读书', top: 50 });
+  assert.equal(api.requests.find(r => r.path === '/search/semantic')!.headers.authorization, `Bearer ${AGENT_TOKEN}`);
+
+  const [, lists, , compare, semantic] = toolResults(model, 5);
+  assert.deepEqual(lists.items.map((l: any) => [l.list_id, l.name, l.builtin, l.levels.length]), [['vl-ngsl', 'NGSL 1.2', true, 3], ['vl-hsk', 'HSK 3.0', false, 2]]);
+  assert.equal(lists.items[0].license, VOCAB_LISTS[0].license);
+  assert.equal(compare.stat_id, 'stat-cmp');
+  assert.deepEqual(compare.rows[0].search_scope, { corpus_id: CORPUS, filter: { year: ['2001'] } });
+  assert.equal(compare.rows[1].search_scope, undefined);
+  assert.equal(compare.rows[0].search_query, '{lemma=big}');
+  assert.equal(semantic.hits.length, 20);
+  assert.deepEqual(semantic.hits[0], {
+    hit_id: SEMANTIC_HITS[0].hit_id, sentence_index: 0, left: '', match: '我爱看书 0', right: '', source: '文档 0', score: 0.9,
+  });
+  assert.deepEqual(semantic.counts, { hits: 25, sentences: 25, documents: 3 });
+  assert.equal(semantic.scope_name, 'UD 中文');
+});
+
+test('word_sketch groups rows by relation; sketch_diff splits the sides; WordSketch and SketchDiff blocks parse', async () => {
+  const sketch = [
+    'root = WordSketch("stat-ws", "make", relations, "VERB")',
+    'relations = [{relation: "宾语", rows: [{collocate: "decision", freq: 40, logdice: 11, search_query: "{lemma=make} []{0,3} {lemma=decision}"}]}, {relation: "主语", rows: [{collocate: "we", freq: 9, logdice: 8.2}]}]',
+  ].join('\n');
+  const diff = [
+    'root = SketchDiff("stat-sd", "big", "large", a, common, b, {dep: "layer-dep"})',
+    'a = [{relation: "修饰", collocate: "deal", freq_a: 12, freq_b: 0, diff: 9.1, search_query: "{lemma=big} {lemma=deal}"}]',
+    'common = [{relation: "修饰", collocate: "house", freq_a: 5, freq_b: 6, diff: -0.3, search_query: null}]',
+    'b = [{relation: "修饰", collocate: "number", freq_a: 0, freq_b: 20, diff: -10.2}]',
+  ].join('\n');
+  const { api, model, call, createSession } = await setup([
+    { tool: 'stats_word_sketch', args: { lemma: 'make', pos: 'VERB' } },
+    { tool: 'stats_sketch_diff', args: { lemma_a: 'big', lemma_b: 'large', pos: 'ADJ' } },
+    { text: `make 的宾语以 decision 最强。\n\n\`\`\`openui-lang\n${sketch}\n\`\`\`\n\n\`\`\`openui-lang\n${diff}\n\`\`\`\n` },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '比较 big 和 large 的用法' })).text());
+  const results = events.filter(e => e.event === 'tool_result').map(e => e.data);
+  assert.deepEqual(results.map(r => [r.name, r.state, r.result_ref?.id]), [['stats.word_sketch', 'succeeded', 'stat-ws'], ['stats.sketch_diff', 'succeeded', 'stat-sd']]);
+  assert.equal(results[0].result_summary, 'Word Sketch：14 行');
+
+  const body = (path: string) => api.requests.find(r => r.path === path)!.body;
+  assert.deepEqual(body('/stats/word_sketch'), { scope: { corpus_id: CORPUS }, lemma: 'make', pos: 'VERB', min_freq: 2, top: 25 });
+  assert.deepEqual(body('/stats/sketch_diff'), { scope: { corpus_id: CORPUS }, lemma_a: 'big', lemma_b: 'large', pos: 'ADJ', min_freq: 2, top: 25 });
+
+  const [ws, sd] = toolResults(model, 2);
+  assert.equal(ws.rows, undefined);
+  // totals.relations order; a relation without rows is left out; at most 10 per relation
+  assert.deepEqual(ws.relations.map((r: any) => [r.relation, r.rows.length]), [['宾语', 10], ['主语', 2]]);
+  assert.deepEqual(ws.relations[0].rows[0], { collocate: 'decision', freq: 40, logdice: 11, search_query: '{lemma=make} []{0,3} {lemma=decision}' });
+  assert.equal(ws.relations[1].rows[1].search_query, null);
+  assert.deepEqual(Object.fromEntries(Object.entries(sd.sides).map(([side, rows]: [string, any]) => [side, rows.map((r: any) => r.collocate)])),
+    { a: ['deal', 'size'], common: ['house'], b: ['number', 'scale'] });
+  assert.deepEqual(sd.sides.a[0], {
+    relation: '修饰', collocate: 'deal', freq_a: 12, freq_b: 0, logdice_a: 9.1, logdice_b: null, diff: 9.1, search_query: '{lemma=big} {lemma=deal}',
+  });
+  // the dependency layer of the sketch goes with the card, not with every row
+  assert.deepEqual(sd.search_layers, { dep: 'layer-dep' });
+  assert.equal(ws.search_layers, undefined);
+
+  const parser = createParser(library.toJSONSchema());
+  const blocks = events.at(-1)!.data.message.parts.filter((p: any) => p.type === 'ui').map((p: any) => parser.parse(p.lang).root as any);
+  assert.deepEqual(blocks.map((b: any) => b?.typeName), ['WordSketch', 'SketchDiff']);
+  assert.equal(blocks[0].props.pos, 'VERB');
+  assert.equal(blocks[0].props.relations[0].rows[0].collocate, 'decision');
+  assert.deepEqual([blocks[1].props.a[0].collocate, blocks[1].props.common[0].search_query, blocks[1].props.b[0].freq_b], ['deal', null, 20]);
+  assert.deepEqual(blocks[1].props.layers, { dep: 'layer-dep' });
+});
+
+test('export.tidy needs confirmation, then posts the tidy export and returns the job', async () => {
+  const { api, model, call, createSession } = await setup([
+    { tool: 'export_tidy', args: { queries: ['"翻译"', '{lemma=译}'], metrics: true, format: 'xlsx' } },
+    { text: '将导出整洁数据，请确认。' }, { text: '已提交导出。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '导出给 R 用的数据表' })).text());
+  const proposed = events.find(e => e.event === 'tool_result')!.data;
+  assert.deepEqual([proposed.name, proposed.state], ['export.tidy', 'needs_confirmation']);
+  assert.deepEqual(proposed.confirm, { title: '导出整洁数据（XLSX）', lines: ['范围：UD 中文', '查询："翻译"；{lemma=译}', '附文本指标'] });
+  assert.ok(!api.requests.some(r => r.path === '/stats/tidy_export'), 'nothing is exported before 执行');
+
+  const confirmed = await confirmAll(call, session.id);
+  assert.deepEqual(confirmed.filter(e => e.event === 'tool_result').map(e => [e.data.name, e.data.state, e.data.result_ref]),
+    [['export.tidy', 'succeeded', { kind: 'job', id: 'job-tidy' }]]);
+  assert.deepEqual(api.requests.find(r => r.path === '/stats/tidy_export')!.body, {
+    scope: { corpus_id: CORPUS }, queries: ['"翻译"', '{lemma=译}'], metrics: true, format: 'xlsx',
+  });
+  const [result] = confirmedResults(model, 2);
+  assert.deepEqual([result.job_id, result.kind, result.state], ['job-tidy', 'export', 'queued']);
+});
+
+test('research skills: five Pi skills load from services/agent/skills; every tool they name exists', () => {
+  const { skills, diagnostics } = researchSkills();
+  assert.deepEqual(diagnostics, []);
+  assert.deepEqual(skills.map(s => s.name).sort(), ['keyword-analysis', 'learner-error-analysis', 'methods-section', 'synonym-comparison', 'translation-study']);
+  const piNames = new Set(toolSpecs({ api: null as never, projectId: '', scope: null, jobPollMs: 0, jobWaitMs: 0 }).map(t => piName(t.name)));
+  for (const skill of skills) {
+    assert.ok(skill.description.trim().length > 10, skill.name);
+    assert.equal(skill.disableModelInvocation, false);
+    const { title, content } = readSkill(skill);
+    assert.ok(title.length > 0);
+    for (const heading of ['## 适用问题', '## 步骤', '## 工具与参数', '## 呈现', '## 口径与局限']) assert.ok(content.includes(heading), `${skill.name} ${heading}`);
+    const named = content.match(/\b(?:corpora|corpus|subcorpora|stats|methods|sample|evidence|queries|export|jobs|annot|align|kb|vocab)_[a-z_]+\b/g) ?? [];
+    assert.ok(named.length > 0, skill.name);
+    for (const name of named) assert.ok(piNames.has(name), `${skill.name}: ${name}`);
+  }
+  assert.equal(findSkill(String.raw`C:\elsewhere\synonym-comparison.md`)?.name, 'synonym-comparison');
+  assert.equal(findSkill('/etc/passwd'), undefined);
+});
+
+test('the system prompt lists the skills; read loads a skill file and refuses other files', async () => {
+  const location = researchSkills().skills.find(s => s.name === 'synonym-comparison')!.filePath;
+  const { model, call, createSession } = await setup([
+    { tool: 'read', args: { path: location } },
+    { tool: 'read', args: { path: '/etc/passwd' } },
+    { text: '按近义词辨析流程进行。' },
+  ]);
+  const session = await createSession();
+  const events = parseSse(await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '比较 big 和 large 的用法' })).text());
+  const request = JSON.stringify(model.requests[0].body);
+  assert.ok(request.includes('<available_skills>'));
+  for (const name of ['keyword-analysis', 'synonym-comparison', 'translation-study', 'learner-error-analysis', 'methods-section']) assert.ok(request.includes(name), name);
+  assert.ok(request.includes('先用 read 读取该流程文件'));
+  const readTool = model.requests[0].body.tools.find((t: any) => t.function?.name === 'read');
+  assert.match(readTool.function.description, /研究流程/);
+
+  const results = events.filter(e => e.event === 'tool_result').map(e => e.data);
+  assert.deepEqual(results.map(r => [r.name, r.state]), [['skills.read', 'succeeded'], ['skills.read', 'failed']]);
+  assert.equal(results[0].result_summary, '研究流程：近义词辨析');
+  assert.match(results[1].result_summary, /SKILL_NOT_FOUND/);
+  const [skill] = toolResults(model, 1);
+  assert.equal(skill.name, 'synonym-comparison');
+  assert.match(skill.content, /stats_sketch_diff/);
+  assert.ok(!skill.content.startsWith('---'), 'frontmatter stripped');
+});
+
+test('P10 components: catalog signatures, semantic KwicTable block, prompt rules and write gate', () => {
+  const catalog = componentCatalog();
+  assert.match(catalog, /WordSketch\(stat_id: string, lemma: string, relations: .*pos\?: string, layers\?: /);
+  assert.match(catalog, /SketchDiff\(stat_id: string, lemma_a: string, lemma_b: string, a: .*common: .*b: .*layers\?: /);
+  assert.match(catalog, /CompareChart\(stat_id: string, title: string, unit: string, categories: string\[\], series: .*chart: /);
+  assert.match(catalog, /KwicTable\(search_id: string, .*rows: .*score\?: number.*mode\?: /);
+  const parser = createParser(library.toJSONSchema());
+  const card = parser.parse('root = KwicTable("", "我喜欢读书", "UD 中文", {hits: 2, sentences: 2, documents: 1}, [{hit_id: "doc0:0-6", left: "", match: "我爱看书", right: "", source: "文档 0", score: 0.9}], 2, "semantic")').root as any;
+  assert.equal(card?.typeName, 'KwicTable');
+  assert.equal(card.props.search_id, '');
+  assert.equal(card.props.mode, 'semantic');
+  assert.equal(card.props.rows[0].score, 0.9);
+  const chart = parser.parse('root = CompareChart("stat-cmp", "big / large", "每百万词", ["2001", "2002"], [{name: "big", values: [120.5, 98]}, {name: "large", values: [80, null]}], "line")').root as any;
+  assert.equal(chart?.typeName, 'CompareChart');
+  assert.deepEqual(chart.props.series[1].values, [80, null]);
+
+  assert.ok(CONFIRM_TOOLS.has('export.tidy'));
+  for (const name of ['stats.text_metrics', 'vocab.lists', 'stats.vocab_profile', 'stats.compare', 'stats.word_sketch', 'stats.sketch_diff', 'search.semantic', 'skills.read']) {
+    assert.ok(!CONFIRM_TOOLS.has(name), name);
+  }
+  const prompt = systemPrompt('UD 中文');
+  for (const text of ['stats_word_sketch 用 WordSketch', 'stats_sketch_diff 用 SketchDiff', 'CompareChart', 'search_semantic 用 KwicTable', '近义词辨析', '数字只来自工具结果', '不代写研究结论']) {
+    assert.ok(prompt.includes(text), text);
+  }
 });

@@ -12,14 +12,16 @@ type Aligned = { op: "+" | "-"; query: string };
  * Search page link of a stat row (contracts/p8.md §一、§四): q, scope (the row's search_scope, else the session scope)
  * and, for translation rows, `aligned` as JSON {op, query} — same convention as the `layers` parameter.
  */
-export function rowSearchUrl(projectId: string, query: string, scope: SearchScope | null, aligned?: Aligned): string {
+export function rowSearchUrl(projectId: string, query: string, scope: SearchScope | null, aligned?: Aligned, layers?: Record<string, string | undefined>): string {
   const p = new URLSearchParams({ q: query });
   if (scope) p.set("scope", JSON.stringify(scope));
+  // word sketch rows on a Chinese dependency layer ({dep=…}) search the same layer
+  if (layers && Object.values(layers).some(Boolean)) p.set("layers", JSON.stringify(layers));
   if (aligned) p.set("aligned", JSON.stringify({ op: aligned.op, query: aligned.query }));
   return `/p/${projectId}/search?${p.toString()}`;
 }
 
-function StatFoot({ statId }: { statId: string }) {
+export function StatFoot({ statId }: { statId: string }) {
   const { projectId } = useContext(ResultContext);
   return (
     <Link className="btn xs" to={`/p/${projectId}/stats?stat=${encodeURIComponent(statId)}`}>

@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 export const KwicTable = defineComponent({
   name: 'KwicTable',
-  description: '检索命中的 KWIC 列表。corpus_search 之后使用；rows 取工具返回的 hits，保留 hit_id。',
+  description: '检索命中的 KWIC 列表。corpus_search 之后使用；rows 取工具返回的 hits，保留 hit_id。search_semantic 之后也用它：search_id 写 ""，query 为输入句，counts 取工具结果，rows 每条带 score（相似度），mode 写 "semantic"。',
   props: z.object({
     search_id: z.string(),
     query: z.string(),
@@ -17,9 +17,10 @@ export const KwicTable = defineComponent({
     counts: z.object({ hits: z.number(), sentences: z.number(), documents: z.number() }),
     rows: z.array(z.object({
       hit_id: z.string(), left: z.string(), match: z.string(), right: z.string(), source: z.string(),
-      aligned: z.string().optional(),
+      aligned: z.string().optional(), score: z.number().optional(),
     })),
     total: z.number(),
+    mode: z.enum(['query', 'semantic']).optional(),
   }),
   component: null,
 });
@@ -216,9 +217,64 @@ export const AlignmentGraph = defineComponent({
   component: null,
 });
 
+const SketchLayers = z.object({ dep: z.string().optional() }).optional();
+const sketchRow = {
+  collocate: z.string(), search_query: z.string().nullable().optional(),
+};
+
+export const WordSketch = defineComponent({
+  name: 'WordSketch',
+  description: 'Word Sketch 分栏卡。stats_word_sketch 之后使用：relations 从工具结果的 relations 原样复制（每栏 relation 为栏名，rows 每行 collocate、freq、logdice、search_query），可只放用户关心的栏；点击行回到例句；pos 为节点词性（没有就省略）；layers 从工具结果的 search_layers 复制（没有就省略）。',
+  props: z.object({
+    stat_id: z.string(),
+    lemma: z.string(),
+    relations: z.array(z.object({
+      relation: z.string(),
+      rows: z.array(z.object({ ...sketchRow, freq: z.number(), logdice: z.number() })),
+    })),
+    pos: z.string().optional(),
+    layers: SketchLayers,
+  }),
+  component: null,
+});
+
+const diffRow = z.object({
+  ...sketchRow, relation: z.string(), freq_a: z.number(), freq_b: z.number(), diff: z.number(),
+});
+
+export const SketchDiff = defineComponent({
+  name: 'SketchDiff',
+  description: '近义词对比三列卡（偏 A / 共同 / 偏 B）。stats_sketch_diff 之后使用：a、common、b 分别从工具结果 sides 的 a、common、b 原样复制（每行 relation、collocate、freq_a、freq_b、diff、search_query）；点击行回到例句；layers 从工具结果的 search_layers 复制（没有就省略）。',
+  props: z.object({
+    stat_id: z.string(),
+    lemma_a: z.string(),
+    lemma_b: z.string(),
+    a: z.array(diffRow),
+    common: z.array(diffRow),
+    b: z.array(diffRow),
+    layers: SketchLayers,
+  }),
+  component: null,
+});
+
+export const CompareChart = defineComponent({
+  name: 'CompareChart',
+  description: '多项对比的多系列折线图或分组柱图。stats_compare 带 by 时使用：categories 为各行的字段值（按行顺序），series 每项一个系列，name 为该项 label，values 为各行该项的每百万词（与 categories 一一对应）；chart 为 line（有序字段如年份）或 bar（体裁等类别）；unit 写“每百万词”。',
+  props: z.object({
+    stat_id: z.string(),
+    title: z.string(),
+    unit: z.string(),
+    categories: z.array(z.string()),
+    series: z.array(z.object({ name: z.string(), values: z.array(z.number().nullable()) })),
+    chart: z.enum(['line', 'bar']),
+  }),
+  component: null,
+});
+
 export const COMPONENTS = [
   KwicTable, FreqChart, CollocationTable, KeywordTable, DistributionChart, EvidenceCard, JobStatus, Callout,
   DependencyTree, AnnotationDiff, TermCard, KbCitation, SpanView, AlignmentGraph, BreakdownTable, TranslationTable,
+  WordSketch, SketchDiff, CompareChart,
 ];
 export const COMPONENT_NAMES = COMPONENTS.map(component => component.name);
 

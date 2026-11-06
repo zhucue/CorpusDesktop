@@ -212,7 +212,9 @@ export const DISAGREEMENTS = Array.from({ length: 12 }, (_, i) => ({
 }));
 
 // ---- P8 translations, breakdown, method appendix, samples (contracts/p8.md)
-const STAT_OF_JOB: Record<string, string> = { 'job-translations': 'stat-tr', 'job-breakdown': 'stat-bd' };
+const STAT_OF_JOB: Record<string, string> = {
+  'job-translations': 'stat-tr', 'job-breakdown': 'stat-bd', 'job-word_sketch': 'stat-ws', 'job-sketch_diff': 'stat-sd', 'job-compare': 'stat-cmp',
+};
 const statBase = (id: string, method: string) => ({
   id, project_id: PROJECT, method, params: {}, scope: { corpus_id: CORPUS, subcorpus_id: null, name: 'UD 中文' },
   index_version: 'v1', created_at: '2026-11-05T00:00:00Z',
@@ -246,6 +248,57 @@ export const SAMPLE_SUMMARY = {
   total_hits: 2, sampled: 2, coded: 1, rejected: 0,
   labels: [{ label: '直译', count: 1, pct: 100, ci_low: 20.65, ci_high: 100, estimate: 2 }],
 };
+
+// ---- P10 research tools (contracts/p10.md)
+export const WORD_SKETCH_STAT = {
+  ...statBase('stat-ws', 'word_sketch'),
+  totals: { lemma: 'make', node_freq: 300, relations: [{ key: 'obj', label: '宾语', freq: 200, rows: 12 }, { key: 'nsubj', label: '主语', freq: 14, rows: 2 }, { key: 'pp:with', label: 'with + N', freq: 0, rows: 0 }] },
+  columns: [{ key: 'relation', label: '关系', type: 'string' }, { key: 'collocate', label: '搭配词', type: 'string' }, { key: 'freq', label: '频次', type: 'number' }, { key: 'logdice', label: 'logDice', type: 'number' }],
+  // 12 objects, 2 subjects; the third relation has no rows
+  rows: [
+    ...Array.from({ length: 12 }, (_, i) => {
+      const word = i ? `w${i}` : 'decision';
+      return {
+        key: `obj	${word}`, values: { relation: 'obj', relation_label: '宾语', collocate: word, freq: 40 - i, coll_freq: 90, logdice: 11 - i / 10 },
+        search_query: i ? null : '{lemma=make} []{0,3} {lemma=decision}',
+      };
+    }),
+    { key: 'nsubj	we', values: { relation: 'nsubj', relation_label: '主语', collocate: 'we', freq: 9, coll_freq: 50, logdice: 8.2 }, search_query: '{lemma=we} {lemma=make}' },
+    { key: 'nsubj	they', values: { relation: 'nsubj', relation_label: '主语', collocate: 'they', freq: 5, coll_freq: 40, logdice: 7.1 }, search_query: null },
+  ],
+  row_count: 14,
+};
+export const SKETCH_DIFF_STAT = {
+  ...statBase('stat-sd', 'sketch_diff'),
+  totals: { lemma_a: 'big', lemma_b: 'large', relations: [{ key: 'amod', label: '修饰', freq_a: 18, freq_b: 35, rows: 5 }] },
+  columns: [{ key: 'collocate', label: '搭配词', type: 'string' }, { key: 'diff', label: '差', type: 'number' }],
+  rows: [
+    { key: 'a:deal', values: { relation: 'amod', relation_label: '修饰', collocate: 'deal', freq_a: 12, freq_b: 0, logdice_a: 9.1, logdice_b: null, diff: 9.1, group: 'a' }, search_query: '{lemma=big} {lemma=deal}', search_layers: { dep: 'layer-dep' } },
+    { key: 'c:house', values: { relation: 'amod', relation_label: '修饰', collocate: 'house', freq_a: 5, freq_b: 6, logdice_a: 7.2, logdice_b: 7.5, diff: -0.3, group: 'common' }, search_query: null },
+    { key: 'b:number', values: { relation: 'amod', relation_label: '修饰', collocate: 'number', freq_a: 0, freq_b: 20, logdice_a: 0, logdice_b: 10.2, diff: -10.2, group: 'b' }, search_query: '{lemma=large} {lemma=number}' },
+    { key: 's:scale', values: { relation: 'amod', relation_label: '修饰', collocate: 'scale', freq_a: 1, freq_b: 9, logdice_a: 3, logdice_b: 8, diff: -5, group: 'b' }, search_query: null },
+    { key: 'amod	size', values: { relation: 'amod', relation_label: '修饰', collocate: 'size', freq_a: 3, freq_b: 0, logdice_a: 5, logdice_b: null, diff: 5 }, search_query: null },
+  ],
+  row_count: 5,
+};
+export const COMPARE_STAT = {
+  ...statBase('stat-cmp', 'compare'),
+  totals: { tokens: 1000, sentences: 80, documents: 5 },
+  columns: [{ key: 'item', label: '字段值', type: 'string' }, { key: 'big', label: 'big', type: 'number' }, { key: 'large', label: 'large', type: 'number' }],
+  rows: [
+    { key: '2001', values: { item: '2001', big: 120.5, large: 80 }, search_query: '{lemma=big}', search_scope: { corpus_id: CORPUS, filter: { year: ['2001'] } } },
+    { key: '2002', values: { item: '2002', big: 98, large: 101.2 }, search_query: '{lemma=big}', search_scope: { corpus_id: CORPUS } },
+  ],
+  row_count: 2,
+};
+export const VOCAB_LISTS = [
+  { id: 'vl-ngsl', project_id: null, name: 'NGSL 1.2', language: 'en', levels: ['1', '2', '3'], source: 'Browne et al.', license: 'CC BY-SA 4.0', created_by: null, created_at: '2026-11-05T00:00:00Z' },
+  { id: 'vl-hsk', project_id: PROJECT, name: 'HSK 3.0', language: 'zh', levels: ['HSK1', 'HSK2'], source: '用户上传', license: null, created_by: USER.id, created_at: '2026-11-05T00:00:00Z' },
+];
+export const SEMANTIC_HITS = Array.from({ length: 25 }, (_, i) => ({
+  hit_id: `doc${i % 3}:0-6`, document_id: `doc${i % 3}`, document_title: `文档 ${i % 3}`, sentence_index: i, left: '', match: `我爱看书 ${i}`, right: '',
+  start_cp: 0, end_cp: 6, metadata: {}, aligned: [], score: 0.9 - i / 100,
+}));
 
 export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' } = {}) {
   const requests: ApiRequest[] = [];
@@ -301,7 +354,7 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
         items: HITS, page: 1, page_size: 20,
       });
     }
-    const statJob = /^\/stats\/(frequency|ngrams|collocations|keywords|distribution|breakdown|translations)$/.exec(path);
+    const statJob = /^\/stats\/(frequency|ngrams|collocations|keywords|distribution|breakdown|translations|text_metrics|vocab_profile|compare|word_sketch|sketch_diff)$/.exec(path);
     if (statJob && request.method === 'POST') {
       return json(response, 200, { id: `job-${statJob[1]}`, project_id: PROJECT, kind: 'stats', state: 'queued', progress: { done: 0, total: null, message: '' }, result: null, error: null });
     }
@@ -357,6 +410,14 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
     }
     if (path === '/stats/stat-tr') return json(response, 200, TRANSLATION_STAT);
     if (path === '/stats/stat-bd') return json(response, 200, BREAKDOWN_STAT);
+    if (path === '/stats/stat-ws') return json(response, 200, WORD_SKETCH_STAT);
+    if (path === '/stats/stat-sd') return json(response, 200, SKETCH_DIFF_STAT);
+    if (path === '/stats/stat-cmp') return json(response, 200, COMPARE_STAT);
+    if (path === `/projects/${PROJECT}/vocab-lists` && request.method === 'GET') return json(response, 200, VOCAB_LISTS);
+    if (path === '/search/semantic' && request.method === 'POST') return json(response, 200, { items: SEMANTIC_HITS.slice(0, body.top) });
+    if (path === '/stats/tidy_export' && request.method === 'POST') {
+      return json(response, 200, { id: 'job-tidy', project_id: PROJECT, kind: 'export', state: 'queued', progress: { done: 0, total: null, message: '' }, result: null, error: null });
+    }
     // ---- P8 method appendix and samples (contracts/p8.md §五–六)
     if (path === `/projects/${PROJECT}/method-appendix` && request.method === 'POST') return json(response, 200, APPENDIX);
     if (path === `/projects/${PROJECT}/samples` && request.method === 'POST') return json(response, 201, { layer_id: SAMPLE_LAYER, sampled: body.n, total: 2 });

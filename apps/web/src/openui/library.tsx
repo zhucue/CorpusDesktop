@@ -14,21 +14,31 @@ import {
 import { AnnotationDiffCard, DependencyTreeCard } from "../components/results/annotCards";
 import { AlignmentGraphCard, SpanViewCard } from "../components/results/annot2Cards";
 import { KbCitationCard, TermCardView } from "../components/results/kbCards";
+import { CompareChartCard, SketchDiffCard, WordSketchCard } from "./sketchCards";
 import { BreakdownTableCard, TranslationTableCard } from "./statCards";
 
 // Names, prop order and schemas mirror services/agent/src/components.ts (positional OpenUI Lang args).
 export const KwicTable = defineComponent({
   name: "KwicTable",
-  description: "检索命中的 KWIC 列表。",
+  description: "检索命中的 KWIC 列表；mode semantic 为语义检索结果，rows 带相似度 score。",
   props: z.object({
     search_id: z.string(),
     query: z.string(),
     scope_name: z.string(),
     counts: z.object({ hits: z.number(), sentences: z.number(), documents: z.number() }),
     rows: z.array(
-      z.object({ hit_id: z.string(), left: z.string(), match: z.string(), right: z.string(), source: z.string(), aligned: z.string().optional() }),
+      z.object({
+        hit_id: z.string(),
+        left: z.string(),
+        match: z.string(),
+        right: z.string(),
+        source: z.string(),
+        aligned: z.string().optional(),
+        score: z.number().optional(),
+      }),
     ),
     total: z.number(),
+    mode: z.enum(["query", "semantic"]).optional(),
   }),
   component: ({ props }) => <KwicTableCard {...props} />,
 });
@@ -232,6 +242,45 @@ export const TranslationTable = defineComponent({
   component: ({ props }) => <TranslationTableCard {...props} />,
 });
 
+const sketchLayers = z.object({ dep: z.string().optional() }).optional();
+const sketchLink = { collocate: z.string(), search_query: z.string().nullable().optional() };
+
+export const WordSketch = defineComponent({
+  name: "WordSketch",
+  description: "Word Sketch 分栏卡：每个依存关系一栏，搭配词、频次、logDice；行打开例句。",
+  props: z.object({
+    stat_id: z.string(),
+    lemma: z.string(),
+    relations: z.array(z.object({ relation: z.string(), rows: z.array(z.object({ ...sketchLink, freq: z.number(), logdice: z.number() })) })),
+    pos: z.string().optional(),
+    layers: sketchLayers,
+  }),
+  component: ({ props }) => <WordSketchCard {...props} />,
+});
+
+const diffRow = z.object({ ...sketchLink, relation: z.string(), freq_a: z.number(), freq_b: z.number(), diff: z.number() });
+
+export const SketchDiff = defineComponent({
+  name: "SketchDiff",
+  description: "近义词对比三列卡：偏 A、共同、偏 B。",
+  props: z.object({ stat_id: z.string(), lemma_a: z.string(), lemma_b: z.string(), a: z.array(diffRow), common: z.array(diffRow), b: z.array(diffRow), layers: sketchLayers }),
+  component: ({ props }) => <SketchDiffCard {...props} />,
+});
+
+export const CompareChart = defineComponent({
+  name: "CompareChart",
+  description: "多项对比的多系列折线图或分组柱图。",
+  props: z.object({
+    stat_id: z.string(),
+    title: z.string(),
+    unit: z.string(),
+    categories: z.array(z.string()),
+    series: z.array(z.object({ name: z.string(), values: z.array(z.number().nullable()) })),
+    chart: z.enum(["line", "bar"]),
+  }),
+  component: ({ props }) => <CompareChartCard {...props} />,
+});
+
 export const COMPONENTS = [
   KwicTable,
   FreqChart,
@@ -249,6 +298,9 @@ export const COMPONENTS = [
   AlignmentGraph,
   BreakdownTable,
   TranslationTable,
+  WordSketch,
+  SketchDiff,
+  CompareChart,
 ];
 
 /** No root component: each ui block is a program whose entry is `root = <Component>(...)`. */
@@ -317,4 +369,7 @@ export const RENDERERS: Record<string, React.FC<never>> = {
   AlignmentGraph: AlignmentGraphCard,
   BreakdownTable: BreakdownTableCard,
   TranslationTable: TranslationTableCard,
+  WordSketch: WordSketchCard,
+  SketchDiff: SketchDiffCard,
+  CompareChart: CompareChartCard,
 };

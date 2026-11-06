@@ -15,6 +15,7 @@ import type { Config } from './config.ts';
 import { MODEL_ERROR_TEXT, trackModelRequests, type CallUsage, type ModelHandle } from './model.ts';
 import { describeContext, describeScope, systemPrompt } from './prompt.ts';
 import type { Store, SessionRecord } from './store.ts';
+import { researchSkills } from './skills.ts';
 import { piName, piTools, runConfirmed, toolSpecs, type ToolOutput } from './tools.ts';
 import type { Message, PageContext, Part, ToolCall } from './types.ts';
 import { FenceSplitter } from './ui-stream.ts';
@@ -47,7 +48,8 @@ function explicitResources(prompt: string): ResourceLoader {
   const runtime = createExtensionRuntime();
   return {
     getExtensions: () => ({ extensions: [], errors: [], runtime }),
-    getSkills: () => ({ skills: [], diagnostics: [] }),
+    // Research workflows (contracts/p10.md §九): listed in the system prompt, loaded with the skills-only `read` tool.
+    getSkills: () => researchSkills(),
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
     getThemes: () => ({ themes: [], diagnostics: [] }),
     getAgentsFiles: () => ({ agentsFiles: [] }),

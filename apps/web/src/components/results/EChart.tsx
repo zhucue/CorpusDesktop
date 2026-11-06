@@ -1,4 +1,4 @@
-import { BarChart, GraphChart, ScatterChart } from "echarts/charts";
+import { BarChart, GraphChart, LineChart, ScatterChart } from "echarts/charts";
 import { GridComponent, TooltipComponent } from "echarts/components";
 import * as echarts from "echarts/core";
 import { SVGRenderer } from "echarts/renderers";
@@ -6,7 +6,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { reducedMotion } from "../../theme/motion";
 import { useTheme } from "../../theme/theme";
 
-echarts.use([BarChart, ScatterChart, GraphChart, GridComponent, TooltipComponent, SVGRenderer]);
+echarts.use([BarChart, LineChart, ScatterChart, GraphChart, GridComponent, TooltipComponent, SVGRenderer]);
 
 export type EChartsOption = echarts.EChartsCoreOption;
 

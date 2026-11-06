@@ -2,19 +2,21 @@ import type { IconName } from "../Icon";
 
 /** Agent tools (contracts/p2–p5, same names as services/agent/src/tools.ts), grouped by capability as on the assistant page. */
 export const AGENT_TOOLS: { group: string; tools: string[] }[] = [
-  { group: "语料与检索", tools: ["corpora.list", "corpora.get", "corpora.documents", "subcorpora.list", "subcorpora.create", "corpus.parse", "corpus.search", "corpus.context", "corpus.sentence"] },
+  { group: "语料与检索", tools: ["corpora.list", "corpora.get", "corpora.documents", "subcorpora.list", "subcorpora.create", "corpus.parse", "corpus.search", "corpus.context", "corpus.sentence", "search.semantic"] },
   { group: "统计", tools: ["stats.frequency", "stats.ngrams", "stats.collocations", "stats.keywords", "stats.distribution", "stats.breakdown", "stats.translations"] },
+  { group: "研究统计", tools: ["stats.text_metrics", "vocab.lists", "stats.vocab_profile", "stats.compare", "stats.word_sketch", "stats.sketch_diff"] },
   { group: "词性与依存标注", tools: ["annot.layers", "annot.create_layer", "annot.sentence", "annot.diff", "annot.stats", "annot.suggest", "annot.export"] },
   { group: "片段与对齐", tools: ["annot.spans", "annot.suggest_spans", "align.pairs", "align.suggest", "annot.agreement", "sample.create", "sample.summary"] },
   { group: "知识库", tools: ["kb.search", "kb.terms", "kb.documents", "kb.save", "kb.extract_terms", "kb.summarize"] },
-  { group: "证据与导出", tools: ["evidence.add", "evidence.list", "queries.save", "queries.list", "export.create", "methods.appendix"] },
+  { group: "证据与导出", tools: ["evidence.add", "evidence.list", "queries.save", "queries.list", "export.create", "export.tidy", "methods.appendix"] },
+  { group: "研究流程", tools: ["skills.read"] },
   { group: "任务", tools: ["jobs.get", "jobs.cancel"] },
 ];
 
 /** Write tools: the assistant proposes them and runs them only after 执行 on the confirm card. */
 export const CONFIRM_TOOLS = new Set([
   "subcorpora.create", "evidence.add", "queries.save", "export.create", "jobs.cancel", "annot.create_layer", "annot.suggest",
-  "annot.export", "annot.suggest_spans", "align.suggest", "kb.save", "kb.extract_terms", "kb.summarize", "sample.create",
+  "annot.export", "annot.suggest_spans", "align.suggest", "kb.save", "kb.extract_terms", "kb.summarize", "sample.create", "export.tidy",
 ]);
 
 export const TOOL_COUNT = AGENT_TOOLS.reduce((n, g) => n + g.tools.length, 0);
@@ -37,6 +39,15 @@ export const TOOL_VIEW: Record<string, { title: string; label: string; icon: Ico
   "stats.distribution": { title: "计算分布", label: "正在计算分布…", icon: "barchart" },
   "stats.breakdown": { title: "分解命中频次", label: "正在分解命中…", icon: "listordered" },
   "stats.translations": { title: "统计译法", label: "正在统计译法…", icon: "languages" },
+  "stats.text_metrics": { title: "计算文本指标", label: "正在计算文本指标…", icon: "pilcrow" },
+  "vocab.lists": { title: "列出词表", label: "正在读取词表…", icon: "booka" },
+  "stats.vocab_profile": { title: "词汇等级画像", label: "正在统计词汇等级…", icon: "chartpie" },
+  "stats.compare": { title: "多项对比", label: "正在对比…", icon: "chartline" },
+  "stats.word_sketch": { title: "Word Sketch", label: "正在生成 Word Sketch…", icon: "columns" },
+  "stats.sketch_diff": { title: "近义词对比", label: "正在对比搭配…", icon: "arrowleftright" },
+  "search.semantic": { title: "语义检索", label: "正在检索相近句子…", icon: "brain" },
+  "export.tidy": { title: "导出整洁数据", label: "正在创建导出…", icon: "filespreadsheet" },
+  "skills.read": { title: "读取研究流程", label: "正在读取研究流程…", icon: "lightbulb" },
   "methods.appendix": { title: "生成方法附录", label: "正在生成方法附录…", icon: "scrolltext" },
   "sample.create": { title: "抽样编码", label: "正在抽样…", icon: "listchecks" },
   "sample.summary": { title: "读取抽样汇总", label: "正在汇总抽样编码…", icon: "sigma" },
@@ -73,6 +84,7 @@ export const TOOL_INVALIDATES: Record<string, string[][]> = {
   "subcorpora.create": [["subcorpora"], ["corpora"]],
   "queries.save": [["queries"]],
   "export.create": [["jobs"]],
+  "export.tidy": [["jobs"]],
   "annot.export": [["jobs"]],
   "jobs.cancel": [["jobs"], ["job"]],
   "annot.create_layer": [["layers"], ["jobs"]],

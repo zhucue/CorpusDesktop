@@ -14,6 +14,7 @@ WORKDIR /app
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules node_modules
 COPY --from=build /app/dist dist
+COPY services/agent/skills skills
 # DATA_DIR=/data/agent is a named volume; it inherits this ownership on first mount.
 RUN useradd --create-home --uid 10001 corpus && mkdir -p /data/agent && chown -R corpus:corpus /data
 USER corpus

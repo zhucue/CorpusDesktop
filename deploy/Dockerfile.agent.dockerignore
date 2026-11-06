@@ -4,3 +4,4 @@
 !services/agent/tsconfig.json
 !services/agent/tsconfig.build.json
 !services/agent/src
+!services/agent/skills

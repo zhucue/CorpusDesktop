@@ -9,6 +9,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { Type, type Static, type TSchema } from 'typebox';
 import { ApiError, query, type ApiClient, type Job } from './api.ts';
+import { findSkill, readSkill, researchSkills } from './skills.ts';
 import type { Proposal, Scope } from './types.ts';
 
 export interface ToolContext {
@@ -59,7 +60,11 @@ const alignedLine = (aligned: AlignedInput) => aligned ? [`译文条件：${alig
 const scopeKey = (scope: unknown) => JSON.stringify(Object.fromEntries(
   Object.entries((scope ?? {}) as Record<string, unknown>).filter(([, v]) => v !== null && v !== undefined).sort(([a], [b]) => a.localeCompare(b))));
 /** Methods whose rows the assistant opens in the search page: rows carry their search link fields. */
-const ROW_LINK_METHODS = new Set(['breakdown', 'translations']);
+const ROW_LINK_METHODS = new Set(['breakdown', 'translations', 'vocab_profile', 'compare', 'word_sketch', 'sketch_diff']);
+/** Word sketch: collocates kept per relation column; sketch diff: per side (偏 A / 共同 / 偏 B). */
+const MAX_SKETCH_PER_RELATION = 10;
+const MAX_DIFF_PER_SIDE = 15;
+const MAX_SEMANTIC_HITS = 20;
 const MAX_APPENDIX_CHARS = 12000;
 /** Document selector of the sentence-level annotation tools (one of; none → the layer's first document). */
 const DocArgs = {
@@ -105,12 +110,16 @@ const compactKbDocument = (doc: any) => ({
   chunk_count: doc.chunk_count ?? 0, error: doc.error ?? null, updated_at: doc.updated_at,
 });
 
-/** Pi tool names must match [A-Za-z0-9_-]; the contract name keeps the dot. */
-export const piName = (name: string) => name.replace('.', '_');
+/**
+ * Pi tool names must match [A-Za-z0-9_-]; the contract name keeps the dot. `skills.read` takes Pi's `read` name:
+ * Pi lists skills in the system prompt only when a `read` tool exists, and this one reads skill files only.
+ */
+export const piName = (name: string) => name === 'skills.read' ? 'read' : name.replace('.', '_');
 
 /** Step and citation summaries are shown to users: Chinese names, no internal values. */
 const METHOD_NAMES: Record<string, string> = {
   frequency: '频次', ngrams: 'n-gram', collocations: '搭配', keywords: '关键词', distribution: '分布', breakdown: '命中分解', translations: '译法',
+  text_metrics: '文本指标', vocab_profile: '词汇等级', compare: '对比', word_sketch: 'Word Sketch', sketch_diff: '近义词对比',
 };
 const CORPUS_STATUS: Record<string, string> = { ready: '就绪', indexing: '索引中', importing: '导入中', failed: '失败', pending: '等待中' };
 
@@ -326,32 +335,95 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
   const annotValue = (kind: string, label: unknown, head: unknown) =>
     label === null || label === undefined ? '' : kind === 'dep' ? `${label}→${head ?? ''}` : String(label);
 
-  async function runStat(path: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<ToolOutput> {
+  /**
+   * Runs a stat job and returns its first rows. `shape` replaces the flat `rows` (word sketch: per relation;
+   * sketch diff: per side) and gets the compacted rows.
+   */
+  async function runStat(path: string, body: Record<string, unknown>, signal?: AbortSignal,
+    shape?: (rows: any[], stat: any) => Record<string, unknown>): Promise<ToolOutput> {
     const job = await waitJob(await api.post<Job>(path, body, signal), signal);
     if (running(job)) return pendingOutput(job, '');
     if (job.state !== 'succeeded') throw jobFailed(job, '统计');
     const statId = String(job.result?.stat_id ?? '');
     if (!statId) throw new Error('STAT_RESULT_MISSING: 任务成功但没有 stat_id');
     const stat = await api.get<any>(`/stats/${statId}`, signal);
-    // Breakdown and translation rows open the search page with their own query (and translation condition);
+    // Rows of these methods open the search page with their own query (and translation condition);
     // search_scope only when it differs from the session scope (meta rows filter the scope).
     const links = ROW_LINK_METHODS.has(stat.method);
     const sessionScope = scopeKey(ctx.scope);
+    const compact = (row: any) => ({
+      key: row.key, values: row.values,
+      ...(links ? { search_query: row.search_query ?? null } : {}),
+      ...(links && row.search_aligned ? { search_aligned: row.search_aligned } : {}),
+      ...(links && row.search_layers ? { search_layers: row.search_layers } : {}),
+      ...(links && row.search_scope && scopeKey(row.search_scope) !== sessionScope ? { search_scope: row.search_scope } : {}),
+    });
+    const rows: any[] = stat.rows ?? [];
     return {
       data: {
         stat_id: statId, method: stat.method, scope: stat.scope, index_version: stat.index_version,
         columns: stat.columns, row_count: stat.row_count, totals: stat.totals,
-        rows: (stat.rows ?? []).slice(0, MAX_STAT_ROWS).map((row: any) => ({
-          key: row.key, values: row.values,
-          ...(links ? { search_query: row.search_query ?? null } : {}),
-          ...(links && row.search_aligned ? { search_aligned: row.search_aligned } : {}),
-          ...(links && row.search_scope && scopeKey(row.search_scope) !== sessionScope ? { search_scope: row.search_scope } : {}),
-        })),
+        ...(shape ? shape(rows.map(compact), stat) : { rows: rows.slice(0, MAX_STAT_ROWS).map(compact) }),
       },
       summary: `${METHOD_NAMES[stat.method] ?? '统计'}：${stat.row_count ?? 0} 行`,
       ref: { kind: 'stat', id: statId },
     };
   }
+
+  /** Sketch rows in the WordSketch / SketchDiff card shape (values keys as the api names them). */
+  const num = (value: unknown) => value === null || value === undefined ? null : Number(value);
+  const collocateOf = (row: any) => String(row.values?.collocate ?? row.values?.item ?? row.key ?? '');
+  const linkOf = (row: any) => ({ search_query: row.search_query ?? null, ...(row.search_scope ? { search_scope: row.search_scope } : {}) });
+  const sketchRow = (row: any) => ({
+    collocate: collocateOf(row), freq: num(row.values?.freq ?? row.values?.cooc), logdice: num(row.values?.logdice), ...linkOf(row),
+  });
+  const relationLabel = (row: any) => String(row.values?.relation_label ?? row.values?.relation ?? '');
+  /** Chinese sketches search on a dependency layer: the rows' search_layers (one per stat) go with the card. */
+  const layersOf = (rows: any[]) => {
+    const layers = rows.find(row => row.search_layers)?.search_layers;
+    return layers ? { search_layers: layers } : {};
+  };
+  const diffRow = (row: any) => ({
+    relation: relationLabel(row), collocate: collocateOf(row),
+    freq_a: num(row.values?.freq_a), freq_b: num(row.values?.freq_b),
+    logdice_a: num(row.values?.logdice_a), logdice_b: num(row.values?.logdice_b), diff: num(row.values?.diff), ...linkOf(row),
+  });
+
+  /**
+   * Word sketch rows grouped by relation column (values.relation), in totals.relations order ([{key, label}] or names),
+   * each column named by its label; rows without a relation stay flat.
+   */
+  const byRelation = (rows: any[], stat: any) => {
+    const relationOf = (row: any) => String(row.values?.relation ?? '');
+    if (!rows.some(relationOf)) return { rows: rows.slice(0, MAX_STAT_ROWS) };
+    const order = ((stat.totals?.relations ?? []) as any[]).map(rel => String(rel && typeof rel === 'object' ? rel.key : rel));
+    const groups = new Map<string, { relation: string; rows: any[] }>(order.map(key => [key, { relation: key, rows: [] }]));
+    for (const row of rows) {
+      const key = relationOf(row);
+      if (!groups.has(key)) groups.set(key, { relation: key, rows: [] });
+      const group = groups.get(key)!;
+      group.relation = relationLabel(row);
+      if (group.rows.length < MAX_SKETCH_PER_RELATION) group.rows.push(sketchRow(row));
+    }
+    return { relations: [...groups.values()].filter(group => group.rows.length), ...layersOf(rows) };
+  };
+
+  /** Sketch diff side of a row: the api's side / group field when given, else unique to A, unique to B or shared. */
+  const sideOf = (row: any): 'a' | 'common' | 'b' => {
+    const given = String(row.values?.side ?? row.values?.group ?? '').toLowerCase().replace(/[\s偏]/g, '');
+    if (given === 'a' || given === 'b') return given;
+    if (given === 'common' || given === '共同') return 'common';
+    const [fa, fb] = [Number(row.values?.freq_a ?? 0), Number(row.values?.freq_b ?? 0)];
+    return fb === 0 ? 'a' : fa === 0 ? 'b' : 'common';
+  };
+  const bySide = (rows: any[]) => {
+    const sides: Record<'a' | 'common' | 'b', any[]> = { a: [], common: [], b: [] };
+    for (const row of rows) {
+      const list = sides[sideOf(row)];
+      if (list.length < MAX_DIFF_PER_SIDE) list.push(diffRow(row));
+    }
+    return { sides, ...layersOf(rows) };
+  };
 
   return [
     spec({
@@ -661,6 +733,127 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
         scope: resolveScope(args.scope), query: args.query, field: args.field, bins: args.bins, ...alignedBody(args.aligned),
       }, signal),
     }),
+    // ---- P10 research tools (contracts/p10.md §一–六)
+    spec({
+      name: 'stats.text_metrics',
+      description: '文本指标（后台任务）：每篇文档一行——词数、句数、TTR、STTR（每 sttr_window 词一段）、MTLD、词汇密度、平均句长、平均依存距离，英文另有 Flesch Reading Ease 与 Flesch-Kincaid Grade；返回 stat_id 与前 50 行，totals.notes 说明哪些值为 null 及原因（如词数不足 100 时 STTR、MTLD 为 null）。用户问“词汇丰富度 / 多样性”“句子长度、句法复杂度”“可读性”“学习者作文的复杂度”“几组文本的指标差异”时用它；group_by 按元数据字段（如学习者水平、体裁）另给分组均值与标准差（totals.groups）。',
+      parameters: Type.Object({
+        scope: ScopeArg,
+        metrics: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { minItems: 1, description: '只算这些指标；一般省略（全部）' })),
+        group_by: Type.Optional(Type.String({ minLength: 1, description: '分组汇总所用的元数据字段，如 level' })),
+        sttr_window: positiveInt(),
+      }),
+      run: (args, signal) => runStat('/stats/text_metrics', {
+        scope: resolveScope(args.scope), ...(args.metrics ? { metrics: args.metrics } : {}),
+        ...(args.group_by ? { group_by: args.group_by } : {}), sttr_window: args.sttr_window ?? 1000,
+      }, signal),
+    }),
+    spec({
+      name: 'vocab.lists',
+      description: '列出可用词表（内置 NGSL 与本项目上传的词表）：list_id、名称、语言、等级顺序、来源与许可。做词汇等级画像（stats_vocab_profile）前用它选词表；中文 HSK、AWL 等词表不内置，没有时请用户在统计页“词汇等级”处上传。',
+      parameters: Type.Object({}),
+      run: async (_args, signal) => {
+        const items = listItems(await api.get<any>(`/projects/${seg(projectId)}/vocab-lists`, signal));
+        return {
+          data: {
+            total: items.length,
+            items: items.map((list: any) => ({
+              list_id: list.id, name: list.name, language: list.language, levels: list.levels ?? [], builtin: list.builtin ?? list.project_id === null,
+              source: list.source ?? null, license: list.license ?? null,
+            })),
+          },
+          summary: `${items.length} 个词表`,
+        };
+      },
+    }),
+    spec({
+      name: 'stats.vocab_profile',
+      description: '词汇等级画像（后台任务）：按词表统计各等级的词次、词种、词次覆盖率 %，另有“表外”一行。by=corpus 整个范围（默认）；by=document 每篇一行、各等级覆盖率；by=<元数据字段> 按字段值分组。返回 stat_id 与前 50 行；等级行的 search_query 可打开该等级词的例句（词太多时为 null）。用户问“用词难度 / 词汇等级分布”“NGSL / HSK 覆盖率”“表外词有哪些”时用它；list_id 取自 vocab_lists。',
+      parameters: Type.Object({
+        scope: ScopeArg,
+        list_id: Type.String({ minLength: 1, description: '词表 list_id，取自 vocab_lists' }),
+        by: Type.Optional(Type.String({ minLength: 1, description: 'corpus | document | <元数据字段>' })),
+      }),
+      run: (args, signal) => runStat('/stats/vocab_profile', {
+        scope: resolveScope(args.scope), list_id: args.list_id, by: args.by ?? 'corpus',
+      }, signal),
+    }),
+    spec({
+      name: 'stats.compare',
+      description: '多项对比与历时（后台任务）：2–10 项，每项 label、query、可选 scope（省略用会话范围；可以同一查询比较不同子库，或同一范围比较不同查询）。不带 by：每项一行——命中数、词数、每百万词、文档数、文档频率 %，恰两项时附 LL 与 log ratio。带 by（元数据字段，如 year、genre）：每个字段值一行，列为各项的每百万词，用于看趋势。test：mann_whitney 恰两项时按文档比较（U、z、p、效应量 r）；spearman 在 by 为数值字段时给每项与该字段的秩相关（ρ、p、n）。返回 stat_id 与前 50 行，行的 search_query、search_scope 可打开例句。用户问“A 和 B 哪个更常用”“几个词或几个子库的用量比较”“某词随年代的变化”“差异是否显著”时用它；两库之间全词表比较用 stats_keywords。',
+      parameters: Type.Object({
+        items: Type.Array(Type.Object({
+          label: Type.String({ minLength: 1, description: '该项的显示名' }),
+          query: Type.String({ minLength: 1, description: '查询式，与检索相同' }),
+          scope: ScopeArg,
+        }), { minItems: 2, maxItems: 10 }),
+        by: Type.Optional(Type.String({ minLength: 1, description: '元数据字段，如 year；省略则每项一行' })),
+        test: oneOf(['none', 'mann_whitney', 'spearman']),
+      }),
+      run: (args, signal) => runStat('/stats/compare', {
+        items: args.items.map(item => ({ label: item.label, scope: resolveScope(item.scope), query: item.query })),
+        by: args.by ?? null, test: args.test ?? 'none',
+      }, signal),
+    }),
+    spec({
+      name: 'stats.word_sketch',
+      description: 'Word Sketch 词汇画像（后台任务）：按 UD 依存关系分栏列出一个词元的搭配——主语、宾语、修饰 / 被修饰、并列、介词短语（如 with + N）、作主语的谓词等；每栏搭配词元、共现频次、logDice（按该关系计）。返回 stat_id 与按栏分组的 relations（每栏前 10 个；totals.relations 为全部栏名），行的 search_query 可打开例句（null 表示无法回到检索）。用户问“某词按语法关系常和哪些词搭配”“某动词常带什么宾语”“某名词常被什么形容词修饰”时用它；只看窗口内共现用 stats_collocations。英文语料自带依存；中文语料要用依存标注层（layers.dep，省略则用该语料最新的依存层），没有时返回 NO_DEPENDENCIES，请用户先在标注页建依存层。',
+      parameters: Type.Object({
+        scope: ScopeArg,
+        lemma: Type.String({ minLength: 1, description: '节点词元，如 make' }),
+        pos: Type.Optional(Type.String({ description: '节点词性（UPOS），如 NOUN、VERB、ADJ' })),
+        layers: Type.Optional(Type.Object({ dep: Type.Optional(Type.String()) }, { description: '依存标注层 layer_id；一般省略' })),
+        min_freq: positiveInt(),
+        top: positiveInt(),
+      }),
+      run: (args, signal) => runStat('/stats/word_sketch', {
+        scope: resolveScope(args.scope), lemma: args.lemma, ...(args.pos ? { pos: args.pos } : {}),
+        ...(args.layers ? { layers: args.layers } : {}), min_freq: args.min_freq ?? 2, top: args.top ?? 25,
+      }, signal, byRelation),
+    }),
+    spec({
+      name: 'stats.sketch_diff',
+      description: '近义词对比（Sketch Diff，后台任务）：两个词元在各依存关系栏的共同与独有搭配，每行 relation、搭配词元、freq_a、freq_b、logdice_a、logdice_b、diff（logDice 差，A 减 B）。返回 stat_id 与分好的 sides：a（偏 A）、common（共同）、b（偏 B），每组前 15 个。用户问“A 和 B 的用法有什么区别”“近义词辨析”时用它；依存要求同 stats_word_sketch。',
+      parameters: Type.Object({
+        scope: ScopeArg,
+        lemma_a: Type.String({ minLength: 1 }),
+        lemma_b: Type.String({ minLength: 1 }),
+        pos: Type.Optional(Type.String({ description: '两个词元的词性（UPOS），如 ADJ' })),
+        layers: Type.Optional(Type.Object({ dep: Type.Optional(Type.String()) }, { description: '依存标注层 layer_id；一般省略' })),
+        min_freq: positiveInt(),
+        top: positiveInt(),
+      }),
+      run: (args, signal) => runStat('/stats/sketch_diff', {
+        scope: resolveScope(args.scope), lemma_a: args.lemma_a, lemma_b: args.lemma_b, ...(args.pos ? { pos: args.pos } : {}),
+        ...(args.layers ? { layers: args.layers } : {}), min_freq: args.min_freq ?? 2, top: args.top ?? 25,
+      }, signal, bySide),
+    }),
+    spec({
+      name: 'search.semantic',
+      description: `语义检索：按句子语义相似度（余弦）找与一句话意思相近的句子，返回最相近的前 ${MAX_SEMANTIC_HITS} 句与相似度 score（越接近 1 越相近）。用户要“找意思相近的句子”“类似表达 / 换种说法的例句”、或按词形检索查不到的同义表述时用它；要准确计数或限定词形时用 corpus_search。相似度只表示相近程度，不能当作命中计数。返回 SEMANTIC_NOT_READY（未建语义索引）或 SEMANTIC_MODEL_CHANGED（需重建）时，请用户在语料库页建语义索引，助手不建索引。`,
+      parameters: Type.Object({
+        scope: ScopeArg,
+        text: Type.String({ minLength: 1, maxLength: 500, description: '一句话，≤ 500 字' }),
+        top: positiveInt(),
+      }),
+      run: async (args, signal) => {
+        const scope = resolveScope(args.scope);
+        const result = await api.post<any>('/search/semantic', { scope, text: args.text, top: args.top ?? 50 }, signal);
+        const items = listItems(result);
+        const hits = items.slice(0, MAX_SEMANTIC_HITS).map((hit: any) => ({
+          hit_id: hit.hit_id, sentence_index: hit.sentence_index, left: hit.left ?? '', match: hit.match ?? '', right: hit.right ?? '',
+          source: hit.document_title ?? '', score: hit.score,
+        }));
+        const documents = new Set(items.map((hit: any) => String(hit.hit_id ?? '').split(':')[0])).size;
+        return {
+          data: {
+            text: args.text, scope, scope_name: await scopeName(scope, signal).catch(() => ''),
+            counts: { hits: items.length, sentences: items.length, documents }, hits,
+          },
+          summary: `语义相近 ${items.length} 句`,
+        };
+      },
+    }),
     spec({
       name: 'methods.appendix',
       description: '生成论文方法部分的附录草稿（Markdown）：语料规模与版本、处理工具、检索式与计数、统计方法的全部参数与公式出处、标注与抽样情况、参考文献条目。用户要“写方法部分”“方法说明”“怎么引用语料 / 平台”“列出统计方法的文献”时用它。来源三选：stat_ids（统计结果的 stat_id）、searches（[{query, scope, aligned?}]）、layer_ids（标注层，含抽样层）；evidence=true 时从证据篮收集。style：gbt7714（默认）或 apa。返回 markdown 与 citations，不生成文件。',
@@ -845,6 +1038,48 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
           }, signal);
         }
         return { data: compactJob(job), summary: '已提交导出任务', ref: { kind: 'job', id: job.id } };
+      },
+    }),
+    spec({
+      name: 'export.tidy',
+      description: '整洁数据导出（后台任务）：每篇文档一行，列为文档元数据、词数、句数，每个查询（≤ 10 个）两列：命中数与每百万词；metrics=true 时附文本指标；另附列说明（codebook），可直接用 R / pandas 读取做回归或混合模型。用户明确要求“导出数据表”“导出给 R / SPSS / pandas 分析”时用它。返回任务：文件由用户在任务页下载，不要自己生成文件内容。',
+      parameters: Type.Object({
+        scope: ScopeArg,
+        queries: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 10, description: '每个查询两列计数' })),
+        metrics: Type.Optional(Type.Boolean({ description: '附文本指标列，默认 false' })),
+        format: Type.Union([Type.Literal('csv'), Type.Literal('xlsx')]),
+      }),
+      confirm: async (args, signal) => ({
+        title: `导出整洁数据（${args.format.toUpperCase()}）`,
+        lines: [
+          await scopeLine(resolveScope(args.scope), signal),
+          ...(args.queries ? [`查询：${args.queries.join('；')}`] : []),
+          ...(args.metrics ? ['附文本指标'] : []),
+        ],
+      }),
+      run: async (args, signal) => {
+        const job = await api.post<Job>('/stats/tidy_export', {
+          scope: resolveScope(args.scope), ...(args.queries ? { queries: args.queries } : {}), metrics: args.metrics ?? false, format: args.format,
+        }, signal);
+        return {
+          data: { ...compactJob(job), note: '文件生成后由用户在任务页下载；用 JobStatus 组件告知，不复述文件内容。' },
+          summary: '已提交整洁数据导出',
+          ref: { kind: 'job', id: job.id },
+        };
+      },
+    }),
+    spec({
+      name: 'skills.read',
+      description: '读取一个研究流程文件（available_skills 中的 location，或流程名）。只能读取研究流程。',
+      parameters: Type.Object({ path: Type.String({ minLength: 1, description: '流程文件的 location 或流程名' }) }),
+      run: async args => {
+        const skill = findSkill(args.path);
+        if (!skill) {
+          const names = researchSkills().skills.map(item => item.name).join('、') || '无';
+          throw new Error(`SKILL_NOT_FOUND: 只能读取研究流程：${names}`);
+        }
+        const { title, content } = readSkill(skill);
+        return { data: { name: skill.name, title, content }, summary: `研究流程：${title}` };
       },
     }),
     spec({

@@ -76,39 +76,51 @@ export interface KwicTableProps {
   query: string;
   scope_name: string;
   counts: { hits: number; sentences: number; documents: number };
-  rows: { hit_id: string; left: string; match: string; right: string; source: string; aligned?: string }[];
+  rows: { hit_id: string; left: string; match: string; right: string; source: string; aligned?: string; score?: number }[];
   total: number;
+  /** semantic: search.semantic results (contracts/p10.md §六) — query is the input sentence, rows carry the cosine similarity. */
+  mode?: "query" | "semantic";
 }
 
 export function KwicTableCard(p: KwicTableProps) {
   const { projectId, scope } = useContext(ResultContext);
+  const semantic = p.mode === "semantic";
+  const rows = p.rows ?? [];
   return (
     <Card
       component="KwicTable"
-      icon="textsearch"
-      title="KWIC"
+      icon={semantic ? "brain" : "textsearch"}
+      title={semantic ? "语义检索" : "KWIC"}
       meta={p.query}
-      right={`${fmt(p.counts?.hits ?? p.total)} 命中`}
+      right={semantic ? `${fmt(rows.length)} 句` : `${fmt(p.counts?.hits ?? p.total)} 命中`}
       foot={
-        <Link className="btn xs" to={searchUrl(projectId, p.query, scope)}>
-          <Icon name="external" size={14} />
-          打开完整结果
-        </Link>
+        semantic ? undefined : (
+          <Link className="btn xs" to={searchUrl(projectId, p.query, scope)}>
+            <Icon name="external" size={14} />
+            打开完整结果
+          </Link>
+        )
       }
     >
       <KwicRows
         compact
-        rows={(p.rows ?? []).map((r) => ({
+        rows={rows.map((r) => ({
           id: r.hit_id,
           left: r.left,
           match: r.match,
           right: r.right,
           source: r.source,
+          locator: r.score != null ? `相似度 ${fmtValue(r.score, 3)}` : undefined,
           aligned: r.aligned ? [{ language: "", text: r.aligned }] : undefined,
-          evidence: { kind: "hit", ref: { hit_id: r.hit_id, search_query: p.query, scope: scope ?? undefined }, text: `${r.left}${r.match}${r.right}`, source: `${r.source} · ${p.scope_name}` },
+          evidence: {
+            kind: "hit",
+            ref: { hit_id: r.hit_id, ...(semantic ? {} : { search_query: p.query }), scope: scope ?? undefined },
+            text: `${r.left}${r.match}${r.right}`,
+            source: `${r.source} · ${p.scope_name}`,
+          },
         }))}
       />
-      {(p.rows ?? []).length === 0 && <Empty icon="searchx" text="没有命中" />}
+      {rows.length === 0 && <Empty icon="searchx" text={semantic ? "没有相近的句子" : "没有命中"} />}
     </Card>
   );
 }
