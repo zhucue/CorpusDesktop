@@ -1,8 +1,9 @@
 """Statistics (contracts/p2.md §三): requests are checked here and computed by the worker as `stats` jobs."""
 
 import json
+import re
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter
@@ -23,11 +24,15 @@ from services.api.auth import CurrentUser, Db
 from services.api.errors import ApiError, forbidden, not_found
 from services.api.jobs import enqueue
 from services.api.metadata import field_types
-from services.api.models import StatResult, Subcorpus
+from services.api.models import Document, StatResult, Subcorpus
 from services.api.search import (
+    AlignedInput,
     LayersInput,
     Scope,
+    check_layer_problem,
     corpus_tagset,
+    pg_answered,
+    plan_aligned,
     plan_query,
     resolve_scope,
     with_span_layer,
@@ -37,7 +42,9 @@ from services.api.views import job_view, stat_view
 router = APIRouter(prefix="/api")
 
 Unit = Literal["word", "lemma"]
-Measure = Literal["mi", "logdice", "t", "ll"]
+Measure = Literal["mi", "logdice", "t", "ll", "mi3", "delta_p", "z"]
+_PARTS = re.compile(r"^(document|segments|field:.+)$")
+_BY = re.compile(r"^(word|lemma|pos|left1|right1|meta:.+)$")
 
 
 class StatsInput(BaseModel):
@@ -63,6 +70,9 @@ class FrequencyInput(StatsInput, PunctInput):
     pos: str | None = Field(default=None, max_length=20)
     min_freq: int = Field(default=1, ge=1)
     layers: LayersInput | None = None
+    # dispersion over parts (contracts/p8.md §二): document | segments | field:<字段>
+    parts: str = Field(default="document", max_length=210, pattern=_PARTS.pattern)
+    dispersion: bool = True
 
 
 class NgramsInput(StatsInput, PunctInput):
@@ -70,7 +80,9 @@ class NgramsInput(StatsInput, PunctInput):
     n: int = Field(default=2, ge=2, le=4)
     unit: Unit = "word"
     pos_pattern: list[str | None] | None = None
-    contains: str | None = Field(default=None, max_length=200)  # word / lemma in some slot
+    contains: str | None = Field(
+        default=None, max_length=200
+    )  # word / lemma in some slot
     min_freq: int = Field(default=2, ge=1)
 
     @model_validator(mode="after")
@@ -87,7 +99,7 @@ class CollocationsInput(StatsInput, PunctInput):
     unit: Unit = "word"
     pos: str | None = Field(default=None, max_length=20)
     measures: list[Measure] = Field(
-        default=["mi", "logdice", "t", "ll"], min_length=1, max_length=4
+        default=["mi", "logdice", "t", "ll"], min_length=1, max_length=7
     )
     min_freq: int = Field(default=3, ge=1)
 
@@ -96,8 +108,13 @@ class KeywordsInput(StatsInput, PunctInput):
     target: Scope
     reference: Scope
     unit: Unit = "word"
-    measure: Literal["ll", "log_ratio"] = "ll"
+    measure: Literal["ll", "log_ratio", "pct_diff", "odds_ratio"] = "ll"
     min_freq: int = Field(default=3, ge=1)
+    direction: Literal["positive", "negative", "both"] = "positive"
+    # only these words, whatever min_freq and direction (single-item comparison)
+    items: list[Annotated[str, Field(min_length=1, max_length=200)]] | None = Field(
+        default=None, min_length=1, max_length=50
+    )
 
 
 class DistributionInput(StatsInput):
@@ -106,10 +123,30 @@ class DistributionInput(StatsInput):
     field: str = Field(min_length=1, max_length=200)
     bins: int = Field(default=10, ge=1, le=100)
     layers: LayersInput | None = None  # span layer of a `[标签]` query
+    aligned: AlignedInput | None = None  # translation condition (contracts/p8.md §四)
+
+
+class BreakdownInput(StatsInput):
+    scope: Scope
+    query: str = Field(min_length=1, max_length=1000)
+    by: str = Field(default="word", max_length=210, pattern=_BY.pattern)
+    min_freq: int = Field(default=1, ge=1)
+    layers: LayersInput | None = None
+
+
+class TranslationsInput(StatsInput, PunctInput):
+    scope: Scope
+    query: str = Field(min_length=1, max_length=1000)
+    unit: Unit = "word"
+    target_language: str | None = Field(default=None, min_length=1, max_length=20)
+    measure: Literal["dice", "ll"] = "dice"
+    top: int = Field(default=100, ge=1, le=2000)
+    min_freq: int = Field(default=2, ge=1)
+    layers: LayersInput | None = None
 
 
 class ExportInput(BaseModel):
-    format: Literal["csv", "xlsx"]
+    format: Literal["csv", "xlsx", "docx"]
 
 
 def _tagset(db, scope, user):
@@ -137,6 +174,35 @@ def _plain_query(text, tagset, allow_span=False):
     return cqp
 
 
+def _check_field(db, corpus, field):
+    if field not in field_types(db, corpus.id):
+        raise ApiError(422, "INVALID_FIELD", f"未知元数据字段：{field}")
+
+
+def _hit_query(db, user, body):
+    """Check the query of a breakdown / translation statistic as search does; `{…}` / `[…]` slots are
+    answered from the layers (stored in the job), a whole query of one `{…}` or `[…]` is rejected (those
+    hits come from PostgreSQL, not CWB). Returns (corpus, body with the span layer filled in)."""
+    corpus, _ = resolve_scope(db, body.scope, user)
+    ast, cqp = plan_query(body.query, corpus_tagset(corpus))
+    if pg_answered(ast, cqp):
+        raise ApiError(
+            422, "QUERY_INVALID", "该统计不支持单独的 {…} 或 […] 查询，请加上词或词性"
+        )
+    layers = effective.check_layers(db, body.layers, corpus, user)
+    with_span_layer(db, cqp, layers, corpus, user)
+    check_layer_problem(db, corpus, user, ast, layers)
+    if layers.get("span"):
+        body = body.model_copy(
+            update={
+                "layers": (body.layers or LayersInput()).model_copy(
+                    update={"span": layers["span"].id}
+                )
+            }
+        )
+    return corpus, body
+
+
 def _submit(db, user, method, body, scope):
     corpus, _ = resolve_scope(db, scope, user)
     if scope.subcorpus_id:
@@ -158,6 +224,8 @@ def _submit(db, user, method, body, scope):
 def frequency(body: FrequencyInput, user: CurrentUser, db: Db):
     _check_pos(_tagset(db, body.scope, user), body.pos)
     corpus, _ = resolve_scope(db, body.scope, user)
+    if body.parts.startswith("field:"):
+        _check_field(db, corpus, body.parts[6:])
     layers = effective.check_layers(db, body.layers, corpus, user)
     if body.unit in ("span_label", "relation_label"):
         kind = body.unit.split("_")[0]
@@ -196,6 +264,33 @@ def keywords(body: KeywordsInput, user: CurrentUser, db: Db):
     return _submit(db, user, "keywords", body, body.target)
 
 
+@router.post("/stats/breakdown")
+def breakdown(body: BreakdownInput, user: CurrentUser, db: Db):
+    corpus, body = _hit_query(db, user, body)
+    if body.by.startswith("meta:"):
+        _check_field(db, corpus, body.by[5:])
+    return _submit(db, user, "breakdown", body, body.scope)
+
+
+@router.post("/stats/translations")
+def translations(body: TranslationsInput, user: CurrentUser, db: Db):
+    corpus, _ = resolve_scope(db, body.scope, user)
+    if not corpus.parallel:
+        raise ApiError(422, "NOT_PARALLEL", "译法统计只能用于平行语料")
+    corpus, body = _hit_query(db, user, body)
+    if body.target_language is not None:
+        languages = db.scalars(
+            select(Document.language).where(Document.corpus_id == corpus.id).distinct()
+        ).all()
+        if body.target_language not in languages:
+            raise ApiError(
+                422,
+                "VALIDATION_ERROR",
+                f"该平行语料没有 {body.target_language} 一侧（现有：{'、'.join(sorted(languages))}）",
+            )
+    return _submit(db, user, "translations", body, body.scope)
+
+
 @router.post("/stats/distribution")
 def distribution(body: DistributionInput, user: CurrentUser, db: Db):
     if body.query:
@@ -203,6 +298,7 @@ def distribution(body: DistributionInput, user: CurrentUser, db: Db):
         corpus, _ = resolve_scope(db, body.scope, user)
         layers = effective.check_layers(db, body.layers, corpus, user)
         with_span_layer(db, cqp, layers, corpus, user)
+        plan_aligned(db, corpus, user, body.aligned, layers)  # 422 NOT_PARALLEL / QUERY_INVALID
         if layers.get("span"):
             body = body.model_copy(
                 update={
@@ -211,6 +307,8 @@ def distribution(body: DistributionInput, user: CurrentUser, db: Db):
                     )
                 }
             )
+    elif body.aligned:
+        raise ApiError(422, "VALIDATION_ERROR", "译文条件须与查询式一起使用")
     if body.field != "position":
         corpus, _ = resolve_scope(db, body.scope, user)
         if body.field not in field_types(db, corpus.id):

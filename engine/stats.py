@@ -18,6 +18,26 @@ Measures (N = tokens in scope):
     LL = 2 (a ln(a/E1) + b ln(b/E2)), E1 = c(a+b)/(c+d), E2 = d(a+b)/(c+d)        (Rayson & Garside 2000)
     log ratio = log2((a/c) / (b/d)), a zero frequency counted as 0.5             (Hardie 2014)
     significance: LL ≥ 3.84 / 6.63 / 10.83 → * / ** / ***  (p < 0.05 / 0.01 / 0.001, 1 d.f.)
+    effect sizes (contracts/p8.md §三; a' = a or 0.5, b' = b or 0.5 when a frequency is 0, values.smoothed):
+      %DIFF = (a/c − b'/d) / (b'/d) × 100                                          (Gabrielatos & Marchi 2012)
+      odds ratio = (a'/(c − a')) / (b'/(d − b'))
+      log ratio 95% CI = log2((a'/c)/(b'/d)) ± 1.959964 × √(1/a' + 1/b') / ln 2  (SE of ln RR, on the log2 scale)
+      bonferroni: p = P(χ²₁ ≥ LL) multiplied by m = word types compared (target ∪ reference after the unit,
+        lemma and punctuation exclusions); p·m < 0.05 / 0.01 / 0.001 → * / ** / ***
+    direction: positive lists a/c > b/d (min_freq on a), negative b/d > a/c (min_freq on b), both = either;
+      rows sort by |measure| (ll as is; odds ratio by |ln OR|), so the positive order is unchanged.
+    items: only these words (given order), whatever min_freq and direction.
+  collocations, further measures on the same table (Oakes 1998; Gries 2013):
+    MI3 = log2(O³/E); z = (O − E)/√E;
+    ΔP node→collocate = O/R − (C − O)/(N − R); ΔP collocate→node = O/C − (R − O)/(N − C)
+  frequency dispersion (contracts/p8.md §二), parts: document | segments (10 equal token segments of the scope
+    in corpus order) | field:<name> (one part per value; documents without it are left out, and f, the part
+    sizes and their total then count only the documents in some part):
+    sᵢ = part tokens / Σ part tokens, vᵢ = fᵢ / f, DP = ½ Σ|vᵢ − sᵢ| (Gries 2008), DPnorm = DP / (1 − min sᵢ)
+    (Lijffijt & Gries 2012); Juilland D = 1 − CV/√(n − 1), CV = population SD / mean of pᵢ = fᵢ / part tokens;
+    range = parts with fᵢ > 0. Fewer than 2 parts: these values are null.
+  breakdown (contracts/p8.md §一): hits come from cwb.query_rows exactly as search counts them; word / lemma /
+    pos values of the hit tokens are read from the CWB attribute files.
   Rows sort by the measure (rounded to 1e-10 so equal values tie), then frequency desc, then key.
 
 search_query (engine.query.parse accepts every generated string):
@@ -32,8 +52,11 @@ exclude_punct (word / lemma units): leave out items made only of punctuation, sy
   punctuation included (totals.tokens); frequency reports the left-out tokens as totals.excluded_tokens.
 """
 
+import contextlib
 import math
+import mmap
 import re
+import struct
 from bisect import bisect_right
 from collections import Counter
 from dataclasses import dataclass
@@ -43,10 +66,27 @@ from engine import cwb, query
 
 TIMEOUT = 3600
 MISSING = "_"
-MEASURES = ("mi", "logdice", "t", "ll")
-MEASURE_LABELS = {"mi": "MI", "logdice": "logDice", "t": "t", "ll": "LL"}
+MEASURES = ("mi", "logdice", "t", "ll", "mi3", "delta_p", "z")
+MEASURE_LABELS = {
+    "mi": "MI",
+    "logdice": "logDice",
+    "t": "t",
+    "ll": "LL",
+    "mi3": "MI3",
+    "z": "z",
+    "delta_p_node": "ΔP 节点→搭配词",
+    "delta_p_coll": "ΔP 搭配词→节点",
+}
+KEYWORD_MEASURES = ("ll", "log_ratio", "pct_diff", "odds_ratio")
+DIRECTIONS = ("positive", "negative", "both")
 SIGNIFICANCE = ((10.827566, "***"), (6.634897, "**"), (3.841459, "*"))
+P_LEVELS = ((0.001, "***"), (0.01, "**"), (0.05, "*"))
+Z95 = 1.959963984540054
+SEGMENTS = 10
+BREAKDOWN_BY = ("word", "lemma", "pos", "left1", "right1")
+SENT_START, SENT_END, NO_VALUE = "（句首）", "（句末）", "（无）"
 _PUNCT = re.compile(r"[\W\d_]+")
+_ATTR_UNSAFE = set(' ,{}[]|=/"')
 
 
 def is_punct(value: str) -> bool:
@@ -200,6 +240,40 @@ class _Corpus:
             rows = [r for r in rows if ((r[2], r[3]) in found) == (op == "+")]
         return [(int(r[0]), int(r[1])) for r in rows]
 
+    def rows(self, text, attr_filter=None, max_hits=None):
+        """Hit rows (match, matchend, doc_id, sentence) of a query in the scope, in corpus order, as search
+        counts them (cwb.query_rows; attr_filter answers `{…}` / `[…]` slots). More than max_hits anchor hits
+        raise ValueError."""
+        if not self.docs:
+            return []
+        compiled = query.compile(query.parse(text, self.tagset))
+        try:
+            return cwb.query_rows(
+                self.index_dir,
+                self.key,
+                compiled,
+                restrict=self.restrict,
+                timeout=TIMEOUT,
+                attr_filter=attr_filter,
+                max_hits=max_hits,
+            )
+        except cwb.TooManyHits as e:
+            raise ValueError(f"命中超过 {e.limit}，请缩小范围或加条件") from None
+
+    def doc_values(self, field) -> dict[str, str]:
+        """doc_id → raw index value of a metadata field, for the scope's documents that have it."""
+        if not self.docs:
+            return {}
+        try:
+            att = "doc_" + cwb.meta_attr(field)
+            by_start = {int(a): v for a, _, v in self._decode(att, values=True)}
+        except cwb.CQPError:
+            raise ValueError(f"语料中没有字段：{field}") from None
+        return {d: by_start[a] for a, _, d in self.docs if by_start.get(a, "") != ""}
+
+    def attr(self, att) -> "_Attr":
+        return _Attr(cwb._home(self.index_dir, self.key) / "data", att)
+
     def forms(self, tag=None) -> dict[str, list[str]]:
         """lemma → its word forms in the scope (most frequent first)."""
         if tag not in self._forms:
@@ -209,6 +283,39 @@ class _Corpus:
                 by_lemma.setdefault(lemma, []).append(form)
             self._forms[tag] = by_lemma
         return self._forms[tag]
+
+
+class _Attr:
+    """Values of a positional attribute by corpus position, read from the CWB data files: <att>.corpus holds
+    int32 big-endian lexicon ids (cwb-makeall leaves it uncompressed), <att>.lexicon.idx int32 big-endian byte
+    offsets into <att>.lexicon (NUL-terminated strings). Use as a context manager."""
+
+    def __init__(self, data: Path, att: str):
+        self._paths = [
+            data / f"{att}{ext}" for ext in (".corpus", ".lexicon.idx", ".lexicon")
+        ]
+        self._cache = {}
+
+    def __enter__(self):
+        self._stack = contextlib.ExitStack()
+        self._maps = []
+        for path in self._paths:
+            f = self._stack.enter_context(open(path, "rb"))
+            m = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+            self._maps.append(self._stack.enter_context(m))
+        return self
+
+    def __exit__(self, *exc):
+        self._stack.close()
+
+    def __call__(self, cpos: int) -> str:
+        ids, idx, lex = self._maps
+        i = struct.unpack_from(">i", ids, 4 * cpos)[0]
+        v = self._cache.get(i)
+        if v is None:
+            off = struct.unpack_from(">i", idx, 4 * i)[0]
+            v = self._cache[i] = lex[off : lex.find(b"\0", off)].decode("utf-8")
+        return v
 
 
 def _slot(c: _Corpus, unit, value, tag=None):
@@ -239,14 +346,101 @@ def _check_unit(unit, allowed):
 # ---------------------------------------------------------------- methods
 
 
+def dispersion_measures(freqs: dict, sizes: dict) -> dict:
+    """range, range_pct, dp, dp_norm, juilland_d of one item; freqs {part: f}, sizes {part: tokens} (all
+    parts, sizes > 0). Fewer than 2 parts: all None; f = 0 in the parts: range 0 and the measures None."""
+    n = len(sizes)
+    keys = ("range", "range_pct", "dp", "dp_norm", "juilland_d")
+    if n < 2:
+        return dict.fromkeys(keys)
+    occ = {p: f for p, f in freqs.items() if f and p in sizes}
+    f, total, r = sum(occ.values()), sum(sizes.values()), len(occ)
+    out = {"range": r, "range_pct": r / n * 100, "dp": None, "dp_norm": None}
+    out["juilland_d"] = None
+    if not f:
+        return out
+    s = {p: sizes[p] / total for p in occ}
+    dp = 0.5 * (sum(abs(occ[p] / f - s[p]) for p in occ) + 1 - sum(s.values()))
+    out["dp"] = dp
+    out["dp_norm"] = dp / (1 - min(sizes.values()) / total)
+    rel = [occ[p] / sizes[p] for p in occ]
+    mean = sum(rel) / n
+    var = (sum((x - mean) ** 2 for x in rel) + (n - r) * mean**2) / n
+    out["juilland_d"] = 1 - math.sqrt(var) / mean / math.sqrt(n - 1)
+    return out
+
+
+def _parts(parts) -> tuple[str, str | None]:
+    if parts in ("document", "segments"):
+        return parts, None
+    if parts.startswith("field:") and parts[6:]:
+        return "field", parts[6:]
+    raise ValueError(f"未知部分划分：{parts}")
+
+
+def segments(ranges, total, k=SEGMENTS) -> list[list[tuple[int, int]]]:
+    """The scope's tokens in corpus order cut into k parts of ⌈i·total/k⌉ boundaries, as corpus ranges."""
+    bounds = [-(-i * total // k) for i in range(k + 1)]
+    out, offset = [[] for _ in range(k)], 0
+    for a, b in ranges:
+        n = b - a + 1
+        for s in range(k):
+            lo, hi = max(bounds[s], offset), min(bounds[s + 1], offset + n)
+            if lo < hi:
+                out[s].append((a + lo - offset, a + hi - 1 - offset))
+        offset += n
+    return out
+
+
+def _part_counts(c: _Corpus, keys, parts, shown, scanned):
+    """(sizes {part: tokens}, {value: {part: f}}) of the shown values; scanned = the (value, doc_id) scan."""
+    kind, field = _parts(parts)
+    want = set(shown)
+    counts = {v: Counter() for v in want}
+    if kind == "segments":
+        sizes = {}
+        for k, ranges in enumerate(segments(c.ranges, c.tokens)):
+            size = sum(b - a + 1 for a, b in ranges)
+            if not size:
+                continue
+            sizes[k] = size
+            for (value,), f in c.scan(keys, ranges).items():
+                if value in want:
+                    counts[value][k] += f
+        return sizes, counts
+    if kind == "document":
+        doc_part = {d: d for _, _, d in c.docs}
+    else:
+        doc_part = c.doc_values(field)
+    sizes = Counter()
+    for a, b, d in c.docs:
+        if d in doc_part:
+            sizes[doc_part[d]] += b - a + 1
+    for (value, d), f in scanned.items():
+        if value in want and d in doc_part:
+            counts[value][doc_part[d]] += f
+    return dict(sizes), counts
+
+
 def frequency(
-    scope: Scope, unit="word", pos=None, top=200, min_freq=1, exclude_punct=False
+    scope: Scope,
+    unit="word",
+    pos=None,
+    top=200,
+    min_freq=1,
+    exclude_punct=False,
+    parts="document",
+    dispersion=False,
 ) -> Table:
+    """dispersion: add range, range_pct, dp, dp_norm, juilland_d over `parts` (module docstring)."""
     _check_unit(unit, ("word", "lemma", "pos"))
+    _parts(parts)
     c = _Corpus(scope)
     skip = exclude_punct and unit != "pos"
     freq, docs, excluded = Counter(), Counter(), 0
-    for (value, _), f in c.scan([unit, "doc_id", *_pos_keys([pos], c.tagset)]).items():
+    pos_keys = _pos_keys([pos], c.tagset)
+    scanned = c.scan([unit, "doc_id", *pos_keys])
+    for (value, _), f in scanned.items():
         if skip and is_punct(value):
             excluded += f
         elif unit == "word" or value != MISSING:
@@ -255,26 +449,36 @@ def frequency(
     items = sorted(
         (v for v in freq if freq[v] >= min_freq), key=lambda v: (-freq[v], v)
     )
-    rows = [
-        _row(
-            v,
-            {
-                "item": v,
-                "freq": freq[v],
-                "per_million": c.pm(freq[v]),
-                "doc_freq": docs[v],
-            },
-            _slot(c, unit, v, pos),
-        )
-        for v in items[:top]
-    ]
+    shown = items[:top]
+    if dispersion:
+        sizes, counts = _part_counts(c, [unit, *pos_keys], parts, shown, scanned)
+    rows = []
+    for v in shown:
+        values = {
+            "item": v,
+            "freq": freq[v],
+            "per_million": c.pm(freq[v]),
+            "doc_freq": docs[v],
+        }
+        if dispersion:
+            values.update(dispersion_measures(counts[v], sizes))
+        rows.append(_row(v, values, _slot(c, unit, v, pos)))
     columns = [
         _col("item", "项", "string"),
         _col("freq", "频次"),
         _col("per_million", "每百万词"),
         _col("doc_freq", "文档频率"),
     ]
-    totals = {**c.totals, "excluded_tokens": excluded} if skip else c.totals
+    totals = {**c.totals, "excluded_tokens": excluded} if skip else dict(c.totals)
+    if dispersion:
+        columns += [
+            _col("range", "分布部分数"),
+            _col("range_pct", "分布部分 %"),
+            _col("dp", "DP"),
+            _col("dp_norm", "DPnorm"),
+            _col("juilland_d", "Juilland D"),
+        ]
+        totals["parts"] = len(sizes)
     return Table(columns, rows, len(items), totals)
 
 
@@ -386,12 +590,21 @@ def collocations(
             "logdice": 14 + math.log2(2 * o / (f_node + c1)),
             "t": (o - e) / math.sqrt(o),
             "ll": _ll2x2(o, r1, c1, n),
+            "mi3": math.log2(o**3 / e),
+            "z": (o - e) / math.sqrt(e),
+            "delta_p_node": o / r1 - ((c1 - o) / (n - r1) if n > r1 else 0.0),
+            "delta_p_coll": o / c1 - ((r1 - o) / (n - c1) if n > c1 else 0.0),
         }
-    first = measures[0]
+    first = "delta_p_node" if measures[0] == "delta_p" else measures[0]
     items = sorted(stats, key=lambda y: (-_rank(stats[y][first]), -stats[y]["freq"], y))
     gap = f" ${window - 1} " if window > 1 else " "
     tail = "".join(f" {cond.op}{cond.query.text}" for cond in ast.conditions)
-    shown = [m for m in MEASURES if m in measures]
+    shown = [
+        k
+        for m in MEASURES
+        if m in measures
+        for k in (("delta_p_node", "delta_p_coll") if m == "delta_p" else (m,))
+    ]
     rows = []
     for y in items[:top]:
         s = stats[y]
@@ -418,6 +631,44 @@ def significance(ll):
     return next((mark for crit, mark in SIGNIFICANCE if ll >= crit), "")
 
 
+def _p_chi1(x):
+    """Upper tail of χ² with 1 d.f."""
+    return math.erfc(math.sqrt(max(x, 0.0) / 2))
+
+
+def keyword_values(a, b, c, d, m=1) -> dict:
+    """Keyword measures of a word with frequency a / b in target / reference of c / d tokens; m = number
+    of word types compared (Bonferroni). Formulas in the module docstring."""
+    e1, e2 = c * (a + b) / (c + d), d * (a + b) / (c + d)
+    ll = 2 * ((a * math.log(a / e1) if a else 0) + (b * math.log(b / e2) if b else 0))
+    a1, b1 = a or 0.5, b or 0.5
+    lr = math.log2((a1 / c) / (b1 / d))
+    half = Z95 * math.sqrt(1 / a1 + 1 / b1) / math.log(2)
+    p = _p_chi1(ll) * m
+    return {
+        "target_freq": a,
+        "ref_freq": b,
+        "target_pm": a / c * 1e6,
+        "ref_pm": b / d * 1e6,
+        "ll": ll,
+        "log_ratio": lr,
+        "log_ratio_ci_low": lr - half,
+        "log_ratio_ci_high": lr + half,
+        "pct_diff": (a / c - b1 / d) / (b1 / d) * 100,
+        "odds_ratio": (a1 / (c - a1)) / (b1 / (d - b1)) if c > a1 and d > b1 else None,
+        "significance": significance(ll),
+        "bonferroni": next((mark for lim, mark in P_LEVELS if p < lim), ""),
+        "smoothed": not (a and b),
+    }
+
+
+def _keyword_rank(values, measure):
+    v = values[measure]
+    if v is None:  # odds ratio of a word that makes up a whole corpus
+        return math.inf
+    return abs(math.log(v)) if measure == "odds_ratio" else abs(v)
+
+
 def keywords(
     target: Scope,
     reference: Scope,
@@ -426,41 +677,54 @@ def keywords(
     min_freq=3,
     top=200,
     exclude_punct=False,
+    direction="positive",
+    items=None,
 ) -> Table:
+    """direction: positive (a/c > b/d), negative (b/d > a/c) or both; items: only these words."""
     _check_unit(unit, ("word", "lemma"))
-    if measure not in ("ll", "log_ratio"):
+    if measure not in KEYWORD_MEASURES:
         raise ValueError(f"未知关键词指标：{measure}")
+    if direction not in DIRECTIONS:
+        raise ValueError(f"未知方向：{direction}")
     t, r = _Corpus(target), _Corpus(reference)
     if not r.tokens:
         raise ValueError("参照范围没有词")
+    if not t.tokens:
+        raise ValueError("目标范围没有词")
     ft, fr = t.scan([unit]), r.scan([unit])
     c, d = t.tokens, r.tokens
+    types = {
+        w
+        for (w,) in (*ft, *fr)
+        if not (unit == "lemma" and w == MISSING)
+        and not (exclude_punct and is_punct(w))
+    }
+    m = max(len(types), 1)
     stats = {}
-    for (w,), a in ft.items():
-        b = fr.get((w,), 0)
-        if (
-            a < min_freq
-            or (unit == "lemma" and w == MISSING)
-            or a / c <= b / d
-            or (exclude_punct and is_punct(w))
-        ):
-            continue
-        e1, e2 = c * (a + b) / (c + d), d * (a + b) / (c + d)
-        ll = 2 * (a * math.log(a / e1) + (b * math.log(b / e2) if b else 0))
-        stats[w] = {
-            "word": w,
-            "target_freq": a,
-            "ref_freq": b,
-            "target_pm": a / c * 1e6,
-            "ref_pm": b / d * 1e6,
-            "ll": ll,
-            "log_ratio": math.log2((a / c) / ((b or 0.5) / d)),
-            "significance": significance(ll),
-        }
-    items = sorted(
-        stats, key=lambda w: (-_rank(stats[w][measure]), -stats[w]["target_freq"], w)
-    )
-    rows = [_row(w, stats[w], _slot(t, unit, w)) for w in items[:top]]
+    if items is not None:
+        words = list(dict.fromkeys(items))
+    else:
+        words = []
+        for w in types:
+            a, b = ft.get((w,), 0), fr.get((w,), 0)
+            pos_ok = a / c > b / d and a >= min_freq
+            neg_ok = b / d > a / c and b >= min_freq
+            if (direction != "negative" and pos_ok) or (
+                direction != "positive" and neg_ok
+            ):
+                words.append(w)
+    for w in words:
+        a, b = ft.get((w,), 0), fr.get((w,), 0)
+        stats[w] = {"word": w, **keyword_values(a, b, c, d, m)}
+    if items is None:
+        words.sort(
+            key=lambda w: (
+                -_rank(_keyword_rank(stats[w], measure)),
+                -stats[w]["target_freq"],
+                w,
+            )
+        )
+    rows = [_row(w, stats[w], _slot(t, unit, w)) for w in words[:top]]
     columns = [
         _col("word", "词", "string"),
         _col("target_freq", "目标频次"),
@@ -469,10 +733,15 @@ def keywords(
         _col("ref_pm", "参照每百万"),
         _col("ll", "LL"),
         _col("log_ratio", "log ratio"),
+        _col("log_ratio_ci_low", "log ratio 95% 下限"),
+        _col("log_ratio_ci_high", "log ratio 95% 上限"),
+        _col("pct_diff", "%DIFF"),
+        _col("odds_ratio", "odds ratio"),
         _col("significance", "显著性", "string"),
+        _col("bonferroni", "Bonferroni 显著性", "string"),
     ]
-    totals = {**t.totals, "reference": r.totals}
-    return Table(columns, rows, len(items), totals)
+    totals = {**t.totals, "reference": r.totals, "types_compared": m}
+    return Table(columns, rows, len(words), totals)
 
 
 def _number(s):
@@ -569,3 +838,122 @@ def distribution(
     ]
     totals = {**c.totals, "hits": len(hits) if query_text else None}
     return Table(columns, rows[:top], len(rows), totals)
+
+
+def hit_rows(scope: Scope, query_text, attr_filter=None, max_hits=None):
+    """(hit rows as search counts them, scope totals); see _Corpus.rows."""
+    c = _Corpus(scope)
+    return c.rows(query_text, attr_filter, max_hits), c.totals
+
+
+def _plain_value(v):
+    return bool(v) and v != MISSING and not any(ch in _ATTR_UNSAFE for ch in v)
+
+
+def _breakdown_query(c: _Corpus, ast, kind, values, tail):
+    """search_query of a breakdown row (contracts/p8.md §一), None when it cannot be written."""
+    anchor = ast.anchor.text
+    if kind == "word":
+        if any('"' in v for v in values):
+            return None
+        return " ".join(f'"{v}"' for v in values) + tail
+    if kind == "lemma":
+        if len(values) == 1 and not tail and _plain_value(values[0]):
+            return f"{{lemma={values[0]}}}"
+        # several slots or conditions: `{lemma=}` slots would make CWB scan every position, so each slot
+        # is the alternation of the scope's forms of that lemma (as frequency rows)
+        slots = [_slot(c, "lemma", v) if v != MISSING else None for v in values]
+        return None if None in slots else " ".join(slots) + tail
+    if kind == "pos":
+        slots = [_slot(c, "pos", v) for v in values]
+        return None if None in slots else " ".join(slots) + tail
+    (v,) = values
+    if v in (SENT_START, SENT_END) or '"' in v:
+        return None
+    return f'"{v}" {anchor}{tail}' if kind == "left1" else f'{anchor} "{v}"{tail}'
+
+
+def breakdown(
+    scope: Scope,
+    query_text: str,
+    by="word",
+    top=200,
+    min_freq=1,
+    numeric=False,
+    attr_filter=None,
+    max_hits=None,
+) -> Table:
+    """Hits of a query split by the hit's word forms / lemmas / POS (multi-token hits joined by spaces), the
+    word left / right of it in its sentence, or a metadata field of its document (`meta:<field>`). The hits
+    are those search counts (cwb.query_rows with attr_filter); totals.hits = all of them. meta rows carry
+    bin_value (the field value) for a temporary filter scope; documents without the field: "（无）"."""
+    if by in BREAKDOWN_BY:
+        kind, field = by, None
+    elif by.startswith("meta:") and by[5:]:
+        kind, field = "meta", by[5:]
+    else:
+        raise ValueError(f"未知分解方式：{by}")
+    c = _Corpus(scope)
+    ast = query.parse(query_text, c.tagset)
+    hits = c.rows(query_text, attr_filter, max_hits)
+    counts = Counter()
+    if kind in ("word", "lemma", "pos"):
+        with c.attr(kind) as att:
+            for m, me, _, _ in hits:
+                counts[tuple(att(p) for p in range(m, me + 1))] += 1
+    elif kind in ("left1", "right1"):
+        starts, ends = c.sentences() if len(hits) else ([], [])
+        with c.attr("word") as att:
+            for m, me, _, _ in hits:
+                k = bisect_right(starts, m) - 1
+                if kind == "left1":
+                    v = att(m - 1) if m > starts[k] else SENT_START
+                else:
+                    v = att(me + 1) if me < ends[k] else SENT_END
+                counts[(v,)] += 1
+    else:
+        doc_value = c.doc_values(field)
+        for _, _, d, _ in hits:
+            counts[(doc_value.get(d),)] += 1
+    total = len(hits)
+    tail = "".join(f" {cond.op}{cond.query.text}" for cond in ast.conditions)
+
+    def label(k):
+        if kind != "meta":
+            return " ".join(k)
+        if k[0] is None:
+            return NO_VALUE
+        return str(_number(k[0])) if numeric else k[0]
+
+    keys = sorted(
+        (k for k in counts if counts[k] >= min_freq),
+        key=lambda k: (-counts[k], label(k)),
+    )
+    rows = []
+    for k in keys[:top]:
+        h, item = counts[k], label(k)
+        values = {
+            "item": item,
+            "hits": h,
+            "pct": h / total * 100,
+            "per_million": c.pm(h),
+        }
+        if kind == "meta":
+            extra = (
+                {}
+                if k[0] is None
+                else {"bin_value": _number(k[0]) if numeric else k[0]}
+            )
+            q = query_text if extra else None
+            rows.append(_row(item, values, q, **extra))
+        else:
+            rows.append(
+                _row("\t".join(k), values, _breakdown_query(c, ast, kind, k, tail))
+            )
+    columns = [
+        _col("item", "项", "string"),
+        _col("hits", "命中数"),
+        _col("pct", "占比 %"),
+        _col("per_million", "每百万词"),
+    ]
+    return Table(columns, rows, len(keys), {**c.totals, "hits": total})

@@ -536,6 +536,7 @@ def run_export(run):
         ast, cqp = plan_query(req.query, corpus_tagset(corpus))
         layers = effective.check_layers(db, req.layers, corpus, user)
         with_span_layer(db, cqp, layers, corpus, user)
+        keep = _aligned_keep(db, corpus, user, req.aligned, layers, req.scope)
         notice = source_notice(db, [corpus.id])
         size = (
             10**9 if pure_attr(ast) or query.pure_span(ast) else EXPORT_PAGE
@@ -553,6 +554,7 @@ def run_export(run):
                 page,
                 size,
                 EXPORT_COUNT_TIMEOUT,
+                keep,
             )
             if hits is None:
                 hits = result.counts.hits
@@ -563,6 +565,27 @@ def run_export(run):
             page += 1
     header, rows = _rows(items)
     _finish_export(run, "检索结果", header, rows, {"hits": hits}, notice)
+
+
+def _aligned_keep(db, corpus, user, aligned, layers, scope=None):
+    """Sentences of a translation condition (contracts/p8.md §四) for export and distribution; None without
+    one. Engine timeouts fail the job."""
+    import subprocess
+
+    from services.api.errors import ApiError
+    from services.api.search import aligned_keep, plan_aligned
+
+    if aligned is None:
+        return None
+    try:
+        plan = plan_aligned(db, corpus, user, aligned, layers, scope)
+        return aligned_keep(db, corpus, plan, EXPORT_COUNT_TIMEOUT)
+    except ApiError as e:
+        raise JobFailed(e.code, e.message) from e
+    except subprocess.TimeoutExpired as e:
+        raise JobFailed("TIMEOUT", "译文条件检索超时，请缩小条件") from e
+    except cwb.TooManyHits as e:
+        raise JobFailed("TOO_MANY_HITS", "译文条件命中过多，请加条件") from e
 
 
 SOURCE_FIELDS = (
@@ -624,13 +647,16 @@ def _write_docx(path, title, header, rows, notice=()):
 
 def run_export_stats(run):
     """Rows of a StatResult; the file opens with the method, parameters, scope and token totals (punctuation
-    included), then the source / license lines. Decimal values are rounded to 2 places."""
+    included), then the source / license lines. Decimal values are rounded to 2 places (4 for the measures
+    between −1 and 1: DP, DPnorm, Juilland D, ΔP, Dice). Translation rows add the translation condition."""
     methods = {
         "frequency": "频次",
         "ngrams": "n-gram",
         "collocations": "搭配",
         "keywords": "关键词",
         "distribution": "分布",
+        "breakdown": "命中分解",
+        "translations": "译法",
     }
     units = {
         "word": "词形",
@@ -646,7 +672,22 @@ def run_export_stats(run):
         "t": "t 值",
         "ll": "LL",
         "log_ratio": "Log Ratio",
+        "mi3": "MI3",
+        "delta_p": "ΔP",
+        "z": "z 值",
+        "pct_diff": "%DIFF",
+        "odds_ratio": "Odds Ratio",
+        "dice": "Dice",
     }
+    by_labels = {
+        "word": "词形",
+        "lemma": "词元",
+        "pos": "词性",
+        "left1": "左一词",
+        "right1": "右一词",
+    }
+    directions = {"negative": "参照多于目标", "both": "双向"}
+    fine = {"dp", "dp_norm", "juilland_d", "delta_p_node", "delta_p_coll", "dice"}
     with session() as db:
         stat = db.get(StatResult, uuid.UUID(run.params["stat_id"]))
         if not stat:
@@ -679,8 +720,21 @@ def run_export_stats(run):
         parts.append(f"包含词 {p['contains']}")
     if method == "collocations" and p.get("measures"):
         parts.append(f"排序指标 {measures.get(p['measures'][0], p['measures'][0])}")
-    if method == "keywords" and p.get("measure"):
+    if method in ("keywords", "translations") and p.get("measure"):
         parts.append(f"指标 {measures.get(p['measure'], p['measure'])}")
+    if method == "keywords" and p.get("direction") in directions:
+        parts.append(f"方向 {directions[p['direction']]}")
+    if method == "keywords" and p.get("items"):
+        parts.append("指定词 " + "、".join(p["items"]))
+    if method == "breakdown" and p.get("by"):
+        by = p["by"]
+        parts.append(f"按 {by_labels.get(by) or by.removeprefix('meta:')}")
+    if method == "translations" and p.get("target_language"):
+        parts.append(f"译文语言 {p['target_language']}")
+    if method == "frequency" and p.get("dispersion"):
+        kind = p.get("parts", "document")
+        names = {"document": "文档", "segments": "等分 10 段"}
+        parts.append(f"离散度部分 {names.get(kind) or kind.removeprefix('field:')}")
     if method == "distribution":
         field = p.get("field")
         parts.append("按 文档位置" if field == "position" else f"按 {field}")
@@ -701,13 +755,22 @@ def run_export_stats(run):
     head.append(f"索引版本：{index_version or '—'}；计算时间：{at:%Y-%m-%d %H:%M} UTC")
     data = json.loads(path.read_text(encoding="utf-8"))["rows"]
     header = [c["label"] for c in columns] + ["查询式"]
+    aligned = method == "translations"
+    if aligned:
+        header.append("译文条件")
 
-    def value(v):
+    def value(key, v):
         v = _cell(v)
-        return round(v, 2) if isinstance(v, float) else v
+        return round(v, 4 if key in fine else 2) if isinstance(v, float) else v
+
+    def condition(r):
+        cond = r.get("search_aligned")
+        return f"{cond['op']}{cond['query']}" if cond else None
 
     rows = [
-        [value(r["values"].get(c["key"])) for c in columns] + [r["search_query"]]
+        [value(c["key"], r["values"].get(c["key"])) for c in columns]
+        + [r["search_query"]]
+        + ([condition(r)] if aligned else [])
         for r in data
     ]
     _finish_export(run, f"统计-{label}", header, rows, notice=[*head, *notice])
@@ -764,7 +827,10 @@ def run_export_evidence(run):
         run.lock(db)
         run.succeed(
             db,
-            {"rows": len(rows), "filename": f"证据篮-{datetime.now():%Y%m%d-%H%M}.docx"},
+            {
+                "rows": len(rows),
+                "filename": f"证据篮-{datetime.now():%Y%m%d-%H%M}.docx",
+            },
         )
 
 
@@ -907,7 +973,14 @@ def _compute(p, target, reference, numeric, positions=None):
     punct = p.get("exclude_punct", False)  # jobs queued before the option: kept
     if method == "frequency":
         return stats.frequency(
-            target, p["unit"], p["pos"], top, p["min_freq"], exclude_punct=punct
+            target,
+            p["unit"],
+            p["pos"],
+            top,
+            p["min_freq"],
+            exclude_punct=punct,
+            parts=p.get("parts", "document"),
+            dispersion=p.get("dispersion", False),  # jobs queued before P8: none
         )
     if method == "ngrams":
         return stats.ngrams(
@@ -941,6 +1014,8 @@ def _compute(p, target, reference, numeric, positions=None):
             p["min_freq"],
             top,
             exclude_punct=punct,
+            direction=p.get("direction", "positive"),
+            items=p.get("items"),
         )
     return stats.distribution(
         target,
@@ -997,9 +1072,12 @@ def _label_frequency(db, p, corpus, scope, user):
 
 
 def _span_positions(db, p, corpus, scope, user):
-    """Token positions of the spans of a pure `[标签]` distribution query (None for other queries)."""
+    """Token positions of the spans of a pure `[标签]` distribution query (None for other queries); with a
+    translation condition (`aligned`) the positions of the filtered hits."""
     if not p.get("query"):
         return None
+    if p.get("aligned"):
+        return _aligned_positions(db, p, corpus, scope, user)
     ast, cqp = plan_query(p["query"], corpus_tagset(corpus))
     spans = query.spans(cqp)
     if not spans or not query.pure_span(ast):
@@ -1011,6 +1089,41 @@ def _span_positions(db, p, corpus, scope, user):
     filt = scope_filter(db, scope)
     fields = field_types(db, corpus.id) if filt else {}
     return effective.span_positions(db, corpus, filt, fields, layers["span"], spans[0])
+
+
+def _aligned_positions(db, p, corpus, scope, user):
+    """(document id, token offset in the document) of the hits of a distribution query that pass its
+    translation condition, for engine.stats.distribution(positions=)."""
+    import subprocess
+
+    from services.api.search import AlignedInput, attr_filter_for
+
+    ast, cqp = plan_query(p["query"], corpus_tagset(corpus))
+    if query.spans(cqp) and query.pure_span(ast):
+        raise JobFailed("STATS_INVALID", "带译文条件的分布不支持单独的 [标签] 查询")
+    layers = effective.check_layers(
+        db, LayersInput.model_validate(p.get("layers") or {}), corpus, user
+    )
+    with_span_layer(db, cqp, layers, corpus, user)
+    keep = _aligned_keep(
+        db, corpus, user, AlignedInput.model_validate(p["aligned"]), layers, scope
+    )
+    _, restrict = resolve_scope(db, scope, user)
+    ix, key = index_dir(corpus.id), corpus_key(corpus.id)
+    try:
+        rows = cwb.query_rows(
+            ix,
+            key,
+            cqp,
+            restrict=restrict,
+            timeout=EXPORT_COUNT_TIMEOUT,
+            attr_filter=attr_filter_for(db, cqp, layers),
+            aligned=keep,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise JobFailed("TIMEOUT", "检索超时，请缩小范围或加条件") from e
+    starts = cwb.doc_starts(ix, key)
+    return [(d, m - starts[d]) for m, _, d, _ in rows if d in starts]
 
 
 def _pg_frequency(db, p, corpus, scope, user):
@@ -1064,6 +1177,162 @@ def _resolves(value, tagset):
         return False
 
 
+def _hit_filter(db, p, corpus, user):
+    """attr_filter for the `{…}` / `[…]` slots of a breakdown / translation query (layers stored by the api)."""
+    from services.api.search import attr_filter_for
+
+    _, cqp = plan_query(p["query"], corpus_tagset(corpus))
+    layers = effective.check_layers(
+        db, LayersInput.model_validate(p.get("layers") or {}), corpus, user
+    )
+    with_span_layer(db, cqp, layers, corpus, user)
+    return attr_filter_for(db, cqp, layers)
+
+
+def _breakdown(db, p, corpus, user, target):
+    """Hit breakdown (contracts/p8.md §一); hits as search counts them, failing past SEARCH_MAX_HITS."""
+    from services.api.search import MAX_HITS
+
+    by = p["by"]
+    numeric = (
+        by.startswith("meta:") and field_types(db, corpus.id).get(by[5:]) == "number"
+    )
+    return stats.breakdown(
+        target,
+        p["query"],
+        by,
+        p["top"],
+        p["min_freq"],
+        numeric=numeric,
+        attr_filter=_hit_filter(db, p, corpus, user),
+        max_hits=MAX_HITS,
+    )
+
+
+def _chunks(items, size=2000):
+    items = list(items)
+    return [items[i : i + size] for i in range(0, len(items), size)]
+
+
+def _translations(db, p, corpus, scope, user, target, params):
+    """Translation statistics (contracts/p8.md §四, engine.translations): the hits' sentences, their aligned
+    sentences in the target language and those sentences' tokens, then N and b over the scope."""
+    from sqlalchemy import distinct, tuple_, union
+    from sqlalchemy.orm import aliased
+
+    from engine import translations
+    from services.api.search import MAX_HITS
+
+    rows, scope_totals = stats.hit_rows(
+        target, p["query"], _hit_filter(db, p, corpus, user), MAX_HITS
+    )
+    keys = {(uuid.UUID(d), n) for _, _, d, n in rows}
+    sentence_doc = {}  # hit sentence id → document id
+    for chunk in _chunks(keys):
+        sentence_doc.update(
+            db.execute(
+                select(Sentence.id, Sentence.document_id).where(
+                    tuple_(Sentence.document_id, Sentence.idx).in_(chunk)
+                )
+            ).all()
+        )
+    doc_lang = dict(
+        db.execute(
+            select(Document.id, Document.language).where(
+                Document.id.in_(set(sentence_doc.values()))
+            )
+        ).all()
+    )
+    other_s, other_d, link = aliased(Sentence), aliased(Document), SentenceAlignment
+    sides = (
+        (link.src_sentence_id, link.tgt_sentence_id),
+        (link.tgt_sentence_id, link.src_sentence_id),
+    )
+    links = []  # (hit sentence, aligned sentence, its language)
+    for chunk in _chunks(sentence_doc):
+        for mine, other in sides:
+            links += db.execute(
+                select(mine, other, other_d.language)
+                .select_from(link)
+                .join(other_s, other_s.id == other)
+                .join(other_d, other_d.id == other_s.document_id)
+                .where(mine.in_(chunk))
+            ).all()
+    lang = p.get("target_language")
+    if lang is None:
+        others = Counter(
+            lg for h, _, lg in links if lg != doc_lang.get(sentence_doc[h])
+        )
+        lang = others.most_common(1)[0][0] if others else None
+    params["target_language"] = lang
+    hit_targets = {h: [] for h in sentence_doc}
+    for h, o, lg in links:
+        if lg == lang:
+            hit_targets[h].append(o)
+    unit_col = Token.form if p["unit"] == "word" else Token.lemma
+    target_values = {}
+    for chunk in _chunks({o for os in hit_targets.values() for o in os}):
+        for sid, value in db.execute(
+            select(Token.sentence_id, unit_col).where(
+                Token.sentence_id.in_(chunk), unit_col.is_not(None)
+            )
+        ):
+            target_values.setdefault(sid, set()).add(value)
+    a, n = translations.cooccurrence(
+        hit_targets, target_values, p.get("exclude_punct", True)
+    )
+    # N and b: scope sentences aligned to a target-language sentence, and those whose aligned ones hold w
+    filt = scope_filter(db, scope)
+    fields = field_types(db, corpus.id) if filt else {}
+    where = effective.scope_clauses(corpus, filt, fields)
+
+    def pairs(mine, other):
+        return (
+            select(mine.label("sid"), other.label("tid"))
+            .select_from(link)
+            .join(Sentence, Sentence.id == mine)
+            .join(Document, Document.id == Sentence.document_id)
+            .join(other_s, other_s.id == other)
+            .join(other_d, other_d.id == other_s.document_id)
+            .where(*where, other_d.language == lang)
+        )
+
+    universe = union(*(pairs(m, o) for m, o in sides)).subquery()
+    total = db.scalar(select(func.count(distinct(universe.c.sid)))) if lang else 0
+    b = {}
+    for chunk in _chunks(translations.candidates(a, p["min_freq"])):
+        b.update(
+            db.execute(
+                select(unit_col, func.count(distinct(universe.c.sid)))
+                .select_from(universe)
+                .join(Token, Token.sentence_id == universe.c.tid)
+                .where(unit_col.in_(chunk))
+                .group_by(unit_col)
+            ).all()
+        )
+    totals = {
+        **scope_totals,
+        "hits": len(rows),
+        "hit_sentences": len(sentence_doc),
+        "aligned_sentences": n,
+        "unaligned": len(sentence_doc) - n,
+        "target_language": lang,
+        "scope_aligned_sentences": total,
+    }
+    return translations.table(
+        a,
+        n,
+        b,
+        total,
+        query_text=p["query"],
+        unit=p["unit"],
+        measure=p["measure"],
+        top=p["top"],
+        min_freq=p["min_freq"],
+        totals=totals,
+    )
+
+
 def run_stats(run):
     p = run.params
     method = p["method"]
@@ -1096,6 +1365,16 @@ def run_stats(run):
             params["reference"] = _scope_info(db, ref_scope, ref_corpus)
         if method == "distribution":
             numeric = field_types(db, corpus.id).get(p["field"]) == "number"
+        # breakdown / translations: attribute filters and aligned sentences read the database
+        if method in ("breakdown", "translations"):
+            run.progress(0, None, "计算")
+            try:
+                if method == "breakdown":
+                    table = _breakdown(db, p, corpus, user, target)
+                else:
+                    table = _translations(db, p, corpus, scope, user, target, params)
+            except ValueError as e:
+                raise JobFailed("STATS_INVALID", str(e)) from e
     run.progress(0, None, "计算")
     try:
         table = table or _compute(p, target, reference, numeric, positions)
@@ -1104,8 +1383,10 @@ def run_stats(run):
     search_scope = scope.model_dump(mode="json", exclude_none=True)
     for row in table.rows:
         row["search_scope"] = search_scope
-        if "bin_value" in row:  # distribution by field: temporary filter for that value
-            filt = {**base_filter, p["field"]: row.pop("bin_value")}
+        # by field (distribution, breakdown meta:): temporary filter for that value
+        if "bin_value" in row:
+            field = p["field"] if method == "distribution" else p["by"][5:]
+            filt = {**base_filter, field: row.pop("bin_value")}
             row["search_scope"] = {"corpus_id": str(corpus.id), "filter": filt}
     stat_id = uuid.uuid4()
     path = stats_path(stat_id)

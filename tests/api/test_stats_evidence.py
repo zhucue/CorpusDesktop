@@ -85,7 +85,11 @@ def test_stats_job_lifecycle(owner, project, corpus, member, fake_stats):
     scope = {"corpus_id": corpus["id"]}
     stat_id = run_stat(owner, "frequency", {"scope": scope, "unit": "word", "top": 2})
     assert fake_stats[-1]["args"][1:3] == ("word", None)
-    assert fake_stats[-1]["kw"] == {"exclude_punct": True}  # punctuation left out by default
+    assert fake_stats[-1]["kw"] == {
+        "exclude_punct": True,  # punctuation left out by default
+        "parts": "document",
+        "dispersion": True,
+    }
     stat = owner.get(f"/api/stats/{stat_id}").json()
     assert stat["method"] == "frequency" and stat["project_id"] == project["id"]
     assert stat["scope"] == {
@@ -112,7 +116,9 @@ def test_stats_job_lifecycle(owner, project, corpus, member, fake_stats):
     assert r.status_code == 200, r.text
     rows = list(csv.reader(io.StringIO(r.content.decode("utf-8-sig"))))
     # parameters, scope and token total (punctuation included) above the table
-    assert rows[0] == ["统计：频次（单位 词形；最低频次 1；显示前 2；排除标点和数字）"]
+    assert rows[0] == [
+        "统计：频次（单位 词形；离散度部分 文档；最低频次 1；显示前 2；排除标点和数字）"
+    ]
     assert rows[1] == ["范围：作文，14 词（含标点）"]
     assert rows[2][0].startswith("索引版本：")
     head = rows.index(["项", "频次", "查询式"])

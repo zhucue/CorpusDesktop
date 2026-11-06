@@ -58,7 +58,7 @@ def test_stats_match_golden(ud, case):
     assert table.row_count == case["row_count"]
     assert [r["key"] for r in table.rows] == [r["key"] for r in case["rows"]]
     for got, want in zip(table.rows, case["rows"]):
-        assert set(got["values"]) == set(want["values"]), got["key"]
+        assert set(want["values"]) <= set(got["values"]), got["key"]  # P8 adds columns
         for k, v in want["values"].items():
             assert close(got["values"][k], v), (got["key"], k, got["values"][k], v)
 

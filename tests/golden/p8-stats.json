@@ -1,0 +1,3861 @@
+{
+ "fixture": "tests/fixtures/ud-en-ewt-sample.conllu",
+ "notes": "part = a for documents 1-8, b for 9-16; keywords: target = part a, reference = part b; translations: hand-made alignment in stats_p8_reference.py",
+ "cases": [
+  {
+   "name": "dispersion-document",
+   "method": "frequency",
+   "params": {
+    "parts": "document"
+   },
+   "row_count": 1499,
+   "extra": {
+    "parts": 16
+   },
+   "rows": [
+    {
+     "key": ",",
+     "values": {
+      "item": ",",
+      "freq": 234,
+      "per_million": 51473.82314122305,
+      "doc_freq": 12,
+      "range": 12,
+      "range_pct": 75.0,
+      "dp": 0.288695612936704,
+      "dp_norm": 0.29029202751830485,
+      "juilland_d": 0.7510911332865892
+     }
+    },
+    {
+     "key": "the",
+     "values": {
+      "item": "the",
+      "freq": 227,
+      "per_million": 49934.00791904971,
+      "doc_freq": 14,
+      "range": 14,
+      "range_pct": 87.5,
+      "dp": 0.18727118384560373,
+      "dp_norm": 0.18830674668482958,
+      "juilland_d": 0.849993259282046
+     }
+    },
+    {
+     "key": ".",
+     "values": {
+      "item": ".",
+      "freq": 166,
+      "per_million": 36515.6181258249,
+      "doc_freq": 15,
+      "range": 15,
+      "range_pct": 93.75,
+      "dp": 0.11536687886610232,
+      "dp_norm": 0.11600482887089165,
+      "juilland_d": 0.8895895031089128
+     }
+    },
+    {
+     "key": "of",
+     "values": {
+      "item": "of",
+      "freq": 107,
+      "per_million": 23537.175538935327,
+      "doc_freq": 13,
+      "range": 13,
+      "range_pct": 81.25,
+      "dp": 0.20667856305841428,
+      "dp_norm": 0.20782144385391535,
+      "juilland_d": 0.8096219717966529
+     }
+    },
+    {
+     "key": "and",
+     "values": {
+      "item": "and",
+      "freq": 96,
+      "per_million": 21117.46590409151,
+      "doc_freq": 13,
+      "range": 13,
+      "range_pct": 81.25,
+      "dp": 0.2423009238891333,
+      "dp_norm": 0.24364078743640788,
+      "juilland_d": 0.7858032933960101
+     }
+    },
+    {
+     "key": "to",
+     "values": {
+      "item": "to",
+      "freq": 88,
+      "per_million": 19357.67707875055,
+      "doc_freq": 14,
+      "range": 14,
+      "range_pct": 87.5,
+      "dp": 0.17243430788305403,
+      "dp_norm": 0.17338782650660553,
+      "juilland_d": 0.783454955253954
+     }
+    },
+    {
+     "key": "in",
+     "values": {
+      "item": "in",
+      "freq": 77,
+      "per_million": 16937.96744390673,
+      "doc_freq": 13,
+      "range": 13,
+      "range_pct": 81.25,
+      "dp": 0.22619857045725938,
+      "dp_norm": 0.22744939201475364,
+      "juilland_d": 0.795095894979222
+     }
+    },
+    {
+     "key": "a",
+     "values": {
+      "item": "a",
+      "freq": 72,
+      "per_million": 15838.099428068632,
+      "doc_freq": 14,
+      "range": 14,
+      "range_pct": 87.5,
+      "dp": 0.2231387789020873,
+      "dp_norm": 0.22437268057706014,
+      "juilland_d": 0.820529797957174
+     }
+    },
+    {
+     "key": "that",
+     "values": {
+      "item": "that",
+      "freq": 61,
+      "per_million": 13418.389793224813,
+      "doc_freq": 14,
+      "range": 14,
+      "range_pct": 87.5,
+      "dp": 0.25109085270423287,
+      "dp_norm": 0.2524793223608588,
+      "juilland_d": 0.7821935704483749
+     }
+    },
+    {
+     "key": "-",
+     "values": {
+      "item": "-",
+      "freq": 55,
+      "per_million": 12098.548174219093,
+      "doc_freq": 11,
+      "range": 11,
+      "range_pct": 68.75,
+      "dp": 0.39128904531456227,
+      "dp_norm": 0.39345277593452777,
+      "juilland_d": 0.6704190882402191
+     }
+    },
+    {
+     "key": "is",
+     "values": {
+      "item": "is",
+      "freq": 45,
+      "per_million": 9898.812142542894,
+      "doc_freq": 12,
+      "range": 12,
+      "range_pct": 75.0,
+      "dp": 0.29999022339541476,
+      "dp_norm": 0.3016490943498243,
+      "juilland_d": 0.7449426861910298
+     }
+    },
+    {
+     "key": "\"",
+     "values": {
+      "item": "\"",
+      "freq": 42,
+      "per_million": 9238.891333040036,
+      "doc_freq": 7,
+      "range": 7,
+      "range_pct": 43.75,
+      "dp": 0.34755829300483937,
+      "dp_norm": 0.34948020349480197,
+      "juilland_d": 0.5228952652543399
+     }
+    },
+    {
+     "key": "on",
+     "values": {
+      "item": "on",
+      "freq": 35,
+      "per_million": 7699.076110866696,
+      "doc_freq": 11,
+      "range": 11,
+      "range_pct": 68.75,
+      "dp": 0.2718936584752687,
+      "dp_norm": 0.27339716244825735,
+      "juilland_d": 0.748041296476019
+     }
+    },
+    {
+     "key": "with",
+     "values": {
+      "item": "with",
+      "freq": 33,
+      "per_million": 7259.128904531456,
+      "doc_freq": 10,
+      "range": 10,
+      "range_pct": 62.5,
+      "dp": 0.3047101014544921,
+      "dp_norm": 0.3063950721548598,
+      "juilland_d": 0.6789687829380397
+     }
+    },
+    {
+     "key": "'s",
+     "values": {
+      "item": "'s",
+      "freq": 31,
+      "per_million": 6819.1816981962165,
+      "doc_freq": 9,
+      "range": 9,
+      "range_pct": 56.25,
+      "dp": 0.37773725217490034,
+      "dp_norm": 0.3798260447660024,
+      "juilland_d": 0.6593886165630944
+     }
+    },
+    {
+     "key": "The",
+     "values": {
+      "item": "The",
+      "freq": 27,
+      "per_million": 5939.2872855257365,
+      "doc_freq": 8,
+      "range": 8,
+      "range_pct": 50.0,
+      "dp": 0.4226263218784116,
+      "dp_norm": 0.4249633398051889,
+      "juilland_d": 0.6818389819286526
+     }
+    },
+    {
+     "key": "have",
+     "values": {
+      "item": "have",
+      "freq": 25,
+      "per_million": 5499.340079190497,
+      "doc_freq": 10,
+      "range": 10,
+      "range_pct": 62.5,
+      "dp": 0.3611526616805983,
+      "dp_norm": 0.36314974563149743,
+      "juilland_d": 0.6217798969622192
+     }
+    },
+    {
+     "key": "was",
+     "values": {
+      "item": "was",
+      "freq": 25,
+      "per_million": 5499.340079190497,
+      "doc_freq": 9,
+      "range": 9,
+      "range_pct": 56.25,
+      "dp": 0.41540695116586007,
+      "dp_norm": 0.41770404777704045,
+      "juilland_d": 0.6654667831263761
+     }
+    },
+    {
+     "key": "al",
+     "values": {
+      "item": "al",
+      "freq": 23,
+      "per_million": 5059.392872855257,
+      "doc_freq": 3,
+      "range": 3,
+      "range_pct": 18.75,
+      "dp": 0.6509784043306107,
+      "dp_norm": 0.6545781521979553,
+      "juilland_d": 0.3378679174108772
+     }
+    },
+    {
+     "key": "it",
+     "values": {
+      "item": "it",
+      "freq": 23,
+      "per_million": 5059.392872855257,
+      "doc_freq": 10,
+      "range": 10,
+      "range_pct": 62.5,
+      "dp": 0.36817842728437805,
+      "dp_norm": 0.3702143619630132,
+      "juilland_d": 0.6648108965097493
+     }
+    }
+   ]
+  },
+  {
+   "name": "dispersion-segments",
+   "method": "frequency",
+   "params": {
+    "parts": "segments"
+   },
+   "row_count": 1499,
+   "extra": {
+    "parts": 10
+   },
+   "rows": [
+    {
+     "key": ",",
+     "values": {
+      "item": ",",
+      "freq": 234,
+      "per_million": 51473.82314122305,
+      "doc_freq": 12,
+      "range": 10,
+      "range_pct": 100.0,
+      "dp": 0.30004399472063353,
+      "dp_norm": 0.33333333333333337,
+      "juilland_d": 0.7205807337565056
+     }
+    },
+    {
+     "key": "the",
+     "values": {
+      "item": "the",
+      "freq": 227,
+      "per_million": 49934.00791904971,
+      "doc_freq": 14,
+      "range": 10,
+      "range_pct": 100.0,
+      "dp": 0.1299559471365639,
+      "dp_norm": 0.14437432445816703,
+      "juilland_d": 0.8845862974321419
+     }
+    },
+    {
+     "key": ".",
+     "values": {
+      "item": ".",
+      "freq": 166,
+      "per_million": 36515.6181258249,
+      "doc_freq": 15,
+      "range": 10,
+      "range_pct": 100.0,
+      "dp": 0.09406389305572488,
+      "dp_norm": 0.1045001118844881,
+      "juilland_d": 0.9127815687063783
+     }
+    },
+    {
+     "key": "of",
+     "values": {
+      "item": "of",
+      "freq": 107,
+      "per_million": 23537.175538935327,
+      "doc_freq": 13,
+      "range": 10,
+      "range_pct": 100.0,
+      "dp": 0.16083565299266891,
+      "dp_norm": 0.17868007783594156,
+      "juilland_d": 0.8669655927588863
+     }
+    },
+    {
+     "key": "and",
+     "values": {
+      "item": "and",
+      "freq": 96,
+      "per_million": 21117.46590409151,
+      "doc_freq": 13,
+      "range": 10,
+      "range_pct": 100.0,
+      "dp": 0.14605330693650095,
+      "dp_norm": 0.16225765721733465,
+      "juilland_d": 0.8834326404871817
+     }
+    },
+    {
+     "key": "to",
+     "values": {
+      "item": "to",
+      "freq": 88,
+      "per_million": 19357.67707875055,
+      "doc_freq": 14,
+      "range": 10,
+      "range_pct": 100.0,
+      "dp": 0.15013198416190057,
+      "dp_norm": 0.16678885630498536,
+      "juilland_d": 0.8755725360543949
+     }
+    },
+    {
+     "key": "in",
+     "values": {
+      "item": "in",
+      "freq": 77,
+      "per_million": 16937.96744390673,
+      "doc_freq": 13,
+      "range": 10,
+      "range_pct": 100.0,
+      "dp": 0.18875163551802354,
+      "dp_norm": 0.20969328813903593,
+      "juilland_d": 0.8460201245432326
+     }
+    },
+    {
+     "key": "a",
+     "values": {
+      "item": "a",
+      "freq": 72,
+      "per_million": 15838.099428068632,
+      "doc_freq": 14,
+      "range": 10,
+      "range_pct": 100.0,
+      "dp": 0.16931246028254388,
+      "dp_norm": 0.1880973715651135,
+      "juilland_d": 0.8584200082281318
+     }
+    },
+    {
+     "key": "that",
+     "values": {
+      "item": "that",
+      "freq": 61,
+      "per_million": 13418.389793224813,
+      "doc_freq": 14,
+      "range": 10,
+      "range_pct": 100.0,
+      "dp": 0.20793275298767427,
+      "dp_norm": 0.2310025159046841,
+      "juilland_d": 0.8165729487572709
+     }
+    },
+    {
+     "key": "-",
+     "values": {
+      "item": "-",
+      "freq": 55,
+      "per_million": 12098.548174219093,
+      "doc_freq": 11,
+      "range": 10,
+      "range_pct": 100.0,
+      "dp": 0.3637243530776307,
+      "dp_norm": 0.404078912290056,
+      "juilland_d": 0.7217266589119771
+     }
+    },
+    {
+     "key": "is",
+     "values": {
+      "item": "is",
+      "freq": 45,
+      "per_million": 9898.812142542894,
+      "doc_freq": 12,
+      "range": 10,
+      "range_pct": 100.0,
+      "dp": 0.3,
+      "dp_norm": 0.33328445747800584,
+      "juilland_d": 0.7696836962684773
+     }
+    },
+    {
+     "key": "\"",
+     "values": {
+      "item": "\"",
+      "freq": 42,
+      "per_million": 9238.891333040036,
+      "doc_freq": 7,
+      "range": 7,
+      "range_pct": 70.0,
+      "dp": 0.36199275134602893,
+      "dp_norm": 0.4021551924777731,
+      "juilland_d": 0.6791671505480341
+     }
+    },
+    {
+     "key": "on",
+     "values": {
+      "item": "on",
+      "freq": 35,
+      "per_million": 7699.076110866696,
+      "doc_freq": 11,
+      "range": 9,
+      "range_pct": 90.0,
+      "dp": 0.2714285714285714,
+      "dp_norm": 0.30154308057533863,
+      "juilland_d": 0.7698218937885043
+     }
+    },
+    {
+     "key": "with",
+     "values": {
+      "item": "with",
+      "freq": 33,
+      "per_million": 7259.128904531456,
+      "doc_freq": 10,
+      "range": 9,
+      "range_pct": 90.0,
+      "dp": 0.3484848484848485,
+      "dp_norm": 0.38714861222192604,
+      "juilland_d": 0.7365403048601316
+     }
+    },
+    {
+     "key": "'s",
+     "values": {
+      "item": "'s",
+      "freq": 31,
+      "per_million": 6819.1816981962165,
+      "doc_freq": 9,
+      "range": 9,
+      "range_pct": 90.0,
+      "dp": 0.28060116656968903,
+      "dp_norm": 0.31173335855958123,
+      "juilland_d": 0.7220877718101569
+     }
+    },
+    {
+     "key": "The",
+     "values": {
+      "item": "The",
+      "freq": 27,
+      "per_million": 5939.2872855257365,
+      "doc_freq": 8,
+      "range": 8,
+      "range_pct": 80.0,
+      "dp": 0.38888888888888884,
+      "dp_norm": 0.4320354078418594,
+      "juilland_d": 0.7237388166429938
+     }
+    },
+    {
+     "key": "have",
+     "values": {
+      "item": "have",
+      "freq": 25,
+      "per_million": 5499.340079190497,
+      "doc_freq": 10,
+      "range": 9,
+      "range_pct": 90.0,
+      "dp": 0.26,
+      "dp_norm": 0.2888465298142718,
+      "juilland_d": 0.7829934068141436
+     }
+    },
+    {
+     "key": "was",
+     "values": {
+      "item": "was",
+      "freq": 25,
+      "per_million": 5499.340079190497,
+      "doc_freq": 9,
+      "range": 9,
+      "range_pct": 90.0,
+      "dp": 0.37995600527936646,
+      "dp_norm": 0.42211143695014663,
+      "juilland_d": 0.6362573114942012
+     }
+    },
+    {
+     "key": "al",
+     "values": {
+      "item": "al",
+      "freq": 23,
+      "per_million": 5059.392872855257,
+      "doc_freq": 3,
+      "range": 5,
+      "range_pct": 50.0,
+      "dp": 0.5695212226706708,
+      "dp_norm": 0.632708572400017,
+      "juilland_d": 0.5461352310408096
+     }
+    },
+    {
+     "key": "it",
+     "values": {
+      "item": "it",
+      "freq": 23,
+      "per_million": 5059.392872855257,
+      "doc_freq": 10,
+      "range": 9,
+      "range_pct": 90.0,
+      "dp": 0.3084316838501119,
+      "dp_norm": 0.3426516214033746,
+      "juilland_d": 0.7248113372767161
+     }
+    }
+   ]
+  },
+  {
+   "name": "dispersion-field",
+   "method": "frequency",
+   "params": {
+    "parts": "field:part"
+   },
+   "row_count": 1499,
+   "extra": {
+    "parts": 2
+   },
+   "rows": [
+    {
+     "key": ",",
+     "values": {
+      "item": ",",
+      "freq": 234,
+      "per_million": 51473.82314122305,
+      "doc_freq": 12,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.029651313637235305,
+      "dp_norm": 0.04307921757586183,
+      "juilland_d": 0.9290505432215399
+     }
+    },
+    {
+     "key": "the",
+     "values": {
+      "item": "the",
+      "freq": 227,
+      "per_million": 49934.00791904971,
+      "doc_freq": 14,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.01654841066649093,
+      "dp_norm": 0.024042529526963174,
+      "juilland_d": 0.9608651512616789
+     }
+    },
+    {
+     "key": ".",
+     "values": {
+      "item": ".",
+      "freq": 166,
+      "per_million": 36515.6181258249,
+      "doc_freq": 15,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.04371909105847058,
+      "dp_norm": 0.06351773344576774,
+      "juilland_d": 0.9018766915504268
+     }
+    },
+    {
+     "key": "of",
+     "values": {
+      "item": "of",
+      "freq": 107,
+      "per_million": 23537.175538935327,
+      "doc_freq": 13,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.05936614709038651,
+      "dp_norm": 0.08625072057299363,
+      "juilland_d": 0.8540408303553828
+     }
+    },
+    {
+     "key": "and",
+     "values": {
+      "item": "and",
+      "freq": 96,
+      "per_million": 21117.46590409151,
+      "doc_freq": 13,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.042464070978149304,
+      "dp_norm": 0.06169436454671356,
+      "juilland_d": 0.9045922570016475
+     }
+    },
+    {
+     "key": "to",
+     "values": {
+      "item": "to",
+      "freq": 88,
+      "per_million": 19357.67707875055,
+      "doc_freq": 14,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.074661040675119,
+      "dp_norm": 0.10847206484790378,
+      "juilland_d": 0.836701220312295
+     }
+    },
+    {
+     "key": "in",
+     "values": {
+      "item": "in",
+      "freq": 77,
+      "per_million": 16937.96744390673,
+      "doc_freq": 13,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.01297272898680732,
+      "dp_norm": 0.018847563430497306,
+      "juilland_d": 0.9701071035949154
+     }
+    },
+    {
+     "key": "a",
+     "values": {
+      "item": "a",
+      "freq": 72,
+      "per_million": 15838.099428068632,
+      "doc_freq": 14,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.04940851542259378,
+      "dp_norm": 0.07178367245481346,
+      "juilland_d": 0.8896380411639461
+     }
+    },
+    {
+     "key": "that",
+     "values": {
+      "item": "that",
+      "freq": 61,
+      "per_million": 13418.389793224813,
+      "doc_freq": 14,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.016620628475402605,
+      "dp_norm": 0.02414745191728355,
+      "juilland_d": 0.9606918373090668
+     }
+    },
+    {
+     "key": "-",
+     "values": {
+      "item": "-",
+      "freq": 55,
+      "per_million": 12098.548174219093,
+      "doc_freq": 11,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.05193376794784629,
+      "dp_norm": 0.07545251169412248,
+      "juilland_d": 0.8842433697347893
+     }
+    },
+    {
+     "key": "is",
+     "values": {
+      "item": "is",
+      "freq": 45,
+      "per_million": 9898.812142542894,
+      "doc_freq": 12,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.11170259568851737,
+      "dp_norm": 0.1622882710131032,
+      "juilland_d": 0.7113788791633512
+     }
+    },
+    {
+     "key": "\"",
+     "values": {
+      "item": "\"",
+      "freq": 42,
+      "per_million": 9238.891333040036,
+      "doc_freq": 7,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.21646450045042212,
+      "dp_norm": 0.31449268745529524,
+      "juilland_d": 0.3772038214640909
+     }
+    },
+    {
+     "key": "on",
+     "values": {
+      "item": "on",
+      "freq": 35,
+      "per_million": 7699.076110866696,
+      "doc_freq": 11,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.054559738545660236,
+      "dp_norm": 0.07926768022645299,
+      "juilland_d": 0.8664523175853422
+     }
+    },
+    {
+     "key": "with",
+     "values": {
+      "item": "with",
+      "freq": 33,
+      "per_million": 7259.128904531456,
+      "doc_freq": 10,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.05193376794784629,
+      "dp_norm": 0.07545251169412248,
+      "juilland_d": 0.8842433697347893
+     }
+    },
+    {
+     "key": "'s",
+     "values": {
+      "item": "'s",
+      "freq": 31,
+      "per_million": 6819.1816981962165,
+      "doc_freq": 9,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.02138001504335607,
+      "dp_norm": 0.031062175898720578,
+      "juilland_d": 0.9492205275132721
+     }
+    },
+    {
+     "key": "The",
+     "values": {
+      "item": "The",
+      "freq": 27,
+      "per_million": 5939.2872855257365,
+      "doc_freq": 8,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.05244333642925808,
+      "dp_norm": 0.07619284353065107,
+      "juilland_d": 0.8718826503194474
+     }
+    },
+    {
+     "key": "have",
+     "values": {
+      "item": "have",
+      "freq": 25,
+      "per_million": 5499.340079190497,
+      "doc_freq": 10,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.03170259568851733,
+      "dp_norm": 0.04605944391179283,
+      "juilland_d": 0.924001771815478
+     }
+    },
+    {
+     "key": "was",
+     "values": {
+      "item": "was",
+      "freq": 25,
+      "per_million": 5499.340079190497,
+      "doc_freq": 9,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.11170259568851737,
+      "dp_norm": 0.1622882710131032,
+      "juilland_d": 0.7113788791633511
+     }
+    },
+    {
+     "key": "al",
+     "values": {
+      "item": "al",
+      "freq": 23,
+      "per_million": 5059.392872855257,
+      "doc_freq": 3,
+      "range": 1,
+      "range_pct": 50.0,
+      "dp": 0.3117025956885173,
+      "dp_norm": 0.45286033876637893,
+      "juilland_d": 0.0
+     }
+    },
+    {
+     "key": "it",
+     "values": {
+      "item": "it",
+      "freq": 23,
+      "per_million": 5059.392872855257,
+      "doc_freq": 10,
+      "range": 2,
+      "range_pct": 100.0,
+      "dp": 0.036123491268004376,
+      "dp_norm": 0.05248238776105717,
+      "juilland_d": 0.9184004148032925
+     }
+    }
+   ]
+  },
+  {
+   "name": "keywords-positive-pct-diff",
+   "method": "keywords",
+   "params": {
+    "measure": "pct_diff",
+    "direction": "positive",
+    "min_freq": 3
+   },
+   "row_count": 87,
+   "extra": {},
+   "rows": [
+    {
+     "key": "opinion",
+     "values": {
+      "word": "opinion",
+      "target_freq": 9,
+      "ref_freq": 0,
+      "target_pm": 6351.446718419195,
+      "ref_pm": 0.0,
+      "ll": 20.982703764992543,
+      "log_ratio": 5.312786901765215,
+      "log_ratio_ci_low": 1.2043352957210818,
+      "log_ratio_ci_high": 9.421238507809349,
+      "pct_diff": 3874.7353563867327,
+      "odds_ratio": 39.99502840909091,
+      "significance": "***",
+      "bonferroni": "**",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Google",
+     "values": {
+      "word": "Google",
+      "target_freq": 6,
+      "ref_freq": 0,
+      "target_pm": 4234.297812279464,
+      "ref_pm": 0.0,
+      "ll": 13.988469176661697,
+      "log_ratio": 4.727824401044059,
+      "log_ratio_ci_low": 0.5656652657385877,
+      "log_ratio_ci_high": 8.889983536349531,
+      "pct_diff": 2549.8235709244886,
+      "odds_ratio": 26.60666194188519,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Parts",
+     "values": {
+      "word": "Parts",
+      "target_freq": 5,
+      "ref_freq": 0,
+      "target_pm": 3528.5815102328866,
+      "ref_pm": 0.0,
+      "ll": 11.657057647218082,
+      "log_ratio": 4.464789995210266,
+      "log_ratio_ci_low": 0.2707364537486283,
+      "log_ratio_ci_high": 8.658843536671903,
+      "pct_diff": 2108.1863091037403,
+      "odds_ratio": 22.156515580736542,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "filed",
+     "values": {
+      "word": "filed",
+      "target_freq": 5,
+      "ref_freq": 0,
+      "target_pm": 3528.5815102328866,
+      "ref_pm": 0.0,
+      "ll": 11.657057647218082,
+      "log_ratio": 4.464789995210266,
+      "log_ratio_ci_low": 0.2707364537486283,
+      "log_ratio_ci_high": 8.658843536671903,
+      "pct_diff": 2108.1863091037403,
+      "odds_ratio": 22.156515580736542,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "nuclear",
+     "values": {
+      "word": "nuclear",
+      "target_freq": 5,
+      "ref_freq": 0,
+      "target_pm": 3528.5815102328866,
+      "ref_pm": 0.0,
+      "ll": 11.657057647218082,
+      "log_ratio": 4.464789995210266,
+      "log_ratio_ci_low": 0.2707364537486283,
+      "log_ratio_ci_high": 8.658843536671903,
+      "pct_diff": 2108.1863091037403,
+      "odds_ratio": 22.156515580736542,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "joined",
+     "values": {
+      "word": "joined",
+      "target_freq": 8,
+      "ref_freq": 1,
+      "target_pm": 5645.7304163726185,
+      "ref_pm": 319.59092361776925,
+      "ll": 13.119383031861567,
+      "log_ratio": 4.142861900322903,
+      "log_ratio_ci_low": 1.14370703851541,
+      "log_ratio_ci_high": 7.142016762130396,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.76011355571327,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": false
+     }
+    },
+    {
+     "key": "BREYER",
+     "values": {
+      "word": "BREYER",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "GINSBURG",
+     "values": {
+      "word": "GINSBURG",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "John",
+     "values": {
+      "word": "John",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "SOUTER",
+     "values": {
+      "word": "SOUTER",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "VI",
+     "values": {
+      "word": "VI",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "read",
+     "values": {
+      "word": "read",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "two",
+     "values": {
+      "word": "two",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "ALITO",
+     "values": {
+      "word": "ALITO",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "log_ratio_ci_low": -0.5914522597878573,
+      "log_ratio_ci_high": 8.047101061875978,
+      "pct_diff": 1224.911785462244,
+      "odds_ratio": 13.275106082036775,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "D",
+     "values": {
+      "word": "D",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "log_ratio_ci_low": -0.5914522597878573,
+      "log_ratio_ci_high": 8.047101061875978,
+      "pct_diff": 1224.911785462244,
+      "odds_ratio": 13.275106082036775,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Darfur",
+     "values": {
+      "word": "Darfur",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "log_ratio_ci_low": -0.5914522597878573,
+      "log_ratio_ci_high": 8.047101061875978,
+      "pct_diff": 1224.911785462244,
+      "odds_ratio": 13.275106082036775,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Falluja",
+     "values": {
+      "word": "Falluja",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "log_ratio_ci_low": -0.5914522597878573,
+      "log_ratio_ci_high": 8.047101061875978,
+      "pct_diff": 1224.911785462244,
+      "odds_ratio": 13.275106082036775,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Government",
+     "values": {
+      "word": "Government",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "log_ratio_ci_low": -0.5914522597878573,
+      "log_ratio_ci_high": 8.047101061875978,
+      "pct_diff": 1224.911785462244,
+      "odds_ratio": 13.275106082036775,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Iranian",
+     "values": {
+      "word": "Iranian",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "log_ratio_ci_low": -0.5914522597878573,
+      "log_ratio_ci_high": 8.047101061875978,
+      "pct_diff": 1224.911785462244,
+      "odds_ratio": 13.275106082036775,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "KENNEDY",
+     "values": {
+      "word": "KENNEDY",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "log_ratio_ci_low": -0.5914522597878573,
+      "log_ratio_ci_high": 8.047101061875978,
+      "pct_diff": 1224.911785462244,
+      "odds_ratio": 13.275106082036775,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    }
+   ]
+  },
+  {
+   "name": "keywords-negative-log-ratio",
+   "method": "keywords",
+   "params": {
+    "measure": "log_ratio",
+    "direction": "negative",
+    "min_freq": 3
+   },
+   "row_count": 142,
+   "extra": {},
+   "rows": [
+    {
+     "key": "al",
+     "values": {
+      "word": "al",
+      "target_freq": 0,
+      "ref_freq": 23,
+      "target_pm": 0.0,
+      "ref_pm": 7350.5912432086925,
+      "ll": 17.18257599420589,
+      "log_ratio": -4.380700055734109,
+      "log_ratio_ci_low": -8.422805522306373,
+      "log_ratio_ci_high": -0.33859458916184604,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.047668012093494375,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Qaeda",
+     "values": {
+      "word": "Qaeda",
+      "target_freq": 0,
+      "ref_freq": 16,
+      "target_pm": 0.0,
+      "ref_pm": 5113.454777884308,
+      "ll": 11.953096343795403,
+      "log_ratio": -3.857138099677096,
+      "log_ratio_ci_low": -7.918012979472885,
+      "log_ratio_ci_high": 0.20373678011869334,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.06867719731733145,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": ";",
+     "values": {
+      "word": ";",
+      "target_freq": 0,
+      "ref_freq": 12,
+      "target_pm": 0.0,
+      "ref_pm": 3835.091083413231,
+      "ll": 8.964822257846553,
+      "log_ratio": -3.442100600398252,
+      "log_ratio_ci_low": -7.523433417629228,
+      "log_ratio_ci_high": 0.639232216832724,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.0916872573243911,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "London",
+     "values": {
+      "word": "London",
+      "target_freq": 0,
+      "ref_freq": 12,
+      "target_pm": 0.0,
+      "ref_pm": 3835.091083413231,
+      "ll": 8.964822257846553,
+      "log_ratio": -3.442100600398252,
+      "log_ratio_ci_low": -7.523433417629228,
+      "log_ratio_ci_high": 0.639232216832724,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.0916872573243911,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Islamic",
+     "values": {
+      "word": "Islamic",
+      "target_freq": 0,
+      "ref_freq": 11,
+      "target_pm": 0.0,
+      "ref_pm": 3515.500159795462,
+      "ll": 8.21775373635934,
+      "log_ratio": -3.316569718314394,
+      "log_ratio_ci_low": -7.405316406900609,
+      "log_ratio_ci_high": 0.7721769702718211,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.1000545518724128,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "E17",
+     "values": {
+      "word": "E17",
+      "target_freq": 0,
+      "ref_freq": 9,
+      "target_pm": 0.0,
+      "ref_pm": 2876.3183125599235,
+      "ll": 6.723616693384915,
+      "log_ratio": -3.027063101119408,
+      "log_ratio_ci_low": -7.135514707163542,
+      "log_ratio_ci_high": 1.0813885049247256,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.12236733733380398,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Iraq",
+     "values": {
+      "word": "Iraq",
+      "target_freq": 0,
+      "ref_freq": 9,
+      "target_pm": 0.0,
+      "ref_pm": 2876.3183125599235,
+      "ll": 6.723616693384915,
+      "log_ratio": -3.027063101119408,
+      "log_ratio_ci_low": -7.135514707163542,
+      "log_ratio_ci_high": 1.0813885049247256,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.12236733733380398,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Laden",
+     "values": {
+      "word": "Laden",
+      "target_freq": 0,
+      "ref_freq": 8,
+      "target_pm": 0.0,
+      "ref_pm": 2556.727388942154,
+      "ll": 5.976548171897702,
+      "log_ratio": -2.857138099677096,
+      "log_ratio_ci_low": -6.979082193949441,
+      "log_ratio_ci_high": 1.2648059945952497,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.1377073773385104,
+      "significance": "*",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "group",
+     "values": {
+      "word": "group",
+      "target_freq": 0,
+      "ref_freq": 8,
+      "target_pm": 0.0,
+      "ref_pm": 2556.727388942154,
+      "ll": 5.976548171897702,
+      "log_ratio": -2.857138099677096,
+      "log_ratio_ci_low": -6.979082193949441,
+      "log_ratio_ci_high": 1.2648059945952497,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.1377073773385104,
+      "significance": "*",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Bin",
+     "values": {
+      "word": "Bin",
+      "target_freq": 0,
+      "ref_freq": 7,
+      "target_pm": 0.0,
+      "ref_pm": 2237.136465324385,
+      "ll": 5.229479650410491,
+      "log_ratio": -2.6644930217346996,
+      "log_ratio_ci_low": -6.803719976269758,
+      "log_ratio_ci_high": 1.4747339328003592,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.15743028591599012,
+      "significance": "*",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Muslim",
+     "values": {
+      "word": "Muslim",
+      "target_freq": 0,
+      "ref_freq": 7,
+      "target_pm": 0.0,
+      "ref_pm": 2237.136465324385,
+      "ll": 5.229479650410491,
+      "log_ratio": -2.6644930217346996,
+      "log_ratio_ci_low": -6.803719976269758,
+      "log_ratio_ci_high": 1.4747339328003592,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.15743028591599012,
+      "significance": "*",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "among",
+     "values": {
+      "word": "among",
+      "target_freq": 0,
+      "ref_freq": 7,
+      "target_pm": 0.0,
+      "ref_pm": 2237.136465324385,
+      "ll": 5.229479650410491,
+      "log_ratio": -2.6644930217346996,
+      "log_ratio_ci_low": -6.803719976269758,
+      "log_ratio_ci_high": 1.4747339328003592,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.15743028591599012,
+      "significance": "*",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "terrorist",
+     "values": {
+      "word": "terrorist",
+      "target_freq": 0,
+      "ref_freq": 7,
+      "target_pm": 0.0,
+      "ref_pm": 2237.136465324385,
+      "ll": 5.229479650410491,
+      "log_ratio": -2.6644930217346996,
+      "log_ratio_ci_low": -6.803719976269758,
+      "log_ratio_ci_high": 1.4747339328003592,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.15743028591599012,
+      "significance": "*",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "had",
+     "values": {
+      "word": "had",
+      "target_freq": 1,
+      "ref_freq": 13,
+      "target_pm": 705.7163020465773,
+      "ref_pm": 4154.6820070310005,
+      "ll": 4.838380373550098,
+      "log_ratio": -2.5575778178181885,
+      "log_ratio_ci_low": -5.491948478124231,
+      "log_ratio_ci_high": 0.3767928424878537,
+      "pct_diff": -83.01395146843277,
+      "odds_ratio": 0.16927422859626248,
+      "significance": "*",
+      "bonferroni": "",
+      "smoothed": false
+     }
+    },
+    {
+     "key": "Clinton",
+     "values": {
+      "word": "Clinton",
+      "target_freq": 0,
+      "ref_freq": 6,
+      "target_pm": 0.0,
+      "ref_pm": 1917.5455417066155,
+      "ll": 4.482411128923276,
+      "log_ratio": -2.442100600398252,
+      "log_ratio_ci_low": -6.604259735703724,
+      "log_ratio_ci_high": 1.7200585349072197,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.18372749735262972,
+      "significance": "*",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Iraqi",
+     "values": {
+      "word": "Iraqi",
+      "target_freq": 0,
+      "ref_freq": 6,
+      "target_pm": 0.0,
+      "ref_pm": 1917.5455417066155,
+      "ll": 4.482411128923276,
+      "log_ratio": -2.442100600398252,
+      "log_ratio_ci_low": -6.604259735703724,
+      "log_ratio_ci_high": 1.7200585349072197,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.18372749735262972,
+      "significance": "*",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Mississauga",
+     "values": {
+      "word": "Mississauga",
+      "target_freq": 0,
+      "ref_freq": 6,
+      "target_pm": 0.0,
+      "ref_pm": 1917.5455417066155,
+      "ll": 4.482411128923276,
+      "log_ratio": -2.442100600398252,
+      "log_ratio_ci_low": -6.604259735703724,
+      "log_ratio_ci_high": 1.7200585349072197,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.18372749735262972,
+      "significance": "*",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "did",
+     "values": {
+      "word": "did",
+      "target_freq": 0,
+      "ref_freq": 6,
+      "target_pm": 0.0,
+      "ref_pm": 1917.5455417066155,
+      "ll": 4.482411128923276,
+      "log_ratio": -2.442100600398252,
+      "log_ratio_ci_low": -6.604259735703724,
+      "log_ratio_ci_high": 1.7200585349072197,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.18372749735262972,
+      "significance": "*",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "so",
+     "values": {
+      "word": "so",
+      "target_freq": 0,
+      "ref_freq": 6,
+      "target_pm": 0.0,
+      "ref_pm": 1917.5455417066155,
+      "ll": 4.482411128923276,
+      "log_ratio": -2.442100600398252,
+      "log_ratio_ci_low": -6.604259735703724,
+      "log_ratio_ci_high": 1.7200585349072197,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.18372749735262972,
+      "significance": "*",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Bush",
+     "values": {
+      "word": "Bush",
+      "target_freq": 1,
+      "ref_freq": 11,
+      "target_pm": 705.7163020465773,
+      "ref_pm": 3515.500159795462,
+      "ll": 3.665101672455102,
+      "log_ratio": -2.316569718314394,
+      "log_ratio_ci_low": -5.269933267256786,
+      "log_ratio_ci_high": 0.6367938306279979,
+      "pct_diff": -79.9255790081478,
+      "odds_ratio": 0.20017976373908578,
+      "significance": "",
+      "bonferroni": "",
+      "smoothed": false
+     }
+    }
+   ]
+  },
+  {
+   "name": "keywords-both-odds-ratio",
+   "method": "keywords",
+   "params": {
+    "measure": "odds_ratio",
+    "direction": "both",
+    "min_freq": 3
+   },
+   "row_count": 229,
+   "extra": {},
+   "rows": [
+    {
+     "key": "opinion",
+     "values": {
+      "word": "opinion",
+      "target_freq": 9,
+      "ref_freq": 0,
+      "target_pm": 6351.446718419195,
+      "ref_pm": 0.0,
+      "ll": 20.982703764992543,
+      "log_ratio": 5.312786901765215,
+      "log_ratio_ci_low": 1.2043352957210818,
+      "log_ratio_ci_high": 9.421238507809349,
+      "pct_diff": 3874.7353563867327,
+      "odds_ratio": 39.99502840909091,
+      "significance": "***",
+      "bonferroni": "**",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Google",
+     "values": {
+      "word": "Google",
+      "target_freq": 6,
+      "ref_freq": 0,
+      "target_pm": 4234.297812279464,
+      "ref_pm": 0.0,
+      "ll": 13.988469176661697,
+      "log_ratio": 4.727824401044059,
+      "log_ratio_ci_low": 0.5656652657385877,
+      "log_ratio_ci_high": 8.889983536349531,
+      "pct_diff": 2549.8235709244886,
+      "odds_ratio": 26.60666194188519,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Parts",
+     "values": {
+      "word": "Parts",
+      "target_freq": 5,
+      "ref_freq": 0,
+      "target_pm": 3528.5815102328866,
+      "ref_pm": 0.0,
+      "ll": 11.657057647218082,
+      "log_ratio": 4.464789995210266,
+      "log_ratio_ci_low": 0.2707364537486283,
+      "log_ratio_ci_high": 8.658843536671903,
+      "pct_diff": 2108.1863091037403,
+      "odds_ratio": 22.156515580736542,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "filed",
+     "values": {
+      "word": "filed",
+      "target_freq": 5,
+      "ref_freq": 0,
+      "target_pm": 3528.5815102328866,
+      "ref_pm": 0.0,
+      "ll": 11.657057647218082,
+      "log_ratio": 4.464789995210266,
+      "log_ratio_ci_low": 0.2707364537486283,
+      "log_ratio_ci_high": 8.658843536671903,
+      "pct_diff": 2108.1863091037403,
+      "odds_ratio": 22.156515580736542,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "nuclear",
+     "values": {
+      "word": "nuclear",
+      "target_freq": 5,
+      "ref_freq": 0,
+      "target_pm": 3528.5815102328866,
+      "ref_pm": 0.0,
+      "ll": 11.657057647218082,
+      "log_ratio": 4.464789995210266,
+      "log_ratio_ci_low": 0.2707364537486283,
+      "log_ratio_ci_high": 8.658843536671903,
+      "pct_diff": 2108.1863091037403,
+      "odds_ratio": 22.156515580736542,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "al",
+     "values": {
+      "word": "al",
+      "target_freq": 0,
+      "ref_freq": 23,
+      "target_pm": 0.0,
+      "ref_pm": 7350.5912432086925,
+      "ll": 17.18257599420589,
+      "log_ratio": -4.380700055734109,
+      "log_ratio_ci_low": -8.422805522306373,
+      "log_ratio_ci_high": -0.33859458916184604,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.047668012093494375,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "joined",
+     "values": {
+      "word": "joined",
+      "target_freq": 8,
+      "ref_freq": 1,
+      "target_pm": 5645.7304163726185,
+      "ref_pm": 319.59092361776925,
+      "ll": 13.119383031861567,
+      "log_ratio": 4.142861900322903,
+      "log_ratio_ci_low": 1.14370703851541,
+      "log_ratio_ci_high": 7.142016762130396,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.76011355571327,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": false
+     }
+    },
+    {
+     "key": "BREYER",
+     "values": {
+      "word": "BREYER",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "GINSBURG",
+     "values": {
+      "word": "GINSBURG",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "John",
+     "values": {
+      "word": "John",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "SOUTER",
+     "values": {
+      "word": "SOUTER",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "VI",
+     "values": {
+      "word": "VI",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "read",
+     "values": {
+      "word": "read",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "two",
+     "values": {
+      "word": "two",
+      "target_freq": 4,
+      "ref_freq": 0,
+      "target_pm": 2822.8652081863092,
+      "ref_pm": 0.0,
+      "ll": 9.325646117774465,
+      "log_ratio": 4.142861900322904,
+      "log_ratio_ci_low": -0.09858358090245911,
+      "log_ratio_ci_high": 8.384307381548268,
+      "pct_diff": 1666.5490472829922,
+      "odds_ratio": 17.712668082094833,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Qaeda",
+     "values": {
+      "word": "Qaeda",
+      "target_freq": 0,
+      "ref_freq": 16,
+      "target_pm": 0.0,
+      "ref_pm": 5113.454777884308,
+      "ll": 11.953096343795403,
+      "log_ratio": -3.857138099677096,
+      "log_ratio_ci_low": -7.918012979472885,
+      "log_ratio_ci_high": 0.20373678011869334,
+      "pct_diff": -100.0,
+      "odds_ratio": 0.06867719731733145,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "ALITO",
+     "values": {
+      "word": "ALITO",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "log_ratio_ci_low": -0.5914522597878573,
+      "log_ratio_ci_high": 8.047101061875978,
+      "pct_diff": 1224.911785462244,
+      "odds_ratio": 13.275106082036775,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "D",
+     "values": {
+      "word": "D",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "log_ratio_ci_low": -0.5914522597878573,
+      "log_ratio_ci_high": 8.047101061875978,
+      "pct_diff": 1224.911785462244,
+      "odds_ratio": 13.275106082036775,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Darfur",
+     "values": {
+      "word": "Darfur",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "log_ratio_ci_low": -0.5914522597878573,
+      "log_ratio_ci_high": 8.047101061875978,
+      "pct_diff": 1224.911785462244,
+      "odds_ratio": 13.275106082036775,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Falluja",
+     "values": {
+      "word": "Falluja",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "log_ratio_ci_low": -0.5914522597878573,
+      "log_ratio_ci_high": 8.047101061875978,
+      "pct_diff": 1224.911785462244,
+      "odds_ratio": 13.275106082036775,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "Government",
+     "values": {
+      "word": "Government",
+      "target_freq": 3,
+      "ref_freq": 0,
+      "target_pm": 2117.148906139732,
+      "ref_pm": 0.0,
+      "ll": 6.9942345883308485,
+      "log_ratio": 3.72782440104406,
+      "log_ratio_ci_low": -0.5914522597878573,
+      "log_ratio_ci_high": 8.047101061875978,
+      "pct_diff": 1224.911785462244,
+      "odds_ratio": 13.275106082036775,
+      "significance": "**",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    }
+   ]
+  },
+  {
+   "name": "keywords-items",
+   "method": "keywords",
+   "params": {
+    "measure": "ll",
+    "items": [
+     "Google",
+     "the",
+     "zzz-absent",
+     "of"
+    ]
+   },
+   "row_count": 4,
+   "extra": {},
+   "rows": [
+    {
+     "key": "Google",
+     "values": {
+      "word": "Google",
+      "target_freq": 6,
+      "ref_freq": 0,
+      "target_pm": 4234.297812279464,
+      "ref_pm": 0.0,
+      "ll": 13.988469176661697,
+      "log_ratio": 4.727824401044059,
+      "log_ratio_ci_low": 0.5656652657385877,
+      "log_ratio_ci_high": 8.889983536349531,
+      "pct_diff": 2549.8235709244886,
+      "odds_ratio": 26.60666194188519,
+      "significance": "***",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "the",
+     "values": {
+      "word": "the",
+      "target_freq": 67,
+      "ref_freq": 160,
+      "target_pm": 47282.99223712068,
+      "ref_pm": 51134.54777884308,
+      "ll": 0.2926598473335318,
+      "log_ratio": -0.11297700410668643,
+      "log_ratio_ci_low": -0.5244469939768144,
+      "log_ratio_ci_high": 0.29849298576344147,
+      "pct_diff": -7.532198306280873,
+      "odds_ratio": 0.9209398148148148,
+      "significance": "",
+      "bonferroni": "",
+      "smoothed": false
+     }
+    },
+    {
+     "key": "zzz-absent",
+     "values": {
+      "word": "zzz-absent",
+      "target_freq": 0,
+      "ref_freq": 0,
+      "target_pm": 0.0,
+      "ref_pm": 0.0,
+      "ll": 0.0,
+      "log_ratio": 1.1428619003229041,
+      "log_ratio_ci_low": -4.512398741310914,
+      "log_ratio_ci_high": 6.798122541956722,
+      "pct_diff": -100.0,
+      "odds_ratio": 2.208612777973879,
+      "significance": "",
+      "bonferroni": "",
+      "smoothed": true
+     }
+    },
+    {
+     "key": "of",
+     "values": {
+      "word": "of",
+      "target_freq": 27,
+      "ref_freq": 80,
+      "target_pm": 19054.340155257585,
+      "ref_pm": 25567.27388942154,
+      "ll": 1.8276747511615685,
+      "log_ratio": -0.42417869240099026,
+      "log_ratio_ci_low": -1.053522036151831,
+      "log_ratio_ci_high": 0.2051646513498503,
+      "pct_diff": -25.47371206774877,
+      "odds_ratio": 0.7403147482014388,
+      "significance": "",
+      "bonferroni": "",
+      "smoothed": false
+     }
+    }
+   ]
+  },
+  {
+   "name": "collocations-the-mi3",
+   "method": "collocations",
+   "params": {
+    "node": "the",
+    "window": 5,
+    "measures": [
+     "mi3",
+     "delta_p",
+     "z"
+    ],
+    "min_freq": 3
+   },
+   "row_count": 122,
+   "extra": {},
+   "rows": [
+    {
+     "key": "of",
+     "values": {
+      "collocate": "of",
+      "freq": 72,
+      "coll_freq": 107,
+      "mi3": 13.060708991616064,
+      "delta_p_node": 0.025781951031918986,
+      "delta_p_coll": 0.2710048781720224,
+      "z": 4.2840096517364605
+     }
+    },
+    {
+     "key": "the",
+     "values": {
+      "collocate": "the",
+      "freq": 85,
+      "coll_freq": 227,
+      "mi3": 12.694025294812466,
+      "delta_p_node": -0.006990690296115883,
+      "delta_p_coll": -0.03559928315923999,
+      "z": -0.7975054946678722
+     }
+    },
+    {
+     "key": ",",
+     "values": {
+      "collocate": ",",
+      "freq": 78,
+      "coll_freq": 234,
+      "mi3": 12.278242910693617,
+      "delta_p_node": -0.01596670298679656,
+      "delta_p_coll": -0.07900432900432902,
+      "z": -1.79404721378296
+     }
+    },
+    {
+     "key": "in",
+     "values": {
+      "collocate": "in",
+      "freq": 39,
+      "coll_freq": 77,
+      "mi3": 10.881821089582122,
+      "delta_p_node": 0.006886536982438149,
+      "delta_p_coll": 0.0999148535510137,
+      "z": 1.3489071968077733
+     }
+    },
+    {
+     "key": "to",
+     "values": {
+      "collocate": "to",
+      "freq": 38,
+      "coll_freq": 88,
+      "mi3": 10.576751895383733,
+      "delta_p_node": 0.0018867773362389421,
+      "delta_p_coll": 0.024011990701088948,
+      "z": 0.345705162551761
+     }
+    },
+    {
+     "key": "and",
+     "values": {
+      "collocate": "and",
+      "freq": 37,
+      "coll_freq": 96,
+      "mi3": 10.335798569855971,
+      "delta_p_node": -0.001997740674272528,
+      "delta_p_coll": -0.023347378277153552,
+      "z": -0.35045321277513686
+     }
+    },
+    {
+     "key": "that",
+     "values": {
+      "collocate": "that",
+      "freq": 31,
+      "coll_freq": 61,
+      "mi3": 10.224252567288014,
+      "delta_p_node": 0.0055501698500192275,
+      "delta_p_coll": 0.10128479266041635,
+      "z": 1.2214280987329913
+     }
+    },
+    {
+     "key": ".",
+     "values": {
+      "collocate": ".",
+      "freq": 42,
+      "coll_freq": 166,
+      "mi3": 10.094313810679633,
+      "delta_p_node": -0.02346734393026535,
+      "delta_p_coll": -0.16114320294878143,
+      "z": -3.1306638936135758
+     }
+    },
+    {
+     "key": "\"",
+     "values": {
+      "collocate": "\"",
+      "freq": 25,
+      "coll_freq": 42,
+      "mi3": 9.83165212023569,
+      "delta_p_node": 0.007150124983976412,
+      "delta_p_coll": 0.1887105641546139,
+      "z": 1.8963370855512272
+     }
+    },
+    {
+     "key": "on",
+     "values": {
+      "collocate": "on",
+      "freq": 23,
+      "coll_freq": 35,
+      "mi3": 9.73380382491635,
+      "delta_p_node": 0.007931274836559416,
+      "delta_p_coll": 0.2508027995059695,
+      "z": 2.3042814702811163
+     }
+    },
+    {
+     "key": "a",
+     "values": {
+      "collocate": "a",
+      "freq": 26,
+      "coll_freq": 72,
+      "mi3": 9.22379512667124,
+      "delta_p_node": -0.0030917510575567235,
+      "delta_p_coll": -0.04791883971588934,
+      "z": -0.6262746314312181
+     }
+    },
+    {
+     "key": "is",
+     "values": {
+      "collocate": "is",
+      "freq": 19,
+      "coll_freq": 45,
+      "mi3": 8.544330417691356,
+      "delta_p_node": 0.0005716414562235601,
+      "delta_p_coll": 0.014090695894739436,
+      "z": 0.14646842456605394
+     }
+    },
+    {
+     "key": "by",
+     "values": {
+      "collocate": "by",
+      "freq": 12,
+      "coll_freq": 18,
+      "mi3": 7.877363474411432,
+      "delta_p_node": 0.0042350339700038455,
+      "delta_p_coll": 0.25942285041224966,
+      "z": 1.715723089787726
+     }
+    },
+    {
+     "key": "-",
+     "values": {
+      "collocate": "-",
+      "freq": 17,
+      "coll_freq": 55,
+      "mi3": 7.773429783916633,
+      "delta_p_node": -0.0049669112934239215,
+      "delta_p_coll": -0.10039472885164269,
+      "z": -1.1511491821496482
+     }
+    },
+    {
+     "key": "from",
+     "values": {
+      "collocate": "from",
+      "freq": 11,
+      "coll_freq": 18,
+      "mi3": 7.500770828159856,
+      "delta_p_node": 0.003324493654659659,
+      "delta_p_coll": 0.2036464468001571,
+      "z": 1.3468393796962106
+     }
+    },
+    {
+     "key": "with",
+     "values": {
+      "collocate": "with",
+      "freq": 13,
+      "coll_freq": 33,
+      "mi3": 7.3493260087550984,
+      "delta_p_node": -0.00043063389309062894,
+      "delta_p_coll": -0.014436409295704666,
+      "z": -0.12884803162421207
+     }
+    },
+    {
+     "key": "as",
+     "values": {
+      "collocate": "as",
+      "freq": 11,
+      "coll_freq": 21,
+      "mi3": 7.278378406823409,
+      "delta_p_node": 0.0022092520189719266,
+      "delta_p_coll": 0.11607471717968959,
+      "z": 0.828632882686713
+     }
+    },
+    {
+     "key": "US",
+     "values": {
+      "collocate": "US",
+      "freq": 9,
+      "coll_freq": 12,
+      "mi3": 7.217213477296056,
+      "delta_p_node": 0.0037338962953467505,
+      "delta_p_coll": 0.34263343625937365,
+      "z": 1.8526704687049176
+     }
+    },
+    {
+     "key": "for",
+     "values": {
+      "collocate": "for",
+      "freq": 11,
+      "coll_freq": 22,
+      "mi3": 7.211264210964871,
+      "delta_p_node": 0.0018375048070760156,
+      "delta_p_coll": 0.09217506631299732,
+      "z": 0.673354386677251
+     }
+    },
+    {
+     "key": "was",
+     "values": {
+      "collocate": "was",
+      "freq": 11,
+      "coll_freq": 25,
+      "mi3": 7.026839639827443,
+      "delta_p_node": 0.0007222631713882837,
+      "delta_p_coll": 0.031904445919044455,
+      "z": 0.24828587682897935
+     }
+    }
+   ]
+  },
+  {
+   "name": "collocations-verb-delta-p",
+   "method": "collocations",
+   "params": {
+    "node": "/v",
+    "window": 3,
+    "measures": [
+     "delta_p",
+     "z",
+     "mi"
+    ],
+    "min_freq": 2
+   },
+   "row_count": 272,
+   "extra": {},
+   "rows": [
+    {
+     "key": "to",
+     "values": {
+      "collocate": "to",
+      "freq": 81,
+      "coll_freq": 88,
+      "mi": 1.0112096247072944,
+      "delta_p_node": 0.03618333294329644,
+      "delta_p_coll": 0.472944451241894,
+      "z": 6.438180442527731
+     }
+    },
+    {
+     "key": "that",
+     "values": {
+      "collocate": "that",
+      "freq": 38,
+      "coll_freq": 61,
+      "mi": 0.44798141634066624,
+      "delta_p_node": 0.008992690708541027,
+      "delta_p_coll": 0.1685472522250855,
+      "z": 1.9218551478078107
+     }
+    },
+    {
+     "key": "he",
+     "values": {
+      "collocate": "he",
+      "freq": 18,
+      "coll_freq": 21,
+      "mi": 0.908398819123519,
+      "delta_p_node": 0.007455945332428447,
+      "delta_p_coll": 0.40233622730860297,
+      "z": 2.7157449452211213
+     }
+    },
+    {
+     "key": "in",
+     "values": {
+      "collocate": "in",
+      "freq": 43,
+      "coll_freq": 77,
+      "mi": 0.29026945446716357,
+      "delta_p_node": 0.006947727254998324,
+      "delta_p_coll": 0.10352994510524155,
+      "z": 1.3215795527487226
+     }
+    },
+    {
+     "key": "you",
+     "values": {
+      "collocate": "you",
+      "freq": 16,
+      "coll_freq": 18,
+      "mi": 0.9608662390176546,
+      "delta_p_node": 0.006897412495222048,
+      "delta_p_coll": 0.43394189242245773,
+      "z": 2.7136001779942993
+     }
+    },
+    {
+     "key": "have",
+     "values": {
+      "collocate": "have",
+      "freq": 19,
+      "coll_freq": 25,
+      "mi": 0.7348625641288278,
+      "delta_p_node": 0.006723066002043794,
+      "delta_p_coll": 0.30501216545012166,
+      "z": 2.244363941841002
+     }
+    },
+    {
+     "key": "it",
+     "values": {
+      "collocate": "it",
+      "freq": 18,
+      "coll_freq": 23,
+      "mi": 0.7771542858452665,
+      "delta_p_node": 0.0066462287332381634,
+      "delta_p_coll": 0.32760095742533335,
+      "z": 2.313168543764926
+     }
+    },
+    {
+     "key": "n't",
+     "values": {
+      "collocate": "n't",
+      "freq": 14,
+      "coll_freq": 15,
+      "mi": 1.0312555669090526,
+      "delta_p_node": 0.0063388796580156484,
+      "delta_p_coll": 0.4782461561097624,
+      "z": 2.731887364854517
+     }
+    },
+    {
+     "key": "a",
+     "values": {
+      "collocate": "a",
+      "freq": 40,
+      "coll_freq": 72,
+      "mi": 0.282794333905017,
+      "delta_p_node": 0.006312357148986293,
+      "delta_p_coll": 0.10048179605622615,
+      "z": 1.2417129970781422
+     }
+    },
+    {
+     "key": "be",
+     "values": {
+      "collocate": "be",
+      "freq": 13,
+      "coll_freq": 15,
+      "mi": 0.9243403629925405,
+      "delta_p_node": 0.0054523257900197354,
+      "delta_p_coll": 0.41135878761127054,
+      "z": 2.3498063914165206
+     }
+    },
+    {
+     "key": "could",
+     "values": {
+      "collocate": "could",
+      "freq": 11,
+      "coll_freq": 11,
+      "mi": 1.130791240459967,
+      "delta_p_node": 0.0052986512524084775,
+      "delta_p_coll": 0.5446527012127894,
+      "z": 2.666643169864447
+     }
+    },
+    {
+     "key": "will",
+     "values": {
+      "collocate": "will",
+      "freq": 11,
+      "coll_freq": 11,
+      "mi": 1.130791240459967,
+      "delta_p_node": 0.0052986512524084775,
+      "delta_p_coll": 0.5446527012127894,
+      "z": 2.666643169864447
+     }
+    },
+    {
+     "key": "has",
+     "values": {
+      "collocate": "has",
+      "freq": 12,
+      "coll_freq": 15,
+      "mi": 0.8088631455726046,
+      "delta_p_node": 0.004565771922023823,
+      "delta_p_coll": 0.3444714191127787,
+      "z": 1.9677254179785244
+     }
+    },
+    {
+     "key": "out",
+     "values": {
+      "collocate": "out",
+      "freq": 10,
+      "coll_freq": 11,
+      "mi": 0.993287716710032,
+      "delta_p_node": 0.004412097384412565,
+      "delta_p_coll": 0.45352310313721556,
+      "z": 2.2204687182559164
+     }
+    },
+    {
+     "key": "would",
+     "values": {
+      "collocate": "would",
+      "freq": 10,
+      "coll_freq": 11,
+      "mi": 0.993287716710032,
+      "delta_p_node": 0.004412097384412565,
+      "delta_p_coll": 0.45352310313721556,
+      "z": 2.2204687182559164
+     }
+    },
+    {
+     "key": "had",
+     "values": {
+      "collocate": "had",
+      "freq": 11,
+      "coll_freq": 14,
+      "mi": 0.7828679370396602,
+      "delta_p_node": 0.004084076353623053,
+      "delta_p_coll": 0.3300655655024587,
+      "z": 1.821905081470457
+     }
+    },
+    {
+     "key": "we",
+     "values": {
+      "collocate": "we",
+      "freq": 9,
+      "coll_freq": 10,
+      "mi": 0.978788147014917,
+      "delta_p_node": 0.003930401816011795,
+      "delta_p_coll": 0.4443121693121693,
+      "z": 2.0745927886585376
+     }
+    },
+    {
+     "key": "not",
+     "values": {
+      "collocate": "not",
+      "freq": 14,
+      "coll_freq": 21,
+      "mi": 0.5458287397388106,
+      "delta_p_node": 0.003909729860444798,
+      "delta_p_coll": 0.21097605893186,
+      "z": 1.4240755038133772
+     }
+    },
+    {
+     "key": "I",
+     "values": {
+      "collocate": "I",
+      "freq": 13,
+      "coll_freq": 20,
+      "mi": 0.5093028637136967,
+      "delta_p_node": 0.003428034292044027,
+      "delta_p_coll": 0.1941891294741494,
+      "z": 1.279458111622363
+     }
+    },
+    {
+     "key": "\"",
+     "values": {
+      "collocate": "\"",
+      "freq": 23,
+      "coll_freq": 42,
+      "mi": 0.2620357737382195,
+      "delta_p_node": 0.003386690380910034,
+      "delta_p_coll": 0.09180199610927858,
+      "z": 0.8722616149976068
+     }
+    }
+   ]
+  },
+  {
+   "name": "breakdown-v-word",
+   "method": "breakdown",
+   "params": {
+    "query": "/v",
+    "by": "word"
+   },
+   "row_count": 300,
+   "extra": {
+    "hits": 432
+   },
+   "rows": [
+    {
+     "key": "joined",
+     "values": {
+      "item": "joined",
+      "hits": 9,
+      "pct": 2.0833333333333335,
+      "per_million": 1979.762428508579
+     }
+    },
+    {
+     "key": "have",
+     "values": {
+      "item": "have",
+      "hits": 8,
+      "pct": 1.8518518518518519,
+      "per_million": 1759.7888253409592
+     }
+    },
+    {
+     "key": "said",
+     "values": {
+      "item": "said",
+      "hits": 8,
+      "pct": 1.8518518518518519,
+      "per_million": 1759.7888253409592
+     }
+    },
+    {
+     "key": "need",
+     "values": {
+      "item": "need",
+      "hits": 6,
+      "pct": 1.3888888888888888,
+      "per_million": 1319.8416190057194
+     }
+    },
+    {
+     "key": "believe",
+     "values": {
+      "item": "believe",
+      "hits": 5,
+      "pct": 1.1574074074074074,
+      "per_million": 1099.8680158380994
+     }
+    },
+    {
+     "key": "filed",
+     "values": {
+      "item": "filed",
+      "hits": 5,
+      "pct": 1.1574074074074074,
+      "per_million": 1099.8680158380994
+     }
+    },
+    {
+     "key": "go",
+     "values": {
+      "item": "go",
+      "hits": 5,
+      "pct": 1.1574074074074074,
+      "per_million": 1099.8680158380994
+     }
+    },
+    {
+     "key": "use",
+     "values": {
+      "item": "use",
+      "hits": 5,
+      "pct": 1.1574074074074074,
+      "per_million": 1099.8680158380994
+     }
+    },
+    {
+     "key": "had",
+     "values": {
+      "item": "had",
+      "hits": 4,
+      "pct": 0.9259259259259259,
+      "per_million": 879.8944126704796
+     }
+    },
+    {
+     "key": "read",
+     "values": {
+      "item": "read",
+      "hits": 4,
+      "pct": 0.9259259259259259,
+      "per_million": 879.8944126704796
+     }
+    },
+    {
+     "key": "send",
+     "values": {
+      "item": "send",
+      "hits": 4,
+      "pct": 0.9259259259259259,
+      "per_million": 879.8944126704796
+     }
+    },
+    {
+     "key": "want",
+     "values": {
+      "item": "want",
+      "hits": 4,
+      "pct": 0.9259259259259259,
+      "per_million": 879.8944126704796
+     }
+    },
+    {
+     "key": "according",
+     "values": {
+      "item": "according",
+      "hits": 3,
+      "pct": 0.6944444444444444,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "calling",
+     "values": {
+      "item": "calling",
+      "hits": 3,
+      "pct": 0.6944444444444444,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "came",
+     "values": {
+      "item": "came",
+      "hits": 3,
+      "pct": 0.6944444444444444,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "coming",
+     "values": {
+      "item": "coming",
+      "hits": 3,
+      "pct": 0.6944444444444444,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "dissenting",
+     "values": {
+      "item": "dissenting",
+      "hits": 3,
+      "pct": 0.6944444444444444,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "found",
+     "values": {
+      "item": "found",
+      "hits": 3,
+      "pct": 0.6944444444444444,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "get",
+     "values": {
+      "item": "get",
+      "hits": 3,
+      "pct": 0.6944444444444444,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "giving",
+     "values": {
+      "item": "giving",
+      "hits": 3,
+      "pct": 0.6944444444444444,
+      "per_million": 659.9208095028597
+     }
+    }
+   ]
+  },
+  {
+   "name": "breakdown-the-n-lemma",
+   "method": "breakdown",
+   "params": {
+    "query": "the /n",
+    "by": "lemma"
+   },
+   "row_count": 141,
+   "extra": {
+    "hits": 181
+   },
+   "rows": [
+    {
+     "key": "the\tUS",
+     "values": {
+      "item": "the US",
+      "hits": 8,
+      "pct": 4.419889502762431,
+      "per_million": 1759.7888253409592
+     }
+    },
+    {
+     "key": "the\tattack",
+     "values": {
+      "item": "the attack",
+      "hits": 4,
+      "pct": 2.2099447513812156,
+      "per_million": 879.8944126704796
+     }
+    },
+    {
+     "key": "the\tAmerican",
+     "values": {
+      "item": "the American",
+      "hits": 3,
+      "pct": 1.6574585635359116,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "the\tal",
+     "values": {
+      "item": "the al",
+      "hits": 3,
+      "pct": 1.6574585635359116,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "the\tcompany",
+     "values": {
+      "item": "the company",
+      "hits": 3,
+      "pct": 1.6574585635359116,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "the\tmedia",
+     "values": {
+      "item": "the media",
+      "hits": 3,
+      "pct": 1.6574585635359116,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "the\tAllawi",
+     "values": {
+      "item": "the Allawi",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "the\tAssociation",
+     "values": {
+      "item": "the Association",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "the\tCIA",
+     "values": {
+      "item": "the CIA",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "the\tGates",
+     "values": {
+      "item": "the Gates",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "the\tMSM",
+     "values": {
+      "item": "the MSM",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "the\tPresident",
+     "values": {
+      "item": "the President",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "the\tTaliban",
+     "values": {
+      "item": "the Taliban",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "the\tarticle",
+     "values": {
+      "item": "the article",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "the\tassault",
+     "values": {
+      "item": "the assault",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "the\tcase",
+     "values": {
+      "item": "the case",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "the\tcity",
+     "values": {
+      "item": "the city",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "the\telection",
+     "values": {
+      "item": "the election",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "the\tfact",
+     "values": {
+      "item": "the fact",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "the\tking",
+     "values": {
+      "item": "the king",
+      "hits": 2,
+      "pct": 1.1049723756906078,
+      "per_million": 439.9472063352398
+     }
+    }
+   ]
+  },
+  {
+   "name": "breakdown-the-pos",
+   "method": "breakdown",
+   "params": {
+    "query": "the $1 /n",
+    "by": "pos"
+   },
+   "row_count": 8,
+   "extra": {
+    "hits": 235
+   },
+   "rows": [
+    {
+     "key": "DET\tNOUN",
+     "values": {
+      "item": "DET NOUN",
+      "hits": 128,
+      "pct": 54.46808510638298,
+      "per_million": 28156.621205455347
+     }
+    },
+    {
+     "key": "DET\tPROPN",
+     "values": {
+      "item": "DET PROPN",
+      "hits": 53,
+      "pct": 22.5531914893617,
+      "per_million": 11658.600967883855
+     }
+    },
+    {
+     "key": "DET\tADJ\tNOUN",
+     "values": {
+      "item": "DET ADJ NOUN",
+      "hits": 35,
+      "pct": 14.893617021276595,
+      "per_million": 7699.076110866696
+     }
+    },
+    {
+     "key": "DET\tADJ\tPROPN",
+     "values": {
+      "item": "DET ADJ PROPN",
+      "hits": 13,
+      "pct": 5.531914893617022,
+      "per_million": 2859.6568411790586
+     }
+    },
+    {
+     "key": "DET\tNUM\tNOUN",
+     "values": {
+      "item": "DET NUM NOUN",
+      "hits": 3,
+      "pct": 1.2765957446808511,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "DET\tDET\tNOUN",
+     "values": {
+      "item": "DET DET NOUN",
+      "hits": 1,
+      "pct": 0.425531914893617,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "DET\tNUM\tPROPN",
+     "values": {
+      "item": "DET NUM PROPN",
+      "hits": 1,
+      "pct": 0.425531914893617,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "DET\tVERB\tNOUN",
+     "values": {
+      "item": "DET VERB NOUN",
+      "hits": 1,
+      "pct": 0.425531914893617,
+      "per_million": 219.9736031676199
+     }
+    }
+   ]
+  },
+  {
+   "name": "breakdown-of-left1",
+   "method": "breakdown",
+   "params": {
+    "query": "of",
+    "by": "left1"
+   },
+   "row_count": 95,
+   "extra": {
+    "hits": 109
+   },
+   "rows": [
+    {
+     "key": ",",
+     "values": {
+      "item": ",",
+      "hits": 3,
+      "pct": 2.7522935779816513,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "many",
+     "values": {
+      "item": "many",
+      "hits": 3,
+      "pct": 2.7522935779816513,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "out",
+     "values": {
+      "item": "out",
+      "hits": 3,
+      "pct": 2.7522935779816513,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "Association",
+     "values": {
+      "item": "Association",
+      "hits": 2,
+      "pct": 1.834862385321101,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "fall",
+     "values": {
+      "item": "fall",
+      "hits": 2,
+      "pct": 1.834862385321101,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "group",
+     "values": {
+      "item": "group",
+      "hits": 2,
+      "pct": 1.834862385321101,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "most",
+     "values": {
+      "item": "most",
+      "hits": 2,
+      "pct": 1.834862385321101,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "people",
+     "values": {
+      "item": "people",
+      "hits": 2,
+      "pct": 1.834862385321101,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "school",
+     "values": {
+      "item": "school",
+      "hits": 2,
+      "pct": 1.834862385321101,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "summer",
+     "values": {
+      "item": "summer",
+      "hits": 2,
+      "pct": 1.834862385321101,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "（句首）",
+     "values": {
+      "item": "（句首）",
+      "hits": 2,
+      "pct": 1.834862385321101,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "\"",
+     "values": {
+      "item": "\"",
+      "hits": 1,
+      "pct": 0.9174311926605505,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "%",
+     "values": {
+      "item": "%",
+      "hits": 1,
+      "pct": 0.9174311926605505,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "February",
+     "values": {
+      "item": "February",
+      "hits": 1,
+      "pct": 0.9174311926605505,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "Four",
+     "values": {
+      "item": "Four",
+      "hits": 1,
+      "pct": 0.9174311926605505,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "Government",
+     "values": {
+      "item": "Government",
+      "hits": 1,
+      "pct": 0.9174311926605505,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "Okrent",
+     "values": {
+      "item": "Okrent",
+      "hits": 1,
+      "pct": 0.9174311926605505,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "One",
+     "values": {
+      "item": "One",
+      "hits": 1,
+      "pct": 0.9174311926605505,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "Secretary",
+     "values": {
+      "item": "Secretary",
+      "hits": 1,
+      "pct": 0.9174311926605505,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "Shiites",
+     "values": {
+      "item": "Shiites",
+      "hits": 1,
+      "pct": 0.9174311926605505,
+      "per_million": 219.9736031676199
+     }
+    }
+   ]
+  },
+  {
+   "name": "breakdown-the-right1",
+   "method": "breakdown",
+   "params": {
+    "query": "the",
+    "by": "right1"
+   },
+   "row_count": 204,
+   "extra": {
+    "hits": 254
+   },
+   "rows": [
+    {
+     "key": "US",
+     "values": {
+      "item": "US",
+      "hits": 8,
+      "pct": 3.1496062992125986,
+      "per_million": 1759.7888253409592
+     }
+    },
+    {
+     "key": "United",
+     "values": {
+      "item": "United",
+      "hits": 5,
+      "pct": 1.968503937007874,
+      "per_million": 1099.8680158380994
+     }
+    },
+    {
+     "key": "Americans",
+     "values": {
+      "item": "Americans",
+      "hits": 3,
+      "pct": 1.1811023622047243,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "Iranian",
+     "values": {
+      "item": "Iranian",
+      "hits": 3,
+      "pct": 1.1811023622047243,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "Iraqi",
+     "values": {
+      "item": "Iraqi",
+      "hits": 3,
+      "pct": 1.1811023622047243,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "al",
+     "values": {
+      "item": "al",
+      "hits": 3,
+      "pct": 1.1811023622047243,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "attack",
+     "values": {
+      "item": "attack",
+      "hits": 3,
+      "pct": 1.1811023622047243,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "company",
+     "values": {
+      "item": "company",
+      "hits": 3,
+      "pct": 1.1811023622047243,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "media",
+     "values": {
+      "item": "media",
+      "hits": 3,
+      "pct": 1.1811023622047243,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "most",
+     "values": {
+      "item": "most",
+      "hits": 3,
+      "pct": 1.1811023622047243,
+      "per_million": 659.9208095028597
+     }
+    },
+    {
+     "key": "Allawi",
+     "values": {
+      "item": "Allawi",
+      "hits": 2,
+      "pct": 0.7874015748031497,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "Association",
+     "values": {
+      "item": "Association",
+      "hits": 2,
+      "pct": 0.7874015748031497,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "CIA",
+     "values": {
+      "item": "CIA",
+      "hits": 2,
+      "pct": 0.7874015748031497,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "MSM",
+     "values": {
+      "item": "MSM",
+      "hits": 2,
+      "pct": 0.7874015748031497,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "President",
+     "values": {
+      "item": "President",
+      "hits": 2,
+      "pct": 0.7874015748031497,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "Taliban",
+     "values": {
+      "item": "Taliban",
+      "hits": 2,
+      "pct": 0.7874015748031497,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "assault",
+     "values": {
+      "item": "assault",
+      "hits": 2,
+      "pct": 0.7874015748031497,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "case",
+     "values": {
+      "item": "case",
+      "hits": 2,
+      "pct": 0.7874015748031497,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "city",
+     "values": {
+      "item": "city",
+      "hits": 2,
+      "pct": 0.7874015748031497,
+      "per_million": 439.9472063352398
+     }
+    },
+    {
+     "key": "early",
+     "values": {
+      "item": "early",
+      "hits": 2,
+      "pct": 0.7874015748031497,
+      "per_million": 439.9472063352398
+     }
+    }
+   ]
+  },
+  {
+   "name": "breakdown-cond-left1",
+   "method": "breakdown",
+   "params": {
+    "query": "I +/v -not",
+    "by": "left1"
+   },
+   "row_count": 7,
+   "extra": {
+    "hits": 17
+   },
+   "rows": [
+    {
+     "key": "（句首）",
+     "values": {
+      "item": "（句首）",
+      "hits": 8,
+      "pct": 47.05882352941177,
+      "per_million": 1759.7888253409592
+     }
+    },
+    {
+     "key": "Parts",
+     "values": {
+      "item": "Parts",
+      "hits": 4,
+      "pct": 23.529411764705884,
+      "per_million": 879.8944126704796
+     }
+    },
+    {
+     "key": ",",
+     "values": {
+      "item": ",",
+      "hits": 1,
+      "pct": 5.882352941176471,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "and",
+     "values": {
+      "item": "and",
+      "hits": 1,
+      "pct": 5.882352941176471,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "but",
+     "values": {
+      "item": "but",
+      "hits": 1,
+      "pct": 5.882352941176471,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "how",
+     "values": {
+      "item": "how",
+      "hits": 1,
+      "pct": 5.882352941176471,
+      "per_million": 219.9736031676199
+     }
+    },
+    {
+     "key": "when",
+     "values": {
+      "item": "when",
+      "hits": 1,
+      "pct": 5.882352941176471,
+      "per_million": 219.9736031676199
+     }
+    }
+   ]
+  },
+  {
+   "name": "breakdown-the-meta",
+   "method": "breakdown",
+   "params": {
+    "query": "the",
+    "by": "meta:part"
+   },
+   "row_count": 2,
+   "extra": {
+    "hits": 254
+   },
+   "rows": [
+    {
+     "key": "b",
+     "values": {
+      "item": "b",
+      "hits": 180,
+      "pct": 70.86614173228347,
+      "per_million": 39595.24857017158
+     }
+    },
+    {
+     "key": "a",
+     "values": {
+      "item": "a",
+      "hits": 74,
+      "pct": 29.133858267716537,
+      "per_million": 16278.046634403872
+     }
+    }
+   ]
+  },
+  {
+   "name": "translations-dice",
+   "method": "translations",
+   "params": {
+    "measure": "dice",
+    "min_freq": 1
+   },
+   "row_count": 10,
+   "extra": {
+    "n": 4,
+    "N": 9,
+    "b": {
+     "He": 1,
+     "I": 2,
+     "She": 2,
+     "The": 2,
+     "Translation": 1,
+     "blue": 1,
+     "book": 3,
+     "books": 2,
+     "hard": 1,
+     "is": 3,
+     "like": 1,
+     "poems": 1,
+     "reads": 1,
+     "red": 1,
+     "sky": 1,
+     "the": 3,
+     "this": 1,
+     "translate": 2,
+     "translated": 2,
+     "translation": 1
+    }
+   },
+   "rows": [
+    {
+     "key": "I",
+     "values": {
+      "item": "I",
+      "cooc": 2,
+      "pct": 50.0,
+      "target_freq": 2,
+      "dice": 0.6666666666666666,
+      "ll": 3.98953413855822
+     }
+    },
+    {
+     "key": "translate",
+     "values": {
+      "item": "translate",
+      "cooc": 2,
+      "pct": 50.0,
+      "target_freq": 2,
+      "dice": 0.6666666666666666,
+      "ll": 3.98953413855822
+     }
+    },
+    {
+     "key": "the",
+     "values": {
+      "item": "the",
+      "cooc": 2,
+      "pct": 50.0,
+      "target_freq": 3,
+      "dice": 0.5714285714285714,
+      "ll": 0.9080533494451892
+     }
+    },
+    {
+     "key": "like",
+     "values": {
+      "item": "like",
+      "cooc": 1,
+      "pct": 25.0,
+      "target_freq": 1,
+      "dice": 0.4,
+      "ll": 1.7802965682241072
+     }
+    },
+    {
+     "key": "poems",
+     "values": {
+      "item": "poems",
+      "cooc": 1,
+      "pct": 25.0,
+      "target_freq": 1,
+      "dice": 0.4,
+      "ll": 1.7802965682241072
+     }
+    },
+    {
+     "key": "this",
+     "values": {
+      "item": "this",
+      "cooc": 1,
+      "pct": 25.0,
+      "target_freq": 1,
+      "dice": 0.4,
+      "ll": 1.7802965682241072
+     }
+    },
+    {
+     "key": "translation",
+     "values": {
+      "item": "translation",
+      "cooc": 1,
+      "pct": 25.0,
+      "target_freq": 1,
+      "dice": 0.4,
+      "ll": 1.7802965682241072
+     }
+    },
+    {
+     "key": "She",
+     "values": {
+      "item": "She",
+      "cooc": 1,
+      "pct": 25.0,
+      "target_freq": 2,
+      "dice": 0.3333333333333333,
+      "ll": 0.032006190705435145
+     }
+    },
+    {
+     "key": "books",
+     "values": {
+      "item": "books",
+      "cooc": 1,
+      "pct": 25.0,
+      "target_freq": 2,
+      "dice": 0.3333333333333333,
+      "ll": 0.032006190705435145
+     }
+    },
+    {
+     "key": "translated",
+     "values": {
+      "item": "translated",
+      "cooc": 1,
+      "pct": 25.0,
+      "target_freq": 2,
+      "dice": 0.3333333333333333,
+      "ll": 0.032006190705435145
+     }
+    }
+   ]
+  },
+  {
+   "name": "translations-ll",
+   "method": "translations",
+   "params": {
+    "measure": "ll",
+    "min_freq": 2
+   },
+   "row_count": 3,
+   "extra": {
+    "n": 4,
+    "N": 9,
+    "b": {
+     "He": 1,
+     "I": 2,
+     "She": 2,
+     "The": 2,
+     "Translation": 1,
+     "blue": 1,
+     "book": 3,
+     "books": 2,
+     "hard": 1,
+     "is": 3,
+     "like": 1,
+     "poems": 1,
+     "reads": 1,
+     "red": 1,
+     "sky": 1,
+     "the": 3,
+     "this": 1,
+     "translate": 2,
+     "translated": 2,
+     "translation": 1
+    }
+   },
+   "rows": [
+    {
+     "key": "I",
+     "values": {
+      "item": "I",
+      "cooc": 2,
+      "pct": 50.0,
+      "target_freq": 2,
+      "dice": 0.6666666666666666,
+      "ll": 3.98953413855822
+     }
+    },
+    {
+     "key": "translate",
+     "values": {
+      "item": "translate",
+      "cooc": 2,
+      "pct": 50.0,
+      "target_freq": 2,
+      "dice": 0.6666666666666666,
+      "ll": 3.98953413855822
+     }
+    },
+    {
+     "key": "the",
+     "values": {
+      "item": "the",
+      "cooc": 2,
+      "pct": 50.0,
+      "target_freq": 3,
+      "dice": 0.5714285714285714,
+      "ll": 0.9080533494451892
+     }
+    }
+   ]
+  }
+ ]
+}
