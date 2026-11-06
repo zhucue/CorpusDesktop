@@ -8,8 +8,8 @@
 | --- | --- |
 | 操作系统 | Linux x86_64（Windows / macOS 的 Docker Desktop 可用于开发） |
 | Docker | Engine 24+ 与 Compose v2 |
-| 资源 | 4 CPU、16 GiB 内存起（api、worker、worker-light 各加载向量模型，常驻约 800 MB；Stanza 英文标注时每个正在导入的 worker 峰值约 2 GiB）；磁盘：镜像约 8 GiB，模型缓存约 1.5 GiB，语料与索引按数据量（完整 Tatoeba 中英约 2 GiB） |
-| 小内存（≤ 4 GiB） | 只跑一个 worker：`docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --scale worker-light=0`；或设 `EMBED_PROVIDER=openai`，不在三个容器各加载一份本地向量模型。两项都不做时导入会被内核 OOM 终止 |
+| 资源 | 4 CPU、16 GiB 内存起（api、worker、worker-light 各加载向量模型，常驻约 800 MB；Stanza 英文标注时每个正在导入的 worker 峰值约 2 GiB；每多保留一种语言管线约多 330 MB，见第四节"语言模型"）；磁盘：镜像约 8 GiB，模型缓存约 1.5 GiB（每多一种 Stanza 语言约 315–340 MB），语料与索引按数据量（完整 Tatoeba 中英约 2 GiB），语义索引每句约 3.5 KB |
+| 小内存（≤ 4 GiB） | 只跑一个 worker：`docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --scale worker-light=0`；或设 `EMBED_PROVIDER=openai`，不在三个容器各加载一份本地向量模型；并设 `STANZA_MAX_PIPELINES=1`。都不做时导入会被内核 OOM 终止 |
 | 网络 | 首次启动需访问 Hugging Face（向量模型）、Stanza 模型源、对话模型服务；向量模型已在 `models` 卷缓存时离线加载，缓存缺失才联网下载；离线部署先在联网机器拉取 `models`、`stanza` 卷内容（第四节） |
 | 域名与证书 | 对外访问需域名和 HTTPS，由宿主机 Caddy 或 nginx 终止（第五节） |
 
@@ -51,6 +51,8 @@
 | SEARCH_CACHE_MAX_BYTES | 检索结果集（`DATA_DIR/search-cache/`）总字节上限，默认 2 GB；超出按最近最少使用淘汰；api 启动时清空该目录 |
 | APP_VERSION | 版本号，设置页"数据与隐私"显示；留空为 `dev` |
 | ALERT_WEBHOOK_URL | `scripts/healthcheck.sh` 失败时 POST `{"text": "..."}` 的地址；留空只打印并以非零退出（第六节） |
+| STANZA_MAX_PIPELINES | 每个 worker 进程同时保留的 Stanza 语言管线数，默认 2（中文依存算一个）；超过时按最近使用淘汰并释放内存。小内存机器设 1 |
+| SEMANTIC_MAX_SENTENCES | 一个语料（或所选语言）可建语义索引的句数上限，默认 300000；超过时建索引返回 422 `TOO_LARGE` |
 | LIGHT_IMPORT_BYTES、LIGHT_INDEX_TOKENS | 短任务门槛，默认 5242880 字节、1000000 词（见第二节队列规则）；api 与 worker 读同一值 |
 | TZ | 服务器时区，默认 `Asia/Shanghai`；api、worker、agent 共用，模型用量按此时区的自然月统计 |
 | LLM_MONTHLY_TOKENS_PER_USER | 每位用户每月对话模型 token 上限，默认 0（不限）；达到后助手新消息、重新生成、确认执行，LLM 预标、文献摘要、术语抽取及其重试返回 429 `LLM_QUOTA_EXCEEDED`；api 与 agent 读同一值 |
@@ -71,7 +73,7 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
 docker compose --env-file deploy/.env -f deploy/compose.yaml exec api python scripts/create_account.py --email admin@example.edu --admin
 ```
 
-api 启动时执行 Alembic 迁移并写入内置标签集；worker 首次启动下载向量模型（约 458 MB）；首次导入英文语料时下载 Stanza 英文模型（约 320 MB）。`GET /api/health`（查询数据库，失败 503）、`GET /agent/health` 可确认就绪；`/agent/health` 返回 `MODEL_NOT_CONFIGURED` 表示未配模型。
+api 启动时执行 Alembic 迁移并写入内置标签集；worker 首次启动下载向量模型（约 458 MB）；首次导入某种语言（en、ja、fr、de、es、ru）或首次做中文依存预标时下载该语言的 Stanza 模型（每种约 315–340 MB）。`GET /api/health`（查询数据库，失败 503）、`GET /agent/health` 可确认就绪；`/agent/health` 返回 `MODEL_NOT_CONFIGURED` 表示未配模型。
 
 ### 预先填充模型卷
 
@@ -81,6 +83,7 @@ api 启动时执行 Alembic 迁移并写入内置标签集；worker 首次启动
 C="docker compose --env-file deploy/.env -f deploy/compose.yaml"
 $C logs -f worker | grep -m1 "embedding model"   # 出现 "embedding model … ready in … s" 即向量模型就绪
 $C exec worker python -c "from engine import nlp; nlp.pipeline('en'); nlp._zh_depparse()"   # Stanza 英文与中文依存；中断时重跑
+$C exec worker python -c "from engine import nlp; [nlp.pipeline(l) for l in ('ja', 'fr', 'de', 'es', 'ru')]"   # 按需预加载其他语言
 ```
 
 服务器不能联网或下载太慢时，从联网机器拷贝：
@@ -97,6 +100,32 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml up -d
 ```
 
 不要用 `scripts/restore.sh` 只为恢复模型：它会清空并替换目标数据库。
+
+### 语言模型
+
+自动标注支持 zh、en、ja、fr、de、es、ru。中文分词词性用 jieba（随镜像），其他语言与中文依存用 Stanza，模型首次用到时下载到 `stanza` 卷。
+
+| 项 | 数值（实测 2026-11-06） |
+| --- | --- |
+| 磁盘 | 每种语言约 315–340 MB |
+| 内存 | 每个已加载的语言管线约 330 MB；worker 进程最多保留 `STANZA_MAX_PIPELINES` 个（默认 2），按最近使用淘汰 |
+| 内存峰值 | 一批同时导入 fr、de、ja：管线数 1 / 2 / 3 时 worker 峰值约 1.15 / 1.52 / 1.84 GB |
+| 首次下载 | 每种约 5 分钟；任务进度显示"下载 fr 模型"，失败时导入失败 `MODEL_UNAVAILABLE`，重试即可 |
+
+下载前只刷新该语言在 `resources.json` 中的条目，已下载的其他语言不重下；多个容器共用 `stanza` 卷时用文件锁与唯一临时文件，不会互相覆盖。离线或慢网环境用上一节命令预加载需要的语言，再按上一节方法拷贝 `stanza` 卷。
+
+### 语义索引
+
+语料语义检索须先在语料详情建语义索引（任务 `embed_corpus`，长任务道，由 worker 执行，可取消）。使用与知识库相同的向量模型，每批 512 句。
+
+| 项 | 数值（Tatoeba 中英第 1 批，16 核，本地 MiniLM） |
+| --- | --- |
+| 速度 | 约 250–280 句 / 秒 |
+| 只建中文侧 | 45,703 句，约 3–5 分钟，约 160 MB |
+| 整库 | 中文 45,703 句 + 英文 220,395 句，约 20–25 分钟，约 0.9 GB |
+| 磁盘估算 | 每句约 3.5 KB（向量与 HNSW 索引，在 `postgres` 卷） |
+
+句数上限 `SEMANTIC_MAX_SENTENCES`（默认 300,000）。更换向量模型（`EMBED_MODEL` / `EMBED_PROVIDER`）后语义索引显示"向量模型已更换"，须重建。
 
 ### 内置语料
 
@@ -236,7 +265,16 @@ npm run web:build
 docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
 ```
 
-迁移随 api 启动自动执行；升级前先备份（第八节）。从 2026 年 11 月 5 日之前的版本升级会执行迁移 `0008_account_lifecycle`（`users` 加 `disabled_at`、`must_change_password`、`last_login_at`），先 `up -d api` 等健康后再启动 worker；升级后设置 `APP_VERSION`，按需配置 `ALERT_WEBHOOK_URL` 与第六节的健康检查 cron。从 2026 年 11 月 6 日之前的版本升级会执行迁移 `0010_operations`（新表 `llm_usage`、`audit_logs`、`feedback`，`projects` 加 `deleted_at`），同样先 `up -d api` 等健康后再启动 worker 与 agent；按需在 `.env` 设置 `LLM_MONTHLY_TOKENS_PER_USER`、`BACKUP_DIR`、`TZ`。向量模型版本变更时知识库需重新向量化（文献页"重新导入"或后台任务）。
+迁移随 api 启动自动执行；升级前先备份（第八节）。从 2026 年 11 月 5 日之前的版本升级会执行迁移 `0008_account_lifecycle`（`users` 加 `disabled_at`、`must_change_password`、`last_login_at`），先 `up -d api` 等健康后再启动 worker；升级后设置 `APP_VERSION`，按需配置 `ALERT_WEBHOOK_URL` 与第六节的健康检查 cron。从 2026 年 11 月 6 日之前的版本升级会执行迁移 `0010_operations`（新表 `llm_usage`、`audit_logs`、`feedback`，`projects` 加 `deleted_at`），同样先 `up -d api` 等健康后再启动 worker 与 agent；按需在 `.env` 设置 `LLM_MONTHLY_TOKENS_PER_USER`、`BACKUP_DIR`、`TZ`。
+
+从 P10 之前的版本升级会执行两个迁移，同样先 `up -d api` 等健康后再启动 worker 与 agent：
+
+| 迁移 | 内容 | 耗时 |
+| --- | --- | --- |
+| `0011` | 新表 `sentence_embeddings`（384 维，HNSW）；`corpora.semantic`；`documents.content_hash` 及索引，任务类型加 `embed_corpus` | 补算存量文档的 `content_hash` 时逐篇读取正文文件，耗时随文档数与正文总量增长；文档多的库升级前预留时间，api 在迁移完成前健康检查不通过 |
+| `0012` | 新表 `vocab_lists`、`vocab_entries`；内置 NGSL 词表首次使用时写入 | 秒级 |
+
+升级后按需在 `.env` 设置 `STANZA_MAX_PIPELINES`、`SEMANTIC_MAX_SENTENCES`；已有语料不会自动建语义索引。向量模型版本变更时知识库需重新向量化（文献页"重新导入"或后台任务），已建的语义索引须在语料详情重建。
 
 ## 八 备份与恢复
 
@@ -324,6 +362,10 @@ HTTP_PORT=18088 POSTGRES_PORT=25432 docker compose -f deploy/compose.yaml -p cor
 | 导入很慢 | Stanza 英文解析与中文依存为 CPU 密集；大语料用管理员脚本后台导入；小于 5 MB 的导入与短任务由 worker-light 处理，不排在大导入后面；需要更多导入并发时 `--scale worker=2` |
 | 内置语料追加导入期间 | 语料保持可检索并显示"更新中"，旧索引继续服务，新索引建好后替换 |
 | 升级后 worker 报错 | 新镜像需要最新迁移，先 `up -d api` 再启动 worker |
+| 导入失败 `MODEL_UNAVAILABLE`"下载 fr 模型失败" | Stanza 模型源不可达或下载中断；重试导入，或按第四节预加载、拷贝 `stanza` 卷 |
+| 多语言导入时 worker 被 OOM 终止 | 降低 `STANZA_MAX_PIPELINES`（小内存设 1），或减少同时导入的语言 |
+| 建语义索引 422 `TOO_LARGE` | 句数超过 `SEMANTIC_MAX_SENTENCES`；只建一种语言、拆分语料，或调高上限（磁盘每句约 3.5 KB） |
+| 语义检索 503 `EMBED_UNAVAILABLE` | 向量模型未就绪；看 worker 与 api 日志中的 `embedding model` |
 | api 刚启动时 503 | 迁移执行中或数据库未就绪，等待健康检查 |
 
 ## 十 上线检查清单
@@ -335,7 +377,7 @@ HTTP_PORT=18088 POSTGRES_PORT=25432 docker compose -f deploy/compose.yaml -p cor
 | HTTPS | 宿主反代已配证书，http 跳转 https；防火墙只开 80、443 |
 | PUBLIC_ORIGIN | 只含 `https://域名`，没有 http 地址 |
 | 管理员账号 | `create_account.py --admin` 已建，密码已妥善保管；其他用户在设置 › 管理 › 用户中新建 |
-| 模型卷 | worker 日志有 `embedding model … ready`；Stanza 英文与中文依存已下载 |
+| 模型卷 | worker 日志有 `embedding model … ready`；Stanza 英文与中文依存已下载，计划使用的其他语言（ja、fr、de、es、ru）已预加载 |
 | 备份 cron | 已配置，手动跑过一次 `scripts/backup.sh` 且恢复演练通过；备份复制到另一台机器 |
 | 健康检查 | `https://域名/api/health` 正常；`docker compose ps` 中 api、worker、worker-light 为 healthy；`/agent/health` 不是 `MODEL_NOT_CONFIGURED`；`/api/docs` 返回 404；`curl -I https://域名/` 可见四个安全响应头；设置 › 管理 › 系统显示最近备份时间 |
 | 告警 | `scripts/healthcheck.sh` 手动执行通过，cron 每 5 分钟执行；`ALERT_WEBHOOK_URL` 已设并收到过一次测试告警 |

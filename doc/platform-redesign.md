@@ -8,8 +8,8 @@
 
 | 能力 | 一句话说明 |
 | --- | --- |
-| 语料检索 | 参照 CCL 的用法：选语料库，输入查询式，直接看 KWIC 结果 |
-| 统计分析 | 词频、n-gram、搭配、关键词、分布，图表展示，可从数字回到例句 |
+| 语料检索 | 参照 CCL 的用法：选语料库，输入查询式，直接看 KWIC 结果；也可输入一句话找语义相近的句子 |
+| 统计分析 | 词频、n-gram、搭配、关键词、分布、文本指标、词汇等级、多项对比、Word Sketch，图表展示，可从数字回到例句 |
 | 标注平台 | Agent 预标，人工在可视化界面校对；词性、依存、自定义片段、双语对齐 |
 | 知识库 | 文献、术语表、标注规范和研究笔记的导入、整理与检索，供人和 Agent 使用 |
 | Agent | 对话调用以上全部能力，回复中直接渲染表格、图表、句法树等组件 |
@@ -35,19 +35,21 @@ Agent 基于 Pi SDK，是系统内置能力，不以 Pi 产品形态出现。手
 
 | 模块 | 内容 |
 | --- | --- |
-| 语料库 | 内置 Tatoeba 中英、UD 中英树库、维基中英子集；用户上传 TXT、DOCX、CSV/TSV（列映射）、CoNLL-U、TMX，规则见第四节"语料导入"；文档级元数据（标题、语言、体裁、年代、来源、自定义字段）；按元数据筛出子库并保存 |
-| 检索 | 类 CCL 查询式（第五节）；平行语料译文条件；KWIC 结果；上下文展开；排序、结果内筛选、随机抽样；保存查询；导出；从结果发起命中分解、译法统计与抽样编码 |
-| 统计 | 频次与标准化频率、离散度（range、DP、DPnorm、Juilland D）、n-gram、搭配（含 MI3、z、ΔP）、关键词比较（含 %DIFF、odds ratio、log ratio 置信区间、Bonferroni）、命中频次分解、平行语料译法、元数据分布；图表；点击任一数字回到例句；方法附录与参考文献 |
+| 语料库 | 内置 Tatoeba 中英、UD 中英树库、维基中英子集；用户上传 TXT、DOCX、PDF（文字层）、CSV/TSV/XLSX/JSONL（列映射）、CoNLL-U、TMX，导入时按正文去重，规则见第四节"语料导入"；自动标注语言 zh、en、ja、fr、de、es、ru；文档级元数据（标题、语言、体裁、年代、来源、自定义字段）；按元数据筛出子库并保存 |
+| 检索 | 类 CCL 查询式（第五节）；平行语料译文条件；KWIC 结果；上下文展开；排序、结果内筛选、随机抽样；保存查询；导出；从结果发起命中分解、译法统计与抽样编码；语义检索（输入一句话返回相近句，需先建语义索引） |
+| 统计 | 频次与标准化频率、离散度（range、DP、DPnorm、Juilland D）、n-gram、搭配（含 MI3、z、ΔP）、关键词比较（含 %DIFF、odds ratio、log ratio 置信区间、Bonferroni）、命中频次分解、平行语料译法、元数据分布；文本指标（TTR、STTR、MTLD、词汇密度、平均句长、平均依存距离、Flesch）、词汇等级画像（内置 NGSL，可上传词表）、多项对比与历时（Mann-Whitney、Spearman）、Word Sketch 与近义词对比；整洁数据导出（每篇一行，带 codebook）；图表；点击任一数字回到例句；方法附录与参考文献 |
 | 标注 | 分词与词性、依存句法、自定义片段与关系、双语句级和词级对齐；Agent 预标；人工校对；检索结果抽样编码（比例与 95% 区间）；按标注检索与统计 |
 | 知识库 | 导入 PDF、DOCX、Markdown、TXT、网页；术语表；标注规范；研究笔记；混合检索；Agent 引用 |
-| Agent | 对话调用全部工具；OpenUI 渲染结果组件；会话按项目保存 |
-| 成果 | 检索结果、统计表、图、标注数据、知识条目的导出：CSV、XLSX、JSON、CoNLL-U、SVG/PNG、DOCX |
+| Agent | 对话调用全部工具；OpenUI 渲染结果组件；五个研究流程（Pi Skills：关键词分析、近义词辨析、译法研究、学习者偏误分析、方法章节）；会话按项目保存 |
+| 成果 | 检索结果、统计表、图、标注数据、知识条目、整洁数据的导出：CSV、XLSX、JSON、CoNLL-U、SVG/PNG、DOCX |
 | 账号与项目 | 邮箱登录；修改密码；项目成员角色；平台管理员维护内置语料并管理账号（新建、重置密码、停用 / 启用、设管理员）；设置页说明数据存放与发送到外部模型的操作；多人运营：模型用量记录与每人月度 token 上限、管理员跨项目视图（项目、任务、用量、审计、反馈、系统）、敏感操作审计、删除项目 7 天内可恢复、过期导出自动清理、站内反馈（第十节） |
 | 全局交互 | 证据篮（任意页面钉住命中或数字，拖入笔记或导出）；命令面板 Ctrl+K（跳页面、切语料库、重跑保存查询、调用助手工具）；查询历史；全局任务托盘；快捷键提示浮层；深色模式；首次登录引导页；空态直接给"导入示例语料"等动作 |
 
 ### 二期
 
-学习者偏误标注、翻译策略标注、命名实体、句子与文档分类、多人标注一致性与仲裁、更多内置语料、语义检索。
+命名实体、句子与文档分类、更多内置语料、实时多人协作。
+
+已提前完成：学习者偏误与翻译策略标签集模板、多人标注一致性与仲裁（P5）；语义检索（P10）。
 
 ### 不做
 
@@ -72,8 +74,10 @@ OCR、音视频、实时多人协同编辑、完整 CQL 语法暴露给用户、
 | 表 | 关键字段 |
 | --- | --- |
 | users, projects, project_members | 角色 owner / editor / annotator / viewer |
-| corpora | project_id（内置为空）、名称、语言、可见性、状态、索引版本 |
-| documents | corpus_id、标题、语言、元数据 JSONB、正文对象路径、字数 |
+| corpora | project_id（内置为空）、名称、语言、可见性、状态、索引版本、语义索引状态 `semantic` JSONB |
+| documents | corpus_id、标题、语言、元数据 JSONB、正文对象路径、字数、正文哈希 `content_hash`（去重） |
+| sentence_embeddings | sentence_id、corpus_id、384 维向量（HNSW，cosine）；语义检索，见第五节 |
+| vocab_lists, vocab_entries | 词表（project_id 为空即内置、名称、语言、等级顺序、来源、许可）与词条（词、等级）；见第六节 |
 | sentences | document_id、序号、起止码点 |
 | tokens | sentence_id、序号、起止码点、词形 |
 | subcorpora | project_id、corpus_id、筛选条件 JSONB、名称 |
@@ -94,24 +98,33 @@ OCR、音视频、实时多人协同编辑、完整 CQL 语法暴露给用户、
 | --- | --- | --- |
 | TXT | 1 篇文档 | 编码自动识别：UTF-8（含或不含 BOM）、UTF-16（BOM 或按零字节判断）、GB18030 / GBK；CRLF、CR 统一为换行；空行去掉；不按分隔线拆分 |
 | DOCX | 1 篇文档 | 正文段落（含标题）与表格单元格按文档顺序取文字，合并单元格只取一次；文本框、脚注、页眉页脚、图片不读；文档标题依次取第一个"标题"（Title）样式段落、文档属性标题、第一个"标题 1–9"段落，都没有时用文件名 |
+| PDF | 1 篇文档 | 读文字层（与知识库同一解析），页之间换行；元数据加 `pages`，文件带作者时加 `author`；标题依次取 PDF 标题、第 1 页像标题的首行、文件名；没有文字层的扫描件失败"PDF 没有文字层（扫描件），暂不支持 OCR" |
 | CSV / TSV | 每行 1 篇文档 | 上传时选择列映射（见下）；正文为空的行跳过；编码规则同 TXT |
+| XLSX | 每行 1 篇文档 | 列映射同 CSV，另可选工作表（默认第一个）；表头为第一个非空行 |
+| JSONL | 每行一个对象 = 1 篇文档 | 字段映射同 CSV；嵌套对象展开为点号键（如 `meta.year`），数组存为 JSON 文本 |
 | CoNLL-U | 1 篇，或每个 `# newdoc` 1 篇 | 保留词形、词元、UPOS、HEAD、依存关系；多词符号按表层形式定位、空节点跳过、注释行忽略；自带分词，导入时不再自动标注，任何语言均可 |
 | TMX | 每种语言 1 篇，句对对齐 | 语言取 `xml:lang`（1.4）或 `lang`（1.1），只取主代码；`<bpt>` `<ept>` `<ph>` `<it>` `<ut>` 去掉，其他行内标签保留文字 |
 | Tatoeba | sentences / links 三件 TSV | 一次上传识别为平行语料 |
 
-CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读取文件前 256 KB），设置正文列（必选，1–2 列；两列按表格列序以空行连接，如标题 + 摘要）、标题列、语言列和元数据列（默认其余全部列）。日期、年份等列作为普通元数据。默认值：正文取名为 text / content / body / sentence / abstract / 正文 / 内容 / 句子 的列（不区分大小写），没有则取前 200 行平均长度最长的列；标题取 title / headline / 标题；语言取 language / lang / 语言。映射对本批全部表格文件生效，存入导入任务参数，重试沿用；不经页面（API、Agent）上传时按默认值导入。
+CSV / TSV / XLSX / JSONL 列映射：选择表格文件后显示前 5 行预览（CSV、TSV、JSONL 读取文件前 256 KB；XLSX 读整个文件，不超过 50 MB，超过时 413"XLSX 预览不超过 50 MB，可另存为 CSV 后上传"；XLSX 另显示工作表下拉，映射随工作表重置），设置正文列（必选，1–2 列；两列按表格列序以空行连接，如标题 + 摘要）、标题列、语言列和元数据列（默认其余全部列）。日期、年份等列作为普通元数据。默认值：正文取名为 text / content / body / sentence / abstract / 正文 / 内容 / 句子 的列（不区分大小写），没有则取前 200 行平均长度最长的列；标题取 title / headline / 标题；语言取 language / lang / 语言。映射对本批全部表格文件生效，存入导入任务参数，重试沿用；不经页面（API、Agent）上传时按默认值导入。
 
-语言（2026 年 11 月 6 日）：自动分词与标注只支持中文和英文。
+语言（2026 年 11 月 6 日，P10 起；契约 [contracts/p10.md](../contracts/p10.md) 第八节）：自动分词与标注支持 zh、en、ja、fr、de、es、ru。中文用 jieba；其他语言用 Stanza（tokenize、mwt（en、fr、de、es）、pos、lemma、depparse），标签集 UPOS + UD 依存。
 
 | 情况 | 结果 |
 | --- | --- |
-| 上传时指定语言（或"自动"时语料语言）不是 zh / en | 422 `LANGUAGE_UNSUPPORTED`"暂只支持中文与英文语料"；全部为 CoNLL-U 文件时不拦（自带分词与标注，任何语言均可）；建语料库不拦 |
-| TMX 含 zh / en 以外的语言 | 导入失败"TMX 含暂不支持的语言：fr"（列出语言码） |
-| 其他格式的文档语言不是 zh / en | 导入失败，列出语言码 |
-| 自动识别：去掉空白、标点、数字后，非汉字非拉丁字母（西里尔、假名、韩文、阿拉伯文等；IPA 算拉丁）占比 > 30% | 导入失败"未识别为中文或英文" |
-| 自动识别为英文：拉丁文本中变音字母占比 > 1%，且英语前 50 个高频功能词占词数 < 3%，词数 ≥ 200，汉字 < 10% | 导入失败"可能不是英文" |
+| 上传时指定语言（或"自动"时语料语言）不在七种之内 | 422 `LANGUAGE_UNSUPPORTED`"暂不支持该语言：it（支持 zh、en、ja、fr、de、es、ru）"；全部为 CoNLL-U 文件时不拦（自带分词与标注，任何语言均可）；建语料库不拦 |
+| TMX 或其他格式的文档语言不在七种之内 | 导入失败，列出语言码 |
+| 自动识别（每篇取前 5 万字符，只看字母）：假名 > 5% → ja；西里尔 > 50% → ru；其他文字（韩文、阿拉伯文等；IPA 算拉丁）> 30% 失败；汉字 > 10% → zh（中文夹英文术语仍判 zh） | — |
+| 拉丁文本：en、fr、de、es 各 30 个高频虚词，占词数比例最高者；最高的是 it、pt、nl | 导入失败"暂不支持该语言：it（…）" |
+| 拉丁文本最高占比 < 3%，词数 ≥ 200，且变音字母 > 1% | 导入失败"未识别语言，请指定（支持 zh、en、ja、fr、de、es、ru）"；变音字母不超过 1% 时按 en（英文术语表、参考文献、音标等虚词少，沿用 P9 的处理） |
 
-"可能不是英文"一条以"可指定 zh 或 en 后重试"结尾（"未识别为中文或英文"指定语言后同样拒绝，不加此句）；以上错误在任务详情与上传结果中显示（任务错误码 `LANGUAGE_UNSUPPORTED`）。
+以上错误在任务详情与上传结果中显示（任务错误码 `LANGUAGE_UNSUPPORTED`）。
+
+Stanza 模型首次用到某语言时下载到 `stanza` 卷，进度显示"下载 fr 模型"；下载或加载失败时导入失败 `MODEL_UNAVAILABLE`。下载前只刷新该语言在 `resources.json` 中的条目（Stanza 同一版本内会替换模型），临时文件用唯一名，并以文件锁防止多个容器同时写。每个 worker 同时最多保留 `STANZA_MAX_PIPELINES`（默认 2）个语言管线，中文依存算一个，按最近使用淘汰并释放内存；体积与内存见部署手册。
+
+检索、统计、标注（词性、依存预标与校对）、KWIC 对七种语言可用；日文字串查询与中文相同（可跨分词边界）。术语抽取的词性模式只有 zh、en，语料含其他语言时抽取报错（可指定 zh 或 en 只抽取该语言）。
+
+去重（P10）：导入时对每篇正文规范化（去首尾空白、连续空白合并为一个空格、NFKC）后取 sha256，存入 `documents.content_hash`。同一语料中已有相同哈希的文档、本批中重复出现的文档跳过；平行格式（TMX、Tatoeba）中同一对齐组的各语言文档全部重复才跳过，否则全组导入，不丢对齐。写入事务内锁定语料行，并发导入不会写入重复文档。任务结果记 `skipped_duplicates` 与前 20 个重复来源（文件名或"文件 #行号"）；全部重复且语料已有索引时不重建索引。存量文档的哈希由迁移 `0011` 补算。
 
 导入失败显示 `PARSE_ERROR` 和含文件名的原因（如"x.csv 缺少列：body""a.txt 无法识别编码"），语料列表与任务页均可重试；语料列表的重试重新执行该语料最近一次失败的导入或索引任务。
 
@@ -121,8 +134,9 @@ CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读�
 | --- | --- |
 | 导入到 | 默认"新建语料库"并要求填写名称；选已有语料库时在下方显示"追加到「名称」· 已有 N 篇"与其状态 |
 | 文件 | 关闭对话框（Esc、取消、上传完成）即清空已选文件；同名且同大小的文件再次选择时跳过并提示 |
-| 语言 | 默认"自动（按内容识别）"：每篇文档（CSV 每行）按正文汉字比例判定 zh / en；也可指定中文或英语。新建语料库选"自动"时，语料语言在导入完成后取文本量最大的语言 |
+| 语言 | 默认"自动（按内容识别）"：每篇文档（表格每行）按上方自动识别规则判定；也可指定七种语言之一。新建语料库选"自动"时，语料语言在导入完成后取文本量最大的语言 |
 | 元数据 | 字段 + 值逐行填写（纯数字的值存为数值，如 2020；007、1,000 保留文本），缺字段名、字段重复时在该项下提示；"JSON"切换为 JSON 输入，嵌套值只能用 JSON |
+| 完成提示 | 导入成功后提示"导入完成：N 篇，跳过重复 M 篇（a.csv #4、b.txt 等）"，最多列 3 个来源；没有重复时只写篇数 |
 
 语料详情抽屉的上传页签、文档编辑使用同样的语言与元数据控件。
 
@@ -151,7 +165,7 @@ CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读�
 
 | 写法 | 含义 |
 | --- | --- |
-| `语言` | 字串，中文按字符匹配，可跨分词边界 |
+| `语言` | 字串，中文、日文按字符匹配，可跨分词边界；其他语言按整词 |
 | `语言/n` | 词 + 词性；`/v` 表示任意动词 |
 | `语言 文化` | 两词相邻 |
 | `语言 $3 文化` | 中间最多 3 个词；`$2-5` 表示 2 到 5 个 |
@@ -165,7 +179,7 @@ CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读�
 
 布尔只支持"主查询 + 同句条件"，不支持任意嵌套；界面显示"主查询 / 条件"。前端提供点选式辅助面板，生成同一查询式。
 
-- `词/标签` 按当前语料的词性体系解析：UD 等 CoNLL-U 语料用 UPOS（`中國/PROPN`、`/n` 展开为 NOUN|PROPN），中文自动标注用 jieba（`/n` 覆盖 nr、ns 等，`/PROPN` 映射到专名标记）。插入面板的"词性"按钮列出该语料索引里实际出现的标签，并标明体系。
+- `词/标签` 按当前语料的词性体系解析：UD 等 CoNLL-U 语料用 UPOS（`中國/PROPN`、`/n` 展开为 NOUN|PROPN），中文自动标注用 jieba（`/n` 覆盖 nr、ns 等，`/PROPN` 映射到专名标记）。插入面板的"词性"按钮列出该语料索引里实际出现的标签，并标明体系。Stanza 自动标注的语料（en、ja、fr、de、es、ru）与 CoNLL-U 语料一样用 UPOS，短标签按同一映射展开。
 - 解析接口带上检索范围时（`POST /search/parse {query, scope}`），同时检查所需标注层：语料没有依存层时 `{dep=}`、没有片段层时 `[标签]`、没有词元时 `{lemma=}` 在解析行直接报错，检索按钮不可用；`POST /search` 对同样情况返回 422 `INVALID_LAYER`，不返回静默的 0 命中。
 - 0 命中且查询含汉字时，页面按简繁对照换写后再计数；对方写法有命中则提示"该库为繁体，试试「為」（n 次）"。语料的简繁取导入时记录的 `meta.script`。
 
@@ -205,8 +219,25 @@ CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读�
 | 分解 | 下拉：按词形 / 词元 / 词性 / 左一词 / 右一词 / 元数据字段；以当前查询与范围提交 `POST /stats/breakdown`，完成后跳到统计页结果（第六节）。分解不接受译文条件，有译文条件时按钮禁用，悬停"含译文条件时不可用" |
 | 统计译法 | 仅平行语料；以当前查询与范围提交 `POST /stats/translations`（词形、Dice），完成后跳到统计页结果；有译文条件时同样禁用 |
 | 抽样编码 | 计数完成后可用；选条数、随机种子、片段标签集（可新建）、层名，连同译文条件提交 `POST /projects/{id}/samples`，完成后跳到该层的抽样模式（第七节） |
+| 导出整洁数据 | 下拉 CSV / XLSX；以当前范围与查询式提交 `POST /stats/tidy_export`（第六节），每篇文档一行 |
 
 契约见 [contracts/p8.md](../contracts/p8.md) 第一、四、五节与第十节实现说明。
+
+### 语义检索
+
+2026 年 11 月 6 日，契约 [contracts/p10.md](../contracts/p10.md) 第六节，差异见其第十二节。检索页"查询式 / 语义"两种模式；语义模式输入一句话（≤ 500 字），返回范围内余弦相似度最高的句子（默认 50 句），命中范围为整句。
+
+| 项 | 规则 |
+| --- | --- |
+| 向量 | 与知识库同一向量模型（本地 MiniLM 或远程，384 维）；`sentence_embeddings` 每句一行，HNSW 索引（cosine）。迁移 `0011` |
+| 建索引 | `POST /corpora/{id}/semantic-index {language?}` → 任务 `embed_corpus`（长任务道），每批 512 句，进度按句，可取消；项目 owner / editor 可建，内置语料仅平台管理员，助手令牌不可建。可只建一种语言（如平行语料的中文侧）。句数上限 `SEMANTIC_MAX_SENTENCES`（默认 300,000），超过 422 `TOO_LARGE`；建立中再提交 409 `JOB_IN_PROGRESS` |
+| 状态 | `GET /corpora/{id}/semantic-index`：未建 / 建立中 / 已建 / 已过期 / 失败，带已建句数、各语言句数、预计耗时（按上次实测速度，没有时按每秒 200 句）、是否可建 |
+| 过期 | 建索引期间语料变化，或建完后重建语料索引时句数变化（文档增删），标记过期；改元数据不过期（范围筛选读实时元数据）；向量模型更换后也视为过期。过期索引仍可检索，页面提示重建 |
+| 重建 | 重建期间旧索引继续服务；重建失败保留旧索引，显示"上次重建失败：原因"；没有可用旧索引时为失败 |
+| 检索 | `POST /search/semantic {scope, text, top}` → `{items: [Hit + score]}`，范围筛选在 SQL 中；范围内已建向量 ≤ 5 万句时精确排序，更大时用 HNSW 迭代扫描（范围筛选后仍能取满 top）。未建 409 `SEMANTIC_NOT_READY`，模型已换 409 `SEMANTIC_MODEL_CHANGED`，向量模型不可用 503 `EMBED_UNAVAILABLE` |
+| 结果 | 复用 KWIC 表（整句、出处带"相似度 0.83"），可看上下文、钉证据 |
+
+实测（Tatoeba 中英第 1 批，16 核）：中文 45,703 句、英文 220,395 句，约 250–280 句 / 秒；只建中文侧约 3–5 分钟、约 160 MB，整库约 20–25 分钟、约 0.9 GB。
 
 ### 子库
 
@@ -224,8 +255,13 @@ CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读�
 | 译法 | 平行语料中命中句对齐译文里的词，共现句数、Dice、LL | 表 + 前 10 横向柱 |
 | 分布 | 按元数据字段（年代、体裁、来源）或文档位置；平行语料可加译文条件 | 折线 / 柱状 |
 | 标注统计 | 标签频次、标签共现、标注者进度与一致性 | 表 + 图 |
+| 文本指标 | 每篇文档词数、句数、TTR、STTR、MTLD、词汇密度、平均句长、平均依存距离、Flesch 易读度与年级（英文）；可按元数据分组汇总 | 表 + 分组均值 ± SD + 箱线图 |
+| 词汇等级 | 按词表等级统计词次、词种、覆盖率与表外词；整体、每篇或按元数据字段 | 表 + 堆叠柱 + 表外词表 |
+| 对比 | 2–10 项（标签 + 范围 + 查询式）的命中与每百万词；可按元数据字段（年份、体裁）展开；Mann-Whitney、Spearman 检验 | 表 + 柱状 / 折线 |
+| 词汇画像 | Word Sketch：节点词元按依存关系分栏列搭配词与 logDice | 分栏卡 |
+| 近义词对比 | 两个词元在各关系栏的偏 A / 共同 / 偏 B 搭配 | 三列分栏 |
 
-每个结果保存参数和索引版本；点击数字打开对应检索。图表用 ECharts，导出 SVG / PNG。
+每个结果保存参数和索引版本；点击数字打开对应检索。图表用 ECharts，导出 SVG / PNG。文本指标、词汇等级、对比、词汇画像、近义词对比的接口与口径见下方"研究指标与口径 P1"。
 
 统计口径与导出（2026 年 10 月 28 日）：
 
@@ -294,6 +330,65 @@ CSV / TSV 列映射：选择表格文件后显示前 5 行预览（服务端读�
 - 参考文献为 `engine/methods.py` 中的静态表，GB/T 7714 或 APA，含 DOI，已联网核对，生成时不联网。
 - `evidence: true` 时从证据篮收集统计行与命中的来源查询；文本条目忽略。
 - 权限：项目 viewer 起可生成，助手令牌（Bearer）可用；引用其他项目的统计、层或范围返回 404，不写入附录。
+
+研究指标与口径 P1（2026 年 11 月 6 日，契约 [contracts/p10.md](../contracts/p10.md) 第一至五节，差异见其第十二节）：
+
+文本指标 `POST /stats/text_metrics {scope, metrics?, group_by?, sttr_window: 1000}`，每篇文档一行（列键 `words`、`sentences`、`ttr`、`sttr`、`mtld`、`lexical_density`、`mean_sentence_length`、`mean_dependency_distance`、`flesch_reading_ease`、`flesch_kincaid_grade`）：
+
+| 项 | 规则 |
+| --- | --- |
+| 词 | 含字母或汉字的词；标点、符号、纯数字不算。词种按小写词形 |
+| TTR / STTR | TTR = 词种 / 词数；STTR = 每 `sttr_window` 词一段的 TTR 均值，最后不足一段不计 |
+| MTLD | McCarthy & Jarvis 2010，阈值 0.72，正反两遍取平均；剩余部分按 (1 − TTR) / (1 − 0.72) 计为部分因子 |
+| 短文档 | 词数 < 100 的文档 STTR、MTLD 为 null；词数小于窗口时 STTR 为 null；`totals.notes` 写明篇数 |
+| 词汇密度 | 实词 / 词数；实词为 UPOS NOUN、PROPN、VERB、ADJ、ADV，或 jieba 标签首字母 n、v、a、d（Ure 1971） |
+| 平均句长 | 词数 / 句数 |
+| 平均依存距离 | 全文所有有中心词的词 \|head − i\| 之和 / 依存数，不含根，标点计入；没有依存为 null（Liu 2008） |
+| Flesch | 仅英文：易读度 = 206.835 − 1.015 × 词 / 句 − 84.6 × 音节 / 词（Flesch 1948）；年级 = 0.39 × 词 / 句 + 11.8 × 音节 / 词 − 15.59（Kincaid et al. 1975）。音节为小写词中元音组 [aeiouy]+ 的个数，多于一组且以 e 结尾时减 1（le 结尾不减），至少 1 |
+| 分组 | `group_by` 时 `totals.groups` 为每个指标的 `[{value, documents, mean, sd}]`（样本标准差，不足 2 篇为 null），缺字段记"（无）" |
+
+页面固定请求 `words`、`sentences` 两列，再加所选指标。
+
+词汇等级 `POST /stats/vocab_profile {scope, list_id, by: corpus | document | <字段>}`：
+
+| 项 | 规则 |
+| --- | --- |
+| 内置词表 | NGSL 1.2（Browne, Culligan & Phillips 2023，CC BY-SA 4.0，2,809 词，`engine/data/ngsl.csv`）。NGSL 没有官方分级，等级是本平台按 SFI 频率排名分的三段："频率排名 1–1000 / 1001–2000 / 2001–2809"。HSK、AWL 许可不明，不内置，由用户上传 |
+| 上传 | `POST /projects/{id}/vocab-lists`（multipart：file、name、language，可选 source、license），项目 owner / editor，浏览器会话；文件为 UTF-8 CSV / TXT，每行 `词,等级`（也可用制表符），空行和 `#` 开头的行跳过，首行等级列为 level / 等级 / grade 时作表头；同一词重复时保留第一个等级。等级名都含数字时按自然顺序（HSK 1 … HSK 9），否则按出现顺序。`GET /projects/{id}/vocab-lists` 含内置；`DELETE /vocab-lists/{id}` 不能删内置（403）。迁移 `0012` |
+| 匹配 | 英文等字母语言按小写词元（无词元用词形）；中文、日文按词形；NFC 规范化 |
+| 列 | 每个等级与"表外"：词次、词种、词次覆盖率 %（词次 / 词数）；`by=document` 或字段时每行为各等级覆盖率与词数 |
+| 回到例句 | 等级行为该等级在范围内出现的词形选项式（`"a"\|"b"`），超过 200 个词形或超过 1000 字时为 null；`totals.off_list` 为表外词前 100 个，各带查询 |
+| 校验 | 词表语言与语料语言不一致时 422"词表语言与语料不一致" |
+
+整洁数据导出 `POST /stats/tidy_export {scope, queries? (≤ 10), metrics?, format: csv | xlsx}` → 导出任务（`kind = export`、`source = tidy`）：
+
+- 每篇文档一行，列为 `document_id`、`title`、`language`、`meta_<字段>`（蛇形命名，每字段一列）、`tokens`（含标点，每百万词的分母）、`sentences`，每个查询 `q{n}_hits`、`q{n}_pm`，`metrics=true` 时再加文本指标列。查询计数与检索相同（纯属性、纯片段查询走 PostgreSQL）。
+- csv：zip，内含 `tidy_data.csv`（UTF-8 无 BOM，便于 R / pandas）、`tidy_data.codebook.csv`（column、description、unit、query）、语料有许可时 `source.txt`；xlsx：`data`、`codebook` 两个工作表（有许可时另加 `source`），标题宋体、无底色。
+- 入口：统计页工具栏、检索页结果栏。
+
+导出防公式注入：检索、统计、证据、整洁数据、标注层 XLSX 导出中，以 `=` `+` `-` `@`、制表符或回车开头的字符串前加 `'`。
+
+对比 `POST /stats/compare {items: [{label, scope, query}] (2–10), by?, test: none | mann_whitney | spearman}`：
+
+| 项 | 规则 |
+| --- | --- |
+| 不带 by | 每项一行：项、范围、查询式、命中数、词数（含标点）、每百万词、文档数、文档频率 %；恰两项时 `totals.comparison` 给 LL、log ratio 与显著性（同关键词公式） |
+| 带 by | 行为字段值（缺字段的文档不计），列 `value`、各项 `hits_i`、`per_million_i`（该值的文档合并计）；行的 `searches` 为各项带字段筛选的检索 |
+| 检验 | 每篇文档的每百万词为一个观测。Mann-Whitney（恰两项）：U、z、p、效应量 r = z / √n，正态近似，含结校正与连续性校正，同 SciPy `mannwhitneyu(method="asymptotic")`；Spearman（by 为数值字段）：每项 ρ、p、n，n < 3 或常量时为 null，同 SciPy `spearmanr`。纯 Python 实现，测试中与 SciPy 比对误差 < 1e-9 |
+| 计数 | 与检索相同：纯属性查询（如 `{lemma=big}`）、纯片段查询走 PostgreSQL，其余走 CWB；超过 `SEARCH_MAX_HITS` 失败 |
+| 范围 | 各项范围须在同一项目内（内置语料可与任何项目搭配），否则 422 |
+
+Word Sketch `POST /stats/word_sketch {scope, lemma, pos?, layers?, min_freq: 2, top: 25}` 与近义词对比 `POST /stats/sketch_diff {scope, lemma_a, lemma_b, …}`：
+
+| 项 | 规则 |
+| --- | --- |
+| 关系栏 | 主语（nsubj 类，节点为中心词）、宾语（obj、iobj）、修饰语与所修饰的词（amod、advmod、nmod、compound，两个方向各一栏）、并列（conj）、介词短语（obl / nmod 带 case 词，栏名如"with + N"）、作主语的谓词；`totals.relations` 列栏名 |
+| 指标 | 每栏：搭配词、共现频次、该关系中搭配词频次、logDice = 14 + log₂(2 f(n,r,c) / (f(n,r,·) + f(·,r,c)))，· 为任意词，按关系计（Rychlý 2008）；`top` 为每栏条数 |
+| 依存来源 | 依次取 `layers.dep`、索引中的系统依存（英文等 Stanza 导入，或中文依存预标时回填到系统层的依存）、该语料最近完成的依存预标层；都没有时 422 `NO_DEPENDENCIES`"该语料没有依存标注，请先在标注页建依存层"；统计页中文语料可选依存层 |
+| 近义词对比 | 每栏两词元的搭配，列 `freq_a`、`freq_b`、`logdice_a`、`logdice_b`、`diff`（logDice 差，缺一方按 0）、`group`：a（只有 A 达到最低频次）、common（都达到）、b；按 a、common、b 显示 |
+| 回到例句 | 从属词带依存关系（`"form"{dep=obj}` 或 `{lemma=x,dep=obj}`）加中心词词形的同句条件；这是同句近似，点回检索的计数可能多于该行 |
+
+方法附录写入以上指标的公式（TTR、STTR、平均句长只写公式），文献补充 MTLD（McCarthy & Jarvis 2010）、词汇密度（Ure 1971）、依存距离（Liu 2008）、Flesch 1948、Kincaid et al. 1975、Mann & Whitney 1947、Spearman 1904、Word Sketch（Kilgarriff et al. 2004、2014）与 NGSL 2023，已联网核对。
 
 ## 七 标注平台
 
@@ -409,21 +504,37 @@ JSON 顶层带 `scope`（口径行）、`offsets: "code points"`、`sentence_ind
 
 ### 工具
 
-共 44 个，界面按能力分组、显示中文名（`apps/web/src/components/global/tools.ts`）；带 * 的是写操作。
+共 53 个，界面按能力分组、显示中文名（`apps/web/src/components/global/tools.ts`）；带 * 的是写操作。
 
 | 分组 | 工具 |
 | --- | --- |
-| 语料与检索 | corpora.list、corpora.get、corpora.documents、subcorpora.list、subcorpora.create*、corpus.parse、corpus.search、corpus.context、corpus.sentence |
+| 语料与检索 | corpora.list、corpora.get、corpora.documents、subcorpora.list、subcorpora.create*、corpus.parse、corpus.search、corpus.context、corpus.sentence、search.semantic |
 | 统计 | stats.frequency、stats.ngrams、stats.collocations、stats.keywords、stats.distribution、stats.breakdown、stats.translations |
+| 研究统计 | stats.text_metrics、vocab.lists、stats.vocab_profile、stats.compare、stats.word_sketch、stats.sketch_diff |
 | 词性与依存标注 | annot.layers、annot.create_layer*、annot.sentence、annot.diff、annot.stats、annot.suggest*、annot.export* |
 | 片段与对齐 | annot.spans、annot.suggest_spans*、align.pairs、align.suggest*、annot.agreement、sample.create*、sample.summary |
 | 知识库 | kb.search、kb.terms、kb.documents、kb.save*、kb.extract_terms*、kb.summarize* |
-| 证据与导出 | evidence.add*、evidence.list、queries.save*、queries.list、export.create*、methods.appendix |
+| 证据与导出 | evidence.add*、evidence.list、queries.save*、queries.list、export.create*、export.tidy*、methods.appendix |
+| 研究流程 | skills.read |
 | 任务 | jobs.get、jobs.cancel* |
 
 每个工具对应一个 api 接口，用 Pi `customTools` 注册；新增业务能力时同步注册工具。
 
 研究能力工具（2026 年 11 月 6 日，契约 [contracts/p8.md](../contracts/p8.md) 第七节）：stats.breakdown（命中分解）、stats.translations（译法）、methods.appendix（方法附录，返回 markdown，不生成文件）、sample.create（抽样编码，写操作确认）、sample.summary（抽样汇总）；stats.frequency 接受 `parts` 与 `dispersion`，stats.keywords 接受 `direction`、`items` 与新排序指标，stats.collocations 接受 mi3、z、delta_p，stats.distribution 与 corpus.search 接受 `aligned`。系统提示增加"统计与方法"：整范围词表与离散度用 stats.frequency，一个查询的命中构成用 stats.breakdown，译法用 stats.translations，某种译法的例句用 corpus.search 加译文条件；效应量、区间、离散度、比例与估计命中数只取工具结果，不自行换算，估计值注明"估计"；只说明统计结果显示了什么，不代写研究结论，方法部分给出 methods.appendix 原文。
+
+研究能力工具 P1（2026 年 11 月 6 日，契约 [contracts/p10.md](../contracts/p10.md) 第九节）：stats.text_metrics（文本指标）、vocab.lists（列出项目可用词表，含内置）、stats.vocab_profile（词汇等级）、stats.compare（多项对比与检验）、stats.word_sketch、stats.sketch_diff（近义词对比）、search.semantic（语义检索，语料须已建语义索引）、export.tidy（整洁数据导出，写操作确认）。工具描述写明适用问题。
+
+研究流程（Pi Skills）：`services/agent/skills/` 下五个 Markdown 文件，每个写适用问题、步骤、调用的工具与参数、结果呈现与口径局限。
+
+| 流程 | 用途 |
+| --- | --- |
+| keyword-analysis | 关键词分析：两类文本的显著多用 / 少用词 |
+| synonym-comparison | 近义词辨析：Word Sketch + 近义词对比 + 例句 |
+| translation-study | 译法研究：译法统计 + 译文条件 + 分布 |
+| learner-error-analysis | 学习者偏误分析：抽样编码 + 偏误分布 + 文本指标 |
+| methods-section | 方法章节：方法附录 + 结果描述草稿，数字只来自工具，不写结论 |
+
+agent 用 Pi `loadSkillsFromDir` 加载，Pi 在系统提示中列出流程名称与说明；模型用 `skills.read`（以 Pi `read` 工具名注册，覆盖 Pi 自带的读文件工具）按名称读取流程，只能读这五个已加载的文件。agent 镜像复制 `services/agent/skills`。
 
 ### 写操作确认
 
@@ -440,7 +551,7 @@ JSON 顶层带 `scope`（口径行）、`offsets: "code points"`、`sentence_ind
 
 ### OpenUI
 
-- 前端注册组件库（16 个）：KwicTable、FreqChart、CollocationTable、KeywordTable、DistributionChart、EvidenceCard、JobStatus、Callout、DependencyTree、AnnotationDiff、TermCard、KbCitation、SpanView、AlignmentGraph、BreakdownTable、TranslationTable。BreakdownTable 显示项、命中数、占比、每百万词；TranslationTable 显示译文词、共现句数、占命中句 %、所选指标，行点击带 `search_aligned` 打开检索。
+- 前端注册组件库（19 个）：KwicTable、FreqChart、CollocationTable、KeywordTable、DistributionChart、EvidenceCard、JobStatus、Callout、DependencyTree、AnnotationDiff、TermCard、KbCitation、SpanView、AlignmentGraph、BreakdownTable、TranslationTable、WordSketch、SketchDiff、CompareChart。BreakdownTable 显示项、命中数、占比、每百万词；TranslationTable 显示译文词、共现句数、占命中句 %、所选指标，行点击带 `search_aligned` 打开检索。WordSketch 按关系分栏列搭配词、频次、logDice；SketchDiff 为偏 A / 共同 / 偏 B 三列；CompareChart 为对比带 by 时的多系列折线或分组柱（每百万词）；KwicTable 增加 `mode: semantic`，行带相似度 `score`。行点击均回到检索。
 - 组件说明自动生成后写入 Pi 系统提示词；模型回复输出 OpenUI Lang，agent 服务流式转发，前端用 OpenUI React 渲染器绘制。
 - 模型只能使用已注册组件，不执行生成代码。组件内的"打开完整结果""保存为笔记"等操作调用普通接口。
 
@@ -461,14 +572,14 @@ JSON 顶层带 `scope`（口径行）、`offsets: "code points"`、`sentence_ind
 
 去掉 RabbitMQ、Celery、S3 对象存储和多套任务账本。文件存本地卷。Docker Compose 一键启动，单机部署。
 
-NLP：中文分词与词性用 jieba（固定词典、关闭 HMM），英文分词词性依存与中文依存用 Stanza；模型随 worker 镜像固定版本。CWB 安装在 api 与 worker 镜像。
+NLP：中文分词与词性用 jieba（固定词典、关闭 HMM），英、日、法、德、西、俄文分词词性依存与中文依存用 Stanza（包版本随 worker 镜像固定，模型首次使用时下载到 `stanza` 卷，见第四节"语料导入"）。CWB 安装在 api 与 worker 镜像。
 
 ### 权限
 
 | 角色 | 权限 |
 | --- | --- |
 | owner | 项目全部权限，管理成员 |
-| editor | 上传语料、建子库、建标注层、编辑知识库 |
+| editor | 上传语料、建子库、建标注层、编辑知识库、上传词表、建语义索引 |
 | annotator | 标注校对、检索、统计 |
 | viewer | 检索、统计、查看标注与知识库 |
 | 平台管理员 | 维护内置语料与参考资料；管理账号，可见全部账号及各账号项目数；可见全部项目（名称、负责人、成员与语料等数量、占用空间，含已删除）、全部任务、模型用量、审计、反馈与系统状态；可改派项目负责人、恢复已删除项目、取消任何任务；不读取项目私有内容。管理接口 `/admin/*` 只接受管理员的浏览器会话，助手令牌 403 |
@@ -513,7 +624,7 @@ NLP：中文分词与词性用 jieba（固定词典、关闭 HMM），英文分�
 
 唯一 `jobs` 表。状态 queued / running / succeeded / failed / cancelled；进度为已处理数与总数，并带单位（导入：解析按"个文件"、分句与标注和写入按"字"；建索引按"篇"）；失败保留错误原因，用户可重试。页面轮询或 SSE 显示进度。
 
-队列（2026 年 10 月 28 日）：任务分短任务与长任务两条道。短任务 = 统计、导出、预标注、知识库任务，以及上传小于 5 MB（`LIGHT_IMPORT_BYTES`）的导入和词数少于 100 万（`LIGHT_INDEX_TOKENS`）的建索引；其余导入与建索引为长任务。worker-light 处理全部短任务；worker 处理全部任务，但先取短任务，再按创建时间取长任务。同一语料同时只建一个索引。排队中的任务显示"排队中 · 前面还有 n 个任务"（同一道中正在运行和更早排队的任务数），排到最前时显示"排队中 · 下一个执行"。
+队列（2026 年 10 月 28 日）：任务分短任务与长任务两条道。短任务 = 统计、导出、预标注、知识库任务，以及上传小于 5 MB（`LIGHT_IMPORT_BYTES`）的导入和词数少于 100 万（`LIGHT_INDEX_TOKENS`）的建索引；其余导入与建索引，以及全部语义索引任务（`embed_corpus`）为长任务。worker-light 处理全部短任务；worker 处理全部任务，但先取短任务，再按创建时间取长任务。同一语料同时只建一个索引。排队中的任务显示"排队中 · 前面还有 n 个任务"（同一道中正在运行和更早排队的任务数），排到最前时显示"排队中 · 下一个执行"。
 
 任务页与右下角任务托盘：标题写任务对象（统计为"频次 · 语料名"，其他为"导入 · 语料：文件"）；已完成显示"已完成"或结果（导入"N 篇 · N 句 · N 词"），点标题打开结果（统计结果页、导出下载，其他打开任务详情）；1280 px 宽时任务表操作列固定在右侧。
 
@@ -529,9 +640,9 @@ NLP：中文分词与词性用 jieba（固定词典、关闭 HMM），英文分�
 
 | 页面 | 内容 |
 | --- | --- |
-| 语料库 | 内置与项目语料列表；上传；元数据编辑；子库管理 |
-| 检索 | 范围选择、查询式输入与辅助面板、三项计数、KWIC、上下文、导出 |
-| 统计 | 方法切换、参数、结果表与图、回到例句 |
+| 语料库 | 内置与项目语料列表；上传；元数据编辑；子库管理；语义索引状态与建立 |
+| 检索 | 范围选择、查询式 / 语义两种模式、查询式输入与辅助面板、三项计数、KWIC、上下文、导出、导出整洁数据 |
+| 统计 | 方法切换（含文本指标、词汇等级、对比、词汇画像、近义词对比）、参数、词表管理、结果表与图、回到例句、导出整洁数据 |
 | 标注 | 标注层列表与进度；校对工作区（文档句子流 + 可视化编辑器 + 标签面板） |
 | 知识库 | 文献、术语、规范、笔记四个分区；导入；检索 |
 | 助手 | 独立页面，也可作为右侧抽屉在任意页面打开；对话、组件结果、工具调用过程折叠 |
@@ -590,7 +701,8 @@ NLP：中文分词与词性用 jieba（固定词典、关闭 HMM），英文分�
 | P7 批次 1：正确性与上线前 | 检索完整结果集与后台计数（翻页不重跑、排序在计数完成后生效、命中与缓存上限）；删除语料与文档的影响提示；助手抽屉页面上下文；证据篮"清空我钉的"与加载更多；账号生命周期（管理员用户页、临时密码与强制改密、停用、改密）；设置页"数据与隐私"与发送说明；`/api/health` 查库、worker 健康检查、`scripts/healthcheck.sh`；恢复脚本含 worker-light。契约 [contracts/p7.md](../contracts/p7.md)，来源[调研报告](reviews/2026-11-05-gap-research.md)第四节 | 已实现，整栈联调与独立审查通过 |
 | P8 批次 2：研究能力 P0 | 命中频次分解（检索页"分解"）；频次离散度（range、DP、DPnorm、Juilland D）；关键词效应量（%DIFF、odds ratio、log ratio 95% 区间、Bonferroni、方向、指定词对比）与搭配 MI3、z、ΔP；平行语料译法统计与检索译文条件；检索结果抽样编码（抽样层、抽样模式、Wilson 区间与估计命中数，迁移 0009）；方法附录与参考文献（Markdown / DOCX，保存为笔记）；统计导出 DOCX；Agent 新增 5 个工具（共 44）与 BreakdownTable、TranslationTable 组件（共 16）。契约 [contracts/p8.md](../contracts/p8.md)，来源[调研报告](reviews/2026-11-05-gap-research.md)第二节 B1–B6 | 已实现，整栈联调与独立审查通过 |
 | P9 批次 3：多人运营 | 模型用量记录与每人月度 token 上限、助手并发上限；设置 · 管理（用户、项目、任务、用量、审计、反馈、系统）；审计日志；项目软删除、7 天内恢复与到期清除；worker-light 每日维护（清除项目、过期导出与上传目录）；站内反馈；运行中任务可中断取消；删除文档与改元数据后自动重建索引及检索 / 统计页提示；非中英文语料明确报错；nginx 安全响应头；统一下载（过期导出提示）。迁移 0010。契约 [contracts/p9.md](../contracts/p9.md)，来源[调研报告](reviews/2026-11-05-gap-research.md)第四节批次 3 | 已实现，整栈联调与独立审查通过 |
-| 二期 | 命名实体、句子与文档分类、语义检索、更多内置语料（报刊语料，见 `doc/corpus-collection-plan.md`）、实时多人协作 | 不在首版 |
+| P10 批次 4：研究能力 P1 | 文本指标（TTR、STTR、MTLD、词汇密度、平均句长、平均依存距离、Flesch，分组汇总）；词汇等级画像（内置 NGSL 1.2，上传词表，迁移 0012）；整洁数据导出（每篇一行、codebook，CSV zip / XLSX）与导出防公式注入；多项对比与历时（LL、log ratio、Mann-Whitney、Spearman）；Word Sketch 与近义词对比；语料语义检索（语义索引、HNSW、迁移 0011）；导入 PDF、XLSX、JSONL 与正文去重；新增 ja、fr、de、es、ru 五种语言（自动识别、管线数上限）；Agent 新增 9 个工具（共 53）、WordSketch / SketchDiff / CompareChart 组件（共 19）与五个研究流程 Skills。契约 [contracts/p10.md](../contracts/p10.md)，来源[调研报告](reviews/2026-11-05-gap-research.md)第二节 B7–B15 | 已实现，整栈联调与独立审查通过 |
+| 二期 | 命名实体、句子与文档分类、更多内置语料（报刊语料，见 `doc/corpus-collection-plan.md`）、实时多人协作；语义检索已在 P10 完成 | 不在首版 |
 
 贯穿各阶段：每阶段先写 `contracts/pN.md`，三方并行实现，整栈联调后提交；设计文档、Word、change-log 同批更新；每个新业务能力同批注册 Agent 工具与 OpenUI 组件。
 
