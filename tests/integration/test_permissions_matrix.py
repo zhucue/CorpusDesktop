@@ -709,9 +709,11 @@ def build_cases(w: World):
         ),
         C(
             "项目",
-            "GET /users?email=",
-            ANYONE,
-            lambda c, x, r: c.get("/api/users", params={"email": o.email}),
+            "GET /users?email=&project_id=",
+            MANAGE_H,
+            lambda c, x, r: c.get(
+                "/api/users", params={"email": o.email, "project_id": p}
+            ),
         ),
         C(
             "项目",
