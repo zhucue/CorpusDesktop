@@ -1,3 +1,5 @@
+import io
+import subprocess
 import threading
 from pathlib import Path
 
@@ -383,6 +385,44 @@ def test_cancel_stops_cqp(zh):
             timeout=5,
             cancel=cancel,
         )
+
+
+class _KilledMidLine:
+    """CQP stand-in: one complete row, then output stops until kill(), which leaves a row cut short."""
+
+    def __init__(self, *args, **kwargs):
+        self.killed = threading.Event()
+        self.returncode = None
+        self.stdin = io.StringIO()
+        self.stdout = self._out()
+
+    def _out(self):
+        yield "CQP version 3.5\n"
+        yield "0\t1\tzh1\t0\n"
+        self.killed.wait(10)
+        yield "5\t"
+
+    def kill(self):
+        self.returncode = -9
+        self.killed.set()
+
+    def poll(self):
+        return self.returncode
+
+    def wait(self):
+        return self.returncode
+
+
+def test_stopped_cqp_ignores_cut_line(zh, monkeypatch):
+    """A row cut short by the watchdog's kill is not parsed: TimeoutExpired / Cancelled, not ValueError."""
+    monkeypatch.setattr(cwb.subprocess, "Popen", _KilledMidLine)
+    cqp = query.compile(query.parse("语言"))
+    with pytest.raises(subprocess.TimeoutExpired):
+        cwb.query_rows(zh, "zh", cqp, restrict=None, timeout=0.3)
+    cancel = threading.Event()
+    threading.Timer(0.1, cancel.set).start()
+    with pytest.raises(cwb.Cancelled):
+        cwb.query_rows(zh, "zh", cqp, restrict=None, timeout=10, cancel=cancel)
 
 
 def test_max_hits_and_prefix_with_conditions(zh, ud):

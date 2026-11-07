@@ -444,6 +444,8 @@ def _cqp_lines(
                 pass
             first = True
             for line in p.stdout:
+                if stopped:  # killed by the watchdog: the last line may be cut short
+                    break
                 line = line.rstrip("\n")
                 if first and line.startswith("CQP version"):
                     first = False
