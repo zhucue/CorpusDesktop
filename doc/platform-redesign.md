@@ -210,7 +210,7 @@ Stanza 模型首次用到某语言时下载到 `stanza` 卷，进度显示"下�
 - 后台计数失败时 `counts.failed=true`，`message` 为固定文案之一：计数超时（300 秒）、命中过多（超过 `SEARCH_MAX_HITS`，默认 200 万）、计数失败请重试，以及同一用户同一登录方式发起新检索时的"计数已取消：已开始新的检索"；不显示内部错误。页面停止轮询并显示该文案。
 - 结果集总字节上限 `SEARCH_CACHE_MAX_BYTES`（默认 2 GB），与条目上限（2000 条）一起按最近最少使用淘汰；api 启动时清空 `search-cache`。索引版本变化后旧 `search_id` 返回 409 `SEARCH_EXPIRED`。
 - 契约见 [contracts/p7.md](../contracts/p7.md) 第一节。
-- 纯属性与纯片段查询（P11，[contracts/p11.md](../contracts/p11.md) 第一节）：从 PostgreSQL 取完整命中行（文档码点），与 CWB 结果同样存为结果集、翻页切片、超时转后台计数；SQL 在 `statement_timeout`（同步阶段 `SEARCH_COUNT_TIMEOUT`，后台 `SEARCH_FULL_TIMEOUT`）下执行。后台计数期间纯属性查询的首页按语料顺序取（最多 5 秒），纯片段查询的首页等计数完成。KWIC 语境从当前索引的正文与句界读取（`cwb.DocText`），只读本页命中所在句及所需前后句，不读整篇；索引之后新增的文档才从正文文件读取。平行语料语境限在本句，与 CWB 路径一致。实测：Tatoeba 中文侧 `{pos=NOUN}` 38 万命中完整计数 3.88 秒，UD 中文 GSD 3 万命中 0.52 秒，翻页 0.03 秒；"说话"简繁通查 178 条、关闭 74 条。
+- 纯属性与纯片段查询（P11，[contracts/p11.md](../contracts/p11.md) 第一节）：从 PostgreSQL 取完整命中行（文档码点），与 CWB 结果同样存为结果集、翻页切片、超时转后台计数；SQL 在 `statement_timeout`（同步阶段 `SEARCH_COUNT_TIMEOUT`，后台 `SEARCH_FULL_TIMEOUT`）下执行。后台计数期间纯属性查询的首页按语料顺序取（最多 5 秒），纯片段查询的首页等计数完成。KWIC 语境从当前索引的正文与句界读取（`cwb.DocText`），只读本页命中所在句及所需前后句，不读整篇；索引之后新增的文档才从正文文件读取。平行语料语境限在本句，与 CWB 路径一致。实测：Tatoeba 整库 `{pos=NOUN}` 380,100 命中完整计数 4.45–6.06 秒、中文侧 42,036 命中 0.39–0.44 秒，UD 中文 GSD 3 万命中 0.52 秒，翻页 0.03 秒；"说话"简繁通查 178 条、关闭 74 条。
 
 译文条件（2026 年 11 月 6 日）：
 
