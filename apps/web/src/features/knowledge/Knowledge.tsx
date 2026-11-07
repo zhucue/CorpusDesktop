@@ -24,7 +24,8 @@ export default function Knowledge() {
   const projectId = useProjectId();
   const project = useProject();
   const editable = canEdit(project.data);
-  const canWriteNotes = !!project.data && project.data.role !== "viewer";
+  // services/api/kb.py EDIT: owner / editor / annotator import literature and write notes
+  const canAdd = !!project.data && project.data.role !== "viewer";
   const [params, setParams] = useSearchParams();
   const docs = useKbDocuments(projectId);
   const all = docs.data ?? [];
@@ -84,7 +85,7 @@ export default function Knowledge() {
               <Icon name="download" size={14} />
               <span className="lbl">导出术语表</span>
             </button>
-            {editable && (
+            {canAdd && (
               <button className="btn s p" type="button" onClick={goImport}>
                 <Icon name="upload" size={14} />
                 <span className="lbl">导入</span>
@@ -113,7 +114,7 @@ export default function Knowledge() {
 
         {tab === "lit" && (
           <section role="tabpanel" id="kb-p-lit" className="kb-grid">
-            <ImportCard projectId={projectId} docs={all} editable={editable} />
+            <ImportCard projectId={projectId} docs={all} editable={canAdd} />
             <DocTable docs={all} loading={docs.isPending} error={docs.error} onOpen={(id) => set({ doc: id, chunk: null })} />
           </section>
         )}
@@ -136,7 +137,7 @@ export default function Knowledge() {
         )}
         {tab === "notes" && (
           <div role="tabpanel" id="kb-p-notes">
-            <NotesTab projectId={projectId} docs={all} editable={canWriteNotes} selected={docTab === "notes" ? docParam : null} onSelect={(id) => set({ tab: "notes", doc: id, chunk: null })} />
+            <NotesTab projectId={projectId} docs={all} editable={canAdd} selected={docTab === "notes" ? docParam : null} onSelect={(id) => set({ tab: "notes", doc: id, chunk: null })} />
           </div>
         )}
       </div>
