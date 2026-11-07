@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { App } from "antd";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -266,5 +267,66 @@ describe("span workspace", () => {
     fireEvent.keyDown(document.body, { key: "Enter" });
     await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
     expect(calls.find((c) => c.method === "PATCH")).toEqual({ method: "PATCH", path: "/api/layers/L5/spans/sp1", body: { action: "confirm" } });
+  });
+});
+
+describe("span boundary buttons and Enter (B10)", () => {
+  function mockSpans() {
+    const calls: { method: string; path: string; body: unknown }[] = [];
+    const json = (v: unknown) => new Response(JSON.stringify(v), { status: 200, headers: { "Content-Type": "application/json" } });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), "http://x");
+      const method = init?.method ?? "GET";
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      calls.push({ method, path: url.pathname, body });
+      const p = url.pathname;
+      if (p === "/api/auth/me") return json({ id: "u1", email: "a@b", display_name: "A", is_admin: false });
+      if (p === "/api/label-sets")
+        return json({ items: [{ id: "ls-le", project_id: null, name: "learner-errors", kind: "span", language: null, labels: [{ id: "时态", name: "时态" }], created_at: "" }] });
+      if (p === "/api/layers/L5/documents") return json({ items: [{ document_id: "d1", title: "作文 1", sentences: 1, done: 0, pending: 1 }] });
+      if (p === "/api/layers/L5/spans" && method === "GET") return json({ items: [SENT], next_cursor: null });
+      if (p === "/api/layers/L5/spans/sp1" && method === "PATCH") return json({ ...SENT.spans[0], end_cp: (body as { end_cp?: number }).end_cp ?? 53, status: "modified", revision: 1 });
+      if (p === "/api/layers/L5/sentences/d1/0/confirm" && method === "POST") return json({ ...SENT, spans: [{ ...SENT.spans[0], end_cp: 53, status: "modified" }] });
+      return new Response(JSON.stringify({ error: { code: "NOT_FOUND", message: `unexpected ${method} ${p}` } }), { status: 404 });
+    });
+    return { calls, patches: () => calls.filter((c) => c.method === "PATCH") };
+  }
+
+  it("Enter / Shift+Enter after clicking a boundary button confirm without moving the boundary", async () => {
+    const { calls, patches } = mockSpans();
+    const user = userEvent.setup();
+    wrap(<SpanWorkspace layer={LAYER} layers={[LAYER]} projectId="p1" canAnnotate canManage />, "/p/p1/annotate?layer=L5");
+    await waitFor(() => expect(document.querySelector(".smk")?.textContent).toBe("go"));
+    await user.click(document.querySelector("[data-tag='sp1']")!);
+
+    await user.click(await screen.findByRole("button", { name: "终点左移" }));
+    await waitFor(() => expect(patches()).toHaveLength(1));
+    expect(patches()[0].body).toEqual({ action: "modify", start_cp: 52, end_cp: 53 });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "终点左移" })); // the button kept focus
+
+    // arrows switch spans (and make the clicked button :focus-visible); Enter still confirms
+    await user.keyboard("{ArrowRight}{ArrowLeft}{Enter}");
+    await waitFor(() => expect(patches()).toHaveLength(2));
+    expect(patches()[1].body).toEqual({ action: "confirm" });
+
+    await user.keyboard("{Shift>}{Enter}{/Shift}");
+    await waitFor(() => expect(calls.some((c) => c.path === "/api/layers/L5/sentences/d1/0/confirm")).toBe(true));
+    expect(patches()).toHaveLength(2); // the boundary was not changed again
+  });
+
+  it("Enter on a boundary button reached with Tab presses that button", async () => {
+    const { calls, patches } = mockSpans();
+    const user = userEvent.setup();
+    wrap(<SpanWorkspace layer={LAYER} layers={[LAYER]} projectId="p1" canAnnotate canManage />, "/p/p1/annotate?layer=L5");
+    await waitFor(() => expect(document.querySelector(".smk")?.textContent).toBe("go"));
+    await user.click(document.querySelector("[data-tag='sp1']")!);
+    const button = await screen.findByRole("button", { name: "终点左移" });
+    for (let i = 0; i < 80 && document.activeElement !== button; i++) await user.tab();
+    expect(document.activeElement).toBe(button);
+
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(patches()).toHaveLength(1));
+    expect(patches()[0].body).toEqual({ action: "modify", start_cp: 52, end_cp: 53 });
+    expect(calls.some((c) => c.path === "/api/layers/L5/sentences/d1/0/confirm")).toBe(false);
   });
 });

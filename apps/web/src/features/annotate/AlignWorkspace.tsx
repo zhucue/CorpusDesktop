@@ -15,7 +15,7 @@ import { AlignmentStatsCard } from "./AlignStats";
 import { useLayerDocs } from "./data";
 import { useAlignActions, useAlignPair, useAlignPairs, useAnnotatorView } from "./spanData";
 import { fmtScore, isSuggested, pairDone, tokenForms } from "./spanModel";
-import { Stream, typingTarget } from "./Stream";
+import { controlKey, Stream, typingTarget } from "./Stream";
 import { StatsTab } from "./Tabs";
 import { sourceText, statusView } from "./Workspace";
 
@@ -222,7 +222,7 @@ export default function AlignWorkspace({
     if (tab !== "edit") return;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || typingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
-      if ((e.key === "Enter" || e.key === " ") && e.target instanceof Element && e.target.closest("button, a, [role='button'], [role='tab'], [role='switch']")) return;
+      if (controlKey(e)) return;
       const k = e.key.toLowerCase();
       if (e.key === "Enter") {
         runRef.current.setAll("confirmed");

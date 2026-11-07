@@ -148,19 +148,32 @@ export function typingTarget(t: EventTarget | null): boolean {
   return t instanceof Element && !!t.closest("input, textarea, select, [contenteditable='true'], .ant-modal-wrap, .ant-select-dropdown, .ant-popover");
 }
 
+const CONTROLS = "button, a, [role='button'], [role='tab'], [role='switch']";
+
+// The control the mouse last pressed, while it keeps focus. :focus-visible cannot tell it from a tabbed one:
+// browsers switch it on for a clicked button as soon as any key (an arrow, Enter itself) is pressed, so Enter
+// pressed a clicked boundary button again (B10).
+let clicked: Element | null = null;
+if (typeof document !== "undefined") {
+  const opts = { capture: true };
+  document.addEventListener("pointerdown", (e) => {
+    clicked = e.target instanceof Element ? e.target.closest(CONTROLS) : null;
+  }, opts);
+  document.addEventListener("focusin", (e) => {
+    if (e.target !== clicked) clicked = null; // Tab, arrow keys between tabs, focus back from a closed dialog
+  }, opts);
+}
+
 /**
- * Enter / Space are left to a focused button only when the user reached it with the keyboard (Tab, :focus-visible).
- * A button that merely kept focus after a mouse click or a closed dialog does not swallow the editor keys.
+ * Enter / Space are left to a focused control, except the one the mouse clicked that merely kept focus: there they
+ * are the editor keys (Enter confirms). Controls reached with Tab, arrow keys or a closed dialog keep them.
  */
 export function controlKey(e: KeyboardEvent): boolean {
   if (e.key !== "Enter" && e.key !== " ") return false;
   const t = e.target;
-  if (!(t instanceof Element) || !t.closest("button, a, [role='button'], [role='tab'], [role='switch']")) return false;
-  try {
-    return t.matches(":focus-visible");
-  } catch {
-    return true;
-  }
+  if (!(t instanceof Element)) return false;
+  const control = t.closest(CONTROLS);
+  return !!control && control !== clicked;
 }
 
 /** Focus target of the editor card (tabIndex −1): clicks on tokens and spans move focus here. */
