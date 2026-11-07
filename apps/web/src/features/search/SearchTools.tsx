@@ -138,10 +138,15 @@ const BREAKDOWN: [BreakdownBy, string][] = [
 
 /** Statistics from the result bar count the hits without a translation condition: disabled while one is set. */
 const ALIGNED_OFF = "含译文条件时不可用";
+/** Tools that count other things than the hits of one document-position part refuse it (contracts/p2.md B06). */
+export const POSITION_OFF = "文档位置区间仅用于查看例句";
+/** The search runs on one document-position part (回到例句 of a 文档位置 distribution row). */
+export const hasPosition = (scope: SearchScope | null | undefined) => !!scope && "position" in scope && !!scope.position;
 
 export function BreakdownMenu({ projectId, req, fields }: { projectId: string; req: SearchRequest | null; fields: string[] }) {
   const launch = useStatLaunch(projectId);
-  const off = !req || launch.busy || !!req.aligned;
+  const offTip = hasPosition(req?.scope) ? POSITION_OFF : req?.aligned ? ALIGNED_OFF : null;
+  const off = !req || launch.busy || !!offTip;
   const items = [
     ...BREAKDOWN.map(([k, label]) => ({ key: k, label })),
     ...(fields.filter((f) => f !== "position").length
@@ -170,7 +175,7 @@ export function BreakdownMenu({ projectId, req, fields }: { projectId: string; r
           }),
       }}
     >
-      <button className="btn s" type="button" disabled={off} title={req?.aligned ? ALIGNED_OFF : "命中频次分解，结果在统计页"}>
+      <button className="btn s" type="button" disabled={off} title={offTip ?? "命中频次分解，结果在统计页"}>
         {launch.busy ? <span className="spin" /> : <Icon name="table" size={14} />}
         分解
         <Icon name="down" size={14} />
@@ -181,12 +186,13 @@ export function BreakdownMenu({ projectId, req, fields }: { projectId: string; r
 
 export function TranslationsButton({ projectId, req }: { projectId: string; req: SearchRequest | null }) {
   const launch = useStatLaunch(projectId);
+  const offTip = hasPosition(req?.scope) ? POSITION_OFF : req?.aligned ? ALIGNED_OFF : null;
   return (
-    <Tip title={req?.aligned ? ALIGNED_OFF : "对齐句中的译文词，结果在统计页"}>
+    <Tip title={offTip ?? "对齐句中的译文词，结果在统计页"}>
       <button
         className="btn s"
         type="button"
-        disabled={!req || launch.busy || !!req.aligned}
+        disabled={!req || launch.busy || !!offTip}
         onClick={() =>
           req &&
           launch.run("translations", {

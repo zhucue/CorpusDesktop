@@ -5,6 +5,8 @@ import csv
 import io
 import json
 import shutil
+import threading
+import time
 
 import pytest
 from docx import Document as DocxDocument
@@ -16,6 +18,7 @@ pytestmark = pytest.mark.skipif(not shutil.which("cqp"), reason="CWB not install
 
 NAMES = ("build", "search", "query_rows", "prefix_rows", "hits")
 REAL = {n: getattr(cwb, n) for n in NAMES}
+REAL_CQP = cwb._cqp_lines
 TEXT_A = "The language of science is the language.\nA language of the people.\nScience rules."
 TEXT_B = (
     "Grammar rules apply here.\nThe grammar of a language.\nLanguage again and again."
@@ -330,3 +333,127 @@ def test_translations_merge_case(owner, parallel):
     drain()
     text = owner.get(f"/api/jobs/{job['id']}/download").content.decode("utf-8-sig")
     assert "区分大小写：否" in text.splitlines()[0]
+
+
+def test_distribution_position_rows_search_their_part(owner, corpus):
+    """B06: 回到例句 of a 文档位置 row searches that part only; its hits equal the row's."""
+    for scope in (
+        {"corpus_id": corpus["id"]},
+        {"corpus_id": corpus["id"], "filter": {"year": 2001}},
+    ):
+        stat = run_stat(
+            owner,
+            "distribution",
+            {"scope": scope, "query": "language", "field": "position", "bins": 4},
+        )
+        total = search(owner, {"scope": scope, "query": "language"})["hits"]
+        assert stat["totals"]["hits"] == total
+        assert len({r["values"]["hits"] for r in stat["rows"]}) > 1  # the parts differ
+        for k, r in enumerate(stat["rows"]):
+            assert r["search_scope"] == {
+                "corpus_id": corpus["id"],
+                "filter": scope.get("filter", {}),
+                "position": {"bin": k, "bins": 4},
+            }
+            got = search(
+                owner, {"scope": r["search_scope"], "query": r["search_query"]}
+            )
+            assert got["hits"] == r["values"]["hits"], r
+    # the part applies to search and export only; statistics refuse it rather than count everything
+    r = owner.post(
+        "/api/stats/frequency",
+        json={"scope": stat["rows"][0]["search_scope"], "unit": "word"},
+    )
+    assert r.status_code == 422 and r.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_position_cache_key():
+    """B06: the cached result set of a search is per document-position part."""
+    from services.api.search import Scope, search_key
+
+    cid = "00000000-0000-0000-0000-000000000001"
+    plain = search_key("[word='a']", {}, None, Scope(corpus_id=cid))
+    parts = {
+        search_key(
+            "[word='a']",
+            {},
+            None,
+            Scope(corpus_id=cid, position={"bin": k, "bins": n}),
+        )
+        for k, n in ((0, 4), (1, 4), (1, 5))
+    }
+    assert plain not in parts and len(parts) == 3
+    assert all(k.startswith(plain) and "#position" in k for k in parts)
+
+
+def position_stat(owner, corpus):
+    return run_stat(
+        owner,
+        "distribution",
+        {
+            "scope": {"corpus_id": corpus["id"]},
+            "query": "language",
+            "field": "position",
+            "bins": 4,
+        },
+    )
+
+
+def test_position_search_waits_for_the_count(owner, corpus, monkeypatch):
+    """B06: past COUNT_TIMEOUT a search with a position part shows no corpus-order prefix (it would be
+    unfiltered or short); once the background count is done the page holds that part's hits."""
+    from services.api import search as search_api
+
+    stat = position_stat(owner, corpus)
+    row = max(stat["rows"], key=lambda r: r["values"]["hits"])
+    hold = threading.Event()
+
+    def held(index_dir, key, commands, timeout, cancel=None):
+        if timeout == search_api.FULL_TIMEOUT:
+            assert hold.wait(30)
+        return REAL_CQP(index_dir, key, commands, timeout, cancel)
+
+    monkeypatch.setattr(cwb, "_cqp_lines", held)
+    monkeypatch.setattr(search_api, "COUNT_TIMEOUT", 0.0001)
+    req = {"scope": row["search_scope"], "query": row["search_query"]}
+    first = owner.post("/api/search", json=req).json()
+    assert first["counts"]["complete"] is False and first["items"] == []
+    hold.set()
+    polled = {**req, "search_id": first["search_id"]}
+    deadline = time.monotonic() + 30
+    while not (done := owner.post("/api/search", json=polled).json())["counts"][
+        "complete"
+    ]:
+        assert time.monotonic() < deadline, done["counts"]
+        time.sleep(0.05)
+    assert done["counts"]["hits"] == row["values"]["hits"] > 0
+    assert len(done["items"]) == row["values"]["hits"]
+
+
+def test_position_export(owner, corpus):
+    """B06: a search export with a position part has that part's hits and says so in its head line."""
+    stat = position_stat(owner, corpus)
+    for k, row in enumerate(stat["rows"]):
+        job = owner.post(
+            "/api/search/export",
+            json={
+                "scope": row["search_scope"],
+                "query": row["search_query"],
+                "format": "csv",
+            },
+        ).json()
+        drain()
+        done = owner.get(f"/api/jobs/{job['id']}").json()
+        assert done["state"] == "succeeded", done
+        assert done["result"]["rows"] == row["values"]["hits"]
+        lines = list(
+            csv.reader(
+                io.StringIO(
+                    owner.get(f"/api/jobs/{job['id']}/download").content.decode(
+                        "utf-8-sig"
+                    )
+                )
+            )
+        )
+        assert f"（文档位置 {k * 25}–{(k + 1) * 25}%）" in lines[0][0], lines[0]
+        assert len(lines) - 3 == row["values"]["hits"]

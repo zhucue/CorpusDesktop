@@ -63,12 +63,28 @@ CACHE_MAX_BYTES = int(os.environ.get("SEARCH_CACHE_MAX_BYTES") or 2 * 1024**3)
 log = logging.getLogger(__name__)
 
 
+class PositionInput(BaseModel):
+    """Part `bin` (from 0) of `bins` equal parts of each document's tokens: the hits a 文档位置 distribution row
+    counts (engine.stats.distribution)."""
+
+    bin: int = Field(ge=0, le=99)
+    bins: int = Field(ge=1, le=100)
+
+    @model_validator(mode="after")
+    def bin_in_range(self):
+        if self.bin >= self.bins:
+            raise ValueError("bin 须小于 bins")
+        return self
+
+
 class Scope(BaseModel):
-    """{corpus_id} | {subcorpus_id} | {corpus_id, filter}: filter is a temporary subcorpus filter, not saved."""
+    """{corpus_id} | {subcorpus_id} | {corpus_id, filter}: filter is a temporary subcorpus filter, not saved.
+    position: hits in one document-position part (回到例句 of a distribution row); search and export only."""
 
     corpus_id: UUID | None = None
     subcorpus_id: UUID | None = None
     filter: dict | None = None
+    position: PositionInput | None = None
 
     @model_validator(mode="after")
     def one_target(self):
@@ -301,8 +317,13 @@ def scope_filter(db, scope: Scope):
     return scope.filter or {}
 
 
-def resolve_scope(db, scope: Scope, user):
-    """Return (corpus, restrict) after access checks; corpus must have an index."""
+def resolve_scope(db, scope: Scope, user, position=False):
+    """Return (corpus, restrict) after access checks; corpus must have an index. position: the caller applies
+    scope.position (search, export); other callers answer 422 rather than ignore it."""
+    if scope.position is not None and not position:
+        raise ApiError(
+            422, "VALIDATION_ERROR", "文档位置区间只用于检索例句，请先清除临时筛选"
+        )
     restrict = None
     if scope.subcorpus_id:
         sub = load_subcorpus(db, scope.subcorpus_id, user)
@@ -322,6 +343,25 @@ def resolve_scope(db, scope: Scope, user):
     if corpus.status not in ("ready", "stale") or not corpus.index_version:
         raise ApiError(409, "CORPUS_NOT_READY", "语料库尚未完成索引")
     return corpus, restrict
+
+
+def position_rows(corpus, scope: Scope, rows, source):
+    """Rows of complete_rows kept by scope.position (all rows without one). source: "cwb" (cwb.query_rows)
+    or "pg" (PostgreSQL rows in code points)."""
+    p = scope.position
+    if p is None:
+        return rows
+    return cwb.position_rows(
+        index_dir(corpus.id), corpus_key(corpus.id), rows, p.bin, p.bins, source
+    )
+
+
+def search_key(cqp, layers, aligned, scope: Scope):
+    """Search cache key text: the query, its layers, translation condition and document-position part."""
+    key = aligned_cache_key(cache_key(cqp, layers), aligned)
+    if scope.position is not None:
+        key += f"\n#position {scope.position.bin}/{scope.position.bins}"
+    return key
 
 
 def search_context(corpus, req: SearchInput) -> Context:
@@ -389,8 +429,8 @@ def complete_rows(
                 )
                 if len(rows) > MAX_HITS:
                     raise cwb.TooManyHits(MAX_HITS)
-                return rows
-            return effective.pg_hit_rows(
+                return position_rows(corpus, req.scope, rows, "pg")
+            rows = effective.pg_hit_rows(
                 db,
                 corpus,
                 filt,
@@ -403,7 +443,8 @@ def complete_rows(
                 keep,
                 max_hits=MAX_HITS,
             )
-    return cwb.query_rows(
+            return position_rows(corpus, req.scope, rows, "pg")
+    rows = cwb.query_rows(
         index_dir(corpus.id),
         corpus_key(corpus.id),
         cqp,
@@ -416,6 +457,7 @@ def complete_rows(
         max_hits=MAX_HITS,
         **({"aligned": keep} if keep is not None else {}),
     )
+    return position_rows(corpus, req.scope, rows, "cwb")
 
 
 PG_PREFIX_TIMEOUT = 5  # seconds for the corpus-order first page of a PostgreSQL query still being counted
@@ -424,7 +466,10 @@ PG_PREFIX_TIMEOUT = 5  # seconds for the corpus-order first page of a PostgreSQL
 def prefix_rows(db, corpus, restrict, ast, cqp, layers, req, keep, need):
     """The first `need` rows in corpus order while the complete rows are counted in the background: CWB through
     cwb.prefix_rows; pure attribute queries through a limited PostgreSQL query ([] past PG_PREFIX_TIMEOUT);
-    pure span queries have none (their page waits for the count)."""
+    pure span queries and searches with scope.position have none (their page waits for the count: a corpus-order
+    prefix cut before the part filter would leave pages short)."""
+    if req.scope.position is not None:
+        return []
     if pg_answered(ast, cqp):
         if query.spans(cqp):
             return []
@@ -1003,7 +1048,7 @@ def attach_tokens(db, items):
 def parse(body: ParseInput, user: CurrentUser, db: Db):
     if body.scope is None:
         return parse_view(body.query)
-    corpus, _ = resolve_scope(db, body.scope, user)
+    corpus, _ = resolve_scope(db, body.scope, user, position=True)
     tagset = corpus_tagset(corpus)
     view = parse_view(body.query, tagset)
     view["corpus"] = corpus_info(db, corpus, user, tagset)
@@ -1017,7 +1062,7 @@ def parse(body: ParseInput, user: CurrentUser, db: Db):
 
 @router.post("/search")
 def search(body: SearchInput, user: CurrentUser, db: Db):
-    corpus, restrict = resolve_scope(db, body.scope, user)
+    corpus, restrict = resolve_scope(db, body.scope, user, position=True)
     tagset = corpus_tagset(corpus)
     text, ast, cqp = plan_search(corpus, body, tagset)
     variants = variants_on(corpus, body)
@@ -1026,7 +1071,7 @@ def search(body: SearchInput, user: CurrentUser, db: Db):
     check_layer_problem(db, corpus, user, ast, layers)
     aligned = plan_aligned(db, corpus, user, body.aligned, layers, body.scope, variants)
     sid, entry = searches.open(
-        corpus, restrict, aligned_cache_key(cache_key(cqp, layers), aligned), body
+        corpus, restrict, search_key(cqp, layers, aligned, body.scope), body
     )
     req = body.model_copy(update={"seed": entry["seed"]})
     hits, counts, sort_applied = page_hits(
@@ -1159,7 +1204,7 @@ def span_marks(body: SpanMarksInput, user: CurrentUser, db: Db):
 def export(body: ExportInput, user: CurrentUser, db: Db):
     """Export job of a search. When the API holds the search's finished result set, the job reads it
     (params.rows_dir) instead of running the query again; otherwise the job computes it once."""
-    corpus, restrict = resolve_scope(db, body.scope, user)
+    corpus, restrict = resolve_scope(db, body.scope, user, position=True)
     _, ast, cqp = plan_search(corpus, body, corpus_tagset(corpus))
     variants = variants_on(corpus, body)
     layers = effective.check_layers(db, body.layers, corpus, user)
@@ -1177,7 +1222,7 @@ def export(body: ExportInput, user: CurrentUser, db: Db):
     done = searches.done_entry(
         corpus,
         restrict,
-        aligned_cache_key(cache_key(cqp, layers), aligned),
+        search_key(cqp, layers, aligned, body.scope),
         body.sort,
         body.seed,
     )

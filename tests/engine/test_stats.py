@@ -171,6 +171,27 @@ def test_distribution_from_positions_matches_query(ud):
         assert got.totals == want.totals
 
 
+@pytest.mark.cwb
+def test_position_rows_keep_the_hits_of_a_distribution_part(ud):
+    """B06: cwb.position_rows keeps the hits a 文档位置 distribution row counts, for CWB rows and for
+    PostgreSQL rows in document code points alike."""
+    scope = stats.Scope(ud, "ud_en")
+    rows = cwb.query_rows(ud, "ud_en", query.compile(query.parse("the")), restrict=None)
+    hits = cwb.hits(ud, "ud_en", query.compile(query.parse("the")), rows[:], Context())
+    cps = [(h.start_cp, h.end_cp, h.doc_id, h.sentence_index) for h in hits]
+    dist = stats.distribution(scope, "the", "position", 7)
+    assert len({r["values"]["hits"] for r in dist.rows}) > 1
+    for k, r in enumerate(dist.rows):
+        assert r["bin_index"] == k
+        assert (
+            len(cwb.position_rows(ud, "ud_en", rows, k, 7, "cwb"))
+            == r["values"]["hits"]
+        )
+        assert (
+            len(cwb.position_rows(ud, "ud_en", cps, k, 7, "pg")) == r["values"]["hits"]
+        )
+
+
 def test_is_punct():
     for v in ("，", "。", "(", "1990", "3.5%", "——", "_"):
         assert stats.is_punct(v), v

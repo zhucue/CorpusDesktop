@@ -25,6 +25,14 @@ export default function SemanticSearch({ projectId, scope, corpus }: { projectId
   const [text, setText] = useState("");
   const [req, setReq] = useState<SemanticRequest | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  // A new scope clears the results and context of the old one (B03); the sentence stays for a rerun.
+  const scopeKey = JSON.stringify(scope);
+  const [shownScope, setShownScope] = useState(scopeKey);
+  if (shownScope !== scopeKey) {
+    setShownScope(scopeKey);
+    setReq(null);
+    setSelected(null);
+  }
   const index = useSemanticIndex(corpus?.id);
   const result = useQuery({
     queryKey: ["semantic-search", req],

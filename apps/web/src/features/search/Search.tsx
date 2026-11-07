@@ -12,6 +12,7 @@ import {
   type ParseResult,
   type SavedQuery,
   type Scope,
+  type ScopePosition,
   type SearchRequest as BaseSearchRequest,
   type SearchResult,
   type SearchScope,
@@ -41,7 +42,7 @@ import { posGroups } from "./posTags";
 import { convertScript, guessScript, scriptLabel } from "./script";
 import { sortNote, useCountPoll, type SearchCounts, type SearchPage } from "./countPoll";
 import { withCondition } from "./condition";
-import { AlignedInput, BreakdownMenu, isAlignedError, parseAlignedParam, SampleDialog, TranslationsButton } from "./SearchTools";
+import { AlignedInput, BreakdownMenu, hasPosition, isAlignedError, parseAlignedParam, POSITION_OFF, SampleDialog, TranslationsButton } from "./SearchTools";
 import SemanticSearch from "./SemanticSearch";
 import "./search.css";
 
@@ -251,18 +252,21 @@ function PosPicker({ info, onInsert }: { info: ParseCorpus | undefined; onInsert
   );
 }
 
-/** Temporary filter chip text: field names in Chinese, plain values (no JSON quotes). */
-function filterText(filter: Record<string, unknown>): string {
-  return Object.entries(filter)
-    .map(([k, v]) => {
-      if (Array.isArray(v)) return `${fieldLabel(k)} = ${v.join("、")}`;
-      if (v && typeof v === "object") {
-        const r = v as { gte?: number; lte?: number };
-        return `${fieldLabel(k)} ${r.gte ?? ""}–${r.lte ?? ""}`;
-      }
-      return `${fieldLabel(k)} = ${String(v)}`;
-    })
-    .join("，");
+/** Temporary filter chip text: field names in Chinese, plain values (no JSON quotes); a distribution row's document-position part. */
+function filterText(filter: Record<string, unknown>, position?: ScopePosition): string {
+  const parts = Object.entries(filter).map(([k, v]) => {
+    if (Array.isArray(v)) return `${fieldLabel(k)} = ${v.join("、")}`;
+    if (v && typeof v === "object") {
+      const r = v as { gte?: number; lte?: number };
+      return `${fieldLabel(k)} ${r.gte ?? ""}–${r.lte ?? ""}`;
+    }
+    return `${fieldLabel(k)} = ${String(v)}`;
+  });
+  if (position) {
+    const pct = (k: number) => Number(((100 * k) / position.bins).toPrecision(6));
+    parts.push(`文档位置 ${pct(position.bin)}–${pct(position.bin + 1)}%`);
+  }
+  return parts.join("，");
 }
 
 /** Distribution of the current hits; computed only when the user asks (stats.distribution job). */
@@ -277,7 +281,9 @@ function DistributionCard({
   error,
   picked,
   onPick,
+  off,
 }: {
+  off?: string;
   fields: string[];
   selected: string;
   onSelect: (field: string) => void;
@@ -301,9 +307,10 @@ function DistributionCard({
           options={fields.map((f) => ({ value: f, label: fieldLabel(f) }))}
           style={{ width: 120 }}
           aria-label="分布字段"
+          disabled={!!off}
         />
         {(selected !== field || !!error) && (
-          <button className="btn xs" type="button" disabled={running} onClick={onRun}>
+          <button className="btn xs" type="button" disabled={running || !!off} title={off} onClick={onRun}>
             计算分布
           </button>
         )}
@@ -492,6 +499,8 @@ export default function Search() {
   const lastParams = useRef<string>("");
 
   const scope: SearchScope | null = tempScope ?? shell.scope;
+  // a document-position part (B06): search and its CSV / XLSX export only; the other tools are off
+  const shownMode = hasPosition(scope) ? "query" : mode;
   const allCorpora = corpora.data?.items ?? [];
   const allSubs = subcorpora.data?.items ?? [];
   const info = describeScope(scope, allCorpora, allSubs);
@@ -907,7 +916,7 @@ export default function Search() {
         title="检索"
         actions={
           <>
-            <SearchMode value={mode} onChange={setMode} />
+            <SearchMode value={shownMode} onChange={setMode} semanticOff={hasPosition(scope) ? POSITION_OFF : undefined} />
             {/* direct corpus / subcorpus picker (QA Q28) */}
             <ScopeSelect
               projectId={projectId}
@@ -918,7 +927,7 @@ export default function Search() {
               }}
               width={220}
             />
-            <button className="btn s" type="button" onClick={() => setSaving(true)} disabled={mode === "semantic" || !query.trim() || !scope || !!tempScope}>
+            <button className="btn s" type="button" onClick={() => setSaving(true)} disabled={shownMode === "semantic" || !query.trim() || !scope || !!tempScope}>
               <Icon name="plus" size={14} />
               <span className="lbl">保存查询</span>
             </button>
@@ -942,7 +951,7 @@ export default function Search() {
         }}
       />
       <div className="content">
-        {mode === "semantic" ? (
+        {shownMode === "semantic" ? (
           <SemanticSearch projectId={projectId} scope={scope} corpus={info.corpus} />
         ) : (
         <>
@@ -1055,7 +1064,7 @@ export default function Search() {
           {tempScope && (
             <div className="row">
               <span className="filter-chip">
-                临时筛选 · {"filter" in tempScope ? filterText(tempScope.filter) : ""}
+                临时筛选 · {"filter" in tempScope ? filterText(tempScope.filter, tempScope.position) : ""}
                 <button
                   type="button"
                   aria-label="清除筛选"
@@ -1096,6 +1105,7 @@ export default function Search() {
             error={dist.error}
             picked={picked}
             onPick={pickDist}
+            off={hasPosition(distBase.scope) ? POSITION_OFF : undefined}
           />
         )}
 
@@ -1185,8 +1195,8 @@ export default function Search() {
                 )}
                 <BreakdownMenu projectId={projectId} req={toolReq} fields={distFields} />
                 {(parallel || !!req?.aligned) && <TranslationsButton projectId={projectId} req={toolReq} />}
-                <Tip title={counts?.complete ? "从全部命中中抽样并逐条编码" : "计数完成后可抽样"}>
-                  <button className="btn s" type="button" disabled={!req || !counts?.complete || !counts.hits} onClick={() => setSampling(true)}>
+                <Tip title={hasPosition(req?.scope) ? POSITION_OFF : counts?.complete ? "从全部命中中抽样并逐条编码" : "计数完成后可抽样"}>
+                  <button className="btn s" type="button" disabled={!req || !counts?.complete || !counts.hits || hasPosition(req.scope)} onClick={() => setSampling(true)}>
                     <Icon name="pen" size={14} />
                     抽样编码
                   </button>
@@ -1204,7 +1214,7 @@ export default function Search() {
                   </button>
                 </Tip>
                 <Dropdown
-                  disabled={!req || exporter.busy}
+                  disabled={!req || exporter.busy || hasPosition(req.scope)}
                   trigger={["click"]}
                   menu={{
                     items: [
@@ -1214,7 +1224,7 @@ export default function Search() {
                     onClick: ({ key }) => tidyExport(key as "csv" | "xlsx"),
                   }}
                 >
-                  <button className="btn s" type="button" disabled={!req || exporter.busy}>
+                  <button className="btn s" type="button" disabled={!req || exporter.busy || hasPosition(req.scope)} title={hasPosition(req?.scope) ? POSITION_OFF : undefined}>
                     <Icon name="download" size={14} />
                     导出整洁数据
                   </button>
@@ -1336,7 +1346,7 @@ export default function Search() {
   );
 }
 
-function SearchMode({ value, onChange }: { value: "query" | "semantic"; onChange: (v: "query" | "semantic") => void }) {
+function SearchMode({ value, onChange, semanticOff }: { value: "query" | "semantic"; onChange: (v: "query" | "semantic") => void; semanticOff?: string }) {
   return (
     <div className="seg-mini" role="tablist" aria-label="检索方式">
       {(
@@ -1345,7 +1355,15 @@ function SearchMode({ value, onChange }: { value: "query" | "semantic"; onChange
           ["semantic", "语义"],
         ] as const
       ).map(([v, l]) => (
-        <button key={v} type="button" role="tab" aria-selected={value === v} onClick={() => onChange(v)}>
+        <button
+          key={v}
+          type="button"
+          role="tab"
+          aria-selected={value === v}
+          disabled={v === "semantic" && !!semanticOff}
+          title={v === "semantic" ? semanticOff : undefined}
+          onClick={() => onChange(v)}
+        >
           {l}
         </button>
       ))}

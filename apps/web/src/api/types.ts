@@ -126,7 +126,9 @@ export interface Subcorpus {
 
 /** Saved scopes. P2 adds the temporary filtered form returned by distribution rows. */
 export type Scope = { corpus_id: string } | { subcorpus_id: string };
-export type SearchScope = Scope | { corpus_id: string; filter: Filter };
+/** Part `bin` (from 0) of `bins` equal parts of each document: 回到例句 of a 文档位置 distribution row (search only). */
+export type ScopePosition = { bin: number; bins: number };
+export type SearchScope = Scope | { corpus_id: string; filter: Filter; position?: ScopePosition };
 
 export interface SearchRequest {
   scope: SearchScope;

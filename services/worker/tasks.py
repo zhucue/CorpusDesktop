@@ -715,6 +715,8 @@ def _export_head(db, corpus, req, text, counts, at):
     scope = info["name"]
     if req.scope.filter is not None:
         scope += f"（临时筛选 {json.dumps(req.scope.filter, ensure_ascii=False)}）"
+    if req.scope.position is not None:
+        scope += f"（文档位置 {stats.position_label(req.scope.position.bin, req.scope.position.bins)}）"
     parts = [f"查询式：{req.query}"]
     if text != req.query:
         parts.append(f"简繁通查：{text}")
@@ -751,7 +753,7 @@ def run_export(run):
     items = []
     with session() as db:
         user = db.get(User, run.owner_id)
-        corpus, restrict = resolve_scope(db, req.scope, user)
+        corpus, restrict = resolve_scope(db, req.scope, user, position=True)
         tagset = corpus_tagset(corpus)
         text, ast, cqp = plan_search(corpus, req, tagset)
         layers = effective.check_layers(db, req.layers, corpus, user)
@@ -2075,6 +2077,13 @@ def _run_stats(run):
             field = p["field"] if method == "distribution" else p["by"][5:]
             filt = {**base_filter, field: row.pop("bin_value")}
             row["search_scope"] = {"corpus_id": str(corpus.id), "filter": filt}
+        # by document position: the scope's filter and that part (search applies Scope.position)
+        if "bin_index" in row:
+            row["search_scope"] = {
+                "corpus_id": str(corpus.id),
+                "filter": base_filter,
+                "position": {"bin": row.pop("bin_index"), "bins": p["bins"]},
+            }
     stat_id = uuid.uuid4()
     path = stats_path(stat_id)
     path.parent.mkdir(parents=True, exist_ok=True)

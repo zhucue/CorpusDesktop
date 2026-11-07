@@ -143,7 +143,8 @@ class Scope:
 @dataclass
 class Table:
     columns: list[dict]
-    rows: list[dict]  # {key, values, search_query[, search_query_reverse | bin_value]}
+    # {key, values, search_query[, search_query_reverse | bin_value | bin_index]}
+    rows: list[dict]
     row_count: int  # rows passing min_freq before the top cut
     totals: dict
 
@@ -890,6 +891,11 @@ def _pct(x):
     return f"{x:g}"
 
 
+def position_label(k, bins):
+    """Label of document-position part k of `bins`, e.g. 10–20%."""
+    return f"{_pct(100 * k / bins)}–{_pct(100 * (k + 1) / bins)}%"
+
+
 def distribution(
     scope: Scope,
     query_text=None,
@@ -923,7 +929,7 @@ def distribution(
             counts[(m - a) * bins // (b - a + 1)] += 1
         order = list(range(bins))
         for k in order:
-            labels[k] = f"{_pct(100 * k / bins)}–{_pct(100 * (k + 1) / bins)}%"
+            labels[k] = position_label(k, bins)
     else:
         decoded = {}
         if c.docs:
@@ -960,7 +966,10 @@ def distribution(
             if h is None
             else (h / tokens[k] * 1e6 if tokens[k] else 0.0),
         }
-        extra = {"bin_value": bin_values[k]} if field != "position" else {}
+        # the caller turns these into the row's search scope (a field value, or a document-position part)
+        extra = (
+            {"bin_value": bin_values[k]} if field != "position" else {"bin_index": k}
+        )
         rows.append(_row(labels[k], values, query_text, **extra))
     columns = [
         _col("bin", "区间或字段值", "string"),

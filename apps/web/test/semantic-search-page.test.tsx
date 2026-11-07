@@ -46,8 +46,11 @@ function mockApi() {
     if (p === "/api/search/parse") return json({ ok: true, error: null, anchor: body?.query ?? "", conditions: [], tokens: [] });
     if (p === "/api/corpora/c1/semantic-index")
       return json({ corpus_id: "c1", status: "ready", error: null, sentences: 5, indexed: 5, searchable: true, model: "m", built_at: null, estimate_seconds: 1, max_sentences: 300000, can_build: true, job: null });
-    if (p === "/api/search")
-      return json({ search_id: "s1", parse: { ok: true, error: null, anchor: "语言", conditions: [], tokens: [] }, counts: { hits: 0, sentences: 0, documents: 0, complete: true }, sort_applied: true, items: [], page: 1, page_size: 50 });
+    if (p === "/api/search") {
+      const hits = body?.scope?.position ? 7 : 60;
+      return json({ search_id: "s1", parse: { ok: true, error: null, anchor: "语言", conditions: [], tokens: [] }, counts: { hits, sentences: hits, documents: 1, complete: true }, sort_applied: true, items: [], page: 1, page_size: 50 });
+    }
+    if (p === "/api/corpora/c1/metadata-fields") return json([]);
     if (p === "/api/stats/tidy_export")
       return json({ id: "j9", project_id: "p1", kind: "export", state: "queued", progress: { done: 0, total: null, message: "" }, result: null, error: null, created_at: "", finished_at: null });
     if (p === "/api/jobs/j9")
@@ -57,12 +60,12 @@ function mockApi() {
   return calls;
 }
 
-function renderPage() {
+function renderPage(entry = "/p/p1/search") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <App>
-        <MemoryRouter initialEntries={["/p/p1/search"]}>
+        <MemoryRouter initialEntries={[entry]}>
           <Routes>
             <Route path="/p/:projectId/search" element={<Search />} />
           </Routes>
@@ -97,5 +100,31 @@ describe("search page modes", () => {
     fireEvent.click(await screen.findByText("XLSX", { selector: ".ant-dropdown-menu-title-content" }));
     await waitFor(() => expect(calls.some((c) => c.path === "/api/stats/tidy_export")).toBe(true));
     expect(calls.find((c) => c.path === "/api/stats/tidy_export")?.body).toEqual({ project_id: "p1", scope: { corpus_id: "c1" }, queries: ["语言"], format: "xlsx" });
+  });
+
+  it("a document-position part (B06): chip to clear it, the tools that would refuse it are off", async () => {
+    const calls = mockApi();
+    const scope = { corpus_id: "c1", filter: {}, position: { bin: 1, bins: 10 } };
+    renderPage(`/p/p1/search?q=${encodeURIComponent("语言")}&scope=${encodeURIComponent(JSON.stringify(scope))}`);
+    expect(await screen.findByText(/临时筛选 · 文档位置 10–20%/)).toBeTruthy();
+    await waitFor(() => expect(calls.find((c) => c.path === "/api/search")?.body).toMatchObject({ scope, query: "语言" }));
+    const off = "文档位置区间仅用于查看例句";
+    const breakdown = (await screen.findByRole("button", { name: /分解/ })) as HTMLButtonElement;
+    expect([breakdown.disabled, breakdown.title]).toEqual([true, off]);
+    const tidy = screen.getByRole("button", { name: /导出整洁数据/ }) as HTMLButtonElement;
+    expect([tidy.disabled, tidy.title]).toEqual([true, off]);
+    expect((screen.getByRole("button", { name: /抽样编码/ }) as HTMLButtonElement).disabled).toBe(true);
+    const semantic = screen.getByRole("tab", { name: "语义" }) as HTMLButtonElement;
+    expect([semantic.disabled, semantic.title]).toEqual([true, off]);
+    // the hit export keeps the part
+    expect((screen.getByRole("button", { name: /^CSV$/ }) as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "清除筛选" }));
+    await waitFor(() => expect(calls.filter((c) => c.path === "/api/search").at(-1)?.body).toMatchObject({ scope: { corpus_id: "c1" } }));
+    expect(screen.queryByText(/文档位置 10–20%/)).toBeNull();
+    await waitFor(() => expect((screen.getByRole("button", { name: /分解/ }) as HTMLButtonElement).disabled).toBe(false));
+    expect((screen.getByRole("button", { name: /导出整洁数据/ }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /抽样编码/ }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("tab", { name: "语义" }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

@@ -1047,20 +1047,59 @@ def _word_cut_right(s: str, more: bool) -> str:
     return s
 
 
-def doc_starts(index_dir: Path, corpus_key: str) -> dict[str, int]:
-    """{doc_id: corpus position of its first token} of the current index ({} when empty)."""
+def doc_ranges(index_dir: Path, corpus_key: str) -> dict[str, tuple[int, int]]:
+    """{doc_id: (first, last) corpus position of its tokens} of the current index ({} when empty)."""
     key = _key(corpus_key)
     ix = _open(str(_home(Path(index_dir), key)))
     if ix.empty:
         return {}
     reg = str(Path(index_dir) / "registry")
     out = _run(["cwb-s-decode", "-r", reg, key.upper(), "-S", "doc_id"])
-    starts = {}
+    ranges = {}
     for line in out.split("\n"):
         if line:
-            a, _, doc_id = line.split("\t", 2)
-            starts[doc_id] = int(a)
-    return starts
+            a, b, doc_id = line.split("\t", 2)
+            ranges[doc_id] = (int(a), int(b))
+    return ranges
+
+
+def doc_starts(index_dir: Path, corpus_key: str) -> dict[str, int]:
+    """{doc_id: corpus position of its first token} of the current index ({} when empty)."""
+    return {d: a for d, (a, _) in doc_ranges(index_dir, corpus_key).items()}
+
+
+def position_rows(
+    index_dir: Path, corpus_key: str, rows, k: int, bins: int, source: str
+):
+    """The rows whose hit starts in part `k` of `bins` equal parts of its document's tokens: the part
+    engine.stats.distribution (field "position") counts it in. source "cwb": rows is a query_rows RowSet
+    (match = corpus position); "pg": PostgreSQL rows (start_cp, end_cp, doc id, sentence) in document code
+    points, a code point belonging to the first token ending after it."""
+    if source not in ("cwb", "pg"):
+        raise ValueError(f"unknown rows source {source!r}")
+    ranges = doc_ranges(index_dir, corpus_key)
+    if source == "cwb":
+        a, docs, out = rows.arr, rows.docs, array("i")
+        for i in range(0, len(a), 4):
+            r = ranges.get(docs[a[i + 2]])
+            if r and (a[i] - r[0]) * bins // (r[1] - r[0] + 1) == k:
+                out.extend(a[i : i + 4])
+        return RowSet(out, docs)
+    ix = _open(str(_home(Path(index_dir), _key(corpus_key))))
+    ends = {}
+
+    def part(doc_id: str, cp: int) -> int | None:
+        r = ranges.get(doc_id)
+        if r is None:
+            return None
+        if doc_id not in ends:
+            ends[doc_id] = [
+                e for _, e in ix.pairs("offsets.bin", r[0], r[1] - r[0] + 1)
+            ]
+        e = ends[doc_id]
+        return min(bisect_right(e, cp), len(e) - 1) * bins // len(e)
+
+    return [row for row in rows if part(str(row[2]), row[0]) == k]
 
 
 def lexicon(index_dir: Path, corpus_key: str, attr: str) -> list[str]:

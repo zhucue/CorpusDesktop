@@ -127,6 +127,30 @@ describe("semantic search mode", () => {
     expect(post?.body).toEqual({ scope: { corpus_id: "c1", filter: { year: [2010] } }, text: "我喜欢读书", top: 50 });
   });
 
+  it("clears the results and the open context when the scope changes (B03)", async () => {
+    mockApi({ ...INDEX, status: "ready", indexed: 5, searchable: true, sentences: 5 });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (scope: { corpus_id: string; filter?: Record<string, number[]> }) => (
+      <QueryClientProvider client={client}>
+        <App>
+          <MemoryRouter initialEntries={["/p/p1/search"]}>
+            <SemanticSearch projectId="p1" scope={scope} corpus={CORPUS} />
+          </MemoryRouter>
+        </App>
+      </QueryClientProvider>
+    );
+    const view = render(ui({ corpus_id: "c1" }));
+    expect(await screen.findByText("已建")).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("我喜欢读书"), { target: { value: "读书" } });
+    fireEvent.click(screen.getByRole("button", { name: /检索/ }));
+    fireEvent.click(await screen.findByText("我喜欢读书。")); // opens the context
+    expect(screen.getByText("相似句")).toBeTruthy();
+    view.rerender(ui({ corpus_id: "c1", filter: { year: [2019] } }));
+    expect(screen.queryByText("相似句")).toBeNull();
+    expect(screen.queryByText("我喜欢读书。")).toBeNull();
+    expect((screen.getByPlaceholderText("我喜欢读书") as HTMLInputElement).value).toBe("读书");
+  });
+
   it("keeps 检索 disabled until the index is built", async () => {
     mockApi(INDEX);
     wrap(<SemanticSearch projectId="p1" scope={{ corpus_id: "c1" }} corpus={CORPUS} />);
