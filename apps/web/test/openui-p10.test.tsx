@@ -79,6 +79,60 @@ describe("P10 OpenUI components (OpenUI Lang through the renderer)", () => {
     expect(JSON.parse(where().searchParams.get("layers")!)).toEqual({ dep: "layer-dep" });
   });
 
+  it("SketchDiff shows every row of the stored result, not only the rows the model copied (B14)", async () => {
+    const row = (collocate: string, group: string, fa: number, fb: number, diff: number) => ({
+      key: `${group}:${collocate}`,
+      values: { relation: "amod", relation_label: "修饰", collocate, freq_a: fa, freq_b: fb, diff, group },
+      search_query: `{lemma=big} {lemma=${collocate}}`,
+      search_query_b: `{lemma=large} {lemma=${collocate}}`,
+      search_scope: { corpus_id: "c1" },
+      search_layers: { dep: "layer-dep" },
+    });
+    const rows = [row("deal", "a", 12, 0, 9.1), row("house", "common", 5, 6, -0.3), ...Array.from({ length: 17 }, (_, i) => row(`w${i}`, "b", 0, 2, -(1 + i)))];
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ id: "stat-sd", method: "sketch_diff", params: {}, scope: {}, totals: {}, columns: [], rows, row_count: rows.length }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    try {
+      // the model copied one row per side
+      const lang = [
+        'root = SketchDiff("stat-sd", "big", "large", a, [], b)',
+        'a = [{relation: "修饰", collocate: "deal", freq_a: 12, freq_b: 0, diff: 9.1}]',
+        'b = [{relation: "修饰", collocate: "w0", freq_a: 0, freq_b: 2, diff: -1}]',
+      ].join("\n");
+      wrap(<UiBlock lang={lang} />);
+      expect(await screen.findByText("19 项")).toBeTruthy();
+      expect(String(fetch.mock.calls[0][0])).toContain("/stats/stat-sd");
+      const columns = [...document.querySelectorAll(".sk-col")] as HTMLElement[];
+      expect(columns.map((c) => c.querySelectorAll("tr").length)).toEqual([1, 1, 17]);
+      // B: most distinctive first; its rows open B's search on the sketch's layer
+      const first = columns[2].querySelector("tr")!;
+      expect(within(first).getByText("w16")).toBeTruthy();
+      fireEvent.click(first);
+      expect(where().searchParams.get("q")).toBe("{lemma=large} {lemma=w16}");
+      expect(JSON.parse(where().searchParams.get("layers")!)).toEqual({ dep: "layer-dep" });
+    } finally {
+      fetch.mockRestore();
+    }
+  });
+
+  it("SketchDiff falls back to the model's rows when the result is gone and says they are part of it (B14)", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ error: { code: "NOT_FOUND", message: "统计结果不存在" } }), { status: 404, headers: { "Content-Type": "application/json" } }),
+    );
+    try {
+      const lang = [
+        'root = SketchDiff("stat-gone", "big", "large", a, [], b, null, {a: 15, common: 1, b: 15})',
+        'a = [{relation: "修饰", collocate: "deal", freq_a: 12, freq_b: 0, diff: 9.1}]',
+        'b = [{relation: "修饰", collocate: "w0", freq_a: 0, freq_b: 2, diff: -1}]',
+      ].join("\n");
+      wrap(<UiBlock lang={lang} />);
+      expect(await screen.findByText("显示 2 / 共 31")).toBeTruthy();
+      expect(screen.getByText("deal")).toBeTruthy();
+    } finally {
+      fetch.mockRestore();
+    }
+  });
+
   it("CompareChart: series legend and chart host", async () => {
     const lang = 'root = CompareChart("stat-cmp", "big / large", "每百万词", ["2001", "2002"], [{name: "big", values: [120.5, 98]}, {name: "large", values: [80, null]}], "line")';
     wrap(<UiBlock lang={lang} />);

@@ -373,7 +373,10 @@ export async function fakeApi(options: { statJobState?: 'succeeded' | 'running' 
         chunk_count: 0, created_by: USER.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       });
     }
-    if (path === '/kb/documents/note-1/refs' && request.method === 'POST') return json(response, 201, { note_id: 'note-1', ...body });
+    if (path === '/kb/documents/note-1/refs' && request.method === 'POST') {
+      // an evidence item the note already cites (kb.add_ref existing)
+      return json(response, 200, { note_id: 'note-1', ...body, existing: body.ref?.evidence_id === 'ev-cited', appended: false });
+    }
     if (path === `/projects/${PROJECT}/kb/terms/extract` && request.method === 'POST') {
       return json(response, 200, { id: 'job-kbextract', project_id: PROJECT, kind: 'kb_extract', state: 'queued', progress: null, result: null, error: null });
     }

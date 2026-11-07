@@ -89,7 +89,7 @@ export function systemPrompt(scopeText: string): string {
     bindings: false,
     builtinFunctions: false,
     additionalRules: [
-      '回答由正文和组件组成：组件代码放在 ```openui-lang 代码块里，块外是正文。只要回答里有检索、统计、证据、标注、对齐、知识库或任务结果，就用组件呈现。',
+      '回答由正文和组件组成：组件代码放在 ```openui-lang 代码块里，块外是正文；openui-lang 不是工具，不要用工具调用输出组件。只要回答里有检索、统计、证据、标注、对齐、知识库或任务结果，就用组件呈现。',
       '每个 openui-lang 代码块是独立的完整程序，只能使用上面列出的组件，没有 Stack、Card、Row 等布局组件；root 直接写成某个组件，例如 root = KwicTable(...)。要呈现多个结果就写多个代码块。',
       '组件的 rows 从工具结果复制，不改动数值、hit_id 和 stat_id；每个表格或图最多 20 行（DependencyTree、SpanView、AlignmentGraph 给出整句全部 token、片段与连线）。',
       '一个回答可以包含多个代码块，代码块之间用简短文字衔接。正文可用 Markdown（标题、列表、粗体、短表格）。',

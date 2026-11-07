@@ -244,7 +244,7 @@ const diffRow = z.object({
 
 export const SketchDiff = defineComponent({
   name: 'SketchDiff',
-  description: '近义词对比三列卡（偏 A / 共同 / 偏 B）。stats_sketch_diff 之后使用：a、common、b 分别从工具结果 sides 的 a、common、b 原样复制（每行 relation、collocate、freq_a、freq_b、diff、search_query）；点击行回到例句；layers 从工具结果的 search_layers 复制（没有就省略）。',
+  description: '近义词对比三列卡（偏 A / 共同 / 偏 B）。stats_sketch_diff 之后使用：a、common、b 分别从工具结果 sides 的 a、common、b 原样复制（每行 relation、collocate、freq_a、freq_b、diff、search_query）；点击行回到例句；layers 从工具结果的 search_layers 复制（没有就省略）；side_totals 从工具结果 side_totals 原样复制（各组全部行数）。',
   props: z.object({
     stat_id: z.string(),
     lemma_a: z.string(),
@@ -253,6 +253,7 @@ export const SketchDiff = defineComponent({
     common: z.array(diffRow),
     b: z.array(diffRow),
     layers: SketchLayers,
+    side_totals: z.object({ a: z.number(), common: z.number(), b: z.number() }).optional(),
   }),
   component: null,
 });

@@ -1,9 +1,13 @@
 import { useCallback, useContext } from "react";
 import { useNavigate } from "react-router";
-import type { SearchScope } from "../api";
+import type { SearchScope, StatResult, StatRow } from "../api";
 import { Empty } from "../components/common";
 import { Card, ResultContext } from "../components/results/cards";
 import { EChart, baseOption, type ChartTokens, type EChartsOption } from "../components/results/EChart";
+import { num } from "../features/stats/columns";
+import { sideOf } from "../features/stats/P10Results";
+import { statLayers } from "../features/stats/StatTable";
+import { useStatResult } from "../features/stats/useStatJob";
 import { fmt, fmtValue } from "../lib/format";
 import { rowSearchUrl, StatFoot } from "./statCards";
 import "./sketch.css";
@@ -100,24 +104,60 @@ export interface SketchDiffProps {
   common: DiffRow[];
   b: DiffRow[];
   layers?: Layers;
+  /** Row counts of each side in the full result (tool side_totals); the props may hold fewer. */
+  side_totals?: { a: number; common: number; b: number };
 }
 
-/** Three columns — collocates favouring A, shared, favouring B — with both counts and the logDice difference. */
+type Sides = { a: DiffRow[]; common: DiffRow[]; b: DiffRow[] };
+
+/** Every row of a stored sketch_diff result by side, most distinctive first (as on the stats page); B's rows open B's search. */
+export function diffSides(stat: StatResult): Sides {
+  const sides: Record<"a" | "common" | "b", StatRow[]> = { a: [], common: [], b: [] };
+  for (const r of stat.rows) sides[sideOf(r)].push(r);
+  const diff = (r: StatRow) => num(r.values.diff) ?? 0;
+  const row = (r: StatRow, b: boolean): DiffRow => ({
+    relation: String(r.values.relation_label ?? r.values.relation ?? ""),
+    collocate: String(r.values.collocate ?? r.values.item ?? r.key),
+    freq_a: num(r.values.freq_a) ?? 0,
+    freq_b: num(r.values.freq_b) ?? 0,
+    diff: diff(r),
+    search_query: b ? (r.search_query_b ?? r.search_query) : r.search_query,
+    ...(r.search_scope ? { search_scope: r.search_scope as Record<string, unknown> } : {}),
+  });
+  return {
+    a: [...sides.a].sort((x, y) => diff(y) - diff(x)).map((r) => row(r, false)),
+    common: [...sides.common].sort((x, y) => diff(y) - diff(x)).map((r) => row(r, false)),
+    b: [...sides.b].sort((x, y) => diff(x) - diff(y)).map((r) => row(r, true)),
+  };
+}
+
+/**
+ * Three columns — collocates favouring A, shared, favouring B — with both counts and the logDice difference.
+ * The rows come from the stored result (stat_id), all of them; the props the model wrote are only the fallback
+ * while it loads or when it is gone.
+ */
 export function SketchDiffCard(p: SketchDiffProps) {
-  const open = useOpenRow(p.layers);
+  const stat = useStatResult(p.stat_id || null);
+  const stored = stat.data?.method === "sketch_diff" ? stat.data : null;
+  const sides: Sides = stored ? diffSides(stored) : { a: p.a ?? [], common: p.common ?? [], b: p.b ?? [] };
+  const layers = stored ? ((stored.rows.find((r) => r.search_layers)?.search_layers ?? statLayers(stored)) as Layers | undefined) : p.layers;
+  const open = useOpenRow(layers);
   const columns: [string, DiffRow[]][] = [
-    [`偏 ${p.lemma_a}`, p.a ?? []],
-    ["共同", p.common ?? []],
-    [`偏 ${p.lemma_b}`, p.b ?? []],
+    [`偏 ${p.lemma_a}`, sides.a],
+    ["共同", sides.common],
+    [`偏 ${p.lemma_b}`, sides.b],
   ];
   const total = columns.reduce((n, [, rows]) => n + rows.length, 0);
+  // the model's rows stand in for a result that is gone or still loading: say when they are only part of it
+  const t = p.side_totals;
+  const all = !stored && t ? (Number(t.a) || 0) + (Number(t.common) || 0) + (Number(t.b) || 0) : 0;
   return (
     <Card
       component="SketchDiff"
       icon="arrowleftright"
       title="近义词对比"
       meta={`${p.lemma_a} / ${p.lemma_b}`}
-      right={`${fmt(total)} 项`}
+      right={total < all ? `显示 ${fmt(total)} / 共 ${fmt(all)}` : `${fmt(total)} 项`}
       foot={<StatFoot statId={p.stat_id} />}
     >
       <div className="ou-body">

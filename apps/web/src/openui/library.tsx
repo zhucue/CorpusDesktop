@@ -263,7 +263,16 @@ const diffRow = z.object({ ...sketchLink, relation: z.string(), freq_a: z.number
 export const SketchDiff = defineComponent({
   name: "SketchDiff",
   description: "近义词对比三列卡：偏 A、共同、偏 B。",
-  props: z.object({ stat_id: z.string(), lemma_a: z.string(), lemma_b: z.string(), a: z.array(diffRow), common: z.array(diffRow), b: z.array(diffRow), layers: sketchLayers }),
+  props: z.object({
+    stat_id: z.string(),
+    lemma_a: z.string(),
+    lemma_b: z.string(),
+    a: z.array(diffRow),
+    common: z.array(diffRow),
+    b: z.array(diffRow),
+    layers: sketchLayers,
+    side_totals: z.object({ a: z.number(), common: z.number(), b: z.number() }).optional(),
+  }),
   component: ({ props }) => <SketchDiffCard {...props} />,
 });
 

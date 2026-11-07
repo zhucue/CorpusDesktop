@@ -11,7 +11,7 @@ import { findSkill, readSkill, researchSkills } from '../src/skills.ts';
 import { CONFIRM_TOOLS, piName, toolSpecs } from '../src/tools.ts';
 import { createApp } from '../src/server.ts';
 import {
-  AGENT_TOKEN, AGREEMENT, SEMANTIC_HITS, VOCAB_LISTS, ALIGN_LAYER, APPENDIX, SAMPLE_LAYER, SAMPLE_SUMMARY, BUILTIN_CORPUS, CORPUS, COOKIE, DEP_LAYER, KB_SEARCH, SPAN_LAYER, LONG_CHUNK, MemoryStore, ORIGIN, PROJECT, USER, fakeApi, fakeModel, parseSse, testConfig, type Reply,
+  AGENT_TOKEN, AGREEMENT, SEMANTIC_HITS, VOCAB_LISTS, ALIGN_LAYER, APPENDIX, SAMPLE_LAYER, SAMPLE_SUMMARY, BUILTIN_CORPUS, CORPUS, COOKIE, DEP_LAYER, KB_SEARCH, SPAN_LAYER, LONG_CHUNK, MemoryStore, SKETCH_DIFF_STAT, ORIGIN, PROJECT, USER, fakeApi, fakeModel, parseSse, testConfig, type Reply,
 } from './fixtures.ts';
 
 const closers: (() => Promise<void>)[] = [];
@@ -495,8 +495,11 @@ test('kb.search returns compact chunks and the answer cites them with KbCitation
 });
 
 test('kb.save creates a note, adds refs and returns a note ref', async () => {
-  const refs = [{ kind: 'chunk', ref: { chunk_id: 'chunk-1', document_id: 'kb-doc-1' } }];
-  const { api, call, createSession } = await setup([
+  const refs = [
+    { kind: 'chunk', ref: { chunk_id: 'chunk-1', document_id: 'kb-doc-1' } },
+    { kind: 'evidence', ref: { evidence_id: 'ev-cited' } },
+  ];
+  const { api, model, call, createSession } = await setup([
     { tool: 'kb_save', args: { body: '# 翻译腔\n\n定义见 chunk-1。', refs } },
     { text: '将新建笔记，请确认。' },
     { text: '已保存为笔记。' },
@@ -513,6 +516,9 @@ test('kb.save creates a note, adds refs and returns a note ref', async () => {
   const ref = api.requests.find(r => r.path === '/kb/documents/note-1/refs')!;
   // the quote is already in body, so the ref is recorded without appending it again
   assert.deepEqual(ref.body, { ...refs[0], append: false });
+  // refs_added counts the refs the API stored, not the refs passed (the note already cited ev-cited)
+  assert.equal(api.requests.filter(r => r.path === '/kb/documents/note-1/refs').length, 2);
+  assert.equal(confirmedResults(model, 2)[0].refs_added, 1);
 });
 
 test('kb.extract_terms polls the job and returns the newest 20 drafts', async () => {
@@ -1206,6 +1212,35 @@ test('P10 stats tools and search.semantic map their parameters onto the api bodi
   });
   assert.deepEqual(semantic.counts, { hits: 25, sentences: 25, documents: 3 });
   assert.equal(semantic.scope_name, 'UD 中文');
+});
+
+test('sketch_diff: each side keeps its most distinctive rows first and reports the full counts (B14)', async () => {
+  // 17 rows favouring large (as big/large on UD EWT): the cap must drop the weakest, not the strongest
+  const extra = Array.from({ length: 15 }, (_, i) => ({
+    key: `b:w${i}`, values: { relation: 'amod', relation_label: '修饰', collocate: `w${i}`, freq_a: 0, freq_b: 2, diff: -(1 + i / 10), group: 'b' },
+    search_query: `{lemma=big} {lemma=w${i}}`, search_query_b: `{lemma=large} {lemma=w${i}}`,
+  }));
+  const rows = SKETCH_DIFF_STAT.rows;
+  SKETCH_DIFF_STAT.rows = [...rows, ...extra] as any;
+  try {
+    const { model, call, createSession } = await setup([
+      { tool: 'stats_sketch_diff', args: { lemma_a: 'big', lemma_b: 'large' } },
+      { text: '已对比。' },
+    ]);
+    const session = await createSession();
+    await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '比较 big 和 large' })).text();
+    const [sd] = toolResults(model, 1);
+    assert.equal(sd.row_count, 5);
+    assert.deepEqual(sd.side_totals, { a: 2, common: 1, b: 17 });
+    assert.equal(sd.sides.b.length, 15);
+    // B ascending by diff: number (−10.2) and scale (−5) lead, the two weakest extras are cut
+    assert.deepEqual(sd.sides.b.slice(0, 3).map((r: any) => r.collocate), ['number', 'scale', 'w14']);
+    assert.ok(!sd.sides.b.some((r: any) => r.collocate === 'w0' || r.collocate === 'w1'));
+    // a B row opens B's search
+    assert.equal(sd.sides.b.find((r: any) => r.collocate === 'w14').search_query, '{lemma=large} {lemma=w14}');
+  } finally {
+    SKETCH_DIFF_STAT.rows = rows;
+  }
 });
 
 test('word_sketch groups rows by relation; sketch_diff splits the sides; WordSketch and SketchDiff blocks parse', async () => {

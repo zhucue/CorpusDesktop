@@ -354,6 +354,7 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     const compact = (row: any) => ({
       key: row.key, values: row.values,
       ...(links ? { search_query: row.search_query ?? null } : {}),
+      ...(links && row.search_query_b ? { search_query_b: row.search_query_b } : {}),
       ...(links && row.search_aligned ? { search_aligned: row.search_aligned } : {}),
       ...(links && row.search_layers ? { search_layers: row.search_layers } : {}),
       ...(links && row.search_scope && scopeKey(row.search_scope) !== sessionScope ? { search_scope: row.search_scope } : {}),
@@ -383,10 +384,12 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     const layers = rows.find(row => row.search_layers)?.search_layers;
     return layers ? { search_layers: layers } : {};
   };
-  const diffRow = (row: any) => ({
+  /** B's rows open B's search (search_query_b), as on the stats page. */
+  const diffRow = (row: any, side: 'a' | 'common' | 'b') => ({
     relation: relationLabel(row), collocate: collocateOf(row),
     freq_a: num(row.values?.freq_a), freq_b: num(row.values?.freq_b),
-    logdice_a: num(row.values?.logdice_a), logdice_b: num(row.values?.logdice_b), diff: num(row.values?.diff), ...linkOf(row),
+    logdice_a: num(row.values?.logdice_a), logdice_b: num(row.values?.logdice_b), diff: num(row.values?.diff),
+    ...linkOf(side === 'b' && row.search_query_b ? { ...row, search_query: row.search_query_b } : row),
   });
 
   /**
@@ -416,13 +419,19 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     const [fa, fb] = [Number(row.values?.freq_a ?? 0), Number(row.values?.freq_b ?? 0)];
     return fb === 0 ? 'a' : fa === 0 ? 'b' : 'common';
   };
+  /**
+   * Rows by side, most distinctive first (A and common by diff descending, B ascending, as on the stats page), each
+   * cut to MAX_DIFF_PER_SIDE; side_totals are the full counts (the SketchDiff card loads every row by stat_id).
+   */
   const bySide = (rows: any[]) => {
-    const sides: Record<'a' | 'common' | 'b', any[]> = { a: [], common: [], b: [] };
-    for (const row of rows) {
-      const list = sides[sideOf(row)];
-      if (list.length < MAX_DIFF_PER_SIDE) list.push(diffRow(row));
-    }
-    return { sides, ...layersOf(rows) };
+    const groups: Record<'a' | 'common' | 'b', any[]> = { a: [], common: [], b: [] };
+    for (const row of rows) groups[sideOf(row)].push(row);
+    const diff = (row: any) => Number(row.values?.diff ?? 0) || 0;
+    const sides = Object.fromEntries((['a', 'common', 'b'] as const).map(side => [side,
+      [...groups[side]].sort((x, y) => side === 'b' ? diff(x) - diff(y) : diff(y) - diff(x))
+        .slice(0, MAX_DIFF_PER_SIDE).map(row => diffRow(row, side))]));
+    const side_totals = { a: groups.a.length, common: groups.common.length, b: groups.b.length };
+    return { sides, side_totals, ...layersOf(rows) };
   };
 
   return [
@@ -814,7 +823,7 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     }),
     spec({
       name: 'stats.sketch_diff',
-      description: '近义词对比（Sketch Diff，后台任务）：两个词元在各依存关系栏的共同与独有搭配，每行 relation、搭配词元、freq_a、freq_b、logdice_a、logdice_b、diff（logDice 差，A 减 B）。返回 stat_id 与分好的 sides：a（偏 A）、common（共同）、b（偏 B），每组前 15 个。用户问“A 和 B 的用法有什么区别”“近义词辨析”时用它；依存要求同 stats_word_sketch。',
+      description: '近义词对比（Sketch Diff，后台任务）：两个词元在各依存关系栏的共同与独有搭配，每行 relation、搭配词元、freq_a、freq_b、logdice_a、logdice_b、diff（logDice 差，A 减 B）。返回 stat_id 与分好的 sides：a（偏 A）、common（共同）、b（偏 B），每组按差异最明显的前 15 个，side_totals 为各组全部行数（SketchDiff 卡按 stat_id 显示全部行）。用户问“A 和 B 的用法有什么区别”“近义词辨析”时用它；依存要求同 stats_word_sketch。',
       parameters: Type.Object({
         scope: ScopeArg,
         lemma_a: Type.String({ minLength: 1 }),
@@ -1555,10 +1564,14 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
             kind: 'note', title: args.title ?? (clip(firstLine, 40) || '助手笔记'), body: args.body,
           }, signal);
         }
-        // the quote is already in body: record the ref without appending it again
-        for (const ref of args.refs ?? []) await api.post(`/kb/documents/${seg(note.id)}/refs`, { ...ref, append: false }, signal);
+        // the quote is already in body: record the ref without appending it again; a ref the note already has is not added
+        let refsAdded = 0;
+        for (const ref of args.refs ?? []) {
+          const r = await api.post<any>(`/kb/documents/${seg(note.id)}/refs`, { ...ref, append: false }, signal);
+          if (!r?.existing) refsAdded += 1;
+        }
         return {
-          data: { note_id: note.id, title: note.title, appended: Boolean(args.note_id), refs_added: args.refs?.length ?? 0 },
+          data: { note_id: note.id, title: note.title, appended: Boolean(args.note_id), refs_added: refsAdded },
           summary: `${args.note_id ? '已追加到笔记' : '已新建笔记'} ${note.title}`,
           ref: { kind: 'note', id: note.id },
         };
