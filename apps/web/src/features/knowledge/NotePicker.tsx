@@ -23,12 +23,24 @@ export const evidenceRef = (it: EvidenceItem, append = true) => ({
 
 /**
  * Evidence basket → note: an empty new note (or the existing one), then one ref per item. The API appends
- * each quote block itself, so the body holds every item once and matches the 引用 list.
+ * each quote block itself and skips items the note already cites and holds (`existing` without `appended`; a cited
+ * item whose block is gone from the body gets the block again), so the body holds every item once and matches the
+ * 引用 list.
  */
-export async function writeEvidenceToNote(projectId: string, target: NoteTarget, items: EvidenceItem[]): Promise<KbDocument> {
+export async function writeEvidenceToNote(projectId: string, target: NoteTarget, items: EvidenceItem[]): Promise<{ note: KbDocument; added: number; skipped: number }> {
   const note = "noteId" in target ? await api.get<KbDocument>(`/kb/documents/${target.noteId}`) : await createNote(projectId, target.newTitle, "");
-  for (const it of items) await api.post(`/kb/documents/${note.id}/refs`, evidenceRef(it));
-  return note;
+  let skipped = 0;
+  for (const it of items) {
+    const r = await api.post<{ existing?: boolean; appended?: boolean }>(`/kb/documents/${note.id}/refs`, evidenceRef(it));
+    if (r?.existing && !r.appended) skipped += 1;
+  }
+  return { note, added: items.length - skipped, skipped };
+}
+
+/** The message after the basket went into a note (link to the note follows it). */
+export function basketNoteText(title: string, added: number, skipped: number): string {
+  if (!added) return `均已在笔记「${title}」中`;
+  return `已加入笔记「${title}」${added} 条${skipped ? `，${skipped} 条已在笔记中，已跳过` : ""}`;
 }
 
 /** Pick an existing note or name a new one; `onPick` does the write and the dialog shows its error. */

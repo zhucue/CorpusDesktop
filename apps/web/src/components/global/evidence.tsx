@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Link } from "react-router";
 import { MAX_PAGE_SIZE, api, errorText, type Evidence, type EvidenceInput, type Job, type Page } from "../../api";
 import { knowledgeHref } from "../../features/knowledge/data";
-import { EVIDENCE_MIME, NotePicker, evidenceMarkdown, writeEvidenceToNote, type NoteTarget } from "../../features/knowledge/NotePicker";
+import { EVIDENCE_MIME, NotePicker, basketNoteText, evidenceMarkdown, writeEvidenceToNote, type NoteTarget } from "../../features/knowledge/NotePicker";
 import { isActiveJob, quietJobs, useJob, useJobCreated } from "../../lib/data";
 import { JobDownloadLink, useJobDownload } from "../../lib/download";
 import { cpSlice } from "../annot/spans";
@@ -271,10 +271,10 @@ export function EvidenceBasket({ projectId, open, onToggle }: { projectId: strin
 
   /** One evidence ref per item; the API appends each quote block once (Q58). */
   async function toNote(t: NoteTarget) {
-    const note = await writeEvidenceToNote(projectId, t, ev!.items);
-    message.success(
+    const { note, added, skipped } = await writeEvidenceToNote(projectId, t, ev!.items);
+    message[added ? "success" : "info"](
       <span>
-        已加入笔记「{note.title}」，<Link to={knowledgeHref(projectId, { tab: "notes", doc: note.id })}>打开笔记</Link>
+        {basketNoteText(note.title, added, skipped)}，<Link to={knowledgeHref(projectId, { tab: "notes", doc: note.id })}>打开笔记</Link>
       </span>,
     );
   }

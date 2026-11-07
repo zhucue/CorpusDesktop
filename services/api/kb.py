@@ -620,21 +620,55 @@ def _resolve_ref(db, note, kind, ref):
 @router.post("/kb/documents/{note_id}/refs")
 def add_ref(note_id: UUID, body: RefInput, user: CurrentUser, db: Db):
     """Store a ref; an evidence ref also appends the evidence text and its source to the note body (the only
-    writer of that block, unless append is false)."""
+    writer of that block, unless append is false). One ref per evidence item in a note: when the note already
+    cites it, no second ref is stored and the block is appended only if the body no longer holds it (removed
+    by hand, or an editor insert not saved yet). existing: the ref was already there; appended: the body got
+    the block."""
     note, _ = load_document(db, note_id, user, EDIT, lock=True)
     if note.kind != "note":
         raise ApiError(422, "NOT_A_NOTE", "只能向笔记添加引用")
     ref = _resolve_ref(db, note, body.kind, body.ref)
-    item = NoteRef(note_id=note.id, kind=body.kind, ref=ref)
-    db.add(item)
+    same = _same_evidence(db, note.id, ref) if body.kind == "evidence" else None
+    item = same or NoteRef(note_id=note.id, kind=body.kind, ref=ref)
+    if same is None:
+        db.add(item)
+    appended = False
     if body.kind == "evidence" and body.append:
         block = _evidence_block(ref["text"], ref.get("source"), ref.get("search_query"))
         current = (note.body or "").rstrip()
-        note.body = (current + "\n\n" if current else "") + block + "\n"
-        note.updated_at = now()
-        reindex_text(db, note, user.id)
+        held = same is not None and any(
+            b in current
+            for b in (
+                block,
+                _evidence_block(
+                    same.ref["text"],
+                    same.ref.get("source"),
+                    same.ref.get("search_query"),
+                ),
+            )
+        )
+        if not held:
+            note.body = (current + "\n\n" if current else "") + block + "\n"
+            note.updated_at = now()
+            reindex_text(db, note, user.id)
+            appended = True
     db.commit()
-    return note_ref_view(item)
+    return {**note_ref_view(item), "existing": same is not None, "appended": appended}
+
+
+def _same_evidence(db, note_id, ref):
+    """The note's evidence ref for the same item: same evidence_id, or (for text-only refs) same text and source."""
+    stmt = select(NoteRef).where(NoteRef.note_id == note_id, NoteRef.kind == "evidence")
+    if ref.get("evidence_id"):
+        stmt = stmt.where(NoteRef.ref["evidence_id"].astext == str(ref["evidence_id"]))
+    else:
+        stmt = stmt.where(
+            NoteRef.ref["evidence_id"].astext.is_(None),
+            NoteRef.ref["text"].astext == ref["text"],
+            func.coalesce(NoteRef.ref["source"].astext, "")
+            == str(ref.get("source") or ""),
+        )
+    return db.scalars(stmt.order_by(NoteRef.id).limit(1)).first()
 
 
 class NoteExportInput(BaseModel):

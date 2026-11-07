@@ -196,6 +196,32 @@ describe("note autosave", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("takes a newer server version (basket append) while nothing is unsaved, and saves on top of it (B12)", async () => {
+    const calls = mockFetch((c) => ({ ...NOTE, ...(c.body as object), updated_at: "2026-10-27T03:00:00Z" }));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = (n: KbDocument) => (
+      <QueryClientProvider client={client}>
+        <App>
+          <MemoryRouter>
+            <NoteEditor note={n} editable />
+          </MemoryRouter>
+        </App>
+      </QueryClientProvider>
+    );
+    const { rerender } = render(view(NOTE));
+    const appended = { ...NOTE, body: "初稿\n\n> 新证据", updated_at: "2026-10-27T02:00:00Z", refs: [...NOTE.refs!, { kind: "evidence" as const, ref: { text: "新证据" } }] };
+    rerender(view(appended));
+    const box = screen.getByLabelText("笔记正文") as HTMLTextAreaElement;
+    expect(box.value).toBe("初稿\n\n> 新证据");
+    // an older copy (a refetch overtaken by a save) does not roll the editor back
+    rerender(view(NOTE));
+    expect(box.value).toBe("初稿\n\n> 新证据");
+    fireEvent.change(box, { target: { value: "初稿\n\n> 新证据\n\n补充" } });
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "保存" })));
+    expect(calls).toEqual([{ method: "PATCH", path: "/api/kb/documents/n1", body: { title: "把字句英译", body: "初稿\n\n> 新证据\n\n补充", base_updated_at: appended.updated_at } }]);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("a save conflict keeps the local text to copy and stops saving", async () => {
     const calls: Call[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {

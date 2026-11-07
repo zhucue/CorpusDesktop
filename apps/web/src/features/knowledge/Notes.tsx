@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { App, Dropdown, Popconfirm } from "antd";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { api, errorCode, errorText, type Evidence, type Job, type KbDocument, type KbLocator, type NoteRef } from "../../api";
 import { Empty, ErrorAlert, QueryChip, Skeleton } from "../../components/common";
@@ -103,6 +103,15 @@ export function NoteEditor({ note, editable }: { note: KbDocument; editable: boo
     1000,
     !!conflict && !conflict.loaded,
   );
+  // A newer server version (evidence basket / assistant appended) replaces the content while nothing is unsaved;
+  // with local edits pending the save gets 409 and the conflict box takes over.
+  useEffect(() => {
+    // only newer: a refetch that started before this editor's own save may land after it
+    if (!(Date.parse(note.updated_at) > Date.parse(version.current)) || auto.state !== "saved" || conflict) return;
+    version.current = note.updated_at;
+    setTitle(note.title);
+    setBody(note.body ?? "");
+  }, [note.updated_at]); // eslint-disable-line react-hooks/exhaustive-deps
   /** The other version replaces the editor's content; the local one stays in the conflict box to copy from. */
   async function loadLatest() {
     const mine = { title, body };

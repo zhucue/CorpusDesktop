@@ -165,8 +165,12 @@ def test_corpus_delete_impact(owner, project, annotated, member):
     )
     assert r.status_code == 200, r.text
     # the assistant (kb_save) refers to evidence by evidence_id only: still the same sentence
+    other = owner.post(
+        f"/api/projects/{project['id']}/kb/documents",
+        json={"kind": "note", "title": "助手笔记", "body": ""},
+    ).json()
     r = owner.post(
-        f"/api/kb/documents/{note['id']}/refs",
+        f"/api/kb/documents/{other['id']}/refs",
         json={"kind": "evidence", "ref": {"evidence_id": pin["id"]}, "append": False},
     )
     assert r.status_code == 200, r.text

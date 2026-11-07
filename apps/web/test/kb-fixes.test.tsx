@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { KbHits } from "../src/features/knowledge/KbSearch";
 import type { KbSearchResult } from "../src/api";
-import { evidenceMarkdown, writeEvidenceToNote } from "../src/features/knowledge/NotePicker";
+import { basketNoteText, evidenceMarkdown, writeEvidenceToNote } from "../src/features/knowledge/NotePicker";
 import { extractSummary } from "../src/features/knowledge/Terms";
 import { searchLanding } from "../src/features/onboarding/Onboarding";
 import { isGone } from "../src/features/settings/ProjectGate";
@@ -32,14 +32,32 @@ const items = [0, 1, 2].map((i) => ({ id: `e${i}`, text: `第 ${i} 句`, source:
 describe("evidence basket → note (Q58)", () => {
   it("creates an empty note and posts one evidence ref per item; the body is left to the API", async () => {
     const calls = mockFetch((c) => (c.path.endsWith("/kb/documents") ? { id: "n1", title: "证据摘录", kind: "note" } : {}));
-    const note = await writeEvidenceToNote("p1", { newTitle: "证据摘录" }, items);
+    const { note, added, skipped } = await writeEvidenceToNote("p1", { newTitle: "证据摘录" }, items);
     expect(note.id).toBe("n1");
+    expect([added, skipped]).toEqual([3, 0]);
     const create = calls.find((c) => c.path === "/api/projects/p1/kb/documents")!;
     expect(create.body).toMatchObject({ kind: "note", title: "证据摘录", body: "" });
     const refs = calls.filter((c) => c.path === "/api/kb/documents/n1/refs");
     expect(refs.map((r) => (r.body as { ref: { evidence_id: string } }).ref.evidence_id)).toEqual(["e0", "e1", "e2"]);
     expect(refs.every((r) => (r.body as { append: boolean }).append)).toBe(true);
     expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+  });
+
+  it("counts the items the note already cites and holds as skipped (B12)", async () => {
+    // e1: cited and in the body; e2: cited but its block was removed, so the API appended it again
+    mockFetch((c) => {
+      if (c.method === "GET") return { id: "n2", title: "翻译例句观察", kind: "note" };
+      const id = (c.body as { ref: { evidence_id: string } }).ref.evidence_id;
+      return { existing: id !== "e0", appended: id !== "e1" };
+    });
+    const r = await writeEvidenceToNote("p1", { noteId: "n2" }, items);
+    expect([r.note.id, r.added, r.skipped]).toEqual(["n2", 2, 1]);
+  });
+
+  it("says when every item is already in the note", () => {
+    expect(basketNoteText("翻译例句观察", 0, 8)).toBe("均已在笔记「翻译例句观察」中");
+    expect(basketNoteText("翻译例句观察", 2, 1)).toBe("已加入笔记「翻译例句观察」2 条，1 条已在笔记中，已跳过");
+    expect(basketNoteText("证据摘录", 3, 0)).toBe("已加入笔记「证据摘录」3 条");
   });
 
   it("formats a quote exactly like the API block", () => {

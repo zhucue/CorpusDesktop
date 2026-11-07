@@ -949,14 +949,63 @@ def test_evidence_basket_to_new_note_writes_each_block_once(owner, project):
     for i in range(3):
         assert got["body"].count(f"第 {i} 句翻译例句。") == 1
     assert len(got["refs"]) == 3
-    # dropped into the editor: the page placed the quote itself, the ref only records it
+    # the basket again (B12): items the note cites and holds are skipped, no second block or ref
+    url = f"/api/kb/documents/{note['id']}"
+    for ev in evs:
+        r = owner.post(
+            f"{url}/refs", json={"kind": "evidence", "ref": {"evidence_id": ev["id"]}}
+        )
+        assert r.status_code == 200, r.text
+        assert (r.json()["existing"], r.json()["appended"]) == (True, False)
+    again = owner.get(url).json()
+    assert again["body"] == got["body"] and len(again["refs"]) == 3
+    assert again["updated_at"] == got["updated_at"]  # an open editor keeps its version
+    # the block removed from the body by hand: the basket puts it back, still one ref
+    cut = got["body"].replace(evidence_block(evs[0]), "")
+    assert "第 0 句翻译例句。" not in cut
+    assert owner.patch(url, json={"body": cut}).status_code == 200
     r = owner.post(
-        f"/api/kb/documents/{note['id']}/refs",
-        json={"kind": "evidence", "ref": {"evidence_id": evs[0]["id"]}, "append": False},
+        f"{url}/refs", json={"kind": "evidence", "ref": {"evidence_id": evs[0]["id"]}}
+    ).json()
+    assert (r["existing"], r["appended"]) == (True, True)
+    back = owner.get(url).json()
+    assert back["body"].count("第 0 句翻译例句。") == 1 and len(back["refs"]) == 3
+    # dropped into the editor: the page places the quote itself, the ref only records it
+    fresh = owner.post(
+        f"/api/projects/{project['id']}/evidence",
+        json={"kind": "text", "text": "新拖入的句子。", "source": "QA 平行"},
+    ).json()
+    drop = {"kind": "evidence", "ref": {"evidence_id": fresh["id"]}}
+    r = owner.post(f"{url}/refs", json={**drop, "append": False}).json()
+    assert (r["existing"], r["appended"]) == (False, False)
+    dropped = owner.get(url).json()
+    assert dropped["body"] == back["body"] and len(dropped["refs"]) == 4
+    # the basket before the editor saved that insert: the block is appended once, no second ref
+    r = owner.post(f"{url}/refs", json=drop).json()
+    assert (r["existing"], r["appended"]) == (True, True)
+    saved = owner.get(url).json()
+    assert saved["body"].count("新拖入的句子。") == 1 and len(saved["refs"]) == 4
+    # and once the body holds it, the basket skips it
+    r = owner.post(f"{url}/refs", json=drop).json()
+    assert (r["existing"], r["appended"]) == (True, False)
+    assert owner.get(url).json()["body"] == saved["body"]
+    # text-only refs (no evidence_id) match on text and source
+    loose = {"kind": "evidence", "ref": {"text": "手写引文。", "source": "某书"}}
+    first = owner.post(f"{url}/refs", json=loose).json()
+    second = owner.post(f"{url}/refs", json=loose).json()
+    assert first["existing"] is False and first["appended"] is True
+    assert second == {**first, "existing": True, "appended": False}
+    body = owner.get(url).json()["body"]
+    assert body.count("手写引文。") == 1
+
+
+def evidence_block(ev):
+    """The quote block the API appends for a basket item (services.api.kb._evidence_block)."""
+    from services.api.kb import _evidence_block
+
+    return _evidence_block(
+        ev["text"], ev["source"], (ev.get("ref") or {}).get("search_query")
     )
-    assert r.status_code == 200
-    again = owner.get(f"/api/kb/documents/{note['id']}").json()
-    assert again["body"] == got["body"] and len(again["refs"]) == 4
 
 
 def test_literature_markdown_becomes_guideline(owner, project, member):
