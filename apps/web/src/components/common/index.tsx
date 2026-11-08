@@ -1,6 +1,6 @@
 import { Tooltip } from "antd";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { errorCode, errorText, type CorpusStatus, type JobState } from "../../api";
+import { errorCodeHint, errorText, type CorpusStatus, type JobState } from "../../api";
 import { fmt, fmtRelative, fmtTime } from "../../lib/format";
 import { reducedMotion } from "../../theme/motion";
 import { Icon, type IconName } from "../Icon";
@@ -213,10 +213,10 @@ export function Empty({ icon = "inbox", text, children }: { icon?: IconName; tex
   );
 }
 
-/** Shows the API message verbatim with the code in small mono after it (doc 10 错误显示). */
+/** Shows the API message verbatim; the code follows in small mono only when the message is not Chinese (doc 10 错误显示). */
 export function ErrorAlert({ error, children, style }: { error: unknown; children?: ReactNode; style?: React.CSSProperties }) {
   if (!error) return null;
-  const code = errorCode(error);
+  const code = errorCodeHint(error);
   return (
     <div className="alert err" role="alert" style={style}>
       <Icon name="alert" size={14} />

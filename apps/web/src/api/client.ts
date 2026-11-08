@@ -152,6 +152,12 @@ export function errorCode(e: unknown): string | null {
   return e instanceof ApiError && e.code !== "http_error" ? e.code : null;
 }
 
+/** The code worth showing next to the message: only when the message itself is not Chinese text. */
+export function errorCodeHint(e: unknown): string | null {
+  const code = errorCode(e);
+  return code && !/[一-鿿]/.test(errorText(e)) ? code : null;
+}
+
 export const MAX_PAGE_SIZE = 200;
 
 export const roleLabels: Record<Role, string> = {

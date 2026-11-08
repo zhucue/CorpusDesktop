@@ -72,3 +72,6 @@ export function fmtVersion(v: number | string | null | undefined): string {
   if (typeof v === "number" || /^\d+$/.test(v)) return `v${v}`;
   return v.length > 8 ? v.slice(0, 8) : v;
 }
+
+/** Accounts are matched on the trimmed, lower-case address (the backend stores it that way). */
+export const normalizeEmail = (v: string | undefined) => (v ?? "").trim().toLowerCase();

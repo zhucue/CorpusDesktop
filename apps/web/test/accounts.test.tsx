@@ -149,3 +149,47 @@ describe("data and privacy", () => {
     expect(screen.getByText(/全局任务、模型用量、审计记录与反馈；不通过界面读取他人项目内的语料、标注与知识库内容/)).toBeTruthy();
   });
 });
+
+describe("adding a member", () => {
+  it("trims and lower-cases the email before the lookup", async () => {
+    const lookups: string[] = [];
+    const calls = mockFetch((path, method) => {
+      if (path === "/api/auth/me") return { ...admin, is_admin: false };
+      if (path === "/api/projects/p1") return { id: "p1", name: "P", role: "owner", created_at: "" };
+      if (path === "/api/projects/p1/members" && method === "GET") return { items: [], total: 0 };
+      if (path === "/api/projects/deleted") return { items: [], total: 0 };
+      if (path === "/api/users") return { items: [{ id: "u9", email: "sol-viewer@example.edu", display_name: "V" }] };
+      if (path === "/api/projects/p1/members/u9" && method === "PUT") return { user_id: "u9", email: "sol-viewer@example.edu", role: "viewer" };
+      return { items: [], total: 0 };
+    });
+    const fetchSpy = vi.mocked(globalThis.fetch);
+    renderAt("/p/p1/settings?tab=project", <Route path="/p/:projectId/settings" element={<Settings />} />);
+    fireEvent.change(await screen.findByPlaceholderText("邮箱"), { target: { value: "  SOL-VIEWER@Example.edu  " } });
+    fireEvent.click(screen.getByRole("button", { name: /添加/ }));
+    await waitFor(() => expect(calls).toContain("PUT /api/projects/p1/members/u9"));
+    for (const [input] of fetchSpy.mock.calls) {
+      const url = new URL(String(input), "http://x");
+      if (url.pathname === "/api/users") lookups.push(url.searchParams.get("email") ?? "");
+    }
+    expect(lookups).toEqual(["sol-viewer@example.edu"]);
+    expect(screen.queryByText("请输入邮箱")).toBeNull();
+  });
+});
+
+describe("login errors", () => {
+  it("shows the Chinese message without the error code", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ error: { code: "LOGIN_RATE_LIMITED", message: "登录尝试过多，请 1 分钟后再试" } }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    renderAt("/login", <Route path="/login" element={<Login />} />);
+    fireEvent.change(screen.getByLabelText("邮箱"), { target: { value: "root@x.edu" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "wrong-pass" } });
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+    await screen.findByText("登录尝试过多，请 1 分钟后再试");
+    expect(screen.queryByText("LOGIN_RATE_LIMITED")).toBeNull();
+  });
+});

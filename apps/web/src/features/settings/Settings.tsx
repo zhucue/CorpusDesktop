@@ -7,7 +7,7 @@ import { Avatar, ErrorAlert, RelTime } from "../../components/common";
 import { Icon, type IconName } from "../../components/Icon";
 import { PageHeader } from "../../components/shell/AppShell";
 import { listOf, useMe, useProject, useProjectId } from "../../lib/data";
-import { fmt } from "../../lib/format";
+import { fmt, normalizeEmail } from "../../lib/format";
 import { LlmUsageCard, PasswordCard, PrivacyCard } from "./AccountPanels";
 import { AdminAudit, AdminFeedback, AdminJobs, AdminProjects, AdminSystemPanel, AdminUsage } from "./AdminPanels";
 import { AuditTable } from "./audit";
@@ -257,7 +257,7 @@ function ProjectSettings() {
   });
   const addMember = useMutation({
     mutationFn: async ({ email, role }: { email: string; role: Role }) => {
-      const found = await api.get<{ items: Pick<User, "id" | "email" | "display_name">[] }>("/users", { email: email.trim(), project_id: projectId });
+      const found = await api.get<{ items: Pick<User, "id" | "email" | "display_name">[] }>("/users", { email: normalizeEmail(email), project_id: projectId });
       const user = found.items[0];
       if (!user) throw new Error("邮箱不存在");
       return api.put<Member>(`/projects/${projectId}/members/${encodeURIComponent(user.id)}`, { role });
@@ -288,7 +288,7 @@ function ProjectSettings() {
         {isOwner && (
           <div className="add-member">
             <Form form={form} layout="inline" onFinish={addMember.mutate} initialValues={{ role: "viewer" }}>
-              <Form.Item name="email" rules={[{ required: true, type: "email", message: "请输入邮箱" }]}>
+              <Form.Item name="email" rules={[{ required: true, whitespace: true, message: "请输入邮箱" }, { type: "email", transform: normalizeEmail, message: "邮箱格式不正确" }]}>
                 <Input placeholder="邮箱" style={{ width: 280 }} prefix={<Icon name="mail" size={14} />} />
               </Form.Item>
               <Form.Item name="role">
