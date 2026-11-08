@@ -991,7 +991,11 @@ def layer_documents(
         from services.api.spans import p5_documents
 
         return p5_documents(db, layer, visible(db, layer, user, annotator_id))
-    annotators = visible(db, layer, user, annotator_id)
+    return _token_documents(db, layer, visible(db, layer, user, annotator_id))
+
+
+def _token_documents(db, layer, annotators):
+    """Documents of a token layer in sentences: done = sentences without a suggested token."""
     pending = func.count(Annotation.sentence_index.distinct()).filter(
         Annotation.status == "suggested"
     )
@@ -1233,33 +1237,14 @@ def layer_stats(
         .group_by(Annotation.label)
         .order_by(n.desc(), Annotation.label)
     ).all()
-    per_doc = db.execute(
-        select(
-            Annotation.document_id,
-            Document.title,
-            n,
-            *(n.filter(Annotation.status == s) for s in STATUSES),
-        )
-        .join(Document, Document.id == Annotation.document_id)
-        .where(Annotation.layer_id == layer.id, *_of(annotators))
-        .group_by(Annotation.document_id, Document.title, Document.created_at)
-        .order_by(Document.created_at, Annotation.document_id)
-    ).all()
     return {
         "labels": [
             {"label": label, "count": c, "confirmed": cf, "modified": m}
             for label, c, cf, m in rows
         ],
         "progress": layer_view(db, layer)["progress"],
-        "per_document": [
-            {
-                "document_id": d,
-                "title": t,
-                "total": total,
-                **dict(zip(STATUSES, counts)),
-            }
-            for d, t, total, *counts in per_doc
-        ],
+        # same rows as GET /layers/{id}/documents: sentences, done, pending
+        "per_document": _token_documents(db, layer, annotators)["items"],
     }
 
 

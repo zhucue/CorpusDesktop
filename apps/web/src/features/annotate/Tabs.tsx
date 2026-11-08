@@ -205,17 +205,17 @@ export function StatsTab({ layer }: { layer: Layer }) {
           <table className="tbl">
             <tbody>
               {q.data.per_document.map((d) => {
-                const total = d.sentences ?? (d.done ?? 0) + (d.pending ?? 0);
+                const total = d.sentences;
                 return (
                   <tr key={d.document_id}>
                     <td className="ellipsis" style={{ maxWidth: 280 }}>
-                      {d.title ?? d.document_id}
+                      {d.title || d.document_id}
                     </td>
                     <td style={{ width: "40%" }}>
-                      <Progress done={d.done ?? 0} total={total || null} state={total && d.done === total ? "succeeded" : undefined} thin />
+                      <Progress done={d.done} total={total || null} state={total && d.done === total ? "succeeded" : undefined} thin />
                     </td>
                     <td className="r num" style={{ width: 110 }}>
-                      {fmt(d.done ?? 0)} / {fmt(total)}
+                      {fmt(d.done)} / {fmt(total)}
                     </td>
                   </tr>
                 );

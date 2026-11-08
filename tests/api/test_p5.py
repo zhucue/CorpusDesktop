@@ -241,6 +241,8 @@ def test_span_preannotation(owner, project, essay, fake_llm):
     job = owner.get(f"/api/jobs/{r.json()['id']}").json()
     assert job["state"] == "succeeded" and job["result"]["written"] == 4
     assert job["result"]["dropped"] == 1
+    # the layer list shows the job's progress in sentences (预标中 3 / 3 句)
+    assert job["progress"]["unit"] == "句" and job["progress"]["total"] == 3
     layer = owner.get(f"/api/layers/{layer['id']}").json()
     assert layer["progress"]["total"] == 4 and layer["progress"]["suggested"] == 4
     assert layer["progress"]["failed_sentences"] == []

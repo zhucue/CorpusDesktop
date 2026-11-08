@@ -265,7 +265,7 @@ def _span_job(run, info, docs, rng):
     stats = {"sentences": len(todo), "written": 0, "dropped": 0}
     failed, errors = [], []
     for i in range(0, len(todo), BATCH):
-        run.progress(i, len(todo), "预标")
+        run.progress(i, len(todo), "预标", "句")
         batch = todo[i : i + BATCH]
         found, dropped, error = _span_batch(run, info, batch, model)
         if found is None:
@@ -340,7 +340,7 @@ def _relation_job(run, info, docs, rng):
                 work.append((group, sentences[key], spans))
     stats["sentences"] = len(work)
     for i in range(0, len(work), BATCH):
-        run.progress(i, len(work), "预标")
+        run.progress(i, len(work), "预标", "句")
         batch = work[i : i + BATCH]
         blocks = []
         for n, (_, s, spans) in enumerate(batch, 1):
@@ -499,7 +499,7 @@ def _sentence_alignment(run, info, docs, rng):
         pairing = _target_documents(db, info, [d for d in docs if not stored[d]])
     written, used = 0, set()
     for k, doc_id in enumerate(docs):
-        run.progress(k, len(docs), "句级对齐")
+        run.progress(k, len(docs), "句级对齐", "篇")
         in_range = (
             (lambda i: rng["start"] <= i < rng["end"]) if rng else (lambda i: True)
         )
@@ -638,7 +638,7 @@ def _word_alignment(run, info, docs, rng):
     stats = {"pairs": len(todo), "written": 0, "dropped": 0}
     failed, errors = [], []
     for i in range(0, len(todo), BATCH):
-        run.progress(i, len(todo), "词级对齐")
+        run.progress(i, len(todo), "词级对齐", "句对")
         batch = todo[i : i + BATCH]
         with session() as db:
             toks = _tokens_of(

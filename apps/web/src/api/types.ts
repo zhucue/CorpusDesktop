@@ -853,8 +853,8 @@ export type AlignmentStats = Record<string, unknown>;
 export interface LayerStats {
   labels: { label: string; count: number; confirmed: number; modified: number }[];
   progress: LayerProgress;
-  /** Shape beyond the contract: assumed to mirror GET /layers/{id}/documents rows. */
-  per_document: (Partial<LayerDocument> & { document_id: string })[];
+  /** Same rows as GET /layers/{id}/documents (sentences). */
+  per_document: LayerDocument[];
 }
 
 // ---------- P4: knowledge base (contracts/p4.md) ----------

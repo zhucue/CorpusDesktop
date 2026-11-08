@@ -401,6 +401,8 @@ def test_review_actions(owner, project, corpus):
     assert docs == [
         {"document_id": doc, "title": "a", "sentences": 3, "done": 1, "pending": 2}
     ]
+    # 统计 · 文档进度 counts sentences like the editor's document list
+    assert owner.get(f"/api/layers/{pos['id']}/stats").json()["per_document"] == docs
 
     reset = owner.post(
         f"/api/layers/{pos['id']}/sentences/{doc}/0/reset", json={}
@@ -456,7 +458,9 @@ def test_review_actions(owner, project, corpus):
     }
     assert labels["det"]["count"] == 3 and labels["det"]["confirmed"] == 1
     assert stats["progress"]["modified"] == 2
-    assert stats["per_document"][0]["total"] == TOKENS
+    assert stats["per_document"] == [
+        {"document_id": doc, "title": "a", "sentences": 3, "done": 0, "pending": 3}
+    ]
 
 
 def test_permissions(owner, project, corpus, member, make_user):
