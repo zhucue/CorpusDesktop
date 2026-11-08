@@ -421,7 +421,7 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
   };
   /**
    * Rows by side, most distinctive first (A and common by diff descending, B ascending, as on the stats page), each
-   * cut to MAX_DIFF_PER_SIDE; side_totals are the full counts (the SketchDiff card loads every row by stat_id).
+   * cut to MAX_DIFF_PER_SIDE; side_totals are the full counts, total = every row (the SketchDiff card loads every row by stat_id).
    */
   const bySide = (rows: any[]) => {
     const groups: Record<'a' | 'common' | 'b', any[]> = { a: [], common: [], b: [] };
@@ -430,7 +430,7 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     const sides = Object.fromEntries((['a', 'common', 'b'] as const).map(side => [side,
       [...groups[side]].sort((x, y) => side === 'b' ? diff(x) - diff(y) : diff(y) - diff(x))
         .slice(0, MAX_DIFF_PER_SIDE).map(row => diffRow(row, side))]));
-    const side_totals = { a: groups.a.length, common: groups.common.length, b: groups.b.length };
+    const side_totals = { a: groups.a.length, common: groups.common.length, b: groups.b.length, total: rows.length };
     return { sides, side_totals, ...layersOf(rows) };
   };
 
@@ -823,7 +823,7 @@ export function toolSpecs(ctx: ToolContext): Spec[] {
     }),
     spec({
       name: 'stats.sketch_diff',
-      description: '近义词对比（Sketch Diff，后台任务）：两个词元在各依存关系栏的共同与独有搭配，每行 relation、搭配词元、freq_a、freq_b、logdice_a、logdice_b、diff（logDice 差，A 减 B）。返回 stat_id 与分好的 sides：a（偏 A）、common（共同）、b（偏 B），每组按差异最明显的前 15 个，side_totals 为各组全部行数（SketchDiff 卡按 stat_id 显示全部行）。用户问“A 和 B 的用法有什么区别”“近义词辨析”时用它；依存要求同 stats_word_sketch。',
+      description: '近义词对比（Sketch Diff，后台任务）：两个词元在各依存关系栏的共同与独有搭配，每行 relation、搭配词元、freq_a、freq_b、logdice_a、logdice_b、diff（logDice 差，A 减 B）。返回 stat_id 与分好的 sides：a（偏 A）、common（共同）、b（偏 B），每组按差异最明显的前 15 个，side_totals 为各组全部行数，side_totals.total 为全部搭配数，回答中说总数时用它（SketchDiff 卡按 stat_id 显示全部行）。用户问“A 和 B 的用法有什么区别”“近义词辨析”时用它；依存要求同 stats_word_sketch。',
       parameters: Type.Object({
         scope: ScopeArg,
         lemma_a: Type.String({ minLength: 1 }),

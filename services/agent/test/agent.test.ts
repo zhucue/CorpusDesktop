@@ -1231,7 +1231,7 @@ test('sketch_diff: each side keeps its most distinctive rows first and reports t
     await (await call('POST', `/agent/sessions/${session.id}/messages`, { content: '比较 big 和 large' })).text();
     const [sd] = toolResults(model, 1);
     assert.equal(sd.row_count, 5);
-    assert.deepEqual(sd.side_totals, { a: 2, common: 1, b: 17 });
+    assert.deepEqual(sd.side_totals, { a: 2, common: 1, b: 17, total: 20 });
     assert.equal(sd.sides.b.length, 15);
     // B ascending by diff: number (−10.2) and scale (−5) lead, the two weakest extras are cut
     assert.deepEqual(sd.sides.b.slice(0, 3).map((r: any) => r.collocate), ['number', 'scale', 'w14']);
@@ -1381,7 +1381,7 @@ test('P10 components: catalog signatures, semantic KwicTable block, prompt rules
     assert.ok(!CONFIRM_TOOLS.has(name), name);
   }
   const prompt = systemPrompt('UD 中文');
-  for (const text of ['stats_word_sketch 用 WordSketch', 'stats_sketch_diff 用 SketchDiff', 'CompareChart', 'search_semantic 用 KwicTable', '近义词辨析', '数字只来自工具结果', '不代写研究结论']) {
+  for (const text of ['stats_word_sketch 用 WordSketch', 'stats_sketch_diff 用 SketchDiff', 'CompareChart', 'search_semantic 用 KwicTable', '近义词辨析', '数字只来自工具结果', '不自己数行、相加或推算', '不代写研究结论']) {
     assert.ok(prompt.includes(text), text);
   }
 });
