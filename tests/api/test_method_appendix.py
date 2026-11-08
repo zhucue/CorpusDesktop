@@ -160,8 +160,13 @@ def test_appendix_stat_and_sample_layer(
         and "CWB）3.5.0" in md
         and "平台：语料检索、分析与标注研究平台 dev" in md
     )
+    # the sampled search: its own section with the three formal counts (hits / sentences / documents)
+    assert (
+        "## 3 检索" in md
+        and '1. 查询式 `"language"`；范围：作文；命中 2 次，2 句，1 篇文档' in md
+    )
     # statistics parameters and formula references
-    assert "### 3.1 频次" in md and "部分 每篇文档" in md and "部分数 1" in md
+    assert "### 4.1 频次" in md and "部分 每篇文档" in md and "部分数 1" in md
     assert (
         "DP = ½ Σ|vᵢ − sᵢ|" in md
         and "（Gries 2008）" in md
@@ -205,6 +210,34 @@ def test_appendix_stat_and_sample_layer(
     other = owner.post("/api/projects", json={"name": "另一个"}).json()
     r = owner.post(f"/api/projects/{other['id']}/method-appendix", json=body)
     assert r.status_code == 404 and r.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_appendix_sampled_aligned_search_listed_once(owner, project, corpus, sample_layer):
+    """The layer's stored aligned condition keeps None keys; the same search passed without them is one search."""
+    from services.api.db import transaction
+    from services.api.models import AnnotationLayer
+
+    scope = {"corpus_id": corpus["id"]}
+    with transaction() as db:
+        db.get(AnnotationLayer, uuid.UUID(sample_layer["id"])).meta = {
+            "sample": {
+                **SAMPLE,
+                "scope": scope,
+                "aligned": {"op": "+", "query": '"x"', "lang": None},
+            }
+        }
+    r = owner.post(
+        f"/api/projects/{project['id']}/method-appendix",
+        json={
+            "layer_ids": [sample_layer["id"]],
+            "searches": [
+                {"query": '"language"', "scope": scope, "aligned": {"op": "+", "query": '"x"'}}
+            ],
+        },
+    )
+    assert r.status_code == 200, r.text
+    md = r.json()["markdown"]
+    assert '1. 查询式 `"language"`；范围：作文；译文条件：含' in md and "2. 查询式" not in md
 
 
 def test_appendix_searches_evidence_and_bearer(owner, project, corpus):

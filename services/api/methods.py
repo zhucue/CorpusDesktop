@@ -286,6 +286,16 @@ def _layer_view(db, layer, user, corpora):
     }
 
 
+def _search_key(spec: SearchSpec):
+    # Sampling layers store `aligned` via model_dump() (None keys kept); agent-passed ones usually omit them.
+    aligned = {k: v for k, v in (spec.aligned or {}).items() if v is not None}
+    return (
+        spec.query,
+        em.as_json(spec.scope.model_dump(mode="json")),
+        em.as_json(aligned or None),
+    )
+
+
 def collect(db, project_id, body: AppendixInput, user) -> dict:
     corpora = _Corpora(db)
     stat_ids = list(dict.fromkeys(body.stat_ids))
@@ -293,15 +303,21 @@ def collect(db, project_id, body: AppendixInput, user) -> dict:
         if not _scope_in_project(db, spec.scope, project_id):
             raise not_found("检索范围")
     searches = list(body.searches)
+    seen = {_search_key(s) for s in searches}
+
+    def add_search(spec):
+        """A search the appendix found itself (evidence, sampling layer); skipped when out of the project."""
+        key = _search_key(spec)
+        if key not in seen and _scope_in_project(db, spec.scope, project_id):
+            seen.add(key)
+            searches.append(spec)
+
     if body.evidence:
         rows = db.scalars(
             select(Evidence)
             .where(Evidence.project_id == project_id)
             .order_by(Evidence.created_at, Evidence.id)
         )
-        seen = {
-            (s.query, em.as_json(s.scope.model_dump(mode="json"))) for s in searches
-        }
         for e in rows:
             ref = e.ref or {}
             if e.kind == "stat_row" and ref.get("stat_id"):
@@ -314,10 +330,7 @@ def collect(db, project_id, body: AppendixInput, user) -> dict:
                     spec = SearchSpec(query=ref["search_query"], scope=ref["scope"])
                 except ValueError:
                     continue
-                key = (spec.query, em.as_json(spec.scope.model_dump(mode="json")))
-                if key not in seen and _scope_in_project(db, spec.scope, project_id):
-                    seen.add(key)
-                    searches.append(spec)
+                add_search(spec)
     stats = []
     for sid in stat_ids:
         stat = db.get(StatResult, sid)
@@ -330,6 +343,17 @@ def collect(db, project_id, body: AppendixInput, user) -> dict:
         if layer is None or layer.project_id != project_id:
             raise not_found("标注层")
         layers.append(_layer_view(db, layer, user, corpora))
+        sample = (layer.meta or {}).get("sample") or {}
+        if sample.get("query") and sample.get("scope"):
+            try:  # the sampled search, counted now like any other search (hits / sentences / documents)
+                spec = SearchSpec(
+                    query=sample["query"],
+                    scope=sample["scope"],
+                    aligned=sample.get("aligned") or None,
+                )
+            except ValueError:
+                continue
+            add_search(spec)
     counted = [_count_search(db, user, s, corpora) for s in searches]
     return {
         "corpora": corpora.view(),
