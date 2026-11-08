@@ -1,12 +1,13 @@
 import { BarChart, GraphChart, LineChart, ScatterChart } from "echarts/charts";
 import { GridComponent, TooltipComponent } from "echarts/components";
 import * as echarts from "echarts/core";
+import { LabelLayout } from "echarts/features";
 import { SVGRenderer } from "echarts/renderers";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { reducedMotion } from "../../theme/motion";
 import { useTheme } from "../../theme/theme";
 
-echarts.use([BarChart, LineChart, ScatterChart, GraphChart, GridComponent, TooltipComponent, SVGRenderer]);
+echarts.use([BarChart, LineChart, ScatterChart, GraphChart, GridComponent, TooltipComponent, LabelLayout, SVGRenderer]);
 
 export type EChartsOption = echarts.EChartsCoreOption;
 

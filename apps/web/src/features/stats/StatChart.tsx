@@ -47,11 +47,25 @@ export function hbarOption(t: ChartTokens, labels: string[], values: number[], v
   };
 }
 
-function vbarOption(t: ChartTokens, labels: string[], values: (number | null)[], unit: string): EChartsOption {
+/** Plot width the distribution chart is laid out for (the stats page chart is about 600px wide). */
+const VBAR_PLOT_WIDTH = 560;
+
+/**
+ * Value labels above the distribution bars only when every label fits its bar slot at VBAR_PLOT_WIDTH;
+ * otherwise none (the tooltip and the table keep every value). A narrower box still drops colliding labels (hideOverlap).
+ */
+export function vbarShowValues(values: (number | null)[]): boolean {
+  const widest = Math.max(0, ...values.map((v) => textWidth(fmtValue(v, 1), 11)));
+  return values.length * (widest + 8) <= VBAR_PLOT_WIDTH;
+}
+
+export function vbarOption(t: ChartTokens, labels: string[], values: (number | null)[], unit: string): EChartsOption {
+  const showValues = vbarShowValues(values);
   return {
     ...baseOption(t),
-    grid: { left: 8, right: 8, top: 24, bottom: 4, containLabel: true },
-    xAxis: { type: "category", data: labels, axisLine: { lineStyle: { color: t.line } }, axisTick: { show: false }, axisLabel: { color: t.text3, fontFamily: t.mono, fontSize: 11 } },
+    grid: { left: 8, right: 8, top: showValues ? 24 : 12, bottom: 4, containLabel: true },
+    // Category labels: interval "auto" skips the ones that would collide.
+    xAxis: { type: "category", data: labels, axisLine: { lineStyle: { color: t.line } }, axisTick: { show: false }, axisLabel: { color: t.text3, fontFamily: t.mono, fontSize: 11, interval: "auto" } },
     yAxis: { type: "value", show: false },
     tooltip: { ...(baseOption(t).tooltip as object), trigger: "item", formatter: (p: { dataIndex: number }) => `${labels[p.dataIndex]} · ${fmtValue(values[p.dataIndex], 1)} ${unit}` },
     series: [
@@ -60,8 +74,8 @@ function vbarOption(t: ChartTokens, labels: string[], values: (number | null)[],
         data: values,
         barMaxWidth: 34,
         itemStyle: { color: t.accent, borderRadius: [4, 4, 0, 0] },
-        label: { show: true, position: "top", color: t.text2, fontFamily: t.mono, fontSize: 11, formatter: (p: { value: number }) => fmtValue(p.value, 1) },
-        // Many narrow bins: drop the value labels that would collide (the tooltip and the table keep every value).
+        label: { show: showValues, position: "top", color: t.text2, fontFamily: t.mono, fontSize: 11, formatter: (p: { value: number }) => fmtValue(p.value, 1) },
+        // Needs the LabelLayout feature registered in EChart.tsx.
         labelLayout: { hideOverlap: true },
         animationDelay: (i: number) => i * 50,
       },
