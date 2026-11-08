@@ -39,6 +39,12 @@ export function useOptionalShell(): ShellState | null {
   return useContext(Ctx);
 }
 
+/**
+ * Key of the routed page: a new pathname mounts a fresh page (and error boundary). The assistant's session id is
+ * left out, so a new conversation getting its URL keeps its stream, input and errors (B15).
+ */
+export const pageKey = (pathname: string) => pathname.replace(/\/assistant\/[^/]+\/?$/, "/assistant");
+
 export function ShellProvider({
   projectId,
   openPalette,

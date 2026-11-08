@@ -28,8 +28,10 @@ export default function AssistantDrawer({ onClose }: { onClose: () => void }) {
   const corpora = useCorpora(shell.projectId);
   const subs = useSubcorpora(shell.projectId);
   const sessions = useSessions(shell.projectId);
-  const ctx = shell.assistantContext;
-  const scope = ctx?.scope ?? shell.scope;
+  // The page context counts only while it is about the scope the page shows: after the breadcrumb switches
+  // corpus with no new search, the old search is not sent and the session mismatch shows (B16).
+  const ctx = shell.assistantContext && scopeKey(shell.assistantContext.scope) === scopeKey(shell.scope) ? shell.assistantContext : null;
+  const scope = shell.scope;
   const label = ctx?.label ?? shell.scopeInfo.name;
   const nameOf = (s: Scope | null) => describeScope(s, corpora.data?.items ?? [], subs.data?.items ?? []).name || "未选择范围";
 

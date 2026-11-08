@@ -14,7 +14,7 @@ import { TaskTray } from "../global/TaskTray";
 import { Icon, type IconName } from "../Icon";
 import { pageIcon } from "../iconSets";
 import { FeedbackButton } from "./Feedback";
-import { ShellProvider, useShell } from "./shell";
+import { pageKey, ShellProvider, useShell } from "./shell";
 
 const AssistantDrawer = lazy(() => import("../../features/assistant/AssistantDrawer"));
 
@@ -307,7 +307,7 @@ function ShellFrame() {
     <div className={`app ${shell.assistantOpen && page !== "assistant" ? "has-asst" : ""}`}>
       <SideNav />
       <main className="main">
-        <ErrorBoundary key={loc.pathname}>
+        <ErrorBoundary key={pageKey(loc.pathname)} resetKey={loc.pathname}>
           <Suspense fallback={<Spin style={{ margin: 80 }} />}>
             <Outlet />
           </Suspense>
