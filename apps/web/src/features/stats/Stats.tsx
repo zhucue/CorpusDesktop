@@ -596,7 +596,7 @@ function ResultView({ stat, projectId, chartRef }: { stat: StatResult; projectId
       )}
     </div>
   );
-  return <div className={`res ${stat.method === "distribution" ? "dist" : ""}`}>{stat.method === "distribution" ? [chart, table] : [table, chart]}</div>;
+  return <div className={`res ${stat.method === "distribution" ? "res-dist" : ""}`}>{stat.method === "distribution" ? [chart, table] : [table, chart]}</div>;
 }
 
 const TEST_LABELS: Record<string, string> = { mann_whitney: "Mann-Whitney U", spearman: "Spearman" };

@@ -61,6 +61,8 @@ function vbarOption(t: ChartTokens, labels: string[], values: (number | null)[],
         barMaxWidth: 34,
         itemStyle: { color: t.accent, borderRadius: [4, 4, 0, 0] },
         label: { show: true, position: "top", color: t.text2, fontFamily: t.mono, fontSize: 11, formatter: (p: { value: number }) => fmtValue(p.value, 1) },
+        // Many narrow bins: drop the value labels that would collide (the tooltip and the table keep every value).
+        labelLayout: { hideOverlap: true },
         animationDelay: (i: number) => i * 50,
       },
     ],

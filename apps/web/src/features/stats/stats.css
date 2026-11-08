@@ -12,7 +12,7 @@
 .params .ant-form-item-label > label { font-size: 12px; color: var(--text-2); font-weight: 500; height: auto; }
 .params .chk .ant-form-item-control-input { min-height: 32px; }
 .res { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
-.res.dist { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+.res.res-dist { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
 .res-meta { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-3); flex-wrap: wrap; }
 .head-btns { display: inline-flex; gap: 6px; flex-shrink: 0; white-space: nowrap; }
 .tip-wrap { display: inline-flex; }
