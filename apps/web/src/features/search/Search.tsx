@@ -901,6 +901,8 @@ export default function Search() {
   const selectedHit = rows.find((r) => r.id === selected)?.hit ?? null;
   // 双语对照 word links: the most recent ready word alignment layer whose source is the searched corpus.
   const hitCorpusId = req ? describeScope(req.scope, allCorpora, allSubs).corpus?.id : undefined;
+  // No dependency layer: the corpus's own CoNLL-U head / deprel (B04), when the parse facts say it has them.
+  const nativeTree = !treeLayer && !!hitCorpusId && hitCorpusId === info.corpus?.id && !!facts?.layers.dep;
   const alignLayer =
     allLayers
       .filter((l) => l.kind === "alignment" && l.level === "word" && l.status === "ready" && (l.src_corpus_id ?? l.corpus_id) === hitCorpusId)
@@ -1289,10 +1291,10 @@ export default function Search() {
                         ) : null;
                       }}
                       renderExpanded={
-                        treeLayer
+                        treeLayer || nativeTree
                           ? (r) => {
                               const hit = rows.find((x) => x.id === r.id)?.hit;
-                              return hit ? <SentenceTree layerId={treeLayer} posLayerId={req?.layers?.pos ?? null} hit={hit} projectId={projectId} /> : null;
+                              return hit ? <SentenceTree layerId={treeLayer} corpusId={hitCorpusId} posLayerId={req?.layers?.pos ?? null} hit={hit} projectId={projectId} /> : null;
                             }
                           : undefined
                       }

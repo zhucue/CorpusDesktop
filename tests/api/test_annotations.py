@@ -751,5 +751,9 @@ def test_sentence_system_tokens_without_layer(owner, make_user, corpus):
         (3, "a", "DET", "det", 4),
         (4, "system.", "NOUN", "root", 0),
     ]
+    # document offsets, so the search page can highlight the hit's tokens in the tree
+    first, last = s["tokens"][0], s["tokens"][-1]
+    assert (first["start_cp"], first["end_cp"]) == (s["start_cp"], s["start_cp"] + 8)
+    assert last["end_cp"] == s["end_cp"]
     assert owner.get(f"{url}/9").status_code == 404
     assert make_user("stranger@example.edu").get(f"{url}/0").status_code in (403, 404)

@@ -539,7 +539,8 @@ def list_sentences(
 def get_sentence(
     corpus_id: UUID, document_id: UUID, sentence_index: int, user: CurrentUser, db: Db
 ):
-    """One stored sentence with its system tokens (index/head 1-based as in CoNLL-U, head 0 = root), no layer
+    """One stored sentence with its system tokens (index/head 1-based as in CoNLL-U, head 0 = root; start_cp /
+    end_cp document offsets for highlighting a hit), no layer
     needed: read-only view of corpora that ship with POS / dependencies (UD) for the assistant and viewers."""
     load_corpus(db, corpus_id, user)
     _document(db, corpus_id, document_id)
@@ -563,6 +564,8 @@ def get_sentence(
             {
                 "index": t.idx + 1,
                 "form": t.form,
+                "start_cp": t.start_cp,
+                "end_cp": t.end_cp,
                 "pos": t.pos,
                 "lemma": t.lemma,
                 "head": t.head,
