@@ -590,3 +590,91 @@ def test_evidence_same_hit_is_not_added_twice(owner, project, corpus):
     ).json()
     assert other["id"] != manual["id"] and other["ref"]["hit_id"]
     assert owner.get(url).json()["total"] == 2
+
+
+def test_evidence_lookup_by_hit_and_stat_row(owner, project, corpus, member, make_user):
+    """Pin state for items beyond the loaded basket pages: lookup by hit (hit_id or document + offsets) and stat
+    row, within this project only; members read, non-members get 404."""
+    import uuid
+
+    from services.api.db import transaction
+    from services.api.models import Evidence, StatResult
+
+    hits = owner.post(
+        "/api/search", json={"scope": {"corpus_id": corpus["id"]}, "query": "language"}
+    ).json()["items"]
+    a, b = hits[0], hits[1]
+    url = f"/api/projects/{project['id']}/evidence"
+    pinned = owner.post(
+        url,
+        json={
+            "kind": "hit",
+            "ref": {"hit_id": a["hit_id"]},
+            "text": "x",
+            "source": "s",
+        },
+    ).json()
+    pid, uid = uuid.UUID(project["id"]), uuid.UUID(owner.user_id)
+    with transaction() as db:
+        stat = StatResult(
+            project_id=pid,
+            method="frequency",
+            params={},
+            scope={"corpus_id": corpus["id"]},
+            index_version="v1",
+            totals={},
+            columns=[],
+            rows_path="missing.json",
+            row_count=0,
+            created_by=uid,
+        )
+        db.add(stat)
+        db.flush()
+        stat_id = str(stat.id)
+        # an older hit item stored without hit_id still matches by document + offsets
+        old = Evidence(
+            project_id=pid,
+            kind="hit",
+            ref={
+                "document_id": b["document_id"],
+                "start_cp": b["start_cp"],
+                "end_cp": b["end_cp"],
+            },
+            text="y",
+            source="s",
+            created_by=uid,
+        )
+        db.add(old)
+        db.flush()
+        old_id = str(old.id)
+    row = owner.post(
+        url,
+        json={
+            "kind": "stat_row",
+            "ref": {"stat_id": stat_id, "row_key": "language"},
+            "text": "language · 3",
+            "source": "频次",
+        },
+    ).json()
+    body = {
+        "hit_ids": [a["hit_id"], b["hit_id"], "not-a-hit"],
+        "stat_rows": [
+            {"stat_id": stat_id, "row_key": "language"},
+            {"stat_id": stat_id, "row_key": "grammar"},
+        ],
+    }
+    r = owner.post(f"{url}/lookup", json=body)
+    assert r.status_code == 200, r.text
+    assert sorted(x["id"] for x in r.json()["items"]) == sorted(
+        [pinned["id"], old_id, row["id"]]
+    )
+    assert owner.post(f"{url}/lookup", json={}).json() == {"items": []}
+
+    # viewers read the basket; another project's lookup does not see these items; strangers get 404
+    assert len(member("viewer").post(f"{url}/lookup", json=body).json()["items"]) == 3
+    other = owner.post("/api/projects", json={"name": "另一个"}).json()
+    r = owner.post(f"/api/projects/{other['id']}/evidence/lookup", json=body)
+    assert r.status_code == 200 and r.json()["items"] == []
+    stranger = make_user("stranger@example.edu")
+    assert stranger.post(f"{url}/lookup", json=body).status_code == 404
+    assert owner.post(f"{url}/lookup", json={"hit_ids": ["x" * 201]}).status_code == 422

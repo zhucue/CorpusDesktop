@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
@@ -26,17 +26,55 @@ interface EvidenceState {
   capsuleRef: React.RefObject<HTMLButtonElement | null>;
   bump: number;
   error: unknown;
+  /** A mounted pin button's key (pinKey); the provider looks such keys up while the basket is partly loaded. */
+  watch: (key: string) => () => void;
 }
 
 const Ctx = createContext<EvidenceState | null>(null);
 export const useEvidence = () => useContext(Ctx);
 
 type EvKey = Pick<EvidenceInput, "kind" | "ref" | "text" | "source">;
+
+/** The api's key of a hit: hit_id, which is "<document id>:<start_cp>-<end_cp>" (also for items saved without it). */
+function hitKey(ref: EvidenceInput["ref"]): string | undefined {
+  if (ref.hit_id) return ref.hit_id;
+  if (ref.document_id && ref.start_cp != null && ref.end_cp != null) return `${ref.document_id}:${ref.start_cp}-${ref.end_cp}`;
+  return undefined;
+}
+
 export function sameEvidence(a: EvKey, b: EvKey): boolean {
   if (a.kind !== b.kind) return false;
+  if (a.kind === "hit" && (hitKey(a.ref) || hitKey(b.ref))) return hitKey(a.ref) === hitKey(b.ref);
   if (a.ref.hit_id || b.ref.hit_id) return a.ref.hit_id === b.ref.hit_id;
   if (a.ref.stat_id || b.ref.stat_id) return a.ref.stat_id === b.ref.stat_id && a.ref.row_key === b.ref.row_key;
   return a.text === b.text && a.source === b.source;
+}
+
+/** Lookup key of a pin (POST /evidence/lookup): hits and stat rows; text items have none. */
+export function pinKey(input: EvKey): string | null {
+  if (input.kind === "hit") {
+    const k = hitKey(input.ref);
+    return k ? `h:${k}` : null;
+  }
+  if (input.kind === "stat_row" && input.ref.stat_id && input.ref.row_key != null) return `s:${JSON.stringify([input.ref.stat_id, input.ref.row_key])}`;
+  return null;
+}
+
+/** Basket items matching pin keys, in requests of at most 500 keys. */
+async function lookupEvidence(projectId: string, keys: string[]): Promise<Evidence[]> {
+  const out: Evidence[] = [];
+  for (let i = 0; i < keys.length; i += 500) {
+    const part = keys.slice(i, i + 500);
+    const body = {
+      hit_ids: part.filter((k) => k.startsWith("h:")).map((k) => k.slice(2)),
+      stat_rows: part.filter((k) => k.startsWith("s:")).map((k) => {
+        const [stat_id, row_key] = JSON.parse(k.slice(2)) as [string, string];
+        return { stat_id, row_key };
+      }),
+    };
+    out.push(...(await api.post<{ items: Evidence[] }>(`/projects/${projectId}/evidence/lookup`, body)).items);
+  }
+  return out;
 }
 
 function flyTo(from: HTMLElement, to: HTMLElement, text: string): Promise<void> {
@@ -87,6 +125,34 @@ export function EvidenceProvider({ projectId, children }: { projectId: string; c
   });
   const items = useMemo(() => list.data?.items ?? [], [list.data]);
   const total = list.data?.total ?? 0;
+
+  // Pin buttons of rows whose item may sit beyond the loaded pages: one lookup for the keys mounted at a time.
+  const watchCounts = useRef(new Map<string, number>());
+  const [watched, setWatched] = useState<string[]>([]);
+  const watch = useCallback((k: string) => {
+    const m = watchCounts.current;
+    const sync = () => {
+      const next = [...m.keys()].sort();
+      setWatched((old) => (old.length === next.length && old.every((x, i) => x === next[i]) ? old : next));
+    };
+    m.set(k, (m.get(k) ?? 0) + 1);
+    sync();
+    return () => {
+      const n = (m.get(k) ?? 1) - 1;
+      if (n > 0) m.set(k, n);
+      else m.delete(k);
+      sync();
+    };
+  }, []);
+  const partial = !!list.data && total > items.length;
+  const lookup = useQuery({
+    queryKey: [...key, "lookup", watched],
+    enabled: partial && watched.length > 0,
+    placeholderData: keepPreviousData,
+    meta: { background: true },
+    queryFn: () => lookupEvidence(projectId, watched),
+  });
+  const found = useMemo(() => (partial ? (lookup.data ?? []) : []), [partial, lookup.data]);
   const loadMore = useCallback(() => {
     pages.current = Math.max(pages.current, Math.ceil(items.length / MAX_PAGE_SIZE)) + 1;
     void qc.invalidateQueries({ queryKey: ["evidence", projectId] });
@@ -95,9 +161,12 @@ export function EvidenceProvider({ projectId, children }: { projectId: string; c
   const add = useMutation({
     mutationFn: (input: EvidenceInput) => api.post<Evidence & { existing?: boolean }>(`/projects/${projectId}/evidence`, input),
     onSuccess: (ev) => {
-      // The api returns the existing item when this hit is already in the basket (e.g. added by the assistant).
+      // The api returns the existing item when this hit is already in the basket (e.g. added by the assistant,
+      // or on a page not loaded yet): it joins the loaded items, the project total stays.
       if (ev.existing) message.info("已在证据篮中");
-      qc.setQueryData<Page<Evidence>>(key, (old) => (old && !old.items.some((x) => x.id === ev.id) ? { items: [...old.items, ev], total: old.total + 1 } : old));
+      qc.setQueryData<Page<Evidence>>(key, (old) =>
+        old && !old.items.some((x) => x.id === ev.id) ? { items: [...old.items, ev], total: old.total + (ev.existing ? 0 : 1) } : old,
+      );
       setBump((n) => n + 1);
     },
     onError: (e) => message.error(errorText(e)),
@@ -105,12 +174,14 @@ export function EvidenceProvider({ projectId, children }: { projectId: string; c
   const del = useMutation({
     mutationFn: (id: string) => api.del(`/evidence/${id}`),
     onSuccess: (_, id) => {
-      qc.setQueryData<Page<Evidence>>(key, (old) => (old?.items.some((x) => x.id === id) ? { items: old.items.filter((x) => x.id !== id), total: old.total - 1 } : old));
+      // the item may be one found by lookup, outside the loaded pages: the total drops either way
+      qc.setQueryData<Page<Evidence>>(key, (old) => (old ? { items: old.items.filter((x) => x.id !== id), total: Math.max(0, old.total - 1) } : old));
+      qc.setQueriesData<Evidence[]>({ queryKey: [...key, "lookup"] }, (old) => old?.filter((x) => x.id !== id));
     },
     onError: (e) => message.error(errorText(e)),
   });
 
-  const find = useCallback((input: EvidenceInput) => items.find((e) => sameEvidence(e, input)), [items]);
+  const find = useCallback((input: EvidenceInput) => items.find((e) => sameEvidence(e, input)) ?? found.find((e) => sameEvidence(e, input)), [items, found]);
 
   const toggle = useCallback(
     (input: EvidenceInput, from?: HTMLElement | null) => {
@@ -127,7 +198,7 @@ export function EvidenceProvider({ projectId, children }: { projectId: string; c
     [find, add, del, message],
   );
 
-  const value: EvidenceState = { items, total, loadMore, loading: list.isFetching, find, toggle, remove: (id) => del.mutate(id), capsuleRef, bump, error: list.error };
+  const value: EvidenceState = { items, total, loadMore, loading: list.isFetching, find, toggle, remove: (id) => del.mutate(id), capsuleRef, bump, error: list.error, watch };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
@@ -135,6 +206,9 @@ export function EvidenceProvider({ projectId, children }: { projectId: string; c
 export function PinButton({ input, className, label }: { input: EvidenceInput; className?: string; label?: boolean }) {
   const ev = useEvidence();
   const ref = useRef<HTMLButtonElement>(null);
+  const k = pinKey(input);
+  const watch = ev?.watch;
+  useEffect(() => (watch && k ? watch(k) : undefined), [watch, k]);
   if (!ev) return null;
   const on = !!ev.find(input);
   return (

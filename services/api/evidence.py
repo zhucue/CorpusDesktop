@@ -1,7 +1,7 @@
 """Evidence basket (contracts/p2.md §四): pinned hits, stat rows and text, kept per project."""
 
 import re
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter
@@ -47,6 +47,24 @@ class EvidenceInput(BaseModel):
     text: str = Field(min_length=1, max_length=20000)
     source: str = Field(max_length=1000)
     note: str | None = Field(default=None, max_length=5000)
+
+
+class StatRowKey(BaseModel):
+    stat_id: UUID
+    row_key: str = Field(max_length=2000)
+
+
+class LookupInput(BaseModel):
+    hit_ids: list[Annotated[str, Field(max_length=200)]] = Field(
+        default=[], max_length=1000
+    )
+    stat_rows: list[StatRowKey] = Field(default=[], max_length=1000)
+
+
+HIT_ID = re.compile(
+    r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
+    r":(\d+)-(\d+)"
+)
 
 
 class ExportInput(BaseModel):
@@ -121,6 +139,51 @@ def list_evidence(project_id: UUID, user: CurrentUser, db: Db, paging: Paging):
     return paging.run(db, stmt, evidence_view)
 
 
+@router.post("/projects/{project_id}/evidence/lookup")
+def lookup_evidence(project_id: UUID, body: LookupInput, user: CurrentUser, db: Db):
+    """Basket items for the given hits (same document + match offsets, or same hit_id) and stat rows, so pin
+    buttons show the right state for items beyond the loaded basket pages."""
+    require_project(db, project_id, user)
+    hits = {
+        (m[1].lower(), int(m[2]), int(m[3]))
+        for h in body.hit_ids
+        if (m := HIT_ID.fullmatch(h))
+    }
+    hit_ids = set(body.hit_ids)
+    rows = {(str(r.stat_id), r.row_key) for r in body.stat_rows}
+    out = []
+    if hits:
+        docs = {d for d, _, _ in hits}
+        for e in db.scalars(
+            select(Evidence).where(
+                Evidence.project_id == project_id,
+                Evidence.kind == "hit",
+                Evidence.ref["document_id"].astext.in_(docs),
+            )
+        ):
+            r = e.ref or {}
+            key = (
+                str(r.get("document_id")).lower(),
+                r.get("start_cp"),
+                r.get("end_cp"),
+            )
+            if key in hits or r.get("hit_id") in hit_ids:
+                out.append(e)
+    if rows:
+        stats = {sid for sid, _ in rows}
+        for e in db.scalars(
+            select(Evidence).where(
+                Evidence.project_id == project_id,
+                Evidence.kind == "stat_row",
+                Evidence.ref["stat_id"].astext.in_(stats),
+            )
+        ):
+            r = e.ref or {}
+            if (str(r.get("stat_id")), r.get("row_key")) in rows:
+                out.append(e)
+    return {"items": [evidence_view(e) for e in out]}
+
+
 @router.post("/projects/{project_id}/evidence")
 def create_evidence(project_id: UUID, body: EvidenceInput, user: CurrentUser, db: Db):
     require_project(db, project_id, user, PIN)
@@ -128,11 +191,7 @@ def create_evidence(project_id: UUID, body: EvidenceInput, user: CurrentUser, db
     text, source, extra = body.text, body.source, {}
     if body.kind == "hit" and not ref.document_id and ref.hit_id:
         # hit_id is "<document id>:<start_cp>-<end_cp>" (engine.model.Hit); assistant cards send only that
-        m = re.fullmatch(
-            r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
-            r":(\d+)-(\d+)",
-            ref.hit_id,
-        )
+        m = HIT_ID.fullmatch(ref.hit_id)
         if m:
             ref = ref.model_copy(
                 update={

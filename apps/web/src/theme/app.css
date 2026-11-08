@@ -476,7 +476,7 @@ tr:hover .pin-btn, .ou:hover .pin-btn, .pin-btn:focus-visible { opacity: 1; colo
 .dp-head { display: flex; align-items: center; gap: 8px; padding: 11px 14px; background: var(--surface-2); border-bottom: 1px solid var(--line-soft); border-radius: calc(var(--radius-xl) - 1px) calc(var(--radius-xl) - 1px) 0 0; }
 .dp-head b { font-weight: 600; font-size: 13px; }
 .dp-body { flex: 1; overflow: auto; padding: 6px 8px; }
-.dp-foot { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--line-soft); }
+.dp-foot { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--line-soft); }
 .ev-item { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 2px 8px; align-items: start; padding: 8px; border-radius: var(--radius); font-size: 13px; animation: rise 300ms var(--ease-out) both; }
 .ev-item:hover { background: var(--fill-hover); }
 .ev-item .pin-btn { opacity: 1; }
