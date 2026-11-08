@@ -101,6 +101,12 @@ describe("knowledge base search results", () => {
       { t: "b", m: true },
       { t: " c", m: false },
     ]);
+    // the server escapes the snippet; text renders decoded once, markup in the source stays text
+    expect(snippetParts("x", "Cohen&#x27;s <mark>kappa</mark> &amp;lt;b&amp;gt; &lt;i&gt;", [])).toEqual([
+      { t: "Cohen's ", m: false },
+      { t: "kappa", m: true },
+      { t: " &lt;b&gt; <i>", m: false },
+    ]);
     expect(locatorText({ line: 12 })).toBe("第 12 行");
     expect(locatorText("第 7 页 · 3.2")).toBe("第 7 页 · 3.2");
   });

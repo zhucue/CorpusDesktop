@@ -5,7 +5,19 @@ export interface Part {
   m: boolean;
 }
 
-const stripTags = (s: string) => s.replace(/<[^>]*>/g, "");
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0" };
+
+/** Decode the character references of server-escaped text (one pass, so `&amp;lt;` stays `&lt;`); rendered as text. */
+export function decodeEntities(s: string): string {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (all, e: string) => {
+    if (e[0] !== "#") return ENTITIES[e.toLowerCase()] ?? all;
+    const code = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : all;
+  });
+}
+
+/** Server highlights are HTML-escaped with <mark>/<b> tags: drop the tags, then decode to plain text. */
+const stripTags = (s: string) => decodeEntities(s.replace(/<[^>]*>/g, ""));
 
 /** Query words for client-side marking: split on spaces and punctuation; Latin words need 2+ letters. */
 export function queryWords(q: string): string[] {
